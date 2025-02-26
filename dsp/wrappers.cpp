@@ -779,7 +779,7 @@ void dsptools::qdynam( edf_t & edf , param_t & param )
       // next dataset
     }
   
-  
-  
-  
+
 }
+
+

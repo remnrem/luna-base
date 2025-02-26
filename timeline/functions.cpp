@@ -177,32 +177,69 @@ void timeline_t::signal2annot( const param_t & param )
   // encoding=label,val,+win
   // bins=min,max,n
   // q=N
+  // pos/neg         --> only make annots for above/below X (abs)
+  // pos-pct/neg-pct --> only make annots for above/below X (percentile)
   
   //  VALUE :  X    // --> X+EPS
   //           X-Y
   //           X+Y  // eps
 
-  if ( ! ( param.has( "encoding" ) || param.has( "encoding2" ) || param.has( "bins" ) || param.has( "q") ) )
-    Helper::halt( "no encoding=label,value,... or encoding2=label,value1,value2,... or bins=min,max,n or q=n" );
+  if ( ! ( param.has( "encoding" )
+	   || param.has( "encoding2" )
+	   || param.has( "bins" )
+	   || param.has( "q")
+	   || param.has( "pos" )
+	   || param.has( "neg" )
+	   || param.has( "pos-pct" )
+	   || param.has( "neg-pct" ) )
+       ) 
+    Helper::halt( "no valid encoding\n"
+		  "    encoding=label,value,...\n"
+		  " or encoding2=label,value1,value2,...\n"
+		  " or bins=min,max,n\n"
+		  " or q=n\n"
+		  " or pos/neg=value\n"
+		  " or pos-pct/neg-pct=pct" );
 
   bool e2 = param.has( "encoding" );
   bool e3 = param.has( "encoding2" );
   bool eb = param.has( "bins" );
   bool eq = param.has( "q" );
+
+  bool etop = param.has( "pos" );
+  bool ebot = param.has( "neg" );
+  bool etopp = param.has( "pos-pct" );  
+  bool ebotp = param.has( "neg-pct" );
+
+  if ( e2 + e3 + eb + eq + etop + ebot + etopp + ebotp > 1 )
+    Helper::halt( "can only specify one of encoding|encoding2|bins|q|pos|neg|pos-pct|neg-pct" );
   
-  if ( e2 + e3 + eb + eq > 1 ) Helper::halt( "must either specify encoding or encoding2 or bins or q");
-  const std::string bin_label = param.has( "bin-label" ) ? param.value( "bin-label" ) : ( eq ? "Q" : "B" ) ; 
+  std::string bin_label = "B";
+  if ( param.has( "bin-label" ) ) bin_label = param.value( "bin-label" );
+  else if ( eq ) bin_label = "Q";
+  else if ( etop || etopp ) bin_label = "POS";
+  else if ( ebot || ebotp ) bin_label = "NEG";
     
   std::vector<std::string> enc; 
   int nxy = -1;
-
+  
   const int nq = eq ? param.requires_int( "q" ) : 0 ; 
-
+  
   if ( eq && ( nq < 1 || nq > 200 ) )
     Helper::halt( "q value must be between 2 and 200" );
-  
+
+  double th = 0;
+  if ( etop ) th = param.requires_dbl( "pos" );
+  else if ( etopp ) th = param.requires_dbl( "pos-pct" );
+  else if ( ebot ) th = param.requires_dbl( "neg" );
+  else if ( ebotp ) th = param.requires_dbl( "neg-pct" );
+
+  if ( etopp || ebotp )
+    if ( th <= 0 || th >= 1 )
+      Helper::halt( "percentile thresholds must be between 0 and 1" );
+      
   //
-  // get encodings (although Q-encodings are signal specific, so do below)
+  // get encodings (although Q-encodings and topp/botp are signal specific, so do below)
   //
 
   if ( e2 ) 
@@ -215,7 +252,7 @@ void timeline_t::signal2annot( const param_t & param )
       enc = param.strvector( "encoding2" );
       nxy = 3;
     }
-  else if ( ! eq ) // bins
+  else if ( ! ( eq || etop || ebot || etopp || ebotp ) ) // bins
     {
       // make 'encoding2' style string
       std::vector<double> b = param.dblvector("bins");
@@ -245,10 +282,16 @@ void timeline_t::signal2annot( const param_t & param )
   //  or each label --> a distinct class
   //
 
-  bool use_class = param.has( "class" );
+  const bool use_class = param.has( "class" );
   
   std::string class_name = use_class ? param.value( "class" ) : "" ; 
+  
+  //
+  // Append channel name to label as instance ID 
+  //
 
+  const bool add_ch_label = param.has( "add-channel-label" ) ? param.yesno( "add-channel-label" ) : false ; 
+  
   //
   // Span EDF discontinuities or no?
   //
@@ -303,9 +346,14 @@ void timeline_t::signal2annot( const param_t & param )
       e[ label ] = std::make_pair( ex , ey );
 
     }
+
+  // handle abs-threshold (pos/neg) cases (-pct variants below)
+  // but add e[] here just so output below is correct (i.e. 1 annot)
+  if ( etop || ebot || etopp || ebotp )
+    e[ bin_label ] = std::make_pair( th , th );
   
   logger << "  encoding " << ( eq ? nq : e.size() ) << " annotation instances\n";
-
+  
   
   //
   // For each signal
@@ -317,11 +365,14 @@ void timeline_t::signal2annot( const param_t & param )
       
       if ( edf->header.is_annotation_channel( signals(s) ) )
 	continue;
-      //Helper::halt( "can only use S2A for data channels" );
+
+
       
       //
       // get signal data
       //
+
+      const std::string ch_label = signals.label(s);
 
       slice_t slice( *edf , signals(s) , wholetrace() );  
 
@@ -337,7 +388,7 @@ void timeline_t::signal2annot( const param_t & param )
 	{
 	  // wipe any current encoding
 	  e.clear();
-
+	  
 	  const double pi = 1 / (double)nq;
 	  double p = 0;
 	  for (int i=0; i<nq; i++)
@@ -348,38 +399,75 @@ void timeline_t::signal2annot( const param_t & param )
 	      p += pi;	      
 	    }
 	}
-      
+
+      if ( etop || etopp )
+	{
+	  // wipe any current encoding
+	  e.clear();	  
+	  const double upr = etopp ? MiscMath::percentile( *d , 1-th ) : th;
+	  e[ bin_label ] = std::make_pair( upr , upr ); // only use 1 val
+	}
+
+      if ( ebot || ebotp )
+	{
+          // wipe any current encoding
+	  e.clear();
+          const double lwr = ebotp ? MiscMath::percentile( *d , th ) : th;
+          e[ bin_label ] = std::make_pair( lwr , lwr ); // only use 1 val	  
+	}
+
+
+      //
+      // Naming
+      //
+      //
+      //  e[][int] : key is 'bin' label (e.g. B1, or POS; can be set by bin-label) 
+      //    --> by default, this is assigned as the 'class' name
+      //    --> if class=XXX then label class name is XXX, and label --> annotation instance ID
+      //    --> if add-channel-label=T, then label appended to class label
+      //
+      //   class  add-ch      class    inst
+      //   F      F           label    .
+      //   =XX    F           XX       label
+      //   F      T           label_CH .
+      //   =XX    T           XX_CH    label
       
       //
-      // Add annot class?
+      // Add annot class? (but not adding a channel label)
       //
-      
-      if ( use_class )
-	annotations.add( class_name );
-      
+            
       int sr = edf->header.sampling_freq( signals(s) );
       
       std::map<std::string,std::pair<double,double> >::const_iterator ee = e.begin();
       
       while ( ee != e.end() )
 	{
-	  //std::cout << " label = " << ee->first << "\n";
 	  
 	  const std::string & label = ee->first; 
 	  double ex = ee->second.first;
 	  double ey = ee->second.second;
 	  
-	  // get annot_t to add to
-	  annot_t * a = use_class ? annotations.find( class_name ) : annotations.add( label );
+	  // get annot_t to add to/
+	  //   (note: if exists, then add() returns existing set, so earier
+	  //          to use add() rather than find() ) 
+	  
+	  std::string class_label = use_class ? class_name : label ;
+	  std::string inst_label  = use_class ? label      : "."   ;
+	  if ( add_ch_label ) class_label += "_" + ch_label;
+	  
+	  annot_t * a = annotations.add( class_label );
 	  
 	  if ( a == NULL ) Helper::halt( "internal error in signal2annot()" );
 	  
-	  // iterate over signal points, find in-range intervals
-	  
+	  // iterate over signal points, find in-range intervals	  
 	  const int n = d->size();
 	  if ( n == 0 ) {++ee; continue; }
 	  
-	  bool in = (*d)[0] >= ex && (*d)[0] <= ey;
+	  bool in;
+	  if      ( etop || etopp ) in = (*d)[0] >= ex;
+	  else if ( ebot || ebotp ) in = (*d)[0] <= ex;
+	  else                      in = (*d)[0] >= ex && (*d)[0] <= ey ;
+	  
 	  uint64_t start = (*tp)[0];
 	  
 	  int cnt = 0;
@@ -393,25 +481,32 @@ void timeline_t::signal2annot( const param_t & param )
 	      bool end = i == n - 1;
 	      
 	      // still in region?
-	      bool in1 = (*d)[i] >= ex && (*d)[i] <= ey; 
+	      bool in1;
+	      if      ( etop || etopp ) in1 = (*d)[i] >= ex;
+	      else if ( ebot || ebotp ) in1 = (*d)[i] <= ex;
+	      else                      in1 = (*d)[i] >= ex && (*d)[i] <= ey;
 	      
 	      // end of an interval? 
 	      if ( in && ( gap || end || ! in1 ) ) 
 		{	      
 		  // 1-past-end encoding
 		  uint64_t stop = end ? last_time_point_tp + 1LLU : (*tp)[i] ;
-		  a->add( use_class ? label : "." , interval_t( start , stop ) , signals.label(s) );
+		  a->add( inst_label , interval_t( start , stop ) , ch_label );
 		  
 		  // update status (i.e. may still be a new interval after a gap)
 		  in = in1;
 		  
 		  if ( gap && in1 ) 
 		    {
-		  start = (*tp)[i];
-		  // unlikely, but could be gap and then last single sample
-		  if ( end )
-		    a->add( use_class ? label : "." , interval_t( start , last_time_point_tp + 1LLU ) , signals.label(s) );		  
-		}	      
+		      start = (*tp)[i];
+		      // unlikely, but could be gap and then last single sample
+		      if ( end )
+			{
+			  a->add( inst_label , 
+				  interval_t( start , last_time_point_tp + 1LLU ) ,
+				  ch_label ); 			  
+			}
+		    }
 	      ++cnt;
 	    }
 	  else if ( in1 && ! in ) // ... or start a new interval
@@ -419,11 +514,27 @@ void timeline_t::signal2annot( const param_t & param )
 	      start = (*tp)[i];
 	      in = true;
 	      if ( i == n - 1 ) // single point interval?
-		a->add( use_class ? label : "." , interval_t( start , last_time_point_tp + 1LLU ) , signals.label(s) );
-	    }
-	}
-      
-      logger << "  added " << cnt << " intervals for " << label << " based on " << ex << " <= " << signals.label(s) << " <= " << ey << "\n";
+		{
+		  a->add( inst_label ,
+			  interval_t( start , last_time_point_tp + 1LLU ) ,
+			  ch_label );
+		}
+	    }	      
+       }
+	  
+	  
+      logger << "  added " << cnt
+	     << " intervals for " << class_label << "/" << inst_label ;
+
+      if ( etop || etopp )
+	logger << " based on " 
+	       << ch_label << " >= " << ex << "\n";
+      else if ( ebot || ebotp )
+	logger << " based on " 
+	       << ch_label << " <= " << ex << "\n";
+      else
+	logger << " based on " << ex
+	       << " <= " << ch_label << " <= " << ey << "\n";
       
       // next label
       ++ee;
@@ -431,7 +542,7 @@ void timeline_t::signal2annot( const param_t & param )
       
       // next signal
     }
-
+  
 }
 
 
@@ -459,7 +570,7 @@ void timeline_t::list_spanning_annotations( const param_t & param )
   // which signals: either look at all, or the requested set
   //
 
-  std::vector<std::string> requested = param.has( "annot" ) 
+  std::vector<std::string> requested = param.has( "annot" ) && param.value( "annot" ) != "." 
     ? param.strvector_xsigs( "annot" ) 
     : annotations.names() ;
   

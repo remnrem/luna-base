@@ -1317,6 +1317,81 @@ void psd_shape_metrics( const std::vector<double> & f , // frq
 
 
 
+bool modal_freq_helper( const std::vector<double> & p ,
+			const std::vector<double> & f ,
+			double * peak_freq ,
+			double * peak_ampl ,
+			const double * flwr ,
+			const double * fupr ,		 
+			const bool norm , 
+			const bool tolog )
+{
+
+  const int n = p.size();
+
+  if ( n < 3 ) return false;
+  
+  double sum = 0;
+  if ( norm )
+    {
+      for (int i=0; i<n; i++) sum += p[i];
+      if ( sum == 0 ) return false;
+    }
+  
+  // use log values for p (or normed p)
+  // use norm or no
+  std::vector<double> y( n );
+  if ( tolog ) 
+    for (int i=0; i<n; i++)
+      y[i] = log( norm ? p[i] / norm : p[i] );
+  else
+    for (int i=0; i<n; i++)
+      y[i] = norm ? p[i] / norm : p[i] ;
+  
+  // simple smoother
+  std::vector<double> ypad(n+2);
+  ypad[0] = y[1];
+  ypad[n+1] = y[n-1];
+  for (int i=0; i<n; i++)
+    ypad[i+1] = y[i];
+
+  //    0 1 2 3 4 5
+  //  0 1 2 3 4 5 6 7
+
+  for (int i=0; i<n; i++)
+    {
+      const int pi = i+1;
+      y[i] = ( ypad[pi] + 0.5 * ( ypad[pi-1] + ypad[pi+1] ) ) * 0.5;
+      //std::cout << " f === " << f[i] << " " << y[i] << "\n";
+    }
+
+  
+  // get max
+  int mxi = -1;
+  double mx = y[0];
+
+  for (int i=0; i<n; i++)
+    {
+      if ( flwr != NULL && f[i] < *flwr ) continue;
+      if ( fupr != NULL && f[i] > *fupr ) continue;
+      if ( y[i] > mx )
+	{
+	  mx = y[i];
+	  mxi = i;
+	}
+    }
+  
+  if ( mxi == -1 ) return false;
+
+  
+  *peak_freq = f[mxi] ;
+  *peak_ampl = y[mxi] ;
+
+  //  std::cout << " f , a = " << *peak_freq << " " << *peak_ampl << "\n";
+  
+  return true;
+      
+}
 
 
 bool spectral_slope_helper( const std::vector<double> & psd , 

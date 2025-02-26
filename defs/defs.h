@@ -91,6 +91,46 @@ enum sleep_stage_t
   };
 
 
+enum cmdline_proc_t
+  {
+    NOPROC, // not set
+    PROC_VALIDATE,
+    PROC_BUILD,
+    PROC_REPATH,
+    PROC_MERGE,
+    PROC_BIND,
+    PROC_XML1,
+    PROC_XML2,
+    PROC_EVAL,
+    PROC_EVAL_VERBOSE,
+    PROC_FIR_DESIGN,
+    PROC_CWT_DESIGN,   
+    PROC_PDLIB,         
+    PROC_PDC,
+    PROC_MAPPER,
+    PROC_MAPPER_HTML,
+    PROC_PSC,           
+    PROC_NMF,           
+    PROC_MS_KMER,       
+    PROC_MS_CMP_MAPS,   
+    PROC_MS_CORR_MAPS,  
+    PROC_MS_LABEL_MAPS, 
+    PROC_COPY_SUDS,     
+    PROC_COMBINE_SUDS,  
+    PROC_CPERM_TEST,    
+    PROC_LGBM,          
+    PROC_ASSOC,         
+    PROC_MASSOC,        
+    PROC_POPS,          
+    PROC_POPS_ESPRIORS, 
+    PROC_EVAL_STAGES,   
+    PROC_OTSU,         
+    PROC_FFT,       
+    PROC_OVERLAP,       
+    PROC_GPA_PREP,      
+    PROC_GPA_RUN
+  };
+
 typedef std::map<sleep_stage_t,std::string> sleep_stage_label_t;
 typedef std::map<std::string,sleep_stage_t> sleep_stage_label_lookup_t;
 

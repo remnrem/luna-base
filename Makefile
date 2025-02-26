@@ -9,7 +9,7 @@ else
   endif
 endif
 
-SRCS = globals.cpp eval.cpp cmddefs.cpp \
+SRCS = globals.cpp eval.cpp param.cpp cmddefs.cpp dummy.cpp \
         $(wildcard edf/*.cpp) \
         $(wildcard edfz/*.cpp) \
         $(wildcard defs/*.cpp) \

@@ -97,6 +97,8 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
   const bool output_features = param.has( "output-features" );
 
+  const bool force_prefix = param.has( "force-prefix" ); // annots -> pN1, pN2, etc even if no known staging 
+  
   
   // training (1) : make level-1 stats, stages, save (binary features, BFTR)
   
@@ -499,12 +501,12 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       // Add annotations
       //
 
-      if ( has_staging ) 
+      if ( has_staging || force_prefix ) 
 	logger << "  adding POPS annotations (pN1, pN2, pN3, pR, pW, p?)\n";
       else
 	logger << "  adding POPS annotations (N1, N2, N3, R, W, ?)\n";
       
-      add_annots( edf , has_staging ? "p" : "" );      
+      add_annots( edf , has_staging || force_prefix ? "p" : "" );      
 
       //
       // All done, now summarize (& also print final confusion matrix)
