@@ -43,6 +43,13 @@ extern logger_t logger;
 
 extern globals global;
 
+std::string helper_remap( const std::string & a , const std::map<std::string,std::string> & remapping )
+{
+  const std::map<std::string,std::string>::const_iterator ii = remapping.find( a );
+  if ( ii == remapping.end() ) return a;
+  return ii->second;
+}
+
 
 void annot_t::wipe()
 {
@@ -4286,9 +4293,10 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
   // use hh:mm:ss, if possible, instead of elapsed seconds (for .annot only)
   //
 
-  bool hms = param.has( "hms" ) || param.has( "dhms" );
-  const bool dhms = param.has( "dhms" );
-
+  bool hms = param.has( "hms" ) ? param.yesno( "hms" ) : false;  
+  const bool dhms = param.has( "dhms" ) ? param.yesno( "dhms" ) : false; 
+  if ( dhms ) hms = true;
+  
   //
   // If from internal EDF+D, write w/ time-stamps for standard EDF
   // i.e. collapse times
@@ -4312,6 +4320,26 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 
   if ( xml_format && tabular_meta )
     Helper::halt( "cannot specify xml and tab-meta" );
+  
+  //
+  // on-the-fly remapping (class labels only) 
+  //
+
+  std::map<std::string,std::string> remapping;
+  std::vector<std::string> tok = param.strvector( "remap" );
+  for (int i=0; i<tok.size(); i++)
+    {
+      std::vector<std::string> tok2 = Helper::parse( tok[i] , "|" );
+      if ( tok2.size() == 2 )
+	remapping[ tok2[1] ] = tok2[0] ;      
+      else
+	Helper::halt( "bad format for remap, expecting alias|orig,alias|orig, etc " + tok[i] );
+    }
+
+  if ( remapping.size() > 0 )
+    logger << "  detected " << remapping.size() << " potential class label remappings\n";
+
+  // use as ' helper_remap( class , remapping ) '
   
   //
   // drop meta-data? (col 6)
@@ -4460,7 +4488,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	  
 	  if ( annot == NULL ) continue;
 	  
-	  O1 << "<Class name=\"" << annot->name << "\">\n"
+	  O1 << "<Class name=\"" << helper_remap( annot->name , remapping )<< "\">\n"
 	     << " <Description>" << annot->description << "</Description>\n";
 	  
 	  std::map<std::string, globals::atype_t>::const_iterator aa = annot->types.begin();
@@ -4541,7 +4569,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 
 	  // output
 	  
-	  O1 << "<Instance class=\"" << annot->name << "\">\n";
+	  O1 << "<Instance class=\"" << helper_remap( annot->name , remapping ) << "\">\n";
 	  
 	  if ( instance_idx.id != "." && instance_idx.id != "" ) 
 	    O1 << " <Name>" << instance_idx.id << "</Name>\n";
@@ -4659,7 +4687,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	    {
 	  
 	      // nb. ensure class name is quoted if contains `|` delimiter here 
-	      O1 << "# " << Helper::quote_if( annot->name, '|' ) ; 
+	      O1 << "# " << Helper::quote_if( helper_remap( annot->name , remapping ) , '|' ) ; 
 	      
 	      if ( annot->description != "" )
 		O1 << " | " << Helper::quote_if( annot->description, '|' );
@@ -4902,7 +4930,7 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
 	  
 	  // output row (nb. no need to quote class, `|` allowed here
 	  
-	  O1 << annot->name << "\t";
+	  O1 << helper_remap( annot->name , remapping ) << "\t";
 	  
 	  if ( instance_idx.id != "." && instance_idx.id != "" ) 
 	    O1 << instance_idx.id << "\t";

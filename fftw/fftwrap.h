@@ -71,6 +71,15 @@ void peakedness( const std::vector<double> & p ,
 		 const std::vector<double> & pr , 
 		 const bool verbose );
 
+bool modal_freq_helper( const std::vector<double> & p ,
+		 const std::vector<double> & f ,
+		 double * peak_freq ,
+		 double * peak_ampl ,
+		 const double * flwr = NULL ,
+		 const double * fupr = NULL , 
+		 const bool norm = false ,
+		 const bool tolog = false );
+
 
 
 //

@@ -26,11 +26,10 @@
 #include <cstddef>
 
 #include "eval.h" 
-
+#include "dummy.h"
 #include "cmddefs.h"
 
 #include "defs/defs.h"
-
 #include "helper/helper.h"
 #include "helper/zfile.h"
 #include "helper/token-eval.h"
@@ -42,7 +41,6 @@
 #include "helper/validate.h"
 
 #include "tinyxml/tinyxml.h"
-//#include "lwprep/lwprep.h"
 #include "tinyxml/xmlreader.h"
 
 #include "stats/Eigen/Dense"
@@ -55,6 +53,7 @@
 
 #include "miscmath/miscmath.h"
 #include "miscmath/dynam.h"
+#include "miscmath/crandom.h"
 
 #include "stats/glm.h"
 #include "stats/lda.h"

@@ -23,336 +23,17 @@
 
 #include "eval.h"
 #include "luna.h"
-#include "miscmath/crandom.h"
 
 extern logger_t logger;
+
 extern writer_t writer;
+
 extern freezer_t freezer;
-
-//
-// param_t 
-//
-
-void param_t::add( const std::string & option , const std::string & value ) 
-{
-  // set key=value pairs to opt[]
-
-  if ( option == "" ) return;
-  
-  // we're assuming this is on the same luna command line, which makes
-  // no sense to have multiple versions
-
-  // two special cases:
-  //  1) if key+=value, then ","-append to any exists list
-  //  2) in API mode, allow key to already exist
-
-  const bool append_mode = option[ option.size() - 1 ] == '+';
-
-  if ( append_mode )
-    {
-      const std::string option1 = option.substr( 0 , option.size() - 1 );
-      if ( option1 == "" ) return;
-      if ( opt.find( option1 ) == opt.end() )
-	opt[ option1 ] = value;
-      else
-	opt[ option1 ] = opt[ option1 ] + "," + value;
-      return;
-    }
-
-  // else check no doubles unless in API mode
-  if ( ! globals::api_mode ) 
-    if ( opt.find( option ) != opt.end() ) 
-      Helper::halt( option + " parameter specified twice, only one value would be retained" );
-
-  opt[ option ] = value; 
-  
-}  
-
-
-void param_t::add_hidden( const std::string & option , const std::string & value ) 
-{
-  add( option , value );
-  hidden.insert( option );
-}
-
-int param_t::size() const 
-{ 
-  // handle hidden things...
-  return opt.size() - hidden.size();
-}
-
-void param_t::parse( const std::string & s )
-{
-  std::vector<std::string> tok = Helper::quoted_parse( s , "=" );
-  if ( tok.size() == 2 )     add( tok[0] , tok[1] );
-  else if ( tok.size() == 1 ) add( tok[0] , "__null__" );
-  else // ignore subsequent '=' signs in 'value'  (i.e. key=value=2  is 'okay', means "value=2" is set to 'key')
-    {
-      std::string v = tok[1];
-      for (int i=2;i<tok.size();i++) v += "=" + tok[i];
-      add( tok[0] , v );
-    }
-}
-
-void param_t::update( const std::string & id , const std::string & wc )
-{
-
-  // replace all instances of 'globals::indiv_wildcard' with 'id'
-  // for all values
-
-  // TODO: amend this so that we can edit keys (or generic text)
-  // with variables and includes;  currently, only the values of keys
-  //  e.g.  for x=y, only y can be a variable/include  
-
-  std::map<std::string,std::string>::iterator ii = opt.begin();
-  while ( ii != opt.end() ) 
-    {
-      
-      std::string v = ii->second;
-      bool changed = false;
-
-      // 1. replace indiv wildcard (e.g. ^) with this person's ID
-      //    nb.  this will also happen via ${id} which is a special, automatic individual-level
-      //         variable
-      
-      while ( v.find( wc ) != std::string::npos )
-	{
-	  int p = v.find( wc );
-	  v = v.substr( 0 , p ) + id + v.substr(p+1);
-	  changed = true;
-	}
-      
-      // 2. for any @{includes}, insert contents of file (comma-delimited)
-      
-      if ( Helper::swap_in_includes( &v ) )
-	changed = true;
-
-      //
-      // needs updating?
-      //
-
-      if ( changed || v != ii->second ) 
-	ii->second = v;
-      
-      ++ii;
-    }
-  
-}
-
-void param_t::clear() 
-{ 
-  opt.clear(); 
-  hidden.clear(); 
-} 
-
-bool param_t::has(const std::string & s ) const 
-{
-  return opt.find(s) != opt.end(); 
-} 
-
-bool param_t::empty(const std::string & s ) const
-{
-  if ( ! has( s ) ) return true; // no key
-  return opt.find( s )->second == "__null__";
-}
-
-bool param_t::yesno(const std::string & s ) const
-{
-  if ( ! has( s ) ) return false;
-  return Helper::yesno( opt.find( s )->second ) ; 
-}
-
-std::string param_t::value( const std::string & s , const bool uppercase ) const 
-{ 
-  if ( has( s ) )
-    return uppercase ?
-      Helper::remove_all_quotes( Helper::toupper( opt.find( s )->second ) )
-      : Helper::remove_all_quotes( opt.find( s )->second );
-  else
-    return "";
-}
-
-bool param_t::single() const 
-{ 
-  return size() == 1; 
-}
-
-std::string param_t::single_value() const 
-{ 
-  if ( ! single() ) Helper::halt( "no single value" ); 
-  
-  std::map<std::string,std::string>::const_iterator ii = opt.begin();
-      
-  while ( ii != opt.end() ) 
-    {
-      if ( hidden.find( ii->first ) == hidden.end() )
-	return Helper::remove_all_quotes( ii->first );
-      ++ii;
-    }
-  return ""; // should not happen
-}
-
-std::string param_t::single_pair( std::string * value ) const 
-{ 
-  if ( ! single() ) Helper::halt( "no single value/pair" ); 
-  
-  std::map<std::string,std::string>::const_iterator ii = opt.begin();
-  
-  while ( ii != opt.end() ) 
-    {
-      if ( hidden.find( ii->first ) == hidden.end() )
-	{
-	  *value = Helper::remove_all_quotes( ii->second );
-	  return Helper::remove_all_quotes( ii->first );
-	}
-      ++ii;
-    }
-  // should not happen
-  *value = "";
-  return ""; 
-}
-
-std::string param_t::requires( const std::string & s , const bool uppercase ) const
-{
-  if ( ! has(s) ) Helper::halt( "command requires parameter " + s );
-  return value(s, uppercase );
-}
-
-int param_t::requires_int( const std::string & s ) const
-{
-  if ( ! has(s) ) Helper::halt( "command requires parameter " + s );
-  int r;
-  if ( ! Helper::str2int( value(s) , &r ) ) 
-    Helper::halt( "command requires parameter " + s + " to have an integer value" );
-  return r;
-}
-
-double param_t::requires_dbl( const std::string & s ) const
-{
-  if ( ! has(s) ) Helper::halt( "command requires parameter " + s );
-  double r;
-  if ( ! Helper::str2dbl( value(s) , &r ) ) 
-    Helper::halt( "command requires parameter " + s + " to have a numeric value" );
-  return r;
-}
-
-std::string param_t::dump( const std::string & indent , const std::string & delim ) const
-{
-  std::map<std::string,std::string>::const_iterator ii = opt.begin();
-  int sz = opt.size();
-  int cnt = 1;
-  std::stringstream ss;
-  while ( ii != opt.end() ) 
-    {
-
-      if ( ii->second != "__null__" )
-	ss << indent << ii->first << "=" << ii->second; 
-      else
-	ss << indent << ii->first ;
-
-      if ( cnt != sz )
-	ss << delim; 
-      
-      ++cnt;
-      ++ii;
-    }
-  return ss.str();
-}
-
-std::set<std::string> param_t::strset( const std::string & k , const std::string delim , const bool uppercase ) const
-{
-  std::set<std::string> s;
-  if ( ! has(k) ) return s;
-  std::vector<std::string> tok = Helper::quoted_parse( value(k , uppercase ) , delim );
-  for (int i=0;i<tok.size();i++)
-    s.insert( Helper::unquote( tok[i]) );
-  return s;
-}
-
-std::set<std::string> param_t::strset_xsigs( const std::string & k , const std::string delim , const bool uppercase ) const
-{
-  std::set<std::string> s;
-  if ( ! has(k) ) return s;
-  const std::string t = Helper::xsigs( value(k,uppercase) );
-  std::vector<std::string> tok = Helper::quoted_parse( t , delim );
-  for (int i=0;i<tok.size();i++)
-    s.insert( Helper::unquote( tok[i]) );
-  return s;
-}
-
-std::vector<std::string> param_t::strvector( const std::string & k , const std::string delim , const bool uppercase ) const
-{
-  std::vector<std::string> s;
-  if ( ! has(k) ) return s;
-  std::vector<std::string> tok = Helper::quoted_parse( value(k,uppercase) , delim );
-  for (int i=0;i<tok.size();i++)
-    s.push_back( Helper::unquote( tok[i]) );
-  return s;
-}
-
-// embed [x][y] expansion in strvector
-std::vector<std::string> param_t::strvector_xsigs( const std::string & k , const std::string delim , const bool uppercase ) const
-{  
-  std::vector<std::string> s;
-  if ( ! has(k) ) return s;
-
-  // first get string and process for xsigs, then tokenize
-  const std::string t = Helper::xsigs( value(k,uppercase) );
-  std::vector<std::string> tok = Helper::quoted_parse( t , delim );
-  for (int i=0;i<tok.size();i++)
-    s.push_back( Helper::unquote( tok[i]) );
-  return s;
-}
-
-std::vector<double> param_t::dblvector( const std::string & k , const std::string delim ) const
-{
-  std::vector<double> s;
-  if ( ! has(k) ) return s;
-  std::vector<std::string> tok = Helper::quoted_parse( value(k) , delim );
-  for (int i=0;i<tok.size();i++) 
-    {
-      std::string str = Helper::unquote( tok[i]);
-      double d = 0;
-      if ( ! Helper::str2dbl( str , &d ) ) Helper::halt( "Option " + k + " requires a double value(s)" );
-      s.push_back(d); 
-    }
-  return s;
-}
-
-std::vector<int> param_t::intvector( const std::string & k , const std::string delim ) const
-{
-  std::vector<int> s;
-  if ( ! has(k) ) return s;
-  std::vector<std::string> tok = Helper::quoted_parse( value(k) , delim );
-  for (int i=0;i<tok.size();i++) 
-    {
-      std::string str = Helper::unquote( tok[i]);
-      int d = 0;
-      if ( ! Helper::str2int( str , &d ) ) Helper::halt( "Option " + k + " requires an integer value(s)" );
-      s.push_back(d);
-    }
-  return s;
-}
-
-
-std::set<std::string> param_t::keys() const
-{
-  std::set<std::string> s;
-  std::map<std::string,std::string>::const_iterator ii = opt.begin();
-  while ( ii != opt.end() )
-    {
-      s.insert( ii->first );
-      ++ii;
-    }
-  return s;
-}
-
 
 
 //
 // cmd_t
 //
-
 
 cmd_t::cmd_t( const bool silent ) 
 {
@@ -381,7 +62,6 @@ void cmd_t::reset()
   error = false;
   will_quit = false;
 }
-
 
 void cmd_t::clear_static_members() 
 {
@@ -535,7 +215,8 @@ void cmd_t::signal_alias( const std::string & s )
       if ( primary_upper2orig.find( Helper::toupper( primary ) ) != primary_upper2orig.end() )
 	{
 	  if ( primary_upper2orig[ Helper::toupper( primary ) ] != primary )
-	    Helper::halt( "primary alias specified with varying case:" + primary_upper2orig[ Helper::toupper( primary ) ]  + " and " + primary );
+	    Helper::halt( "primary alias specified with varying case:"
+			  + primary_upper2orig[ Helper::toupper( primary ) ]  + " and " + primary );
 	    }
       else
 	primary_upper2orig[ Helper::toupper( primary ) ] = primary;
@@ -646,8 +327,7 @@ void cmd_t::replace_wildcards( const std::string & id )
     {
 
       std::string currline = cline[l];
-  
-  
+      
       //
       // swap in any variables (and allows for them being defined on-the-fly)
       //
@@ -663,8 +343,6 @@ void cmd_t::replace_wildcards( const std::string & id )
       iline += currline + "\n";
       
     }
-  
-  //std::cerr << "final [" << iline << "]\n";
   
   //
   // Parse into commands/options
@@ -697,7 +375,6 @@ void cmd_t::replace_wildcards( const std::string & id )
   // ALSO, will expand any @{includes} from files (which may contain ^ ID wildcards
   // in their names,  e..g.    CHEP bad-channels=@{aux/files/bad-^.txt}  
   
-  //params = original_params;
   for (int p = 0 ; p < params.size(); p++ )
     params[p].update( id , globals::indiv_wildcard );
 
@@ -841,14 +518,14 @@ bool cmd_t::read( const std::string * str , bool silent )
   //
 
   //
-  // Note... used to do processing of command file here (global)
-  //  as we now use ivars as well as vars, hold on this till later,
-  //  in update()
+  // Note... we used to do processing of command file here (global),
+  // but as we now use ivars as well as vars, hold on this till
+  // later, in update()
   //
 
 
   //
-  // Initial processing 
+  // Initial reporting of commands read
   //
   
   std::vector<std::string> tok = Helper::quoted_parse( line , "\n" );
@@ -859,9 +536,9 @@ bool cmd_t::read( const std::string * str , bool silent )
       return false;
     }
 
-
   
   // command(s): do this just for printing; real parsing will include variables, etc
+
   for (int c=0;c<tok.size();c++)
     {      
       std::vector<std::string> ctok = Helper::quoted_parse( tok[c] , "\t " );
@@ -942,16 +619,10 @@ bool cmd_t::eval( edf_t & edf )
       
       //
       // If this particular command did not explicitly specify
-      // signals, then add a wildcard
+      // signals, then add a wildcard, which will always take all
+      // in-memory channels
       //
-      
-      // Old version - this did not include newly added signals
-      // when 'sig' is specified on the initial command line,
-      
-      //if ( ! param(c).has( "sig" ) )
-      //param(c).add_hidden( "sig" , signal_string() );
-
-      // Change to add wildcard '*' which will always take all in-memory channels
+            
       if ( ! param(c).has( "sig" ) )
 	param(c).add_hidden( "sig" , "*" );
       
@@ -964,7 +635,8 @@ bool cmd_t::eval( edf_t & edf )
       logger << "   options: " << param(c).dump( "" , " " ) << "\n";
 
       //
-      // Deal with conditionals first: if if_count>1, implies to ignore -- unless we come across an ENDIF/FI 
+      // Deal with conditionals first: if if_count>1, implies to
+      // ignore -- unless we come across an ENDIF/FI
       //
       
       if ( if_count )
@@ -1094,188 +766,188 @@ bool cmd_t::eval( edf_t & edf )
       bool fnd = false;
       
       if ( (!fnd) && is( c, "WRITE" ) )          { fnd = true; proc_write( edf, param(c) ); }
-	if ( (!fnd) && is( c, "EDF" ) )          { fnd = true; proc_force_edf( edf , param(c) ); }
-	if ( (!fnd) && is( c, "EDF-" ) )         { fnd = true; proc_edf_minus( edf , param(c) ); }
-	if ( (!fnd) && is( c, "EDF-MINUS" ) )    { fnd = true; proc_edf_minus( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SET-TIMESTAMPS" ) ) { fnd = true; proc_set_timestamps( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SUMMARY" ) )      { fnd = true; proc_summaries( edf , param(c) ); }
-	if ( (!fnd) && is( c, "HEADERS" ) )      { fnd = true; proc_headers( edf , param(c) ); }
-	if ( (!fnd) && is( c, "ALIASES" ) )      { fnd = true; proc_aliases( edf , param(c) ); }
-	if ( (!fnd) && is( c, "REPORT" ) )       { fnd = true; proc_report( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SET-HEADERS" ) )  { fnd = true; proc_set_headers( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SET-VAR" ) )      { fnd = true; proc_set_ivar( edf, param(c) ); }
-	if ( (!fnd) && is( c, "DESC" ) )         { fnd = true; proc_desc( edf , param(c) ); }
-	if ( (!fnd) && is( c, "TYPES" ) )        { fnd = true; proc_show_channel_map(); }
-	if ( (!fnd) && is( c, "VARS" ) )         { fnd = true; proc_dump_vars( edf , param(c) ); }
-	if ( (!fnd) && is( c, "STATS" ) )        { fnd = true; proc_stats( edf , param(c) ); }
-	if ( (!fnd) && is( c, "DUPES" ) )        { fnd = true; proc_dupes( edf, param(c) );  }
-	if ( (!fnd) && is( c, "REFERENCE" ) )    { fnd = true; proc_reference( edf , param(c) ); }
-	if ( (!fnd) && is( c, "DEREFERENCE" ) )  { fnd = true; proc_dereference( edf , param(c) ); }      
-	if ( (!fnd) && is( c, "FLIP" ) )         { fnd = true; proc_flip( edf , param(c) ); }
-	if ( (!fnd) && is( c, "RECTIFY" ) )      { fnd = true; proc_rectify( edf , param(c) ); }
-	if ( (!fnd) && is( c, "REVERSE" ) )      { fnd = true; proc_reverse( edf , param(c) ); }
-	if ( (!fnd) && is( c, "CANONICAL" ) )    { fnd = true; proc_canonical( edf , param(c) ); }
-	if ( (!fnd) && is( c, "REMAP" ) )        { fnd = true; proc_remap_annots( edf , param(c) ); }
-	if ( (!fnd) && is( c, "uV" ) )           { fnd = true; proc_scale( edf , param(c) , "uV" ); }
-	if ( (!fnd) && is( c, "mV" ) )           { fnd = true; proc_scale( edf , param(c) , "mV" ); }
-	if ( (!fnd) && is( c, "MINMAX" ) )       { fnd = true; proc_minmax( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SCALE" ) )        { fnd = true; proc_setscale( edf , param(c) ); }
-	if ( (!fnd) && is( c, "ROBUST-NORM" ) )  { fnd = true; proc_standardize( edf , param(c) ); }
-	if ( (!fnd) && is( c, "ALTER" ) )        { fnd = true; proc_correct( edf , param(c) ); }
-	if ( (!fnd) && is( c, "RECORD-SIZE" ) )  { fnd = true; proc_rerecord( edf , param(c) ); }  
-	if ( (!fnd) && is( c, "TIME-TRACK" ) )   { fnd = true; proc_timetrack( edf, param(c) ); }
-	if ( (!fnd) && is( c, "STAGE" ) )        { fnd = true; proc_sleep_stage( edf , param(c) , false ); }
-	if ( (!fnd) && is( c, "HYPNO" ) )        { fnd = true; proc_sleep_stage( edf , param(c) , true ); }
-	if ( (!fnd) && is( c, "SIG-CYCLES") )    { fnd = true; proc_ecycle( edf , param(c) ); }
-	if ( (!fnd) && is( c, "TSLIB" ) )        { fnd = true; pdc_t::construct_tslib( edf , param(c) ); }
-        if ( (!fnd) && is( c, "SSS" ) )          { fnd = true; pdc_t::simple_sleep_scorer( edf , param(c) ); }
-        if ( (!fnd) && is( c, "EXE" ) )          { fnd = true; pdc_t::similarity_matrix( edf , param(c) ); }
-        if ( (!fnd) && is( c, "DUMP" ) )         { fnd = true; proc_dump( edf, param(c) );  }
-	if ( (!fnd) && is( c, "DUMP-RECORDS" ) ) { fnd = true; proc_record_dump( edf , param(c) ); }
-	if ( (!fnd) && is( c, "RECS" ) )         { fnd = true; proc_record_table( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SEGMENTS" ) )     { fnd = true; proc_dump_segs( edf , param(c) ); }
-	if ( (!fnd) && is( c, "DUMP-EPOCHS" ) )  { fnd = true; proc_epoch_dump( edf, param(c) ); } // REDUNDANT; use ANNOTS epoch instead
-	if ( (!fnd) && is( c, "ANNOTS" ) )       { fnd = true; proc_list_all_annots( edf, param(c) ); }
-	if ( (!fnd) && is( c, "ESPAN" ) )        { fnd = true; proc_espan( edf , param(c) ); }
-	if ( (!fnd) && is( c, "MAKE-ANNOTS" ) )  { fnd = true; proc_make_annots( edf , param(c) ); }
-	if ( (!fnd) && is( c, "WRITE-ANNOTS" ) ) { fnd = true; proc_write_annots( edf, param(c) ); }
-	if ( (!fnd) && is( c, "META" ) )         { fnd = true; proc_set_annot_metadata( edf, param(c) );  }
-	if ( (!fnd) && is( c, "OVERLAP") )       { fnd = true; proc_annotate( edf, param(c) ); }
-	if ( (!fnd) && is( c, "EXTEND" ) )       { fnd = true; proc_extend_annots( edf, param(c) ); }
-	if ( (!fnd) && is( c, "A2S" ) )          { fnd = true; proc_annot2signal( edf, param(c) ); }
-	if ( (!fnd) && is( c, "S2A" ) )          { fnd = true; proc_signal2annot( edf, param(c) ); }
-	if ( (!fnd) && is( c, "A2C" ) )          { fnd = true; proc_annot2cache( edf , param(c) ); }
-	if ( (!fnd) && is( c, "C2A" ) )          { fnd = true; proc_cache2annot( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SPANNING" ) )     { fnd = true; proc_list_spanning_annots( edf, param(c) ); }
-	if ( (!fnd) && is( c, "MEANS" ) )        { fnd = true; proc_sig_annot_mean( edf, param(c) ); }
-	if ( (!fnd) && is( c, "TABULATE" ) )     { fnd = true; proc_sig_tabulate( edf, param(c) ); }
-	if ( (!fnd) && is( c, "MATRIX" ) )       { fnd = true; proc_epoch_matrix( edf , param(c) ); }
-	if ( (!fnd) && is( c, "HEAD" ) )         { fnd = true; proc_head_matrix( edf , param(c) ); }
-	if ( (!fnd) && ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) ) )  { fnd = true; proc_restructure( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SIGNALS" ) )      { fnd = true; proc_drop_signals( edf , param(c) ); }
-	if ( (!fnd) && is( c, "RENAME" ) )       { fnd = true; proc_rename( edf, param(c) ); }
-	if ( (!fnd) && is( c, "ENFORCE-SR" ) )   { fnd = true; proc_enforce_signals( edf , param(c) ); }
-	if ( (!fnd) && is( c, "COPY" ) )         { fnd = true; proc_copy_signal( edf , param(c) ); }
-	if ( (!fnd) && is( c, "READ" ) )         { fnd = true; proc_read_signal( edf , param(c) ); }
-	if ( (!fnd) && is( c, "ORDER" ) )        { fnd = true; proc_order_signals( edf , param(c) ); }
-	if ( (!fnd) && is( c, "CONTAINS" ) )     { fnd = true; proc_has_signals( edf , param(c) ); }
-	if ( (!fnd) && ( is( c, "RMS" ) || is( c, "SIGSTATS" ) ) ) { fnd = true; proc_rms( edf, param(c) ); }
-	if ( (!fnd) && is( c, "MSE" ) )          { fnd = true; proc_mse( edf, param(c) ); }
-	if ( (!fnd) && is( c, "LZW" ) )          { fnd = true; proc_lzw( edf, param(c) ); }
-	if ( (!fnd) && is( c, "ZR" ) )           { fnd = true; proc_zratio( edf , param(c) ); }
-	if ( (!fnd) && is( c, "ANON" ) )         { fnd = true; proc_anon( edf , param(c) ); }
-	if ( (!fnd) && is( c, "EPOCH" ) )        { fnd = true; proc_epoch( edf, param(c) ); }
-	if ( (!fnd) && is( c, "ALIGN" ) )        { fnd = true; proc_align( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SLICE" ) )        { fnd = true; proc_slice( edf , param(c) , 1 ); }
-	if ( (!fnd) && is( c, "ALIGN-EPOCHS" ) ) { fnd = true; proc_align_epochs( edf , param(c) ); }
-	if ( (!fnd) && is( c, "ALIGN-ANNOTS" ) ) { fnd = true; proc_align_annots( edf , param(c) ); }
-	if ( (!fnd) && is( c, "INSERT" ) )       { fnd = true; proc_insert( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SUDS" ) )         { fnd = true; proc_suds( edf , param(c) ); }
-	if ( (!fnd) && is( c, "MAKE-SUDS" ) )    { fnd = true; proc_make_suds( edf , param(c) ); }
-	if ( (!fnd) && is( c, "RUN-POPS" ) )     { fnd = true; proc_runpops( edf , param(c) ); } // wrapper
-	if ( (!fnd) && is( c, "POPS" ) )         { fnd = true; proc_pops( edf , param(c) ); }
-	if ( (!fnd) && is( c, "EVAL-STAGES" ) )  { fnd = true; proc_eval_stages( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SOAP" ) )         { fnd = true; proc_self_suds( edf , param(c) ); }
-	if ( (!fnd) && is( c, "COMPLETE" ) )     { fnd = true; proc_resoap( edf , param(c) ); }
-	if ( (!fnd) && is( c, "REBASE" ) )       { fnd = true; proc_rebase_soap( edf , param(c) ); } // e.g. 20->30s epochs using SOAP
-	if ( (!fnd) && is( c, "PLACE" ) )        { fnd = true; proc_place_soap( edf , param(c) ); } // e.g. find where should go
-	if ( (!fnd) && is( c, "TRANS" ) )        { fnd = true; proc_trans( edf , param(c) ); }
-	if ( (!fnd) && is( c, "EVAL" ) )         { fnd = true; proc_eval( edf, param(c) ); }
-	if ( (!fnd) && is( c, "DERIVE" ) )       { fnd = true; proc_derive( edf, param(c) ); }
-	if ( (!fnd) && is( c, "MASK" ) )         { fnd = true; proc_mask( edf, param(c) ); }
-	if ( (!fnd) && is( c, "COMBINE" ) )      { fnd = true; proc_combine( edf , param(c) ); }
-	if ( (!fnd) && is( c, "FREEZE" ) )       { fnd = true; proc_freeze( edf , param(c) ); }
-	if ( (!fnd) && is( c, "THAW" ) )         { fnd = true; proc_thaw( edf , param(c) ); }
-	if ( (!fnd) && is( c, "CLEAN-FREEZER"))  { fnd = true; proc_clean_freezer( edf , param(c) ); }
-	if ( (!fnd) && is( c, "FILE-MASK" ) )    { fnd = true; proc_file_mask( edf , param(c) ); } // not supported/implemented
-	if ( (!fnd) && is( c, "DUMP-MASK" ) )    { fnd = true; proc_dump_mask( edf, param(c) ); }
-	if ( (!fnd) && is( c, "ANNOT-MASK" ) )   { fnd = true; proc_annot_mask( edf, param(c) ); }
-	if ( (!fnd) && is( c, "CHEP" ) )         { fnd = true; timeline_t::proc_chep( edf, param(c) ); }
-        if ( (!fnd) && is( c, "CHEP-MASK" ) )    { fnd = true; proc_chep_mask( edf, param(c) ); }
-	if ( (!fnd) && is( c, "EPOCH-ANNOT" ) )  { fnd = true; proc_file_annot( edf , param(c) ); }
-	if ( (!fnd) && is( c, "EPOCH-MASK" ) )   { fnd = true; proc_epoch_mask( edf, param(c) ); }
-	if ( (!fnd) && is( c, "HB" ) )           { fnd = true; proc_hypoxic_burden( edf, param(c) ); }
-	if ( (!fnd) && is( c, "FILTER" ) )       { fnd = true; proc_filter( edf, param(c) ); }
-	if ( (!fnd) && is( c, "FILTER-DESIGN" )) { fnd = true; proc_filter_design( edf, param(c) ); }
-	if ( (!fnd) && is( c, "MOVING-AVERAGE" )) { fnd = true; proc_moving_average( edf, param(c) ); }
-	if ( (!fnd) && is( c, "CWT-DESIGN" ) )   { fnd = true; proc_cwt_design( edf , param(c) ); }
-	if ( (!fnd) && is( c, "CWT" ) )          { fnd = true; proc_cwt( edf , param(c) ); }
-	if ( (!fnd) && is( c, "HILBERT" ) )      { fnd = true; proc_hilbert( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SYNC" ) )         { fnd = true; proc_sync( edf , param(c) ); }
-	if ( (!fnd) && is( c, "TSYNC" ) )        { fnd = true; proc_tsync( edf , param(c) ); }
-	if ( (!fnd) && is( c, "XCORR" ) )        { fnd = true; proc_xcorr( edf, param(c) ); }
-	if ( (!fnd) && is( c, "TV" ) )           { fnd = true; proc_tv_denoise( edf , param(c) ); }
-	if ( (!fnd) && is( c, "OTSU" ) )         { fnd = true; proc_otsu( edf, param(c) ); }
-	if ( (!fnd) && is( c, "COVAR" ) )        { fnd = true; proc_covar( edf, param(c) ); }
-	if ( (!fnd) && is( c, "PSD" ) )          { fnd = true; proc_psd( edf, param(c) ); }
-	if ( (!fnd) && is( c, "FFT" ) )          { fnd = true; proc_fft( edf , param(c) ); }
-	if ( (!fnd) && is( c, "MTM" ) )          { fnd = true; proc_mtm( edf, param(c) ); }
-	if ( (!fnd) && is( c, "IRASA" ) )        { fnd = true; proc_irasa( edf, param(c) ); }
-	if ( (!fnd) && is( c, "1FNORM" ) )       { fnd = true; proc_1overf_norm( edf, param(c) ); }
-	if ( (!fnd) && is( c, "DYNAM" ) )        { fnd = true; proc_qdynam( edf , param(c) ); }
-	if ( (!fnd) && is( c, "PSC" ) )          { fnd = true; proc_psc( edf , param(c) ); }
-	if ( (!fnd) && is( c, "MS" ) )           { fnd = true; proc_microstates( edf , param(c) ); }
-	if ( (!fnd) && is( c, "ASYMM" ) )        { fnd = true; proc_asymm( edf , param(c) ); }
-	if ( (!fnd) && is( c, "TLOCK" ) )        { fnd = true; proc_tlock( edf , param(c) ); }
-	if ( (!fnd) && is( c, "TCLST" ) )        { fnd = true; proc_tclst( edf , param(c) ); }
-	if ( (!fnd) && is( c, "PERI" ) )         { fnd = true; proc_peri( edf , param(c) ); }
-	if ( (!fnd) && is( c, "PEAKS" ) )        { fnd = true; proc_peaks( edf , param(c) ); } 
-	if ( (!fnd) && is( c, "Z-PEAKS" ) )      { fnd = true; proc_zpeaks( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SEDF" ) )         { fnd = true; proc_sedf( edf , param(c) ); }
-	if ( (!fnd) && is( c, "FIP" ) )          { fnd = true; proc_fiplot( edf , param(c) ); }
-	if ( (!fnd) && is( c, "COH" ) )          { fnd = true; proc_coh( edf , param(c) ); }
-	if ( (!fnd) && is( c, "CC" ) )           { fnd = true; proc_conncoupl( edf , param(c) ); }
-	if ( (!fnd) && is( c, "CORREL" ) )       { fnd = true; proc_correl( edf , param(c) ); }
-	if ( (!fnd) && is( c, "PSI" ) )          { fnd = true; proc_psi( edf , param(c) ); }
-	if ( (!fnd) && is( c, "ACF" ) )          { fnd = true; proc_acf( edf , param(c) ); }
-	if ( (!fnd) && is( c, "GP" ) )           { fnd = true; gc_wrapper( edf , param(c) );  }
-        if ( (!fnd) && is( c, "ED" ) )           { fnd = true; proc_elec_distance( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SVD" ) )          { fnd = true; proc_svd( edf, param(c) ); }
-	if ( (!fnd) && is( c, "ICA" ) )          { fnd = true; proc_ica( edf, param(c) ); }
-	if ( (!fnd) && is( c, "ADJUST" ) )       { fnd = true; proc_adjust( edf , param(c) );  }
-	if ( (!fnd) && is( c, "CLOCS" ) )        { fnd = true; proc_attach_clocs( edf , param(c) ); }
-	if ( (!fnd) && is( c, "L1OUT" ) )        { fnd = true; proc_leave_one_out( edf , param(c) ); }
-	if ( (!fnd) && is( c, "INTERPOLATE" ) )  { fnd = true; proc_chep_based_interpolation( edf, param(c) ); }
-	if ( (!fnd) && is( c, "SL" ) )           { fnd = true; proc_surface_laplacian( edf , param(c) ); }
-	if ( (!fnd) && is( c, "EMD" ) )          { fnd = true; proc_emd( edf , param(c) ); }
-	if ( (!fnd) && is( c, "DFA" ) )          { fnd = true; proc_dfa( edf , param(c) ); }
-	if ( (!fnd) && is( c, "MI" ) )           { fnd = true; proc_mi( edf, param(c) ); }
-	if ( (!fnd) && is( c, "HR" ) )           { fnd = true; proc_bpm( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SUPPRESS-ECG" ) ) { fnd = true; proc_ecgsuppression( edf , param(c) ); }
-	if ( (!fnd) && is( c, "PAC" ) )          { fnd = true; proc_pac( edf , param(c) ); }
-	if ( (!fnd) && is( c, "CFC" ) )          { fnd = true; proc_cfc( edf , param(c) ); }
-	if ( (!fnd) && is( c, "GED" ) )          { fnd = true; proc_ged( edf , param(c) ); }
-	if ( (!fnd) && is( c, "PREDICT" ) )      { fnd = true; proc_predict( edf , param(c) ); }
-	if ( (!fnd) && is( c, "TAG" ) )          { fnd = true; proc_tag( param(c) ); }
-	if ( (!fnd) && is( c, "RESAMPLE" ) )     { fnd = true; proc_resample( edf, param(c) ); }
-	if ( (!fnd) && is( c, "ZOH" ) )          { fnd = true; proc_zoh( edf, param(c) ); }
-	if ( (!fnd) && is( c, "LINE-DENOISE" ) ) { fnd = true; dsptools::line_denoiser( edf, param(c) ); }
-        if ( (!fnd) && is( c, "ZC" ) )           { fnd = true; dsptools::detrend( edf, param(c) ); }
-        if ( (!fnd) && is( c, "SPINDLES" ) )     { fnd = true; proc_spindles( edf, param(c) ); }
-	if ( (!fnd) && is( c, "AROUSALS" ) )     { fnd = true; proc_arousals( edf, param(c) ); } 
-	if ( (!fnd) && is( c, "SO" ) )           { fnd = true; proc_slowwaves( edf, param(c) ); }
-	if ( (!fnd) && is( c, "COUPL" ) )        { fnd = true; proc_coupling( edf , param(c) ); }
-	if ( (!fnd) && is( c, "RIPPLES" ) )      { fnd = true; proc_ripples( edf , param(c) ); }
-	if ( (!fnd) && is( c, "PCOUPL" ) )       { fnd = true; proc_generic_coupling( edf , param(c) ); }
-	if ( (!fnd) && is( c, "POL" ) )          { fnd = true; proc_polarity( edf, param(c) ); }	  
-	if ( (!fnd) && is( c, "REMS" ) )         { fnd = true; proc_rems( edf, param(c) ); }
-	if ( (!fnd) && is( c, "ARTIFACTS" ) )    { fnd = true; proc_artifacts( edf, param(c) ); }
-	if ( (!fnd) && is( c, "EDGER" ) )        { fnd = true; proc_trim( edf, param(c) ) ; }
-	if ( (!fnd) && is( c, "CACHE" ) )        { fnd = true; proc_dump_cache( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SIGGEN" ) )       { fnd = true; proc_siggen( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SIMUL" ) )        { fnd = true; proc_simul( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SPIKE" ) )        { fnd = true; proc_spike( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SHIFT" ) )        { fnd = true; proc_shift( edf , param(c) ); }
-	if ( (!fnd) && is( c, "SCRAMBLE" ) )     { fnd = true; proc_scramble( edf , param(c) ); }
+      if ( (!fnd) && is( c, "EDF" ) )          { fnd = true; proc_force_edf( edf , param(c) ); }
+      if ( (!fnd) && is( c, "EDF-" ) )         { fnd = true; proc_edf_minus( edf , param(c) ); }
+      if ( (!fnd) && is( c, "EDF-MINUS" ) )    { fnd = true; proc_edf_minus( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SET-TIMESTAMPS" ) ) { fnd = true; proc_set_timestamps( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SUMMARY" ) )      { fnd = true; proc_summaries( edf , param(c) ); }
+      if ( (!fnd) && is( c, "HEADERS" ) )      { fnd = true; proc_headers( edf , param(c) ); }
+      if ( (!fnd) && is( c, "ALIASES" ) )      { fnd = true; proc_aliases( edf , param(c) ); }
+      if ( (!fnd) && is( c, "REPORT" ) )       { fnd = true; proc_report( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SET-HEADERS" ) )  { fnd = true; proc_set_headers( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SET-VAR" ) )      { fnd = true; proc_set_ivar( edf, param(c) ); }
+      if ( (!fnd) && is( c, "DESC" ) )         { fnd = true; proc_desc( edf , param(c) ); }
+      if ( (!fnd) && is( c, "TYPES" ) )        { fnd = true; proc_show_channel_map(); }
+      if ( (!fnd) && is( c, "VARS" ) )         { fnd = true; proc_dump_vars( edf , param(c) ); }
+      if ( (!fnd) && is( c, "STATS" ) )        { fnd = true; proc_stats( edf , param(c) ); }
+      if ( (!fnd) && is( c, "DUPES" ) )        { fnd = true; proc_dupes( edf, param(c) );  }
+      if ( (!fnd) && is( c, "REFERENCE" ) )    { fnd = true; proc_reference( edf , param(c) ); }
+      if ( (!fnd) && is( c, "DEREFERENCE" ) )  { fnd = true; proc_dereference( edf , param(c) ); }      
+      if ( (!fnd) && is( c, "FLIP" ) )         { fnd = true; proc_flip( edf , param(c) ); }
+      if ( (!fnd) && is( c, "RECTIFY" ) )      { fnd = true; proc_rectify( edf , param(c) ); }
+      if ( (!fnd) && is( c, "REVERSE" ) )      { fnd = true; proc_reverse( edf , param(c) ); }
+      if ( (!fnd) && is( c, "CANONICAL" ) )    { fnd = true; proc_canonical( edf , param(c) ); }
+      if ( (!fnd) && is( c, "REMAP" ) )        { fnd = true; proc_remap_annots( edf , param(c) ); }
+      if ( (!fnd) && is( c, "uV" ) )           { fnd = true; proc_scale( edf , param(c) , "uV" ); }
+      if ( (!fnd) && is( c, "mV" ) )           { fnd = true; proc_scale( edf , param(c) , "mV" ); }
+      if ( (!fnd) && is( c, "MINMAX" ) )       { fnd = true; proc_minmax( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SCALE" ) )        { fnd = true; proc_setscale( edf , param(c) ); }
+      if ( (!fnd) && is( c, "ROBUST-NORM" ) )  { fnd = true; proc_standardize( edf , param(c) ); }
+      if ( (!fnd) && is( c, "ALTER" ) )        { fnd = true; proc_correct( edf , param(c) ); }
+      if ( (!fnd) && is( c, "RECORD-SIZE" ) )  { fnd = true; proc_rerecord( edf , param(c) ); }  
+      if ( (!fnd) && is( c, "TIME-TRACK" ) )   { fnd = true; proc_timetrack( edf, param(c) ); }
+      if ( (!fnd) && is( c, "STAGE" ) )        { fnd = true; proc_sleep_stage( edf , param(c) , false ); }
+      if ( (!fnd) && is( c, "HYPNO" ) )        { fnd = true; proc_sleep_stage( edf , param(c) , true ); }
+      if ( (!fnd) && is( c, "SIG-CYCLES") )    { fnd = true; proc_ecycle( edf , param(c) ); }
+      if ( (!fnd) && is( c, "TSLIB" ) )        { fnd = true; pdc_t::construct_tslib( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SSS" ) )          { fnd = true; pdc_t::simple_sleep_scorer( edf , param(c) ); }
+      if ( (!fnd) && is( c, "EXE" ) )          { fnd = true; pdc_t::similarity_matrix( edf , param(c) ); }
+      if ( (!fnd) && is( c, "DUMP" ) )         { fnd = true; proc_dump( edf, param(c) );  }
+      if ( (!fnd) && is( c, "DUMP-RECORDS" ) ) { fnd = true; proc_record_dump( edf , param(c) ); }
+      if ( (!fnd) && is( c, "RECS" ) )         { fnd = true; proc_record_table( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SEGMENTS" ) )     { fnd = true; proc_dump_segs( edf , param(c) ); }
+      if ( (!fnd) && is( c, "DUMP-EPOCHS" ) )  { fnd = true; proc_epoch_dump( edf, param(c) ); } // REDUNDANT -> ANNOTS epoch
+      if ( (!fnd) && is( c, "ANNOTS" ) )       { fnd = true; proc_list_all_annots( edf, param(c) ); }
+      if ( (!fnd) && is( c, "ESPAN" ) )        { fnd = true; proc_espan( edf , param(c) ); }
+      if ( (!fnd) && is( c, "MAKE-ANNOTS" ) )  { fnd = true; proc_make_annots( edf , param(c) ); }
+      if ( (!fnd) && is( c, "WRITE-ANNOTS" ) ) { fnd = true; proc_write_annots( edf, param(c) ); }
+      if ( (!fnd) && is( c, "META" ) )         { fnd = true; proc_set_annot_metadata( edf, param(c) );  }
+      if ( (!fnd) && is( c, "OVERLAP") )       { fnd = true; proc_annotate( edf, param(c) ); }
+      if ( (!fnd) && is( c, "EXTEND" ) )       { fnd = true; proc_extend_annots( edf, param(c) ); }
+      if ( (!fnd) && is( c, "A2S" ) )          { fnd = true; proc_annot2signal( edf, param(c) ); }
+      if ( (!fnd) && is( c, "S2A" ) )          { fnd = true; proc_signal2annot( edf, param(c) ); }
+      if ( (!fnd) && is( c, "A2C" ) )          { fnd = true; proc_annot2cache( edf , param(c) ); }
+      if ( (!fnd) && is( c, "C2A" ) )          { fnd = true; proc_cache2annot( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SPANNING" ) )     { fnd = true; proc_list_spanning_annots( edf, param(c) ); }
+      if ( (!fnd) && is( c, "MEANS" ) )        { fnd = true; proc_sig_annot_mean( edf, param(c) ); }
+      if ( (!fnd) && is( c, "TABULATE" ) )     { fnd = true; proc_sig_tabulate( edf, param(c) ); }
+      if ( (!fnd) && is( c, "MATRIX" ) )       { fnd = true; proc_epoch_matrix( edf , param(c) ); }
+      if ( (!fnd) && is( c, "HEAD" ) )         { fnd = true; proc_head_matrix( edf , param(c) ); }
+      if ( (!fnd) && ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) ) )  { fnd = true; proc_restructure( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SIGNALS" ) )      { fnd = true; proc_drop_signals( edf , param(c) ); }
+      if ( (!fnd) && is( c, "RENAME" ) )       { fnd = true; proc_rename( edf, param(c) ); }
+      if ( (!fnd) && is( c, "ENFORCE-SR" ) )   { fnd = true; proc_enforce_signals( edf , param(c) ); }
+      if ( (!fnd) && is( c, "COPY" ) )         { fnd = true; proc_copy_signal( edf , param(c) ); }
+      if ( (!fnd) && is( c, "READ" ) )         { fnd = true; proc_read_signal( edf , param(c) ); }
+      if ( (!fnd) && is( c, "ORDER" ) )        { fnd = true; proc_order_signals( edf , param(c) ); }
+      if ( (!fnd) && is( c, "CONTAINS" ) )     { fnd = true; proc_has_signals( edf , param(c) ); }
+      if ( (!fnd) && ( is( c, "RMS" ) || is( c, "SIGSTATS" ) ) ) { fnd = true; proc_rms( edf, param(c) ); }
+      if ( (!fnd) && is( c, "MSE" ) )          { fnd = true; proc_mse( edf, param(c) ); }
+      if ( (!fnd) && is( c, "LZW" ) )          { fnd = true; proc_lzw( edf, param(c) ); }
+      if ( (!fnd) && is( c, "ZR" ) )           { fnd = true; proc_zratio( edf , param(c) ); }
+      if ( (!fnd) && is( c, "ANON" ) )         { fnd = true; proc_anon( edf , param(c) ); }
+      if ( (!fnd) && is( c, "EPOCH" ) )        { fnd = true; proc_epoch( edf, param(c) ); }
+      if ( (!fnd) && is( c, "ALIGN" ) )        { fnd = true; proc_align( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SLICE" ) )        { fnd = true; proc_slice( edf , param(c) , 1 ); }
+      if ( (!fnd) && is( c, "ALIGN-EPOCHS" ) ) { fnd = true; proc_align_epochs( edf , param(c) ); }
+      if ( (!fnd) && is( c, "ALIGN-ANNOTS" ) ) { fnd = true; proc_align_annots( edf , param(c) ); }
+      if ( (!fnd) && is( c, "INSERT" ) )       { fnd = true; proc_insert( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SUDS" ) )         { fnd = true; proc_suds( edf , param(c) ); }
+      if ( (!fnd) && is( c, "MAKE-SUDS" ) )    { fnd = true; proc_make_suds( edf , param(c) ); }
+      if ( (!fnd) && is( c, "RUN-POPS" ) )     { fnd = true; proc_runpops( edf , param(c) ); } // wrapper
+      if ( (!fnd) && is( c, "POPS" ) )         { fnd = true; proc_pops( edf , param(c) ); }
+      if ( (!fnd) && is( c, "EVAL-STAGES" ) )  { fnd = true; proc_eval_stages( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SOAP" ) )         { fnd = true; proc_self_suds( edf , param(c) ); }
+      if ( (!fnd) && is( c, "COMPLETE" ) )     { fnd = true; proc_resoap( edf , param(c) ); }
+      if ( (!fnd) && is( c, "REBASE" ) )       { fnd = true; proc_rebase_soap( edf , param(c) ); } // e.g. 20->30s epochs using SOAP
+      if ( (!fnd) && is( c, "PLACE" ) )        { fnd = true; proc_place_soap( edf , param(c) ); } // e.g. find where should go
+      if ( (!fnd) && is( c, "TRANS" ) )        { fnd = true; proc_trans( edf , param(c) ); }
+      if ( (!fnd) && is( c, "EVAL" ) )         { fnd = true; proc_eval( edf, param(c) ); }
+      if ( (!fnd) && is( c, "DERIVE" ) )       { fnd = true; proc_derive( edf, param(c) ); }
+      if ( (!fnd) && is( c, "MASK" ) )         { fnd = true; proc_mask( edf, param(c) ); }
+      if ( (!fnd) && is( c, "COMBINE" ) )      { fnd = true; proc_combine( edf , param(c) ); }
+      if ( (!fnd) && is( c, "FREEZE" ) )       { fnd = true; proc_freeze( edf , param(c) ); }
+      if ( (!fnd) && is( c, "THAW" ) )         { fnd = true; proc_thaw( edf , param(c) ); }
+      if ( (!fnd) && is( c, "CLEAN-FREEZER"))  { fnd = true; proc_clean_freezer( edf , param(c) ); }
+      if ( (!fnd) && is( c, "FILE-MASK" ) )    { fnd = true; proc_file_mask( edf , param(c) ); } // not supported/implemented
+      if ( (!fnd) && is( c, "DUMP-MASK" ) )    { fnd = true; proc_dump_mask( edf, param(c) ); }
+      if ( (!fnd) && is( c, "ANNOT-MASK" ) )   { fnd = true; proc_annot_mask( edf, param(c) ); }
+      if ( (!fnd) && is( c, "CHEP" ) )         { fnd = true; timeline_t::proc_chep( edf, param(c) ); }
+      if ( (!fnd) && is( c, "CHEP-MASK" ) )    { fnd = true; proc_chep_mask( edf, param(c) ); }
+      if ( (!fnd) && is( c, "EPOCH-ANNOT" ) )  { fnd = true; proc_file_annot( edf , param(c) ); }
+      if ( (!fnd) && is( c, "EPOCH-MASK" ) )   { fnd = true; proc_epoch_mask( edf, param(c) ); }
+      if ( (!fnd) && is( c, "HB" ) )           { fnd = true; proc_hypoxic_burden( edf, param(c) ); }
+      if ( (!fnd) && is( c, "FILTER" ) )       { fnd = true; proc_filter( edf, param(c) ); }
+      if ( (!fnd) && is( c, "FILTER-DESIGN" )) { fnd = true; proc_filter_design( edf, param(c) ); }
+      if ( (!fnd) && is( c, "MOVING-AVERAGE" )) { fnd = true; proc_moving_average( edf, param(c) ); }
+      if ( (!fnd) && is( c, "CWT-DESIGN" ) )   { fnd = true; proc_cwt_design( edf , param(c) ); }
+      if ( (!fnd) && is( c, "CWT" ) )          { fnd = true; proc_cwt( edf , param(c) ); }
+      if ( (!fnd) && is( c, "HILBERT" ) )      { fnd = true; proc_hilbert( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SYNC" ) )         { fnd = true; proc_sync( edf , param(c) ); }
+      if ( (!fnd) && is( c, "TSYNC" ) )        { fnd = true; proc_tsync( edf , param(c) ); }
+      if ( (!fnd) && is( c, "XCORR" ) )        { fnd = true; proc_xcorr( edf, param(c) ); }
+      if ( (!fnd) && is( c, "TV" ) )           { fnd = true; proc_tv_denoise( edf , param(c) ); }
+      if ( (!fnd) && is( c, "OTSU" ) )         { fnd = true; proc_otsu( edf, param(c) ); }
+      if ( (!fnd) && is( c, "COVAR" ) )        { fnd = true; proc_covar( edf, param(c) ); }
+      if ( (!fnd) && is( c, "PSD" ) )          { fnd = true; proc_psd( edf, param(c) ); }
+      if ( (!fnd) && is( c, "FFT" ) )          { fnd = true; proc_fft( edf , param(c) ); }
+      if ( (!fnd) && is( c, "MTM" ) )          { fnd = true; proc_mtm( edf, param(c) ); }
+      if ( (!fnd) && is( c, "IRASA" ) )        { fnd = true; proc_irasa( edf, param(c) ); }
+      if ( (!fnd) && is( c, "1FNORM" ) )       { fnd = true; proc_1overf_norm( edf, param(c) ); }
+      if ( (!fnd) && is( c, "DYNAM" ) )        { fnd = true; proc_qdynam( edf , param(c) ); }
+      if ( (!fnd) && is( c, "PSC" ) )          { fnd = true; proc_psc( edf , param(c) ); }
+      if ( (!fnd) && is( c, "MS" ) )           { fnd = true; proc_microstates( edf , param(c) ); }
+      if ( (!fnd) && is( c, "ASYMM" ) )        { fnd = true; proc_asymm( edf , param(c) ); }
+      if ( (!fnd) && is( c, "TLOCK" ) )        { fnd = true; proc_tlock( edf , param(c) ); }
+      if ( (!fnd) && is( c, "TCLST" ) )        { fnd = true; proc_tclst( edf , param(c) ); }
+      if ( (!fnd) && is( c, "PERI" ) )         { fnd = true; proc_peri( edf , param(c) ); }
+      if ( (!fnd) && is( c, "PEAKS" ) )        { fnd = true; proc_peaks( edf , param(c) ); } 
+      if ( (!fnd) && is( c, "Z-PEAKS" ) )      { fnd = true; proc_zpeaks( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SEDF" ) )         { fnd = true; proc_sedf( edf , param(c) ); }
+      if ( (!fnd) && is( c, "FIP" ) )          { fnd = true; proc_fiplot( edf , param(c) ); }
+      if ( (!fnd) && is( c, "COH" ) )          { fnd = true; proc_coh( edf , param(c) ); }
+      if ( (!fnd) && is( c, "CC" ) )           { fnd = true; proc_conncoupl( edf , param(c) ); }
+      if ( (!fnd) && is( c, "CORREL" ) )       { fnd = true; proc_correl( edf , param(c) ); }
+      if ( (!fnd) && is( c, "PSI" ) )          { fnd = true; proc_psi( edf , param(c) ); }
+      if ( (!fnd) && is( c, "ACF" ) )          { fnd = true; proc_acf( edf , param(c) ); }
+      if ( (!fnd) && is( c, "GP" ) )           { fnd = true; gc_wrapper( edf , param(c) );  }
+      if ( (!fnd) && is( c, "ED" ) )           { fnd = true; proc_elec_distance( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SVD" ) )          { fnd = true; proc_svd( edf, param(c) ); }
+      if ( (!fnd) && is( c, "ICA" ) )          { fnd = true; proc_ica( edf, param(c) ); }
+      if ( (!fnd) && is( c, "ADJUST" ) )       { fnd = true; proc_adjust( edf , param(c) );  }
+      if ( (!fnd) && is( c, "CLOCS" ) )        { fnd = true; proc_attach_clocs( edf , param(c) ); }
+      if ( (!fnd) && is( c, "L1OUT" ) )        { fnd = true; proc_leave_one_out( edf , param(c) ); }
+      if ( (!fnd) && is( c, "INTERPOLATE" ) )  { fnd = true; proc_chep_based_interpolation( edf, param(c) ); }
+      if ( (!fnd) && is( c, "SL" ) )           { fnd = true; proc_surface_laplacian( edf , param(c) ); }
+      if ( (!fnd) && is( c, "EMD" ) )          { fnd = true; proc_emd( edf , param(c) ); }
+      if ( (!fnd) && is( c, "DFA" ) )          { fnd = true; proc_dfa( edf , param(c) ); }
+      if ( (!fnd) && is( c, "MI" ) )           { fnd = true; proc_mi( edf, param(c) ); }
+      if ( (!fnd) && is( c, "HR" ) )           { fnd = true; proc_bpm( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SUPPRESS-ECG" ) ) { fnd = true; proc_ecgsuppression( edf , param(c) ); }
+      if ( (!fnd) && is( c, "PAC" ) )          { fnd = true; proc_pac( edf , param(c) ); }
+      if ( (!fnd) && is( c, "CFC" ) )          { fnd = true; proc_cfc( edf , param(c) ); }
+      if ( (!fnd) && is( c, "GED" ) )          { fnd = true; proc_ged( edf , param(c) ); }
+      if ( (!fnd) && is( c, "PREDICT" ) )      { fnd = true; proc_predict( edf , param(c) ); }
+      if ( (!fnd) && is( c, "TAG" ) )          { fnd = true; proc_tag( param(c) ); }
+      if ( (!fnd) && is( c, "RESAMPLE" ) )     { fnd = true; proc_resample( edf, param(c) ); }
+      if ( (!fnd) && is( c, "ZOH" ) )          { fnd = true; proc_zoh( edf, param(c) ); }
+      if ( (!fnd) && is( c, "LINE-DENOISE" ) ) { fnd = true; dsptools::line_denoiser( edf, param(c) ); }
+      if ( (!fnd) && is( c, "ZC" ) )           { fnd = true; dsptools::detrend( edf, param(c) ); }
+      if ( (!fnd) && is( c, "SPINDLES" ) )     { fnd = true; proc_spindles( edf, param(c) ); }
+      if ( (!fnd) && is( c, "AROUSALS" ) )     { fnd = true; proc_arousals( edf, param(c) ); } 
+      if ( (!fnd) && is( c, "SO" ) )           { fnd = true; proc_slowwaves( edf, param(c) ); }
+      if ( (!fnd) && is( c, "COUPL" ) )        { fnd = true; proc_coupling( edf , param(c) ); }
+      if ( (!fnd) && is( c, "RIPPLES" ) )      { fnd = true; proc_ripples( edf , param(c) ); }
+      if ( (!fnd) && is( c, "PCOUPL" ) )       { fnd = true; proc_generic_coupling( edf , param(c) ); }
+      if ( (!fnd) && is( c, "POL" ) )          { fnd = true; proc_polarity( edf, param(c) ); }	  
+      if ( (!fnd) && is( c, "REMS" ) )         { fnd = true; proc_rems( edf, param(c) ); }
+      if ( (!fnd) && is( c, "ARTIFACTS" ) )    { fnd = true; proc_artifacts( edf, param(c) ); }
+      if ( (!fnd) && is( c, "EDGER" ) )        { fnd = true; proc_trim( edf, param(c) ) ; }
+      if ( (!fnd) && is( c, "CACHE" ) )        { fnd = true; proc_dump_cache( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SIGGEN" ) )       { fnd = true; proc_siggen( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SIMUL" ) )        { fnd = true; proc_simul( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SPIKE" ) )        { fnd = true; proc_spike( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SHIFT" ) )        { fnd = true; proc_shift( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SCRAMBLE" ) )     { fnd = true; proc_scramble( edf , param(c) ); }
       
 #ifdef HAS_LGBM
-	if ( (!fnd) && is( c, "PREP-MASSOC" ) )  { fnd = true; massoc_t::massoc_dumper( edf , param(c) ); }
+      if ( (!fnd) && is( c, "PREP-MASSOC" ) )  { fnd = true; massoc_t::massoc_dumper( edf , param(c) ); }
 #endif
       
       //
       // we don't recognize this command
       //
-
+      
       if ( ! fnd ) 
 	{
 	  Helper::halt( "did not recognize command: " + cmd(c) );
@@ -1326,12 +998,14 @@ bool cmd_t::eval( edf_t & edf )
 //
 // Wrapper (proc_*) functions below that drive specific commands
 //
+//  - most simply pass edf and param to the handling function
+//  - in some (generally older) cases, there is some pre-processing done here
+//  - these are not ordered in any type of logical manner...
+//
 // ----------------------------------------------------------------------------------------
 //
 
-
 // HEADERS : summarize EDF files
-
 void proc_headers( edf_t & edf , param_t & param )
 {
   // optionally add a SIGNALS col that has a comma-delimited list of all signals
@@ -1339,7 +1013,6 @@ void proc_headers( edf_t & edf , param_t & param )
 }
 
 // SET-VAR : set an IVAR
-
 void proc_set_ivar( edf_t & edf , param_t & param )
 {
   std::string val;
@@ -1349,20 +1022,17 @@ void proc_set_ivar( edf_t & edf , param_t & param )
 }
 
 // SET-HEADERS : set EDF header fields
-
 void proc_set_headers( edf_t & edf , param_t & param )
 {
   edf.set_headers( param );
 }
 
 // ALIASES : report aliasing of channels and annotations
-
 void proc_aliases( edf_t & edf , param_t & param )
 {
   edf.report_aliases();
 }
-  
-  
+    
 // REPORT : ensure VAR is added in output
 void proc_report( edf_t & edf , param_t & param )
 {
@@ -1382,7 +1052,6 @@ void proc_report( edf_t & edf , param_t & param )
 }
 
 // SUMMARY : summarize EDF files (verbose, human-readable)  
-
 void proc_summaries( edf_t & edf , param_t & param )
 {
   std::cout << "EDF filename   : " << edf.filename << "\n" 
@@ -1392,21 +1061,18 @@ void proc_summaries( edf_t & edf , param_t & param )
 
 
 // DESC : very brief summary of contents 
-
 void proc_desc( edf_t & edf , param_t & param )
 {
   edf.description( param );
 }
 
 // TYPES : show channel mappings
-
 void proc_show_channel_map()
 {
   std::cout << globals::dump_channel_map(); 
 }
 
 // VARS : dump variables for this individual
-
 void proc_dump_vars( edf_t & edf , param_t & param )
 {
   
@@ -1444,21 +1110,18 @@ void proc_dupes( edf_t & edf , param_t & param )
 }
 
 // STATS : get basic stats for an EDF
-
 void proc_stats( edf_t & edf , param_t & param )
 {
   edf.basic_stats( param );
 }
 
 // RMS/SIGSTATS : calculate root-mean square for signals 
-
 void proc_rms( edf_t & edf , param_t & param )
 {    
   rms_per_epoch( edf , param );
 }
 
 // MSE : calculate multi-scale entropy per epoch
-
 void proc_mse( edf_t & edf , param_t & param )
 {    
   mse_per_epoch( edf , param );
@@ -1471,10 +1134,8 @@ void proc_lzw( edf_t & edf , param_t & param )
 }
 
 
-
 // SOAP : single observation accuracies and probabilities;
 //   i.e. use SUDS on self, to evaluate staging/signal quality
-
 void proc_self_suds( edf_t & edf , param_t & param  )
 {
 
@@ -1510,17 +1171,7 @@ void proc_self_suds( edf_t & edf , param_t & param  )
       
       // force reload either way
       suds_t::model.init();
-      
-      // load model, if not already done
-      //  or, in R mode, force load each time...      
-      // if ( ! suds_t::model.loaded() )
-      // 	{
-
-      // suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" , 
-      // 			  param.has( "read-weights" ) ? param.value( "read-weights" ) : "" ,
-      // 			  param.has( "write-weights" ) ? param.value( "write-weights" ) : "" ,  
-      // 			  param.has( "sig" ) && param.value( "sig" ) != "*" ? param.value( "sig") : "C4_M1" ) ;
-      
+            
       suds_t::model.read( param.has( "model" ) ? param.value( "model" ) : "_1" , 
 			  param.has( "read-weights" ) ? param.value( "read-weights" ) : "" ,
 			  param.has( "write-weights" ) ? param.value( "write-weights" ) : "" ,  
@@ -1610,7 +1261,6 @@ void proc_rebase_soap( edf_t & edf , param_t & param  )
 // RESOAP : single observation accuracies and probabilities;
 //  given a previous call to SOAP, can update observed stages
 //  and model/predictions (i.e. for iterative staging)
-
 void proc_resoap( edf_t & edf , param_t & param  )
 {  
   // check that this same individual has been cached by 
@@ -1660,7 +1310,6 @@ void proc_resoap( edf_t & edf , param_t & param  )
 }
 
 // MAKE-SUDS : populate folder 'db' with trainers
-
 void proc_make_suds( edf_t & edf , param_t & param  )
 {
   // misc options
@@ -1677,7 +1326,6 @@ void proc_make_suds( edf_t & edf , param_t & param  )
 
 
 // EVAL-STAGES : given an external file (.eannot), calculate kappa and all other POPS stats
-
 void proc_eval_stages( edf_t & edf , param_t & param )
 {
 #ifdef HAS_LGBM
@@ -1985,7 +1633,6 @@ void proc_pops( edf_t & edf , param_t & param )
 
 
 // SUDS : staging
-
 void proc_suds( edf_t & edf , param_t & param )
 {
   // clear cache?
@@ -2066,30 +1713,19 @@ void proc_trim( edf_t & edf , param_t & param )
 }
 
 // ARTIFACTS : artifact rejection using Buckelmueller et al. 
-
 void proc_artifacts( edf_t & edf , param_t & param )	  
 {
   std::string signal = param.requires( "sig" );
   annot_t * a = buckelmuller_artifact_detection( edf , param , signal );  
 }
 
-
-// LEGACY-FILTER : band-pass filter, band-pass filter only
-
-// void proc_filter_legacy( edf_t & edf , param_t & param )	  
-// {
-//   //band_pass_filter( edf , param );
-// }
-
 // MOVING-AVERAGE
-
 void proc_moving_average( edf_t & edf , param_t & param )
 {
   dsptools::movavg( edf , param );  
 }
 
 // FILTER : general FIR
-
 void proc_filter( edf_t & edf , param_t & param )	  
 {
 
@@ -2121,7 +1757,6 @@ void proc_filter_design_cmdline()
 }
 
 // TV   total variation 1D denoising
-
 void proc_tv_denoise( edf_t & edf , param_t & param )
 {
   dsptools::tv( edf , param );
@@ -2250,33 +1885,28 @@ void proc_combine_suds_cmdline()
 }
 
 // FILTER-DESIGN : general FIR design
-
 void proc_filter_design( edf_t & edf , param_t & param )	  
 {
   dsptools::design_fir( param );
 }
 
 // CWT-DESIGN : CWT design
-
 void proc_cwt_design( edf_t & edf , param_t & param )	  
 {
   dsptools::design_cwt( param );
 }
 
 // ZOH : special case of upsampling
-
 void proc_zoh( edf_t & edf , param_t & param )
 {
   dsptools::resample_channel_zoh( edf, param );
 }
 
 // RESAMPLE : generic sample-rate conversion 
-
 void proc_resample( edf_t & edf , param_t & param ) 
 {
   dsptools::resample_channel( edf, param );
 }
-
 
 // MS: microstate analysis
 void proc_microstates( edf_t & edf , param_t & param )
@@ -2339,12 +1969,9 @@ void proc_sedf( edf_t & edf , param_t & param )
 
 
 // PREDICT : given cached values, make a model-based prediction
-
 void proc_predict( edf_t & edf , param_t & param )
 {
-  
   prediction_t m( edf , param );
-  
 }
 
 // PSC : either build PSC (from multiple results) or fit to an EDF
@@ -2380,7 +2007,6 @@ void proc_psc( edf_t & edf , param_t & param )
 
 // DYNAM : take arbitrary inputs (files/ signals)
 //         and run qdynam_t
-
 void proc_qdynam( edf_t & edf , param_t & param )
 {
   // assumes a) has HYPNO done
@@ -2392,7 +2018,6 @@ void proc_qdynam( edf_t & edf , param_t & param )
 
 
 // PSD : calculate PSD via Welch
-
 void proc_psd( edf_t & edf , param_t & param )	  
 {  
   std::string signal = param.requires( "sig" );
@@ -2400,44 +2025,36 @@ void proc_psd( edf_t & edf , param_t & param )
 }
 
 // FFT : caclulate basic FFT
-
 void proc_fft( edf_t & edf , param_t & param )
 {
   dsptools::fft( edf , param );
 }
 
 // MTM : calculate MTM 
-
 void proc_mtm( edf_t & edf , param_t & param )	  
 {  
   mtm::wrapper( edf , param );
 }
 
 // 1FNORM : normalization of signals for the 1/f trend
-
 void proc_1overf_norm( edf_t & edf , param_t & param )	  
 {  
   dsptools::norm_1overf( edf,  param ) ;
 }
 
 // IRASA : calculate IRASA
-
 void proc_irasa( edf_t & edf , param_t & param )
 {  
   irasa_wrapper( edf , param );
 }
 
-
-
-// FI-plot : frequency/interval plot
-
+// FIP: frequency/interval plot
 void proc_fiplot( edf_t & edf , param_t & param )	  
 {  
   fiplot_wrapper( edf , param );
 }
 
 // TAG : analysis tag
-
 void proc_tag( param_t & param )
 {
   // either TAG tag=lvl/fac
@@ -2490,7 +2107,6 @@ void set_tag( const std::string & t )
 }
 
 // ANON : anonymize EDF 
-
 void proc_anon( edf_t & edf , param_t & param )
 {
 
@@ -2543,7 +2159,6 @@ void proc_anon( edf_t & edf , param_t & param )
 
 
 // DUMP : dump all data
-
 void proc_dump( edf_t & edf , param_t & param )	  
 {
   std::string signal = param.requires( "sig" );  
@@ -2552,28 +2167,24 @@ void proc_dump( edf_t & edf , param_t & param )
 
 
 // INSERT
-
 void proc_insert( edf_t & edf , param_t & param )
 {
   edf_inserter_t inserter( edf , param );
 }
 
 // ALIGN-EPOCHS
-
 void proc_align_epochs( edf_t & edf , param_t & param )
 {
   align_epochs_t align( edf , param );  
 }
 
 // ALIGN-ANNOTS: given an ALIGN-EPOCHS solution, change annotation timings
-
 void proc_align_annots( edf_t & edf , param_t & param )
 {
   align_annots_t align( edf , param );  
 }
 
 // ALIGN
-
 void proc_align( edf_t & edf , param_t & param )
 {
 
@@ -2615,7 +2226,6 @@ void proc_align( edf_t & edf , param_t & param )
 
 
 // EPOCH DUMP 
-
 void proc_epoch_dump( edf_t & edf , param_t & param )
 {
   // REDUNDANT ; command not documented
@@ -2631,7 +2241,6 @@ void proc_epoch_dump( edf_t & edf , param_t & param )
 
 
 // MATRIX 
-
 void proc_epoch_matrix( edf_t & edf , param_t & param )
 {  
   edf.epoch_matrix_dumper( param );
@@ -2639,7 +2248,6 @@ void proc_epoch_matrix( edf_t & edf , param_t & param )
 
 
 // HEAD
-
 void proc_head_matrix( edf_t & edf , param_t & param )
 {
   edf.head_matrix_dumper( param );
@@ -2647,7 +2255,6 @@ void proc_head_matrix( edf_t & edf , param_t & param )
 
 
 // INTERVALS : raw signal data from an interval list
-
 void proc_intervals( param_t & param , const std::string & data )	  
 {  
 
@@ -2659,14 +2266,12 @@ void proc_intervals( param_t & param , const std::string & data )
 
 
 // PSI : phase slope index
-
 void proc_psi( edf_t & edf , param_t & param )
 {
   dsptools::psi_wrapper( edf , param );
 }
 
 // COVAR : covariance between two signals (not implemented)
-
 void proc_covar( edf_t & edf , param_t & param )
 {  
   std::string signals1 = param.requires( "sig1" );
@@ -2675,14 +2280,12 @@ void proc_covar( edf_t & edf , param_t & param )
 }
 
 // AROUSALS : detect micro-arousals during sleep 
-
 void proc_arousals( edf_t & edf , param_t & param )
 {
   arousals_t arousals( edf , param );  
 }
 
 // SPINDLES : spindle detection using CWT or bandpass/RMS
-
 void proc_spindles( edf_t & edf , param_t & param )
 {	
 
@@ -2697,53 +2300,41 @@ void proc_spindles( edf_t & edf , param_t & param )
 }
 
 // COUPL : spindle/SO couplig
-
 void proc_coupling( edf_t & edf , param_t & param )
 {
   // requires cached SPINDLES and SO results
   spindle_so_coupling( edf , param );
 }
 
-
 // PCOUPL : generic phase coupling
-
 void proc_generic_coupling( edf_t & edf , param_t & param )
 {
   // requires cached SPINDLES and SO results
   dsptools::phase_coupling( edf , param );
 }
 
-
 // RIPPLES : ripple detection
-
 void proc_ripples( edf_t & edf , param_t & param )
 {
   dsptools::ripple_wrapper( edf , param );
 } 
 
-
 // POL : polarity check for EEG N2/N3 
-
 void proc_polarity( edf_t & edf , param_t & param )
 {	
   dsptools::polarity( edf , param );
 }
 
 // REMS : detect REMS via simple heuristic
-
 void proc_rems( edf_t & edf , param_t & param )
 {
   dsptools::rems( edf , param );
 }
 
-// SW || SLOW-WAVES : detect slow waves, do time-locked FFT on rest of signal
-
+// SO : detect slow waves, do time-locked FFT on rest of signal
 void proc_slowwaves( edf_t & edf , param_t & param )
 {	
-
-  // find slow-waves
-  slow_waves_t sw( edf , param );
-  
+  slow_waves_t sw( edf , param );  
 }
 
 
@@ -2751,7 +2342,6 @@ void proc_slowwaves( edf_t & edf , param_t & param )
 //   adding padding (zeros for annots)
 //   ajusting annotations
 //   and adding in a new "gap" annot
-
 void proc_edf_minus( edf_t & edf , param_t & param )
 {
   edf.edf_minus( param );
@@ -2765,7 +2355,6 @@ void proc_set_timestamps( edf_t & edf , param_t & param )
 
 // EDF : convert from EDF+D to EDF or EDF+C
 //               or EDF+C to EDF
-
 void proc_force_edf( edf_t & edf , param_t & param )
 {
   Helper::halt( "EDF command is on pause" );
@@ -2828,7 +2417,6 @@ void proc_force_edf( edf_t & edf , param_t & param )
 // (although user responsible for not altering time structure of EDF
 // i.e. we do not change the time encoding of the annotation file, which
 // are always anchored to the original)
-
 void proc_write( edf_t & edf , param_t & param )
 {
   
@@ -2910,7 +2498,9 @@ void proc_write( edf_t & edf , param_t & param )
       bool append_annots = param.has( "with-annots" );
 
       // open/append
-      logger << "  appending " << filename << " to sample-list " << file << ( append_annots ? " (with annotations)" : " (dropping any annotations)" ) << "\n";
+      logger << "  appending " << filename
+	     << " to sample-list " << file
+	     << ( append_annots ? " (with annotations)" : " (dropping any annotations)" ) << "\n";
       
       std::ofstream FL( file.c_str() , std::ios_base::app );
       FL << edf.id << "\t"
@@ -2978,15 +2568,16 @@ void proc_write( edf_t & edf , param_t & param )
 	}
 
       if ( cuniq.size() < channels.size() )
-	logger << "  exporting " << cuniq.size() << " unique signals ("<< channels.size() << " total) from " << edf.header.ns << " originals\n";
+	logger << "  exporting " << cuniq.size()
+	       << " unique signals ("<< channels.size()
+	       << " total) from " << edf.header.ns << " originals\n";
       else
-	logger << "  exporting " << channels.size() << " signals from " << edf.header.ns << " originals\n";
+	logger << "  exporting " << channels.size() << " signals from "	       
+	       << edf.header.ns << " originals\n";
     }
-
   
-  //
-  // Save data (write_as_edf flag forces starttime to 00.00.00 if really EDF+D)
-  //
+  // Save data (write_as_edf flag forces starttime to 00.00.00 if
+  // really EDF+D)
   
   bool saved = edf.write( filename , edfz , write_as_edf , always_EDFD , set_chorder ? &channels : NULL );
   
@@ -2997,13 +2588,10 @@ void proc_write( edf_t & edf , param_t & param )
 
 
 // EPOCH : set epochs 
-
 void proc_epoch( edf_t & edf , param_t & param )
 {
 
-  //
-  // just dump, do not alter
-  //
+  // just dump, do not alter?
   
   if ( param.has( "dump" ) || param.has( "table" ) )
     {
@@ -3013,9 +2601,13 @@ void proc_epoch( edf_t & edf , param_t & param )
       if ( edf.timeline.epoched() )
 	{
 	  if ( show_masked ) 
-	    logger << "  outputting epoch table for " << edf.timeline.num_total_epochs() << " masked & unmasked epochs\n";
+	    logger << "  outputting epoch table for "
+		   << edf.timeline.num_total_epochs()
+		   << " masked & unmasked epochs\n";
 	  else
-	    logger << "  outputting epoch table for " << edf.timeline.num_epochs() << " unmasked epochs\n";
+	    logger << "  outputting epoch table for "
+		   << edf.timeline.num_epochs()
+		   << " unmasked epochs\n";
 	  
 	  edf.timeline.output_epoch_info( true , show_masked );
 	}
@@ -3032,8 +2624,10 @@ void proc_epoch( edf_t & edf , param_t & param )
     {
       int ne = edf.timeline.calc_epochs_generic_from_annots( param );
       
-      logger << "  set " << ne << " generic epochs, based on annotations [ " << param.value( "annot" ) << " ]";
-      if ( param.has( "else" ) ) logger << " and [ " << param.value( "else" ) << " ]";
+      logger << "  set " << ne
+	     << " generic epochs, based on annotations [ " << param.value( "annot" ) << " ]";
+      if ( param.has( "else" ) )
+	logger << " and [ " << param.value( "else" ) << " ]";
       logger << "\n";
 
       edf.timeline.output_epoch_info( param.has( "verbose" ) );
@@ -3068,9 +2662,7 @@ void proc_epoch( edf_t & edf , param_t & param )
 	}
       return;
     }
-
-  
-  
+    
   // unepoch?
   if ( opt_clear )
     {
@@ -3275,7 +2867,6 @@ void proc_epoch( edf_t & edf , param_t & param )
 
 
 // FILE-MASK : apply a mask from a file
-
 void proc_file_mask( edf_t & edf , param_t & param )
 { 
   std::string f = "";
@@ -3293,39 +2884,13 @@ void proc_file_mask( edf_t & edf , param_t & param )
 
 
 // EPOCH-MASK  : based on epoch-annotations, apply mask
-
 void proc_epoch_mask( edf_t & edf , param_t & param )
 {
-
   Helper::halt( "EPOCH-MASK command is redundant" );
-
-  // COMMAND NOT SUPPORTED
-
-  // std::set<std::string> vars;
-  // std::string onelabel;
-  
-  // if ( param.has( "if" ) ) 
-  //   {    
-  //     if ( param.has( "ifnot" ) ) Helper::halt( "both if & ifnot specified" );
-  //     vars = param.strset( "if" );
-  //     onelabel = param.value("if");
-  //     logger << " masking epochs that match " << onelabel << "\n";
-  //   }
-  // else if ( param.has( "ifnot" ) ) 
-  //   {
-  //     vars = param.strset( "ifnot" );
-  //     onelabel = param.value("ifnot");
-  //     logger << " masking epochs that do not match " << onelabel << "\n";
-  //   }
-  // else
-  //   Helper::halt( "no if/ifnot specified" );
- 
-  // edf.timeline.apply_simple_epoch_mask( vars , onelabel , param.has("if") );  
-
 }
 
-// FREEZE : make a copy of the current (internal) EDF 
 
+// FREEZE : make a copy of the current (internal) EDF 
 void proc_freeze( edf_t & edf , param_t & param )
 {
   
@@ -3373,7 +2938,6 @@ void proc_thaw( edf_t & edf , param_t & param )
 
 // EPOCH-ANNOT : directly apply epoch-level annotations from the command line
 // with recodes
-
 void proc_file_annot( edf_t & edf , param_t & param )
 { 
   
@@ -3446,7 +3010,6 @@ void proc_file_annot( edf_t & edf , param_t & param )
 
 
 // ANNOT-MASK : add (internally) a MASK corresponding to included (or excluded epochs)
-
 void proc_annot_mask( edf_t & edf , param_t & param )
 {
   // default annot name = "E"
@@ -3455,7 +3018,6 @@ void proc_annot_mask( edf_t & edf , param_t & param )
 }
 
 // DUMP-MASK : output the current mask as an .annot file
-
 void proc_dump_mask( edf_t & edf , param_t & param )
 {
   
@@ -3474,7 +3036,6 @@ void proc_dump_mask( edf_t & edf , param_t & param )
 
 
 // COUNT-ANNOTS : show all annotations for the EDF // REDUNDANT
-
 void proc_list_annots( edf_t & edf , param_t & param )
 {
   summarize_annotations( edf , param );
@@ -3482,14 +3043,12 @@ void proc_list_annots( edf_t & edf , param_t & param )
 
 
 // ESPAN : per epoch, give # secs/proportion spanned by annotations
-
 void proc_espan(  edf_t & edf , param_t & param )
 {
   edf.timeline.annotations.espan( edf, param );
 }
 
 // MAKE-ANNOTS : make new annotations based on pairwse intersection,union, overlap, etc
-
 void proc_make_annots( edf_t & edf , param_t & param )
 {
   edf.timeline.annotations.make( param , edf );
@@ -3497,21 +3056,18 @@ void proc_make_annots( edf_t & edf , param_t & param )
 
 
 // META : set annotation meta-data
-
 void proc_set_annot_metadata( edf_t & edf , param_t & param )
 {
   edf.timeline.set_annot_metadata( param );
 }
 
 // WRITE-ANNOTS : write all annots to disk
-
 void proc_write_annots( edf_t & edf , param_t & param )
 {
   edf.timeline.annotations.write( param.requires( "file" ) , param , edf );
 }
 
 // EXTEND : make single point annots longer
-
 void proc_extend_annots( edf_t & edf , param_t & param )
 {
   edf.timeline.annotations.extend( param );
@@ -3528,14 +3084,12 @@ void proc_annotate( edf_t & edf , param_t & param )
 
 
 // A2S : make signbal from ANNOTS
-
 void proc_annot2signal( edf_t & edf , param_t & param )
 {
   edf.timeline.annot2signal( param );
 }
 
 // S2A : make annot from a signal
-
 void proc_signal2annot( edf_t & edf , param_t & param )
 {
   edf.timeline.signal2annot( param );
@@ -3543,35 +3097,30 @@ void proc_signal2annot( edf_t & edf , param_t & param )
 
 
 // A2C : make a cache from an annotation
-
 void proc_annot2cache( edf_t & edf , param_t & param )
 {
   edf.timeline.annot2cache( param );
 }
 
 // C2A : make an annotation from a cache
-
 void proc_cache2annot( edf_t & edf , param_t & param )
 {
   edf.timeline.cache2annot( param );
 }
 
 // MEANS : signal means conditional on annotations
-
 void proc_sig_annot_mean( edf_t & edf , param_t & param )
 {
   edf.timeline.signal_means_by_annot( param );
 }
 
 // TABULATE : assume discrete values for a signal, and get counts
-
 void proc_sig_tabulate( edf_t & edf , param_t & param )
 {
   edf.tabulate( param );
 }
 
 // ANNOTS : list all annotations
-
 void proc_list_all_annots( edf_t & edf , param_t & param )
 {
   edf.timeline.list_all_annotations( param );
@@ -3579,23 +3128,18 @@ void proc_list_all_annots( edf_t & edf , param_t & param )
 
 
 // ANNOTS-SPANNING : list all annotations
-
 void proc_list_spanning_annots( edf_t & edf , param_t & param )
 {
   edf.timeline.list_spanning_annotations( param );
 }
 
-
-
 // TIME-TRACK : make EDF+
-
 void proc_timetrack( edf_t & edf , param_t & param )
 {
   edf.add_time_track();
 }
 
 // RESTRUCTURE : flush masked records
-
 void proc_restructure( edf_t & edf , param_t & param )
 {
   // just drop MASK'ed records, then reset mask
@@ -3626,17 +3170,14 @@ void proc_restructure( edf_t & edf , param_t & param )
 
 
 // DUMP-RECORDS : show all records (i.e. raw data)
-
 void proc_record_dump( edf_t & edf , param_t & param )
 {
   edf.add_time_track();  
   edf.record_dumper( param );
 }
 
-
 // SEGMENTS : show all contiguous segments
 // (and optionally, add annotations to this effect)
-
 void proc_dump_segs( edf_t & edf , param_t & param )
 {
   edf.seg_dumper( param );
@@ -3644,7 +3185,6 @@ void proc_dump_segs( edf_t & edf , param_t & param )
 
 
 // RECS : simple table of records, epochs
-
 void proc_record_table( edf_t & edf , param_t & param )
 {
   edf.record_table( param );
@@ -3653,7 +3193,6 @@ void proc_record_table( edf_t & edf , param_t & param )
 // STAGE : set and display sleep stage labels (verbose = F)
 // STAGE : + eannot=<file> option --> write as .eannot
 // HYPNO : verbose report on sleep STAGES     (verbose = T)
-
 void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
 {
   
@@ -3683,7 +3222,9 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
     }
   else
     {      
-      bool okay = edf.timeline.annotations.make_sleep_stage( edf.timeline, force_remake, wake , nrem1 , nrem2 , nrem3 , nrem4 , rem , lights, misc );
+      bool okay = edf.timeline.annotations.make_sleep_stage( edf.timeline, force_remake,
+							     wake , nrem1 , nrem2 , nrem3 ,
+							     nrem4 , rem , lights, misc );
       if ( ! okay ) return; // e.g. overlapping stages
       okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose ); 
       if ( ! okay ) return; // i.e. if no valid annotations found
@@ -3724,12 +3265,10 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
 
 
 // ED : compute 'electrical distance' measure of bridging
-
 void proc_elec_distance( edf_t & edf , param_t & param )
 {
   dsptools::elec_distance( edf , param );
 }
-
 
 // L1OUT : leave-one-out validation via interpolation of all signals
 void proc_leave_one_out( edf_t & edf , param_t & param )
@@ -3749,6 +3288,7 @@ void proc_surface_laplacian( edf_t & edf , param_t & param )
   dsptools::surface_laplacian_wrapper( edf , param );
 }
 
+// CLOCS : attach channel locations
 void proc_attach_clocs( edf_t & edf , param_t & param )
 {
 
@@ -3779,28 +3319,24 @@ void proc_dfa( edf_t & edf , param_t & param )
 }
 
 // ICA : fastICA on sample by channel matrix (whole trace)
-
 void proc_ica( edf_t & edf , param_t & param )
 {
   dsptools::ica_wrapper( edf , param );
 }
 
 // SVD : singular value decomposition on signals
-
 void proc_svd( edf_t & edf , param_t & param )
 {
   dsptools::svd_wrapper( edf , param );
 }
 
 // COH : calculate cross spectral coherence, using new/default code
-
 void proc_coh( edf_t & edf , param_t & param )
 {
   dsptools::coherence( edf , param );
 }
 
 // CORREL : correlation
-
 void proc_correl( edf_t & edf , param_t & param )
 {
   dsptools::correlate_channels( edf , param );
@@ -3813,29 +3349,24 @@ void proc_acf( edf_t & edf , param_t & param )
 }
 
 // MI : mutual information
-
 void proc_mi( edf_t & edf , param_t & param )
 {
   dsptools::compute_mi( edf , param );
 }
 
-
 // CC : gerneral connectivity and coupling metrics, using wavelets or filter-Hilbert
-
 void proc_conncoupl( edf_t & edf , param_t & param )
 {
   dsptools::connectivity_coupling( edf , param );
 }
 
 // SHIFT : shift one or more signals by X samples
-
 void proc_shift( edf_t & edf , param_t & param )
 {
   dsptools::shift( edf , param );
 }
 
 // SCRAMBLE : randomly scramble a signal (complete perm)
-
 void proc_scramble( edf_t & edf , param_t & param )
 {
   dsptools::scramble( edf , param );
@@ -3843,7 +3374,6 @@ void proc_scramble( edf_t & edf , param_t & param )
 
 
 // CACHE : internal command to dump cache contents (debugging)
-
 void proc_dump_cache( edf_t & edf , param_t & param )
 {
 
@@ -3852,8 +3382,8 @@ void proc_dump_cache( edf_t & edf , param_t & param )
       ctest2( edf );
       return;
     }
+
   // set up to record from output stream
-  
   if ( param.has( "record" ) )
     {
       // record=command,variable,{strata}
@@ -3999,22 +3529,18 @@ void proc_dump_cache( edf_t & edf , param_t & param )
 
 
 // SIGGEN : add/generate artificial signals to 1+ channels
- 
 void proc_siggen( edf_t & edf , param_t & param )
 {
   dsptools::siggen( edf, param );
 }
 
 // SIMUL : simulate a time series from a PSD
-
 void proc_simul( edf_t & edf , param_t & param )
 {
   dsptools::simul( edf , param );
 }
 
-
 // SPIKE : spike in a new bit of signal
-
 void proc_spike( edf_t & edf , param_t & param )
 {
 
@@ -4038,7 +3564,6 @@ void proc_spike( edf_t & edf , param_t & param )
 }
 
 // PAC : phase amplitude coupling
-
 void proc_pac( edf_t & edf , param_t & param )
 {
   dsptools::pac( edf , param );
@@ -4046,38 +3571,34 @@ void proc_pac( edf_t & edf , param_t & param )
 
 
 // GED : generalized eigendecomposition
-
 void proc_ged( edf_t & edf , param_t & param )
 {
   ged_wrapper( edf, param );
 }
 
 // CFC : generic cross-frequency coupling methods (other than PAC as above)
-
 void proc_cfc( edf_t & edf , param_t & param )
 {
   dsptools::cfc( edf , param );
 }
 
 // HB : Hypoxic burden
-
 void proc_hypoxic_burden( edf_t & edf , param_t & param )
 {
   hb_t hb( edf , param );
 }
 
 // SUPPRESS-ECG : ECG supression
-
 void proc_ecgsuppression( edf_t & edf , param_t & param )
 {
   dsptools::ecgsuppression( edf , param );
 }
 
+// BPM : get beats per min from ECG
 void proc_bpm( edf_t & edf , param_t & param )
 {
   dsptools::bpm( edf , param );
 }
-
 
 // ORDER : set order of signals ( in internal EDF)
 void proc_order_signals( edf_t & edf , param_t & param )
@@ -4088,9 +3609,7 @@ void proc_order_signals( edf_t & edf , param_t & param )
 }
 
 
-// READ: just read all data in, do nothing else
-//       (for timing)
-
+// READ: just read all data in, do nothing else (for timing)
 void proc_read_signal( edf_t & edf , param_t & param )
 {
   edf.preread(param);
@@ -4133,7 +3652,6 @@ void proc_copy_signal( edf_t & edf , param_t & param )
 }
 
 // ENFORCE-SR : drop/alter signals based on SR requirements (for record size)
-
 void proc_enforce_signals( edf_t & edf , param_t & param )
 {
   
@@ -4208,7 +3726,6 @@ void proc_enforce_signals( edf_t & edf , param_t & param )
 
 
 // RENAME : rename signals
-
 void proc_rename( edf_t & edf , param_t & param )
 {
 
@@ -4302,7 +3819,6 @@ void proc_rename( edf_t & edf , param_t & param )
 
 
 // SIGNALS : drop one or more signal
-
 void proc_drop_signals( edf_t & edf , param_t & param )
 {
   
@@ -4448,7 +3964,6 @@ void proc_drop_signals( edf_t & edf , param_t & param )
 
 
 // SLICE : pull out slices, based on 'file'
-
 void proc_slice( edf_t & edf , param_t & param , int extract )
 {
   
@@ -4481,7 +3996,6 @@ void proc_slice( edf_t & edf , param_t & param , int extract )
 
 
 // REMAP
-
 void proc_remap_annots( edf_t & edf , param_t & param )
 {
   // as if having originally 'remap' command, but apply these
@@ -4507,7 +4021,6 @@ void proc_remap_annots( edf_t & edf , param_t & param )
 
 
 // CANONICAL
-
 void proc_canonical( edf_t & edf , param_t & param )
 {
   
@@ -4556,14 +4069,13 @@ void proc_canonical( edf_t & edf , param_t & param )
 }
 
 
-// Adjust signals by ICs 
+// ADJUST: Adjust signals by ICs 
 void proc_adjust( edf_t & edf , param_t & param )
 {
   dsptools::ica_adjust( edf , param );
 }
 
-// Reference tracks
-
+// REFERENCE : re-reference tracks
 void proc_reference( edf_t & edf , param_t & param )
 {
   std::string sigstr = param.requires( "sig" );
@@ -4601,7 +4113,6 @@ void proc_reference( edf_t & edf , param_t & param )
 }
 
 // Remove reference
-
 void proc_dereference( edf_t & edf , param_t & param )
 {
   std::string sigstr = param.requires( "sig" );
@@ -4635,8 +4146,7 @@ void proc_dereference( edf_t & edf , param_t & param )
 }
 
 
-// change record size for one or more signals
-
+// RECSIZE: change record size for one or more signals
 void proc_rerecord( edf_t & edf , param_t & param )
 {
   double rs = param.requires_dbl( "dur" ); 
@@ -4653,13 +4163,11 @@ void proc_rerecord( edf_t & edf , param_t & param )
 
 
 // SCALE
-
 void proc_setscale( edf_t & edf , param_t & param )
 {
   
   const bool NO_ANNOTS = true;
   signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) , NO_ANNOTS );
-
 
   // expects min,max
   std::vector<double> minmax ;
@@ -4706,7 +4214,6 @@ void proc_setscale( edf_t & edf , param_t & param )
 
 
 // uV or mV : set units for tracks
-
 void proc_scale( edf_t & edf , param_t & param , const std::string & sc )
 {
   std::string sigstr = param.requires( "sig" );
@@ -4717,7 +4224,6 @@ void proc_scale( edf_t & edf , param_t & param , const std::string & sc )
 }
 
 // MINMAX : set EDF header to have identical min/max (physical) values
-
 void proc_minmax( edf_t & edf , param_t & param )
 {
   std::string sigstr = param.requires( "sig" );
@@ -4745,21 +4251,18 @@ void proc_minmax( edf_t & edf , param_t & param )
 }
 
 // STANDARDIZE : robust winsorization and norming for each signal (done per whole signal or epoch) 
-
 void proc_standardize( edf_t & edf , param_t & param )
 {
   dsptools::standardize( edf , param );
 }
 
 // RECTIFY 
-
 void proc_rectify( edf_t & edf , param_t & param  )
 {
   dsptools::rectify( edf , param );
 }
 
 // FLIP : change polarity of signal
-
 void proc_flip( edf_t & edf , param_t & param  )
 {
   std::string sigstr = param.requires( "sig" );
@@ -4777,7 +4280,6 @@ void proc_flip( edf_t & edf , param_t & param  )
 }
 
 // REVERSE : reverse signal in time domain
-
 void proc_reverse( edf_t & edf , param_t & param  )
 {
   std::string sigstr = param.requires( "sig" );
@@ -4796,63 +4298,19 @@ void proc_reverse( edf_t & edf , param_t & param  )
 
 
 
-
-
 //
-// Helper functions
+// Parse special command-line arguments (e.g. path, silent, etc) 
 //
 	      
-// void attach_annot( edf_t & edf , const std::string & astr )
-// {
-  
-//   // are we checking whether to add this file or no? 
-  
-//   if ( globals::specified_annots.size() > 0 && 
-//        globals::specified_annots.find( astr ) == globals::specified_annots.end() ) return;
-
-//   // otherwise, annotation is either 
-  
-//   // 1) in memory (and may or may not be in a file,
-//   // i.e. just created)
-  
-//   annot_t * a = edf.timeline.annotations( astr );
-  
-//   // 2) or, not in memory but can be retrieved from a file
-  
-//   if ( a == NULL )
-//     {
-      
-//       // search for file for any 'required' annotation
-//       // (e.g. annot=stages,spindles)
-      
-//       std::string annot_file = edf.annotation_file( astr );
-      
-//       if ( annot_file == "" ) 
-// 	{
-// 	  logger << " no instances of annotation [" 
-// 		 << astr << "] for " << edf.id << "\n";		  
-// 	}
-//       else
-// 	{
-// 	  // add to list and load in data (note, if XML, load() does nothing
-// 	  // as all XML annotations are always added earlier
-	  	  
-// 	  bool okay = annot_t::load( annot_file , edf );
-
-// 	  if ( ! okay ) Helper::halt( "problem loading " + annot_file );
-	  		  
-// 	}
-//     }
-// }
-
-
 void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 {
 
-  // record as a standard variable also (i.e. for lookup in lunapi, etc)
-  // n.b. previously, we'd skip this and only add non-special vars
+  // always record as a standard variable also (i.e. for lookup in
+  // lunapi, etc) n.b. previously, we'd skip this and only add
+  // non-special vars
 
-  // except handle the special case of 'sig' which _appends_ to an existing list unless '.'
+  // ... except handle the special case of 'sig' which _appends_ to an
+  // existing list unless '.'
 
   if ( tok0 == "sig" )
     {
@@ -4870,6 +4328,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
   else // just add as usual
     cmd_t::vars[ tok0 ] = tok1;
+
 
   //
   // now process sig opt via cmd_t::signallist
@@ -5269,7 +4728,6 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
   // channel type labels: exact match
-
   if ( Helper::iequals( tok0 , "ch-exact" ) )
     {
       //  type|label1|label2,type|label1|label2
@@ -5724,6 +5182,9 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 }
 
 
+//
+// Channel type information
+//
 
 void cmd_t::define_channel_type_variables( edf_t & edf )
 {

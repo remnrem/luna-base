@@ -4094,4 +4094,579 @@ std::vector<char> ms_cmp_maps_t::label_maps( const ms_prototypes_t & T ,
 }
 
 
+void dsptools::ms_kmer_wrapper( param_t & param )
+{
 
+  std::string infile = Helper::expand( param.requires( "file" ) );
+  int nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 1000;
+  int k1 = param.has( "k1" ) ? param.requires_int( "k1" ) : 2;
+  int k2 = param.has( "k2" ) ? param.requires_int( "k2" ) : 6;
+  if ( param.has( "k" ) ) k1 = k2 = param.requires_int( "k" );
+  // global versus local picks
+  int w = param.has( "w" ) ? param.requires_int( "w" ) : 0 ; 
+  
+  // require at least L sequences; only take the first L
+  const int req_len = param.has( "req-len" ) ? param.requires_int( "req-len" ) : 0 ; 
+  
+  
+  // load from STDIN
+  std::map<std::string,std::string> data0;
+  std::vector<std::string> ids;
+  if ( ! Helper::fileExists( infile ) ) Helper::problem( "could not open " + infile );
+  std::ifstream IN1( infile.c_str() , std::ios::in );
+  int rejected = 0; 
+  while ( ! IN1.eof() )
+    {
+      std::string id, s;
+      IN1 >> id >> s;	  
+      if ( IN1.eof() || id == "" || s.size() < 2 ) continue;
+      
+      bool okay = req_len == 0 || s.size() >= req_len ; 	  
+      if ( ! okay ) { ++rejected; continue;  } 
+      
+      // add, either whole sequence, or subset (1..s)
+      data0[ id ] = req_len ? s.substr( 0 , req_len ) : s;
+      ids.push_back( id );
+    }
+  IN1.close();
+  
+  if ( req_len ) 
+    logger << "  " << data0.size() << " of " 
+	   << data0.size() + rejected 
+	   << " individuals included (analysis of first " << req_len << " states only)\n";
+  
+  //
+  // Splice out '?' and ensure no similar sequences
+  //
+  
+  std::map<std::string,std::string> data;
+  std::map<std::string,std::string>::const_iterator ss = data0.begin();
+  while ( ss != data0.end() )
+    {
+      const std::string & s0 = ss->second;
+      std::vector<char> c;
+      const int n = s0.size();
+      char last = '?';
+      for (int i=0; i<n; i++)
+	{
+	  if ( s0[i] == '?' ) continue;
+	  if ( s0[i] == last ) continue;
+	  c.push_back( s0[i] );
+	  last = s0[i];
+	}
+      data[ ss->first ] = std::string( c.begin() , c.end() );
+      
+      // std::cout << "orig = " << s0 << "\n"
+      // 	    << "new = " << data[ ss->first ] << "\n\n";
+      // next indiv.
+      ++ss;
+    }
+  
+  //
+  // report indiv-level enrichment? (versus group?)
+  //
+  
+  const bool indiv_enrichment = param.has( "indiv-enrichment" );
+  
+  //
+  // phenotypes?      
+  //
+  
+  if ( param.has( "vars" ) )
+    cmd_t::attach_ivars( param.value( "vars" ) );
+  
+  const std::string phe_label = param.has( "phe" ) ? param.value( "phe" ) : "" ;
+  const bool grp = phe_label != "";
+  
+  if ( grp && indiv_enrichment ) 
+    Helper::halt( "cannot specify both indiv-enrichment and phe" );
+  
+  std::map<std::string,int> phe;
+
+  if ( grp )
+    {
+      phe = cmd_t::pull_ivar( ids , phe_label );
+      int cases = 0 , controls = 0 , missing = 0;
+      
+      std::map<std::string,int>::const_iterator ii = phe.begin();
+      while ( ii != phe.end() )
+	{
+	  if ( ii->second == 0 ) ++controls;
+	  else if ( ii->second == 1 ) ++cases;
+	  else ++missing;
+	  ++ii;
+	}
+      
+      logger << "  of " << ids.size() << " total individuals, for "
+	     << phe_label << " "
+	     << cases << " cases, "
+	     << controls << " controls and "
+	     << missing << " unknown\n"; 	    
+      
+      if ( cases == 0 || controls == 0 )
+	Helper::halt( "did not observe both cases and controls: cannot run a phenotype-based analysis" );
+      
+    }
+      
+  
+  //
+  // show within equivalence-group stats? (W_)
+  //
+      
+  const bool wstats = param.has( "w-stats" );
+      
+      
+
+  //
+  // only show verbose mode for group level analysis 
+  //
+
+  const bool verbose_output = ! indiv_enrichment ; 
+
+  //
+  // Run analyses (either group level, in which case do once)
+  //  or individual-level, in which case, we will iterate
+  //  other all groups
+  //
+
+  std::map<std::string,std::string>::const_iterator ii = data.begin();
+  
+  while ( 1 ) 
+    {
+      //
+      // copy over data for this analysis
+      //
+	  
+      std::map<std::string,std::string> data1;
+	  
+      if ( indiv_enrichment ) 
+	data1[ ii->first ] = ii->second;
+      else
+	data1 = data;
+      
+      //
+      // do kmer enrichment: indiv, or group (w/ or w/out phenotype)
+      //
+      
+      ms_kmer_t kmers( data1 , k1 , k2 , nreps , w, grp ? &phe : NULL , verbose_output );
+      
+	  
+      //
+      // individual level output?
+      //
+      
+      if ( indiv_enrichment )
+	{
+	  logger << "  processing " << ii->first << ", L=" << ii->second.size() << " sequence length\n";
+	  writer.id( ii->first , "." ); // ID, EDF
+	  // track sequence length for each indiv
+	  writer.value( "N" , (int)ii->second.size() );
+	}
+      
+      //
+      // report output: OBS and WITHIN-GROUP
+      //
+      
+      std::map<std::string,double>::const_iterator pp = kmers.basic.pval.begin();
+      while ( pp != kmers.basic.pval.end() )
+	{
+	  
+	  writer.level( (int)pp->first.size() , "L" );
+	  writer.level( pp->first , "S" );
+	  
+	  bool valid_equiv = kmers.equiv_set_size[ pp->first ] > 1;
+	  
+	  writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	  writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
+	      
+	  writer.value( "OBS" , kmers.basic.obs[ pp->first ] );
+	  writer.value( "EXP" , kmers.basic.exp[ pp->first ] );
+	  writer.value( "RAT" , kmers.basic.obs[ pp->first ] / (double) kmers.basic.exp[ pp->first ] );	      
+	  writer.value( "P" , pp->second );
+	  writer.value( "Z" , kmers.basic.zscr[ pp->first ] );	  
+	  
+	  if ( valid_equiv && wstats )
+	    {
+	      writer.value( "W_OBS" , kmers.equiv.obs[ pp->first ] );
+	      writer.value( "W_EXP" , kmers.equiv.exp[ pp->first ] );
+	      writer.value( "W_RAT" , kmers.equiv.obs[ pp->first ] / (double)kmers.equiv.exp[ pp->first ]);
+	      writer.value( "W_P" , kmers.equiv.pval[ pp->first ] );
+	      writer.value( "W_Z" , kmers.equiv.zscr[ pp->first ] );
+	    }
+	      
+	  // C/C contrasts?
+	  
+	  if ( grp )
+	    {
+	      
+	      writer.level( "CASE" , "PHE" );
+	      
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
+	      writer.value( "OBS" , kmers.basic_cases.obs[ pp->first ] );
+	      writer.value( "EXP" , kmers.basic_cases.exp[ pp->first ] );
+	      writer.value( "RAT" , kmers.basic_cases.obs[ pp->first ] /(double)kmers.basic_cases.exp[ pp->first ] );
+	      writer.value( "P" , kmers.basic_cases.pval[ pp->first ] );
+	      writer.value( "Z" , kmers.basic_cases.zscr[ pp->first ] );
+	      
+	      if ( valid_equiv && wstats )
+		{
+		  writer.value( "W_OBS" , kmers.equiv_cases.obs[ pp->first ] );
+		  writer.value( "W_EXP" , kmers.equiv_cases.exp[ pp->first ] );
+		  writer.value( "W_RAT" , kmers.equiv_cases.obs[ pp->first ] /(double)kmers.equiv_cases.exp[ pp->first ] );
+		  writer.value( "W_P" , kmers.equiv_cases.pval[ pp->first ] );
+		  writer.value( "W_Z" , kmers.equiv_cases.zscr[ pp->first ] );
+		}
+	      
+	      writer.level( "CONTROL" , "PHE" );
+	      
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
+	      writer.value( "OBS" , kmers.basic_controls.obs[ pp->first ] );
+	      writer.value( "EXP" , kmers.basic_controls.exp[ pp->first ] );
+	      writer.value( "RAT" , kmers.basic_controls.obs[ pp->first ] /(double)kmers.basic_controls.exp[ pp->first ] );
+	      writer.value( "P" , kmers.basic_controls.pval[ pp->first ] );
+	      writer.value( "Z" , kmers.basic_controls.zscr[ pp->first ] );
+	      
+	      if ( valid_equiv && wstats )
+		{
+		  writer.value( "W_OBS" , kmers.equiv_controls.obs[ pp->first ] );
+		  writer.value( "W_EXP" , kmers.equiv_controls.exp[ pp->first ] );
+		  writer.value( "W_RAT" , kmers.equiv_controls.obs[ pp->first ] /(double)kmers.equiv_controls.exp[ pp->first ] );
+		  writer.value( "W_P" , kmers.equiv_controls.pval[ pp->first ] );
+		  writer.value( "W_Z" , kmers.equiv_controls.zscr[ pp->first ] );
+		}
+	      
+	      writer.level( "DIFF" , "PHE" );
+	      
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "SG" ,  kmers.obs2equiv[ pp->first ] );
+	      //writer.value( "OBS" , kmers.basic_diffs.obs[ pp->first ] );
+	      //writer.value( "EXP" , kmers.basic_diffs.exp[ pp->first ] );
+	      writer.value( "Z" , kmers.basic_diffs.zscr[ pp->first ] );
+	      
+	      if ( valid_equiv && wstats )
+		{
+		  // writer.value( "W_OBS" , kmers.equiv_diffs.obs[ pp->first ] );
+		  // writer.value( "W_EXP" , kmers.equiv_diffs.exp[ pp->first ] );
+		  writer.value( "W_Z" , kmers.equiv_diffs.zscr[ pp->first ] );
+		}
+	      
+	      writer.unlevel( "PHE" );
+	    }
+	  
+	  ++pp;
+	}  
+      
+      writer.unlevel( "S" );
+      writer.unlevel( "L" );
+      
+      //
+      // repeat for EQ groups
+      //
+      
+      pp = kmers.group.pval.begin();
+      while ( pp != kmers.group.pval.end() )
+	{
+	  writer.level( (int)pp->first.size() , "L" );
+	  writer.level( pp->first , "SG" );
+	  
+	  writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	  
+	  writer.value( "OBS" , kmers.group.obs[ pp->first ] );
+	  writer.value( "EXP" , kmers.group.exp[ pp->first ] );
+	  writer.value( "RAT" , kmers.group.obs[ pp->first ] / (double)kmers.group.exp[ pp->first ] );
+	  writer.value( "P" , pp->second );
+	  writer.value( "Z" , kmers.group.zscr[ pp->first ] );	  
+	  
+	  // C/C contrasts?
+	  
+	  if ( grp )
+	    {
+	      
+	      writer.level( "CASE" , "PHE" );
+	      
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );	      
+	      writer.value( "OBS" , kmers.group_cases.obs[ pp->first ] );
+	      writer.value( "EXP" , kmers.group_cases.exp[ pp->first ] );
+	      writer.value( "RAT" , kmers.group_cases.obs[ pp->first ] / (double) kmers.group_cases.exp[ pp->first ] );
+	      writer.value( "P" , kmers.group_cases.pval[ pp->first ] );
+	      writer.value( "Z" , kmers.group_cases.zscr[ pp->first ] );
+	      
+	      writer.level( "CONTROL" , "PHE" );
+	      
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	      writer.value( "OBS" , kmers.group_controls.obs[ pp->first ] );
+	      writer.value( "EXP" , kmers.group_controls.exp[ pp->first ] );
+	      writer.value( "RAT" , kmers.group_controls.obs[ pp->first ] / (double) kmers.group_controls.exp[ pp->first ] );
+	      writer.value( "P" , kmers.group_controls.pval[ pp->first ] );
+	      writer.value( "Z" , kmers.group_controls.zscr[ pp->first ] );
+	      
+	      writer.level( "DIFF" , "PHE" );
+	      
+	      writer.value( "NG" , kmers.equiv_set_size[ pp->first ] );
+	      // writer.value( "OBS" , kmers.group_diffs.obs[ pp->first ] );
+	      // writer.value( "EXP" , kmers.group_diffs.exp[ pp->first ] );
+	      writer.value( "Z" , kmers.group_diffs.zscr[ pp->first ] );
+	      
+	      writer.unlevel( "PHE" );
+	    }
+	  
+	  ++pp;
+	}        
+      
+      writer.unlevel( "SG" );
+      writer.unlevel( "L" );
+      
+      //
+      // if processing indiv-by-indiv, loop back
+      //
+      
+      if ( indiv_enrichment ) 
+	{
+	  ++ii;
+	  if ( ii == data.end() ) break;
+	}
+      else // if group mode, all done 
+	break;
+      
+    }
+  
+}
+
+
+void dsptools::ms_cmp_maps( param_t & param )
+{
+
+  logger << " running CMP-MAPS\n";
+  
+  //
+  // number of permutations to perform 
+  //
+
+  const int nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 1000;
+  
+  //
+  // to define global similarity: greedy or brute-force (default) enumeration of all possibilities?
+  //
+      
+  // minimize sum(1-r)^p                                                                                                                                                                               
+  const double p = param.has( "p" ) ? param.requires_dbl( "p" ) : 2 ;
+  logger << "  matching based on minimizing sum_k (1-r)^" << p << "\n";
+  
+  //
+  // Either all-case compared to all-controls : stat = d( concordant pairs ) / d( discordant pairs )
+  // OR given a fixed map=M: stat =  ( d( case - X ) - d( control - X )^2 
+  // 
+  
+  const bool use_fixed = param.has( "template" );
+      
+  ms_prototypes_t fixed;
+      
+  if ( use_fixed )
+    {
+      // read a standard prototype map file (sol format, i.e. no ID)
+      std::string fixed_map = Helper::expand( param.value( "template" ) );	  
+      fixed.read( fixed_map );
+    }
+  
+  //
+  // Load maps
+  //
+  
+  // expect a file as output from MS A matrix in long format
+  // ID	CH	K	A
+  
+  std::string infile = Helper::expand( param.requires( "file" ) );
+
+  // ID -> K -> CH -> 'A'
+  
+  std::map<std::string,std::map<std::string,std::map<std::string,double> > > data;
+  if ( ! Helper::fileExists( infile ) ) Helper::halt( "could not open " + infile );
+  std::ifstream IN1( infile.c_str() , std::ios::in );
+  // header...
+  std::string id, ch, k, dummy;
+  IN1 >> id >> ch >> k >> dummy;
+  if ( id != "ID" || ch != "CH" || k != "K" || dummy != "A" )
+    Helper::halt( "bad format" );
+  
+  while ( ! IN1.eof() )
+    {
+      std::string id, ch, k;
+      double a;
+      IN1 >> id >> ch >> k >> a;
+      if ( IN1.eof() || id == "" ) continue;
+      data[ id ][ k ][ ch ] = a;	  
+    }
+  IN1.close();
+  
+  
+  //
+  // phenotypes?      
+  //
+  
+  if ( param.has( "vars" ) )
+    cmd_t::attach_ivars( param.value( "vars" ) );
+  
+  const std::string phe_label = param.has( "phe" ) ? param.value( "phe" ) : "" ;
+  const bool grp = phe_label != "";
+  
+  std::map<std::string,int> phe;
+      
+  if ( grp )
+    {
+      std::vector<std::string> ids;
+      std::map<std::string,std::map<std::string,std::map<std::string,double> > >::const_iterator qq =  data.begin();
+      while ( qq != data.end() ) { ids.push_back( qq->first ); ++qq; } 
+      
+      phe = cmd_t::pull_ivar( ids , phe_label );
+      int cases = 0 , controls = 0 , missing = 0;
+      
+      std::map<std::string,int>::const_iterator ii = phe.begin();
+      while ( ii != phe.end() )
+	{
+	  if ( ii->second == 0 ) ++controls;
+	  else if ( ii->second == 1 ) ++cases;
+	  else ++missing;
+	  ++ii;
+	}
+      
+      logger << "  of " << data.size() << " total individuals, for "
+	     << phe_label << " "
+	     << cases << " cases, "
+	     << controls << " controls and "
+	     << missing << " unknown\n";
+      
+      if ( cases == 0 || controls == 0 )
+	Helper::halt( "did not observe both cases and controls: cannot run a phenotype-based analysis" );
+      
+    }
+  
+  //
+  // do analysis (& writes output too)
+  //
+  
+  ms_cmp_maps_t cmp_maps( data ,
+			  use_fixed ? &(fixed.A) : NULL ,
+			  use_fixed ? &(fixed.chs) : NULL ,
+			  phe ,
+			  nreps ,
+			  p );
+}
+
+
+void dsptools::ms_label_maps( param_t & param )
+{
+
+  logger << " running LABEL-MAPS\n";
+  
+  //
+  // options
+  //
+  
+  bool verbose = param.has( "verbose" );
+  
+  // minimize sum(1-r)^p
+  
+  double p = param.has( "p" ) ? param.requires_dbl( "p" ) : 2 ;
+  
+  logger << "  minimizing sum_k (1-r)^" << p << "\n";
+  
+  //
+  // Threshold of min spatial correl? 
+  //
+  
+  const double th = param.has( "th" ) ? param.requires_dbl( "th" ) : 0 ; 
+  
+  if ( th < 0 || th > 1 ) Helper::halt( "invalid 'th' value - expecting 0 -- 1" );
+  
+  if ( th > 0 )
+    logger << "  only assigning maps with spatial r >= " << th << " to matched template\n";
+  else
+    logger << "  no spatial correlation threshold ('th') set\n";
+  
+  //
+  // Get template (with labels) and copy the (static) labels
+  //
+  
+  ms_prototypes_t map_template;
+  
+  std::string template_map = Helper::expand( param.requires( "template" ) );	  
+  
+  map_template.read( template_map );
+      
+  std::vector<char> template_labels = map_template.ms_labels;
+
+  //
+  // Get to-be-labelled maps (updates ms_labels?)
+  //
+  
+  ms_prototypes_t sol1;
+  
+  std::string sol1_file = Helper::expand( param.requires( "sol" ) );	  
+  
+  sol1.read( sol1_file );
+  
+  std::vector<char> sol1_labels = sol1.ms_labels;
+
+  
+  //
+  // do mapping (based on maximal spatial correlation), updating static map labels [ to match sol1 ] 
+  //  this will also edit 'sol1' to match polarity to closest to the template (for viz)
+  //
+  
+  ms_prototypes_t::ms_labels = ms_cmp_maps_t::label_maps( map_template , template_labels , &sol1 , sol1_labels ,
+							  th , p , verbose ); 
+    
+      
+  //
+  // Re-write 'sol' (and updated labels will be includede)
+  //
+  
+  std::string sol1_newfile = Helper::expand( param.requires( "new" ) );
+  
+  sol1.write( sol1_newfile );
+
+}
+
+
+void dsptools::ms_correl_maps( param_t & param )
+{
+  
+  logger << " running CORREL-MAPS\n";
+  
+      
+  //
+  // Get to-be-labelled maps (updates ms_labels?)
+  //
+  
+  ms_prototypes_t A;
+  
+  std::string sol_file = Helper::expand( param.requires( "sol" ) );	  
+  
+  A.read( sol_file );
+  
+  //
+  // Spatial correlations
+  //
+  
+  const int nk = A.K;
+  
+  Eigen::MatrixXd R = Eigen::MatrixXd::Zero( nk , nk );
+  for (int i=0; i<nk; i++)
+    for (int j=0; j<nk; j++)
+      R(i,j) = ms_prototypes_t::spatial_correlation( A.A.col(i) , A.A.col(j) );
+  
+  for (int i=0; i<nk; i++)
+    std::cout << "\t" << A.ms_labels[i];
+  std::cout << "\n";
+  
+  for (int i=0; i<nk; i++)
+    {
+      std::cout << A.ms_labels[i];
+      for (int j=0; j<nk; j++) 
+	std::cout << "\t" << R(i,j);
+      std::cout << "\n";	  
+    }
+
+}

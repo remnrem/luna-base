@@ -717,6 +717,12 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   OUT.precision(12);
 
   //
+  // Only show first N epochs ?
+  //
+
+  int head = param.has( "head" ) ? param.requires_int( "head" ) : 0 ;
+  
+  //
   // Minimal output?
   //
 
@@ -794,7 +800,8 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   bool alternative_format = param.has( "format2" );
 
   if ( minimal ) alternative_format = false;
-  
+
+  if ( head ) alternative_format = false;
   
   //
   // Get signals
@@ -854,8 +861,11 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   //
   // Output to log
   //
-  
-  logger << "  dumping " << ne << " unmasked epochs in " ;
+
+  if ( head ) 
+    logger << "  dumping up to " << head << " unmasked epochs in " ;
+  else
+    logger << "  dumping " << ne << " unmasked epochs in " ;
   
   if ( minimal ) logger << "minimal";
   else
@@ -1093,6 +1103,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   // Iterate over epochs, display  
   //
 
+  int epoch_count = 0;
   
   timeline.first_epoch();       
   while ( 1 ) 
@@ -1100,7 +1111,9 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 
       int epoch = timeline.next_epoch();	   
       if ( epoch == -1 ) break;      
-            
+      ++epoch_count;
+      if ( head != 0 && epoch_count > head ) break;
+      
       // get all signals for this epoch
       
       interval_t interval = timeline.epoch( epoch );

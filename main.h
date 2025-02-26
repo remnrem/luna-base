@@ -30,19 +30,42 @@
 #include <sstream>
 #include <iostream>
 #include <new>
+#include <fstream>
+
+#include "miscmath/crandom.h"
 
 class param_t;
 class cmd_t;
 
+// misc helper: command logger 
+std::string log_commands( int argc , char ** argv );
+
+// misc helper: sample-list slicer
+bool luna_helper_sl_slicer( const std::string & f , int n , int m , int * s1 , int * s2 );
+
+// misc helper: evaluate comannd-line methods
+cmdline_proc_t parse_cmdline( int argc , char ** argv , int * );
+
+// misc helper: execture special cmd-line ops
+void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int param_from_command_line );
+
+// misc helper: read and parse an @include file
+void include_param_file( const std::string & paramfile );
+
+// misc helper: manage memory resource issues
 void NoMem();
 
-void proc_dummy( const std::string & , const std::string & p2 );
 void proc_eval_tester( const bool );
-void process_edfs(cmd_t&);
-void list_cmds();
 
+void process_edfs(cmd_t&);
+
+// misc helper: build global params from cmdline
 void build_param( param_t * , int argc , char** argv , int );
+
+// misc helper: build global params from stdin
 void build_param_from_stdin( param_t * );
+
+// misc helper: return Luna version
 std::string luna_base_version();
 
 #endif

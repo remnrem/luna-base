@@ -103,7 +103,8 @@ namespace dsptools
   void cmdline_otsu( param_t & );
   
   void run_otsu( const std::vector<double> & x , const int k );
-  
+
+    
   // Helper
   
   std::vector<double> readcin();

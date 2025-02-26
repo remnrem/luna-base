@@ -258,7 +258,12 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   // threshold to reove epochs when summarizing slopes over all epochs  
   const double slope_th2     = param.has( "slope-th2" ) ? param.requires_dbl( "slope-th2" ) : 3 ;
 
-    
+  //
+  // Modal freq
+  //
+
+  const bool modal_peak = param.has( "modal" );
+  
   // output
   
   const bool dB = param.has( "dB" );
@@ -1361,6 +1366,12 @@ void mtm::wrapper( edf_t & edf , param_t & param )
           writer.level( signals.label(s) , globals::signal_strat );
 
 	  //
+	  // for modal freq calcs (optionally) 
+	  //
+
+	  std::vector<double> mf_f, mf_mtm, mf_wmtm, mf_wrel;
+
+	  //
 	  // basic MTM spectra
 	  //
 	  
@@ -1368,13 +1379,18 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  for (int fi=0; fi<fn; fi++)
 	    {
 	      writer.level( etrack_freqs[ns1][fi]  , globals::freq_strat  );
-
 	      
 	      const double pmean = MiscMath::mean( etrack_power[ns1][fi] );
 	      const double pmed  = MiscMath::median( etrack_power[ns1][fi] );
 	      const double psd   = MiscMath::sdev( etrack_power[ns1][fi] );
 	      
 	      writer.value( "MTM" , pmean );
+
+	      if ( modal_peak )
+		{
+		  mf_f.push_back( etrack_freqs[ns1][fi] );
+		  mf_mtm.push_back( pmean );		  
+		}
 	      
 	      // allow for variable length epochs, so report weighted mean
 	      // -- TOOD - should add this for all outputs...  thus why for
@@ -1387,6 +1403,13 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 		  
 		  const double wrelpmean = MiscMath::weighted_mean( etrack_relpower[ns1][fi] , etrack_length );
                   writer.value( "WREL" , wrelpmean );
+
+		  if ( modal_peak )
+		    {
+		      mf_wmtm.push_back( wpmean );
+		      mf_wrel.push_back( wrelpmean );		  
+		    }
+		  
 		}
 	      
 	      if ( etrack_power[ns1][fi].size() > 2 ) 
@@ -1397,6 +1420,39 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	    }
 	  writer.unlevel( globals::freq_strat );
 
+
+	  //
+	  // modal freq
+	  //
+	  
+	  if ( modal_peak )
+	    {
+	      double peak_freq , peak_ampl;
+	      if ( modal_freq_helper( mf_mtm , mf_f ,&peak_freq , &peak_ampl ) )
+		{
+		  writer.value( "MTM_PK_FREQ" , peak_freq );
+		  writer.value( "MTM_PK_AMPL" , peak_ampl );
+		}
+	      
+	      if (edf.timeline.generic_epochs() )
+		{
+
+		  double peak_freq , peak_ampl;
+		  if ( modal_freq_helper( mf_wmtm , mf_f , &peak_freq , &peak_ampl ) )
+		    {
+		      writer.value( "WMTM_PK_FREQ" , peak_freq );
+		      writer.value( "WMTM_PK_AMPL" , peak_ampl );
+		    }
+		  
+		  if ( modal_freq_helper( mf_wrel , mf_f , &peak_freq , &peak_ampl ) )
+		    {
+		      writer.value( "WREL_PK_FREQ" , peak_freq );
+		      writer.value( "WREL_PK_AMPL" , peak_ampl );
+		    }
+
+		}
+	    }
+	  
 	  //
 	  // band power
 	  //

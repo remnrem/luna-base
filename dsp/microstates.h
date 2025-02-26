@@ -35,7 +35,17 @@ struct signal_list_t;
 namespace dsptools
 {
   void microstates( edf_t & edf , param_t & param );
+  
+  void ms_kmer_wrapper( param_t & param );
+
+  void ms_cmp_maps( param_t & param );
+
+  void ms_label_maps( param_t & param );
+
+  void ms_correl_maps( param_t & param );
+
 }
+
 
 
 struct ms_prototypes_t {
