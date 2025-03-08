@@ -339,19 +339,27 @@ void cmd_t::replace_wildcards( const std::string & id )
       //
 
       Helper::expand_numerics( &currline );
-     
+      
       iline += currline + "\n";
       
     }
-  
+
   //
   // Parse into commands/options
   //
 
   std::vector<std::string> tok = Helper::quoted_parse( iline , "\n" );
-  
-  // command(s): do this just for printing; real parsing will include variables, etc
 
+  //
+  // expand loops
+  //
+
+  tok = cmd_t::proc_forloops( tok );
+
+  //
+  // command(s): do this just for printing; real parsing will include variables, etc
+  //
+  
   params.clear();
   cmds.clear();
 
@@ -522,7 +530,8 @@ bool cmd_t::read( const std::string * str , bool silent )
   // but as we now use ivars as well as vars, hold on this till
   // later, in update()
   //
-
+  
+  
 
   //
   // Initial reporting of commands read
@@ -536,9 +545,11 @@ bool cmd_t::read( const std::string * str , bool silent )
       return false;
     }
 
-  
+    
+  //
   // command(s): do this just for printing; real parsing will include variables, etc
-
+  //
+  
   for (int c=0;c<tok.size();c++)
     {      
       std::vector<std::string> ctok = Helper::quoted_parse( tok[c] , "\t " );
@@ -597,7 +608,7 @@ bool cmd_t::read( const std::string * str , bool silent )
 
 bool cmd_t::eval( edf_t & edf ) 
 {
-
+  
   //
   // Conditional evaluation
   //
@@ -5946,4 +5957,173 @@ std::map<std::string,std::string>  cmd_t::indiv_var_map( const std::string & id 
 	}
     }
   return allvars;
+}
+
+
+std::vector<std::string> cmd_t::proc_forloops( const std::vector<std::string> & lines )
+{
+
+  std::vector<std::string> r;
+  // allow multiple nested FOR UNTIL statements
+  int fors = 0 , untils = 0;
+
+  for (int i=0; i<lines.size(); i++)
+    {
+      std::vector<std::string> ctok = Helper::quoted_parse( lines[i] , "\t " );
+      if ( ctok.size() == 0 ) continue;
+      const std::string str = Helper::toupper( ctok[0] );
+      if      ( str == "LOOP" ) ++fors;
+      else if ( str == "END-LOOP" ) ++untils; 
+    }
+  
+  if ( fors != untils )
+    Helper::halt( "unbalanced number of LOOP/END-LOOP commands in the script" );
+
+  // nothing to do? 
+  if ( fors == 0 ) return lines;
+  
+  // make expansions
+  
+  std::vector<std::string> keys;    // for nested loops, last is the inner
+  std::map<std::string,int> slots;  // for a given loop, which slot we at?
+  std::map<std::string,std::vector<std::string> > seqs; // for a given loop, what are the slots?
+  std::map<std::string,std::string> vals; // swap in this value
+  std::map<std::string,int> repeat_pointer; // line to loop back to 
+
+  std::string inner = ""; // inner loop
+  const int nl = lines.size();
+
+  for (int i=0; i<nl; i++)
+    {
+
+      // swap any loop indexes (e.g. as they may feature in a LOOP vals= arg)
+      
+      std::string l1 = lines[i];
+      
+      std::map<std::string,std::string>::const_iterator vv = vals.begin();
+      while ( vv != vals.end() )
+	{
+	  l1 = Helper::search_replace( l1 , vv->first , vv->second ) ;
+	  ++vv;
+	}
+
+      // parse
+      std::vector<std::string> ctok = Helper::quoted_parse( l1 , "\t " );
+      if ( ctok.size() == 0 ) continue;
+      const std::string str = Helper::toupper( ctok[0] );
+      const bool is_repeat = str == "LOOP";
+      const bool is_until  = str == "END-LOOP";
+      
+      //
+      // Are we starting a new loop? 
+      //
+      
+      if ( is_repeat )
+	{
+	  
+	  // LOOP index=x vals=1,2,3,4
+	  
+	  param_t param;
+          for (int j=1;j<ctok.size();j++)
+	    param.parse( ctok[j] );
+	  
+	  inner = "#{" + param.requires( "index" ) + "}";
+	  
+	  // set repeat pointer to start of loop
+	  repeat_pointer[ inner ] = i;
+	  
+	  // note this is the current inner loop (end element)
+	  keys.push_back( inner );
+
+	  // allow [1:n] expansion for sequences here
+	  const std::string expr = param.value( "vals" ) ;
+	  if ( expr.find( "${" ) != std::string::npos )
+	    Helper::halt( "currently, LOOP vals cannot contain variables" );	  
+
+	  seqs[ inner ] = Helper::parse( Helper::xsigs( expr ) , "," );
+	  
+	  if ( seqs[ inner ].size() == 0 )
+	    Helper::halt( "empty vals in LOOP for " + inner );
+
+	  // set at first slot
+	  slots[ inner ] = 0;
+
+	  // set value
+	  vals[ inner ] = seqs[ inner ][ slots[ inner ] ];
+	  	  
+	}
+      
+      //
+      // Or loop back or ending an existing one?
+      //
+
+      if ( is_until )
+	{
+	  
+	  // advance to next slot
+          slots[ inner ]++;
+	  
+	  // all done?
+	  const bool closeout = seqs[ inner ].size() == slots[ inner ] ;
+
+	  if ( ! closeout )
+	    {
+	      // update value
+	      vals[ inner ] = seqs[ inner ][ slots[ inner ] ];
+	      
+	      // reset point to read from in input
+	      i = repeat_pointer[ inner ];
+
+	    }
+	  else
+	    {
+	      seqs.erase( seqs.find( inner ) );	      
+	      slots.erase( slots.find( inner ) );
+	      vals.erase( vals.find( inner ) );
+	      repeat_pointer.erase( repeat_pointer.find( inner ) );
+	      
+	      if ( keys.size() == 1 )
+		{
+		  inner = "";
+		  keys.clear();
+		}
+	      else
+		{
+		  keys.pop_back();
+		  inner = keys.back();
+		}
+	    }
+	  
+	}
+
+      
+      //
+      // Otherwise, just track this line - but swapping in any loop variables
+      //
+      
+      if ( ! ( is_repeat || is_until ) )
+	r.push_back( l1 );	      
+     
+      // next input line
+    }
+  
+  return r;
+}
+
+void cmd_t::dump()
+{
+  for (int i=0; i<cmds.size(); i++)
+    {      
+      std::cout << cmds[i] << "\n";
+      param_t param = params[i];
+      std::cout << param.dump() << "\n\n";
+    }
+}
+
+std::string cmd_t::concat( const std::vector<std::string> & l )
+{
+  std::string s;
+  for (int i=0; i<l.size(); i++)
+    s += l[i] + "\n";
+  return s;
 }

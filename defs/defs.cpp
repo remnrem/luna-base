@@ -240,7 +240,7 @@ void globals::init_defs()
   
   version = "v1.2.2 ";
   
-  date    = "29-Jan-2025";
+  date    = "7-Mar-2025";
 
   //
   // Return code

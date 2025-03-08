@@ -117,6 +117,8 @@ class cmd_t
 
   static void attach_idmapper( const std::string & file );
 
+  static std::vector<std::string> proc_forloops( const std::vector<std::string> & s );
+  
   static std::string remap_id( const std::string & id )
   {
     if ( idmapper.find( id ) == idmapper.end() ) return id;
@@ -165,6 +167,8 @@ class cmd_t
 
   void quit(bool b) ;
 
+  void dump();
+  
   //
   // Static members (i.e. from command line)
   //
@@ -238,6 +242,7 @@ class cmd_t
 
   static std::set<std::string> specials;
 
+  static std::string concat( const std::vector<std::string> & );
 
 };
 

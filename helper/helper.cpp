@@ -1,5 +1,4 @@
 
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -2002,7 +2001,9 @@ std::string Helper::xsigs( const std::string & t )
   
   // expand [SIG][1:4] to SIG1,SIG2,SIG3,SIG4  
   // expand [a,b,c][1:4] to a1,a2,a3,a4,b1,b2,b3,b4,c1,c2,c3,c4
-
+  // expand [][1:4] to 1,2,3,4
+  // but not [][]
+  
   // [seq] can be numberic n:m or comma-delim list (or a variable)
   //  or a single term
   
@@ -2010,6 +2011,9 @@ std::string Helper::xsigs( const std::string & t )
 
   // three-way concatenation [a][b][c] 
   //    [[a][b]][c]
+
+  // special case: if we see a loop-index [ch][#{i}] then
+  // postpone evaluation... wait until the #{} have been expanded...
   
   // txt locations
   std::map<int,int> splices;  
@@ -2036,7 +2040,7 @@ std::string Helper::xsigs( const std::string & t )
 	  }
 	  
 	  // closing ]
-	  int k=i+1;
+	  int k=i;
 	  while ( 1 ) { 
 	    ++k;
 	    if ( k == t.size() ) 
@@ -2046,29 +2050,50 @@ std::string Helper::xsigs( const std::string & t )
 	  
 	  // whole expression (root)[seq] or [seq](root)
 	  std::string s = t.substr( j , k - j + 1 );
+
+	  // check we/ don't have a loop index
+	  const bool has_loop_index = s.find( "#{" ) != std::string::npos;
+	  if ( has_loop_index ) continue;
 	  
 	  // split into two tokens
+	  // but all first to be empty
+
 	  std::vector<std::string> tok = Helper::parse( s , "][" );
-	  if ( tok.size() != 2 ) 
+	  // std::cout << "tok s = " << tok.size() << "\n";
+	  // for (int tt=0; tt<tok.size() ; tt++) std::cout << "tok[" << tt << "] = '" << tok[tt] << "'\n";
+	  if ( tok.size() > 2 ) 
 	    Helper::halt( "bad format for [seq][seq], not paired" );
-	  
+
+	  // allow [][1:n]	  
+	  if ( tok.size() == 1 )
+	    tok.push_back( "" );
+	  else if ( tok.size() == 0 ) // if [][]
+	    {
+	      tok.push_back( "" );
+	      tok.push_back( "" );
+	    }
+	
 	  //
 	  // parse first seqs, then second
 	  //
 	  
 	  for (int seqn=0; seqn<=1; seqn++)
 	    {
-	  
+	      const bool empty = tok[ seqn ] == "";
+	      
 	      std::vector<std::string> num2 = Helper::parse( tok[ seqn ] , ":" );
 	      const bool numseq = num2.size() == 2;
 	  
-	      // this allows for single term (comma-delim list length = 1 )
+	      // this allows for single term or empty slot (comma-delim list length = 1 or 0 )
 	      std::vector<std::string> com2 = Helper::parse( tok[ seqn ] , "," );
-	      const bool comseq = com2.size() > 1 || ( com2.size() == 1 && ! numseq );
-	      
-	      if ( numseq == comseq ) 
-		Helper::halt( "bad format for [seq] " + tok[ seqn ] );
-	      
+
+	      // allow [][1:n] 
+	      if ( com2.size() == 0 ) com2.push_back( "" );
+
+	      // const bool comseq = com2.size() > 1 || ( com2.size() == 1 && ! numseq );	      
+	      // if ( numseq == comseq ) 
+	      // 	Helper::halt( "bad format for [seq] " + tok[ seqn ] );
+
 	      if ( numseq )
 		{
 		  int s1 , s2;
@@ -2129,7 +2154,7 @@ std::string Helper::xsigs( const std::string & t )
    // 		<< starts[ jj2->first ] << "\n";
    //     ++jj2;
    //    }
-    
+  
 
   //
   // nothing to do
@@ -2152,6 +2177,10 @@ std::string Helper::xsigs( const std::string & t )
       // slice in comma list? [ seq1 x seq2 ]
       std::vector<std::string> v1 = Helper::parse( seq1[ jj->first ] , "," );
       std::vector<std::string> v2 = Helper::parse( seq2[ jj->first ] , "," );
+
+      // allow for emptiness
+      if ( v1.size() == 0 ) v1.push_back("");
+      if ( v2.size() == 0 ) v2.push_back("");
       
       bool first = true;
       for (int a=0;a<v1.size();a++)
@@ -2170,9 +2199,6 @@ std::string Helper::xsigs( const std::string & t )
   // now add final part
   s += t.substr( p );
   
-  // std::cout << "t = [" << *t << "]\n";
-  // std::cout << "s = [" << s << "]\n";
-
   return s;
 
 }

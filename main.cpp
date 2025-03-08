@@ -267,9 +267,8 @@ int main(int argc , char ** argv )
   
   while ( ! std::cin.eof()  )
     {
-      
       cmd_t cmd ; // scans STDIN for next command
-      
+	    
       if ( cmd.empty() ) break; 
 
       ++processed;
@@ -324,7 +323,6 @@ int main(int argc , char ** argv )
 
 void process_edfs( cmd_t & cmd )
 {
-  
   
   //
   // Iterate over some or all of a list of EDFs and annotations,
@@ -502,7 +500,7 @@ void process_edfs( cmd_t & cmd )
 	  if ( globals::skip_sl_annots ) tok.resize(2);
 	  
 	  // allow annot field to be comma delimited? expand out here
-
+	  
 	  if ( tok.size() == 3 )
 	    {
 	      std::vector<std::string> annot_fields = Helper::parse( tok[2] , globals::file_list_delimiter );
@@ -513,7 +511,12 @@ void process_edfs( cmd_t & cmd )
 		    tok[a+2] = annot_fields[a];
 		}
 	    }
-		
+
+	  // remove any quotes (e.g. we're okay to have spaces in names now, as tab delim
+
+	  for (int t=1;t<tok.size();t++)
+	    tok[t] = Helper::unquote( tok[t] );
+	  
 	  // add in project path to relative paths?
 	  // (but keep absolute paths as they are)
 
