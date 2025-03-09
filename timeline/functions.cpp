@@ -1520,8 +1520,6 @@ void timeline_t::signal_means_by_annot( const param_t & param )
 
     } // next annotation
 
-
-  std::cout << " ---------------- done here\n";
   
   //
   // Report means
@@ -2099,7 +2097,7 @@ void timeline_t::set_annot_metadata( const param_t & param )
 		  else if ( fn == "nearest-stop" )
 		    nidx.start = nidx.stop = interval.stop;
 
-		  std::cout << " nidx = " << nidx.as_string() << "\n";
+		  //		  std::cout << " nidx = " << nidx.as_string() << "\n";
 		  // do general lookup:: first event /after/ the query (upper-bound)
 		  //  (and above, the allevs set will have been constructed w/ the a
 		  //   appropriate type (whole, midpoint, start or stop)
@@ -2112,8 +2110,8 @@ void timeline_t::set_annot_metadata( const param_t & param )
 		  int dsign = 0;
 		  std::string matched = ".";
 		  const bool full_mode = fn == "nearest" ;
-		  
-		  std::cout << " going into loop " << allevs.size() << "\n";
+		
+		  //		  std::cout << " going into loop " << allevs.size() << "\n";
 		  
 		  if ( allevs.size() )
 		    {
