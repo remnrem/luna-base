@@ -1234,14 +1234,14 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 		  interval.expand_right( epoch_generic_param_w2 * globals::tp_1sec ); 
 		}
 	    }
-	  
+
 	  if ( has_w_before )
 	    interval.expand_left( epoch_generic_param_w1 * globals::tp_1sec ); 
 
 	  if ( has_w_after )
 	    interval.expand_right( epoch_generic_param_w2 * globals::tp_1sec );	      
 	}
-      
+
       // shift?
       if ( has_shift ) 
 	{

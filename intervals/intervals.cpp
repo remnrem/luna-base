@@ -188,6 +188,7 @@ int interval_t::intersect( const std::set<interval_t> & a,
 
   // add final pool if not empty
   if ( pool.size() > 0 ) superb[ interval_t( first , last ) ] = pool;
+  std::cout << "done1\n";
 
   // now we know that super-intervals do not overlap
   
