@@ -262,7 +262,8 @@ void timeline_t::signal2annot( const param_t & param )
       const double bmax = b[1];
       if ( bmin >= bmax || n == 0 ) Helper::halt( "expecting bins=min,max,m" );
       const double binc = (b[1] - b[0] ) / (double)n;
-      
+      logger << "  setting " << n << " bins of interval size " << binc << "\n";
+
       nxy = 3;
       enc.clear();
       for (int i=0; i<n; i++)
@@ -317,7 +318,8 @@ void timeline_t::signal2annot( const param_t & param )
       bool window = true;
       double ey = 0.05;
       
-      if ( e3 )
+      // 'encoding2' or 'bins'
+      if ( e3 || eb )
 	{
 	  if ( ! Helper::str2dbl( enc[i+2] , &ey ) )
 	    Helper::halt( "bad numeric value for encoding" + enc[i+2] );
@@ -1520,9 +1522,6 @@ void timeline_t::signal_means_by_annot( const param_t & param )
 
     } // next annotation
 
-
-  std::cout << " ---------------- done here\n";
-  
   //
   // Report means
   //
@@ -1542,7 +1541,7 @@ void timeline_t::signal_means_by_annot( const param_t & param )
 	  // if ignoring instance IDs, then only a single '.' here, so skip
 	  // adding as a factor
 	  if ( ! ignore_instance_ids ) 
-	    writer.level( ii->first , globals::annot_instance_strat );
+	    writer.level( jj->first , globals::annot_instance_strat );
 
 	  // by channel
 	  const std::map<int,double> & chs = ax[ ii->first ][ jj->first ];
