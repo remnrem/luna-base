@@ -4279,8 +4279,10 @@ std::vector<std::string> annot_t::as_txt_vec( const std::vector<double> & x ) {
 
 
 
-void annotation_set_t::write( const std::string & filename , param_t & param , edf_t & edf )
+void annotation_set_t::write( const std::string & filename1 , param_t & param , edf_t & edf )
 {
+
+  std::string filename = filename1;
   
   // write all annotations here as a single file; 
   // either XML or .annot file format
@@ -4288,6 +4290,39 @@ void annotation_set_t::write( const std::string & filename , param_t & param , e
   // order by time
 
   const bool xml_format = param.has( "xml" ) || Helper::file_extension( filename , "xml" ) ;
+
+  //
+  // Generate a folder if it doesn't already exist
+  //
+
+  const bool mk_folder = filename == "__special_make_dir__" ; 
+
+  if ( mk_folder )
+    {
+
+      std::string outdir = Helper::expand( param.value( "annot-dir" ) );
+      
+      if ( outdir[ outdir.size() - 1 ] != globals::folder_delimiter ) 
+	outdir += globals::folder_delimiter;
+      
+      int p=filename.size()-1;
+      int v = 0;
+      for (int j=p;j>=0;j--)
+	{
+	  if ( filename[j] == globals::folder_delimiter ) { v=j+1; break; }
+	}
+
+      // new filename to write
+      filename = outdir + edf.id + ( xml_format ? ".xml" : ".annot" ); 
+      
+      // create folder if it does not exist 
+      // -p is (usually?) not needed for Windows
+      
+      std::string syscmd = globals::mkdir_command + " " + outdir ; 
+      
+      int retval = system( syscmd.c_str() );
+      
+    }
   
   //
   // use hh:mm:ss, if possible, instead of elapsed seconds (for .annot only)

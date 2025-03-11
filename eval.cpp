@@ -3076,7 +3076,13 @@ void proc_set_annot_metadata( edf_t & edf , param_t & param )
 // WRITE-ANNOTS : write all annots to disk
 void proc_write_annots( edf_t & edf , param_t & param )
 {
-  edf.timeline.annotations.write( param.requires( "file" ) , param , edf );
+  if ( param.has( "annot-dir" ) )
+    {
+      if ( param.has( "file" ) ) Helper::halt( "cannot specify both annot-dir and file" );
+      edf.timeline.annotations.write( "__special_make_dir__" , param , edf );
+    }
+  else
+    edf.timeline.annotations.write( param.requires( "file" ) , param , edf );
 }
 
 // EXTEND : make single point annots longer
