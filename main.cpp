@@ -38,7 +38,7 @@ extern freezer_t freezer;
 
 int main(int argc , char ** argv )
 {
-  
+   
   //
   // initial check for display of all commands 
   // and save, if writing to log=luna.log
@@ -75,7 +75,7 @@ int main(int argc , char ** argv )
 		<< sqlite3_libversion() << "\n";
       std::exit( globals::retcode );
     }
-
+  
   
   //
   // primary usage

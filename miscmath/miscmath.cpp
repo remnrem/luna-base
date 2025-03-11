@@ -47,6 +47,7 @@ long int MiscMath::nextpow2( const int a )
   return 0;
 }
 
+int MiscMath::num_digits(const int n) { return floor(log10(n) + 1); }
 
 //
 // logspace function

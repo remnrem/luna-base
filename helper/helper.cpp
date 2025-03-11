@@ -253,6 +253,18 @@ std::string Helper::expand( const std::string & f )
 }
 
 
+std::string Helper::zero_pad( int x , int n )
+{
+  // e.g. x = 22 n = 4 --> return 0022  
+  if ( x < 0 ) Helper::halt( "internal error: Helper::zero_pad() cannot be called w/ negative values" );
+  const std::string r = Helper::int2str( x );
+  const int l = r.size();
+  if ( l > n ) Helper::halt( "internal error: Helper::zero_pad() not given a large enough scope" );
+  if ( l == n ) return r;
+  return std::string( n - l , '0' ) + r ;  
+  
+}
+
 bool Helper::is_folder( const std::string & f ) { if ( f.size() == 0 ) return false; return f[f.size()-1]== globals::folder_delimiter; } 
 
 

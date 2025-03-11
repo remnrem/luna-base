@@ -41,7 +41,8 @@ namespace MiscMath
   std::vector<double> logspace(double a, double b, int n);
   std::vector<double> log2space(double a, double b, int n);
   std::vector<double> linspace(double a, double b, int n);
-  
+  int num_digits(const int n); 
+    
   double rms( const std::vector<double> & );
   double rms( const double * , int n );
   

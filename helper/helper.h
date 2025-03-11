@@ -95,6 +95,8 @@ namespace Helper
     return s.substr(a,s.size()-a-b);
   }
 
+  std::string zero_pad( int , int );
+  
   std::string remove_all_quotes(const std::string &s , const char q2 = '"' );
   std::string quote_spaced( const std::string & s );
 

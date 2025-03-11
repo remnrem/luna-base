@@ -214,12 +214,14 @@ void timeline_t::signal2annot( const param_t & param )
   if ( e2 + e3 + eb + eq + etop + ebot + etopp + ebotp > 1 )
     Helper::halt( "can only specify one of encoding|encoding2|bins|q|pos|neg|pos-pct|neg-pct" );
   
-  std::string bin_label = "B";
+  std::string bin_label = "";
   if ( param.has( "bin-label" ) ) bin_label = param.value( "bin-label" );
+  else if ( param.has( "no-bin-label" ) ) bin_label = "";
+  else if ( eb ) bin_label = "B";
   else if ( eq ) bin_label = "Q";
   else if ( etop || etopp ) bin_label = "POS";
   else if ( ebot || ebotp ) bin_label = "NEG";
-    
+  
   std::vector<std::string> enc; 
   int nxy = -1;
   
@@ -266,9 +268,10 @@ void timeline_t::signal2annot( const param_t & param )
 
       nxy = 3;
       enc.clear();
+      int ndigs = MiscMath::num_digits( n );
       for (int i=0; i<n; i++)
 	{
-	  enc.push_back( bin_label + Helper::int2str( i+1 ) ); // annotate label
+	  enc.push_back( bin_label + Helper::zero_pad( i+1 , ndigs ) ); // annotate label
 	  enc.push_back( Helper::dbl2str( bmin + i * binc ) );
 	  enc.push_back( Helper::dbl2str( bmin + (i+1) * binc ) );
 	}
@@ -390,6 +393,8 @@ void timeline_t::signal2annot( const param_t & param )
 	{
 	  // wipe any current encoding
 	  e.clear();
+
+	  int num_digs = MiscMath::num_digits(nq);
 	  
 	  const double pi = 1 / (double)nq;
 	  double p = 0;
@@ -397,7 +402,7 @@ void timeline_t::signal2annot( const param_t & param )
 	    {
 	      const double lwr = MiscMath::percentile( *d , p );
 	      const double upr = MiscMath::percentile( *d , i == nq-1 ? 1.0 : p + pi );
-	      e[ bin_label + Helper::int2str(i+1) ] = std::make_pair( lwr , upr );
+	      e[ bin_label + Helper::zero_pad(i+1,num_digs) ] = std::make_pair( lwr , upr );
 	      p += pi;	      
 	    }
 	}
@@ -1402,6 +1407,13 @@ void timeline_t::signal_means_by_annot( const param_t & param )
 
   const bool ignore_instance_ids = ! param.has( "by-instance" );
 
+
+  //
+  // min-max normalized means 
+  //
+
+  const bool norms = param.has( "norm" );
+
   //
   // flanking windows
   //
@@ -1521,64 +1533,131 @@ void timeline_t::signal_means_by_annot( const param_t & param )
 	}
 
     } // next annotation
-
   
+  
+
+
   //
-  // Report means
+  // Report means, along w/ normalized values (optionally) 
   //
 
-  // by annotation class
-  std::map<std::string,std::map<std::string,int> >::const_iterator ii = an.begin();
-  while ( ii != an.end() )
+ 
+  // first, by by channel
+
+  for (int s=0; s<ns; s++)
     {
-      writer.level( ii->first , globals::annot_strat );
 
-      // by instance ID 
+      writer.level( signals.label( s ) , globals::signal_strat );
       
-      std::map<std::string,int>::const_iterator jj = ii->second.begin();
-      while ( jj != ii->second.end() )
+      // class -> [instance] -> N   [ assumes same SR across channel ]
+      // class -> [instance] -> channel -> sum 
+      // std::map<std::string,std::map<std::string,int> > an;
+      // std::map<std::string,std::map<std::string,std::map<int,double> > > ax;  
+      //                                                     ^
+      //                                                     |
+      //                                                 channel slot
+
+      //
+      // Build norm tables (min/max ranges, within annot class only)
+      //
+      
+      std::map<std::string,double> ann2inst_min;
+      std::map<std::string,double> ann2inst_max;
+      
+      std::map<std::string,std::map<std::string,int> >::const_iterator ii = an.begin();
+      while ( ii != an.end() )
 	{
 
-	  // if ignoring instance IDs, then only a single '.' here, so skip
-	  // adding as a factor
-	  if ( ! ignore_instance_ids ) 
-	    writer.level( jj->first , globals::annot_instance_strat );
+	  double minval = 0 , maxval = 0;
+	  
+	  // by instance ID
+	  std::map<std::string,int>::const_iterator jj = ii->second.begin();
+          while ( jj != ii->second.end() )
+            {
+	      
+	      const double x = ax[ ii->first ][ jj->first ][ s ] / (double)jj->second;
 
-	  // by channel
-	  const std::map<int,double> & chs = ax[ ii->first ][ jj->first ];
-	  std::map<int,double>::const_iterator kk = chs.begin();
-	  while ( kk != chs.end() )
-	    {	      
+	      // min/max
+	      if ( jj == ii->second.begin() )
+		minval = maxval = x;
+	      else if ( x < minval )
+		minval = x;
+	      else if ( x > maxval )
+		maxval = x;
+	      
+	      ++jj;
+	    }
 
-	      writer.level( signals.label( kk->first ) , globals::signal_strat );
+	  // get mean for this class
+	  ann2inst_min[ ii->first ] = minval;
+	  ann2inst_max[ ii->first ] = maxval;
+	  
+	  ++ii;
+	}
 
+
+      //
+      // Report outputs
+      //
+      
+      // by annotation class
+      ii = an.begin();
+      while ( ii != an.end() )
+	{
+	  
+	  writer.level( ii->first , globals::annot_strat );
+	  
+	  const bool do_inst_norms = ii->second.size() > 2 && ! ignore_instance_ids ;
+	  
+	  // by instance ID 	  
+	  std::map<std::string,int>::const_iterator jj = ii->second.begin();
+	  while ( jj != ii->second.end() )
+	    {
+	      
+	      // if ignoring instance IDs, then only a single '.' here, so skip
+	      // adding as a factor
+	      if ( ! ignore_instance_ids ) 
+		writer.level( jj->first , globals::annot_instance_strat );
+	      
+	      // by channel
+	      // ax = ax[ ii->first ][ jj->first ][ s ] 
+	      const double x = ax[ ii->first ][ jj->first ][ s ] / (double)jj->second ;
+	      
 	      // main mean
-	      writer.value( "M" , kk->second / (double)jj->second );
+	      writer.value( "M" , x );
 	      writer.value( "S" , jj->second / (double)Fs ); // span in seconds
-			    
+	      
+	      // normed? 
+	      if ( do_inst_norms )
+		{
+		  writer.value( "M1" , ( x - ann2inst_min[ ii->first ] ) / ( ann2inst_max[ ii->first ] - ann2inst_min[ ii->first ] ) );
+		}
+	      
+		
 	      // flanking regions?
 	      if ( flanking )
 		{
-		  writer.value( "L" , left_ax[ ii->first ][ jj->first ][ kk->first ] / (double)left_an[ ii->first ][ jj->first ] ) ;
-		  writer.value( "R" , right_ax[ ii->first ][ jj->first ][ kk->first ] / (double)right_an[ ii->first ][ jj->first ] ) ;
+		  writer.value( "L" , left_ax[ ii->first ][ jj->first ][ s ] / (double)left_an[ ii->first ][ jj->first ] ) ;
+		  writer.value( "R" , right_ax[ ii->first ][ jj->first ][ s ] / (double)right_an[ ii->first ][ jj->first ] ) ;
 		}
-	      
-	      // next signal
-	      ++kk;
-	    }
 
-	  writer.unlevel( globals::signal_strat );
-	  ++jj;
+	      // next instance
+	      ++jj;
+	    }	  
+
+	  if ( ! ignore_instance_ids )
+	    writer.unlevel( globals::annot_instance_strat );
+	  
+	  // next class
+	  ++ii;	  
 	}
+
+      writer.unlevel( globals::annot_strat );
       
-      if ( ! ignore_instance_ids )
-	writer.unlevel( globals::annot_instance_strat );
-      
-      // next class
-      ++ii;	  
+      // next channel
     }
   
-  writer.unlevel( globals::annot_strat );
+  writer.unlevel( globals::signal_strat );
   
   // all done
 }
