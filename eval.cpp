@@ -1057,7 +1057,7 @@ void proc_report( edf_t & edf , param_t & param )
     {
       logger << "  logging " << vars[v]
 	     << " for " << cmd << ( fac != "" ? ": " + fac : "" ) << "\n";
-
+      
       globals::cmddefs().ensure_table( cmd , fac );
       globals::cmddefs().add_var( cmd , fac , vars[v] , "." );
     }

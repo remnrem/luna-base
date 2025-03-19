@@ -76,7 +76,7 @@ void cmddefs_t::init()
   add_domain( "artifact"   , "Artifacts"        , "Artifacts detection/correction routines" );
   add_domain( "hypno"      , "Hypnograms"       , "Characterizations of hypnograms" );
   add_domain( "stage"      , "Staging"          , "Automated staging/stage evaluation" );
-  add_domain( "timefreq"   , "Time/frequency analysis" , "TF including power spectral density estimation" );
+  add_domain( "power"      , "Time/frequency analysis" , "TF including power spectral density estimation" );
   add_domain( "trans"      , "Spindles and SO"  , "Spindles and slow oscillations" );
   add_domain( "cc"         , "Coupling/connectvitiy" , "Coherence and other topographical analyses" );
   add_domain( "interval"   , "Interval-based analysis" , "Analyses and summaries based on time-domain intervals" );
@@ -162,6 +162,7 @@ void cmddefs_t::init()
 
   add_cmd( "summ" , "SUMMARY" , "More verbose description, sent to the console" );
 
+  
 
   //
   // HEADERS
@@ -218,8 +219,7 @@ void cmddefs_t::init()
   add_cmd( "summ" , "TAG" , "Generic command to add a tag (level/factor) to the output" );  
   add_param( "TAG" , ""    , "RUN/L1" , "Add tag with level L1 to factor RUN in output" );
   add_param( "TAG" , "tag" , "RUN/L1" , "Identical to the above, but explicitly using the tag option" );
-
-
+  
   //
   // STATS
   //
@@ -613,6 +613,32 @@ void cmddefs_t::init()
   add_table( "CHEP" , "CH,E" , "CHEP mask" );
   add_var( "CHEP" , "CH,E" , "CHEP" , "CHannel/EPoch mask" );
   
+
+
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // INTERVALS  
+  //
+  /////////////////////////////////////////////////////////////////////////////////
+
+  add_cmd( "interval" , "MEANS" , "Calculates signal means conditional on annotations" );
+  add_url( "MEANS" , "intervals/#means" );
+  add_param( "MEANS" , "sig" , "C3,C4" , "Means for one or more signals" );
+  add_param( "MEANS" , "annot" , "FS,SS" , "One or more annotations" );
+  add_param( "MEANS" , "w" , "5" , "Optional flanking window before/after each annotation" );
+  add_param( "MEANS" , "by-instance" , "", "Output means by annotation instanace as well as class" );
+ 
+  add_table( "MEANS" , "CH,ANNOT" , "Annotation class means, by channel" );
+  add_var( "MEANS" , "CH,ANNOT" , "M" , "Mean" );
+  add_var( "MEANS" , "CH,ANNOT" , "L" , "Left-flanking mean (if 'w' set)" );
+  add_var( "MEANS" , "CH,ANNOT" , "R" , "Right-flanking mean (if 'w' set)" );
+
+  add_table( "MEANS" , "CH,ANNOT,INST" , "Annotation class/instance means, by channel" );
+  add_var( "MEANS" , "CH,ANNOT,INST" , "M" , "Mean" );  
+  add_var( "MEANS" , "CH,ANNOT,INST" , "L" , "Left-flanking mean (if 'w' set)" );
+  add_var( "MEANS" , "CH,ANNOT,INST" , "R" , "Right-flanking mean (if 'w' set)" );
+  add_var( "MEANS" , "CH,ANNOT,INST" , "M1" , "Mean 0-1 normalized" );  
+
   
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -1564,6 +1590,40 @@ void cmddefs_t::init()
 
 
   //
+  // PCOUPL 
+  //
+
+  add_cmd( "power" , "PCOUPL" , "Generic phase/event coupling analysis" );
+  add_url( "PCOUPL" , "power-spectra/#pcoupl" );
+
+  add_param( "PCOUPL" , "sig" , "C3,C4" , "Signals" );
+  add_param( "PCOUPL" , "events" , "arousal" , "One or more annotation classes" );  
+  add_param( "PCOUPL" , "lwr" , "3" , "Lower frequency for filter-Hilbert" );
+  add_param( "PCOUPL" , "upr" , "8" , "Upper frequency for filter-Hilbert" );
+  add_param( "PCOUPL" , "anchor" , "start" , "Optional anchor (start/middle/stop)" );
+  add_param( "PCOUPL" , "nreps" , "1000" , "Number of permutations" );
+  add_param( "PCOUPL" , "tw" , "0.5" , "Transition width for Kaiser window FIR" );
+  add_param( "PCOUPL" , "ripple" , "0.01" , "Ripple for Kaiser window FIR" );
+  add_param( "PCOUPL" , "perm-whole-trace" , "" , "Permute signals across whole recording (not within epoch)" );  
+  add_param( "PCOUPL" , "fixed-epoch-dur" , "20" , "If using generic epochs, set a fixed epoch size for permutation" );
+  
+  add_table( "PCOUPL" , "ANNOT,CH" , "Phase coupling statistics" );
+  add_var( "PCOUPL" , "ANNOT,CH" , "ANGLE" , "Mean phase angle (degrees)" );
+  add_var( "PCOUPL" , "ANNOT,CH" , "MAG", "Coupling magnitude (observed statistic)" );
+  add_var( "PCOUPL" , "ANNOT,CH" , "MAG_Z", "Permutation-based Z-score for coupling magnitude" );
+  add_var( "PCOUPL" , "ANNOT,CH" , "MAG_NULL", "Mean coupling statistic under the null" );
+  add_var( "PCOUPL" , "ANNOT,CH" , "MAG_EMP", "Empirical p-value" );
+  add_var( "PCOUPL" , "ANNOT,CH" , "PV", "Asymptotic p-value" );
+  add_var( "PCOUPL" , "ANNOT,CH" , "SIGPV_NULL", "Proportion of asymptotic p<0.05 under the null" );
+  add_var( "PCOUPL" , "ANNOT,CH" , "N" , "Number of events" );
+
+  add_table( "PCOUPL" , "ANNOT,CH,PHASE" , "Phase-bin overlap statistics" );
+  add_var( "PCOUPL" , "ANNOT,CH,PHASE" , "OVERLAP", "Observed count of event anchors per signal phase bin" );
+  add_var( "PCOUPL" , "ANNOT,CH,PHASE" , "OVERLAP_EXP", "Expected count based on permutations" );
+  add_var( "PCOUPL" , "ANNOT,CH,PHASE" , "OVERLAP_EMP", "Empirical p-value based on permutations" );
+  add_var( "PCOUPL" , "ANNOT,CH,PHASE" , "OVERLAP_Z", "Z-score based on permutations" );
+
+  //
   // ASYMM
   //
 
@@ -1781,7 +1841,7 @@ void cmddefs_t::init()
   add_var( "MTM" , "CH" , "SPEC_SLOPE_MD" , "Spectral slope (median)" );
   add_var( "MTM" , "CH" , "SPEC_SLOPE_MN" , "Spectral slope (mean over epochs)" );
   add_var( "MTM" , "CH" , "SPEC_SLOPE_SD" , "Spectral slope (SD over epochs)" );
-
+  
   add_table( "MTM", "CH,SEG", "Segment timing details" );
   add_var( "MTM" , "CH,SEG" , "START" , "Start time (seconds)" );
   add_var( "MTM" , "CH,SEG" , "STOP" , "Stop time (seconds)");
@@ -3385,7 +3445,7 @@ void cmddefs_t::ensure_table( const std::string & cmd , const std::string & fact
   // first need to ensure command exists
   if ( ff == otables.end() )
     {
-      // will add a dummy domain '.' but that should not matter
+      // will add a dummy domain '.' but that should not matter      
       add_cmd( "." , cmd , "." );
     }
   
