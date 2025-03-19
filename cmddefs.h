@@ -41,6 +41,8 @@
 //                   d) tracks whether a given output table (or all) should be dumped as a plain-text file or no  out_plaintext()
 
 
+struct strata_t;
+
 struct tfac_t { 
 
   // need to handle: baseline strata (no factors),    augemnted TAGs (i.e something plus TAGs) 
@@ -53,6 +55,8 @@ struct tfac_t {
   // i.e. as we already know command name, and the TAGs will not define the variables to use
   
   tfac_t( const std::string & s , const std::string & delim = "," ) ;
+  
+  tfac_t( const strata_t & s );
 
   std::string as_string( const std::string & delim = "," ) const;
 
@@ -96,7 +100,7 @@ class cmddefs_t
 
 
   // hidden command description 
-  void hide_cmd( const std::string & domain , const std::string & cmd , const std::string & desc );
+  void hidden_cmd( const std::string & domain , const std::string & cmd , const std::string & desc );
   
   bool is_cmd( const std::string & c ) ;
   
@@ -113,7 +117,7 @@ class cmddefs_t
 		  const bool hide = false );
 
   // hide parameter for this command
-  void hide_param( const std::string & cmd , const std::string & param , 
+  void hidden_param( const std::string & cmd , const std::string & param , 
 		   const std::string & ex ,  // "" if none
 		   const std::string & desc , 
 		   const std::string & requirements = "" );
@@ -121,7 +125,7 @@ class cmddefs_t
   // output from this command , "CMD" , "F,B,CH,E" , "desc" , is compressed Y/N
   void add_table( const std::string & cmd , const std::string & factors , const std::string & desc , bool isz = false , bool hide = false );
 
-  void hide_table( const std::string & cmd , const std::string & factors , const std::string & desc , bool isz = false );
+  void hidden_table( const std::string & cmd , const std::string & factors , const std::string & desc , bool isz = false );
 
   // ensure table (from REPORT)
   void ensure_table( const std::string & cmd , const std::string & factors );
@@ -130,7 +134,7 @@ class cmddefs_t
   void add_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const bool hide = false );
 
   // add hidden variable
-  void hide_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc );
+  void hidden_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc );
 
   // register extra col for output (controlled by caller)
   void register_var( const std::string & cmd , const std::string & factors , const std::string & var , const bool value = true );
@@ -159,6 +163,32 @@ class cmddefs_t
   std::string help_commands() const;
 
 
+  //
+  // hide/show variables
+  //
+
+  void hide_all();
+  void hide_cmd( const std::string & cmd );
+
+  void hide_table( const std::string & cmd , const std::string & factors );
+  void hide_table( const std::string & cmd , const tfac_t & factors );
+
+  void hide_var( const std::string & cmd , const std::string & factors , const std::string & var );
+  void hide_var( const std::string & cmd , const tfac_t & factors , const std::string & var );
+
+  void show_all( const bool status = true );
+  void show_cmd( const std::string & cmd , const bool status = true );
+
+  void show_table( const std::string & cmd , const std::string & factors , const bool status = true );
+  void show_table( const std::string & cmd , const tfac_t & factors , const bool status = true );
+
+  void show_var( const std::string & cmd, const std::string & factors, const std::string & var, const bool status = true );
+  void show_var( const std::string & cmd, const tfac_t & factors, const std::string & var, const bool status = true );
+  
+
+
+
+  
   //
   // indicate whether table should be compressed or no
   //
@@ -244,7 +274,7 @@ class cmddefs_t
   std::map<std::string,std::map<tfac_t,std::map<std::string,std::string> > > otout;
 
   //
-  // hidden status (i.e. not reported in help output)
+  // hidden status (i.e. not reported in output)
   //
 
   std::map<std::string,bool> chide;  // cmds
@@ -252,13 +282,15 @@ class cmddefs_t
   std::map<std::string,std::map<tfac_t,bool> > ohide;  // tables
   std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > > vhide;  // variables
       
-  bool hidden_cmd( const std::string & c ) const;
+  bool is_hidden_cmd( const std::string & c ) const;
   
-  bool hidden_param( const std::string & c , const std::string & p ) const;
+  bool is_hidden_param( const std::string & c , const std::string & p ) const;
 
-  bool hidden_table( const std::string & c , const tfac_t & tfac ) const;
-  
-  bool hidden_var( const std::string & c , const tfac_t & tfac , const std::string & v ) const;
+  bool is_hidden_table( const std::string & c , const tfac_t & tfac ) const;
+
+public:
+  bool is_hidden_var( const std::string & c , const tfac_t & tfac , const std::string & v ) const;
+private:
   
   // all, or no, output should be compressed
   bool allz;
