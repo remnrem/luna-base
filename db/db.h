@@ -1032,6 +1032,7 @@ class writer_t
   {    
     if ( caching ) check_cache_write( var_name , d );
     //    std::cout << "add-v :" << var_name << " " << d << "\n";
+    if ( globals::cmddefs().is_hidden_var( curr_command.cmd_name , curr_strata , var_name ) ) return false;
     if ( retval != NULL ) return to_retval( var_name , d );
     else if ( dbless ) return plaintext ? to_plaintext( var_name , value_t( d ) ) : to_stdout( var_name , value_t( d ) ) ;
     if ( desc != "" ) var( var_name , desc );
@@ -1043,6 +1044,7 @@ class writer_t
     // always use numeric cache (i.e. ignore int cache for now, will make life simpler to use
     // them downstream)
     if ( caching ) check_cache_write( var_name , (double)i );
+    if ( globals::cmddefs().is_hidden_var( curr_command.cmd_name , curr_strata , var_name ) ) return false;
     if ( retval != NULL ) return to_retval( var_name , i ); 
     else if ( dbless ) return plaintext ? to_plaintext( var_name , value_t( i ) ) : to_stdout( var_name , value_t( i ) ) ; 
     if ( desc != "" ) var( var_name , desc ); 
@@ -1052,6 +1054,7 @@ class writer_t
   bool value( const std::string & var_name , const std::string & s , const std::string & desc = "" )
   {
     if ( caching ) check_cache_write( var_name , s );
+    if ( globals::cmddefs().is_hidden_var( curr_command.cmd_name , curr_strata , var_name ) ) return false;
     if ( retval != NULL ) return to_retval( var_name , s );
     if ( dbless ) return plaintext ? to_plaintext( var_name , value_t( s ) ) : to_stdout( var_name , value_t( s ) ); 
     if ( desc != "" ) var( var_name , desc );
@@ -1060,6 +1063,7 @@ class writer_t
   
   bool missing_value( const std::string & var_name , const std::string & desc = "" )
   {
+    if ( globals::cmddefs().is_hidden_var( curr_command.cmd_name , curr_strata , var_name ) ) return false;
     if ( retval != NULL ) return to_retval( var_name ); // missing value 
     if ( dbless ) return plaintext ? to_plaintext( var_name , value_t() ) : to_stdout( var_name , value_t() ); 
     if ( desc != "" ) var( var_name , desc );

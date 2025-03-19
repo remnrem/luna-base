@@ -167,9 +167,9 @@ struct zfiles_t {
     // create this folder if it does not exist    
     folder = fileroot + globals::folder_delimiter + indiv + globals::folder_delimiter ; 
     
-    // create folder if it does not exist (will need to change for windows...)
-    std::string syscmd = "mkdir -p " + folder ; 
-    
+    // create folder if it does not exist
+    std::string syscmd = globals::mkdir_command + " " + folder ; 
+
     //int dummy = system( syscmd.c_str() );
     system( syscmd.c_str() );
     
@@ -272,8 +272,8 @@ private:
       return NULL;
       	 
     // should this be compressed by default?
-	 bool compressed = globals::cmddefs().out_compressed( cmd , tfac );
-
+    bool compressed = globals::cmddefs().out_compressed( cmd , tfac );
+    
     // create a new file, store a pointer to it, and return that pointer
     //  prepend-COMMAND-F1_F2_F3{_append}.txt{.gz}
  

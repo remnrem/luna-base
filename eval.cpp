@@ -1048,20 +1048,136 @@ void proc_aliases( edf_t & edf , param_t & param )
 // REPORT : ensure VAR is added in output
 void proc_report( edf_t & edf , param_t & param )
 {
- 
-  std::vector<std::string> vars = param.strvector( "vars" );
-  const std::string cmd = param.requires( "cmd" );
-  const std::string fac = param.has( "fac" ) ? param.value( "fac" ) : "" ; 
 
-  for (int v=0; v<vars.size(); v++)
+  // two functions::
+  //  1) ensure a variable/ftable is added to the output, so that text-table works (ensure)
+  //  2) sets hide/show for a cmd/fac/var/all to hide/show from all output streams (hide/show)
+
+  // the first (ensure) is really only a kludge to handle cases where the table/variable
+  // has not been added to cmddefs.
+  
+  const bool hide_mode = param.has( "hide" );
+  const bool show_mode = param.has( "show" );
+
+  const bool hide_all = param.has( "hide-all" );
+  const bool show_all = param.has( "show-all" );
+
+  const bool ensure_mode = param.has( "ensure" );
+
+  if ( ! ( ensure_mode || hide_mode || show_mode || hide_all || show_all ) )
+    Helper::halt( "nothing to do with REPORT: specify hide/show, hide-all/show-all or ensure" );
+
+  if ( ensure_mode && ( hide_mode || show_mode || hide_all || show_all ) )
+    Helper::halt( "if using ensure mode, cannot specify hide/show commands" );
+  
+  // allow hide-all or show-all to be combined w/ a show or hide command
+
+  if ( hide_mode && show_mode )
+    Helper::halt( "can only specify one of hide and show" );
+  
+  if ( hide_all && show_all )
+    Helper::halt( "can only specify one of hide-all and show-all" );
+  
+  if ( hide_all )
     {
-      logger << "  logging " << vars[v]
-	     << " for " << cmd << ( fac != "" ? ": " + fac : "" ) << "\n";
-
-      globals::cmddefs().ensure_table( cmd , fac );
-      globals::cmddefs().add_var( cmd , fac , vars[v] , "." );
+      logger << "  hiding all outputs\n";
+      globals::cmddefs().hide_all();
     }
+
+  if ( show_all )
+    {
+      logger << "  showing all outputs\n";
+      globals::cmddefs().show_all();
+    }
+  
+  // at this point, will always require cmd,
+  // optionally, fac
+  // optionally vars
+  
+  const std::string cmd = param.requires( "cmd" );
+    
+  const bool has_table = param.has( "fac" );
+
+  const bool has_vars = param.has( "vars" );
+ 
+  if ( has_vars && ! has_table )
+    Helper::halt( "vars specified but no fac" );
+  
+  std::string fac;
+  if ( has_table )
+    {
+      fac = param.value( "fac" );
+      // allow BL or "." to specify baseline ( i.e. "" ) in cmddefs.
+      if ( fac == "BL" || fac == "." || fac == "bl" ) fac = "";
+    }
+  
+  std::vector<std::string> vars;
+  if ( has_vars )
+    vars = param.strvector( "vars" );
+
+  //
+  // logging check
+  //
+  
+  if ( ensure_mode )
+    {
+      for (int v=0; v<vars.size(); v++)
+	{
+	  logger << "  logging " << vars[v]
+		 << " for " << cmd << ( fac != "" ? ": " + fac : "" ) << "\n";
+	  
+	  globals::cmddefs().ensure_table( cmd , fac );
+	  globals::cmddefs().add_var( cmd , fac , vars[v] , "." );
+	}
+      return;
+    }
+
+  //
+  // else, we are setting either cmd, a table or specify variable(s) to show or not
+  //
+  
+  if ( hide_mode )
+    {
+
+      // hide variables?
+      
+      if ( has_vars )
+	for (int v=0; v<vars.size(); v++)
+	  globals::cmddefs().hide_var( cmd , fac , vars[v] );	
+      else if ( has_table )
+	globals::cmddefs().hide_table( cmd , fac );	
+      else
+	globals::cmddefs().hide_cmd( cmd );
+
+      return;
+    }
+
+
+  // show-mode -- similar, except if 'showing' a var or table,
+  //              we need to make sure the higher levels are
+  //              also 'shown'
+  
+  if ( show_mode )
+    {
+      
+      globals::cmddefs().show_cmd( cmd );
+
+      if ( has_table )
+	{
+	  globals::cmddefs().show_table( cmd , fac );
+
+	  if ( has_vars )
+	    {
+	      for (int v=0; v<vars.size(); v++)
+		globals::cmddefs().show_var( cmd , fac , vars[v] );
+	    }
+	}
+
+      return;
+    }
+    
 }
+
 
 // SUMMARY : summarize EDF files (verbose, human-readable)  
 void proc_summaries( edf_t & edf , param_t & param )

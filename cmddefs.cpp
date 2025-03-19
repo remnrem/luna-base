@@ -21,6 +21,7 @@
 //    --------------------------------------------------------------------
 
 #include "luna.h"
+#include "db/db.h"
 #include <iomanip>
 
 //#pragma GCC push_options
@@ -177,28 +178,25 @@ void cmddefs_t::init()
   add_var( "HEADERS" , "" , "STOP_TIME" , "Stop time" );
   add_var( "HEADERS" , "" , "START_DATE" , "Start date in the EDF header" );
   add_var( "HEADERS" , "" , "REC_DUR" , "Duration of each record (seconds)" );
-  add_var( "HEADERS" , "" , "TOT_DUR_SEC" , "Total duration of EDF (seconds)" );
-  add_var( "HEADERS" , "" , "TOT_DUR_HMS" , "Total duration of EDF (hh:mm:ss string)" );
-
-  // add_table( "HEADERS" , "CH" , "Per-channel header information" );
-  // add_var( "HEADERS" , "CH" , "DMAX" , "Digital max" );
-  // add_var( "HEADERS" , "CH" , "DMIN" , "Digital min" );
-  // add_var( "HEADERS" , "CH" , "PDIM", "Physical dimension" );
-  // add_var( "HEADERS" , "CH" , "PMAX", "Physical min" );
-  // add_var( "HEADERS" , "CH" , "PMIN", "Physical max" );
-  // add_var( "HEADERS" , "CH" , "SR", "Sample rate (Hz)" );
-  // add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
-  // add_var( "HEADERS" , "CH" , "TRANS", "Transducer type" );
-
-  // add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
-  // add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
-  // add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
-
-
-
+  add_var( "HEADERS" , "" , "TOT_DUR_SEC" , "Current EDF duration (seconds)" );
+  add_var( "HEADERS" , "" , "TOT_DUR_HMS" , "Current EDF duration (hh:mm:ss)" );
+  add_var( "HEADERS" , "" , "EDF_TYPE" , "EDF, EDF+C or EDF+D" );
+  add_var( "HEADERS" , "" , "NS_ALL" , "Number of signals in original EDF" );
+  add_var( "HEADERS" , "" , "REC_DUR_HMS" , "Original recording duration (hh:mm:ss)" );
+  add_var( "HEADERS" , "" , "REC_DUR_SEC" , "Original recording duration (seconds)" );
   
+  add_table( "HEADERS" , "CH" , "Per-channel header information" );
+  add_var( "HEADERS" , "CH" , "DMAX" , "Digital max" );
+  add_var( "HEADERS" , "CH" , "DMIN" , "Digital min" );
+  add_var( "HEADERS" , "CH" , "PDIM", "Physical dimension" );
+  add_var( "HEADERS" , "CH" , "PMAX", "Physical min" );
+  add_var( "HEADERS" , "CH" , "PMIN", "Physical max" );
+  add_var( "HEADERS" , "CH" , "SR", "Sample rate (Hz)" );
+  add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
+  add_var( "HEADERS" , "CH" , "TRANS", "Transducer type" );
+  add_var( "HEADERS" , "CH" , "POS", "Position in EDF" );
+  add_var( "HEADERS" , "CH" , "TYPE", "Channel type (from Luna TYPES)" );
 
-  
   //
   // ALIASES
   //
@@ -915,10 +913,10 @@ void cmddefs_t::init()
   add_var( "SIGSTATS" , "CH,E" , "H1" , "First Hjorth parameter (activity)" );
   add_var( "SIGSTATS" , "CH,E" , "H2" , "Second Hjorth parameter (mobility)" );
   add_var( "SIGSTATS" , "CH,E" , "H3" , "Third Hjorth parameter (complexity)" );
-  hide_var( "SIGSTATS" , "CH,E" , "CLIP" , "Proportion of clipped sample points" );
-  hide_var( "SIGSTATS" , "CH,E" , "FLAT" , "Proportion of flat sample points" );
-  hide_var( "SIGSTATS" , "CH,E" , "MAX" , "Proportion of max sample points" );
-  hide_var( "SIGSTATS" , "CH,E" , "RMS" , "Signal root mean square" );
+  hidden_var( "SIGSTATS" , "CH,E" , "CLIP" , "Proportion of clipped sample points" );
+  hidden_var( "SIGSTATS" , "CH,E" , "FLAT" , "Proportion of flat sample points" );
+  hidden_var( "SIGSTATS" , "CH,E" , "MAX" , "Proportion of max sample points" );
+  hidden_var( "SIGSTATS" , "CH,E" , "RMS" , "Signal root mean square" );
 
 
   // ARTIFACTS
@@ -2175,8 +2173,8 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "per-spindle" , "" , "Show per-spindle output" );
   
   add_param( "SPINDLES" , "empirical" , "" , "Empirically determine thresholds" );
-  hide_param( "SPINDLES" , "set-empirical" , "" , "Use empirically determined thresholds for spindle detection" );
-  hide_param( "SPINDLES" , "verbose-empirical" , "" , "Output extensive information on threshold estimation" );
+  hidden_param( "SPINDLES" , "set-empirical" , "" , "Use empirically determined thresholds for spindle detection" );
+  hidden_param( "SPINDLES" , "verbose-empirical" , "" , "Output extensive information on threshold estimation" );
 
   add_param( "SPINDLES" , "merge" , "0.2", "Merge two putative spindles if within this interval (default 0.5 seconds)" );
   add_param( "SPINDLES" , "collate" , "" , "Within each channel, collate overlapping spindles of similar frequencies" );
@@ -2185,14 +2183,14 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "list-all-spindles" , "" , "List all spindles that comprise each m-spindle" );
 
   add_param( "SPINDLES" , "th-interval" , "0.5" , "Merge if the ratio of intersection to union is at least this (default 0, i.e. any overlap)" );
-  hide_param( "SPINDLES" , "th-interval-cross-channel" , "" , "not currently used" );
-  hide_param( "SPINDLES" , "th-interval-within-channel" , "" , "not currently used" );
+  hidden_param( "SPINDLES" , "th-interval-cross-channel" , "" , "not currently used" );
+  hidden_param( "SPINDLES" , "th-interval-within-channel" , "" , "not currently used" );
   add_param( "SPINDLES" , "window" , "0.5" , "Set window around each spindle when defining temporal overlap" );
   add_param( "SPINDLES" , "hms" , "" , "Show clock-time of each m-spindle" );
 
   add_param( "SPINDLES" , "ftr" , "tag" , "Produce FTR files for all spindles, with the tag in the filename" );
   add_param( "SPINDLES" , "ftr-dir" , "/path/to/folder" , "Folder for FTR files" );
-  hide_param( "SPINDLES" , "show-coef" , "" , "Request (very verbose) coefficient output (to stdout)" );
+  hidden_param( "SPINDLES" , "show-coef" , "" , "Request (very verbose) coefficient output (to stdout)" );
 
   // output
 
@@ -2253,16 +2251,16 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "STOP_SP" , "Stop position of the spindle (in sample-units relative to the current in-memory EDF)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "SYMM" , "Symmetry index (relative position of peak)" );
   add_var( "SPINDLES" , "CH,F,SPINDLE" , "SYMM2" , "Folded symmetry index (0=symmetrical, 1=asymmetrical)" );
-  hide_var( "SPINDLES" , "CH,F,SPINDLE" , "IF" , "Mean frequency per spindle over duration [if]" );
+  hidden_var( "SPINDLES" , "CH,F,SPINDLE" , "IF" , "Mean frequency per spindle over duration [if]" );
 
   add_table( "SPINDLES" , "CH,F,B,SPINDLE" , "Band enrichment (per-spindle)" );
   add_var( "SPINDLES" , "CH,F,B,SPINDLE" , "ENRICH" , "Spindle enrichment" );
   
-  hide_table( "SPINDLES" , "CH,F,RELLOC" , "Mean IF stratified by relative location in spindle [if]" );
-  hide_var( "SPINDLES" , "CH,F,RELLOC" , "IF" , "Mean frequency of all spindles, per relative position within the spindle (five bins)" );
+  hidden_table( "SPINDLES" , "CH,F,RELLOC" , "Mean IF stratified by relative location in spindle [if]" );
+  hidden_var( "SPINDLES" , "CH,F,RELLOC" , "IF" , "Mean frequency of all spindles, per relative position within the spindle (five bins)" );
   
-  hide_table( "SPINDLES", "F,CH,PHASE,RELLOC" , "Mean IF stratified by phase and relative location in spindle [if]" );
-  hide_var( "SPINDLES" , "F,CH,PHASE,RELLOC" , "SOPL_CHIRP" , "Spindle chirp" );
+  hidden_table( "SPINDLES", "F,CH,PHASE,RELLOC" , "Mean IF stratified by phase and relative location in spindle [if]" );
+  hidden_var( "SPINDLES" , "F,CH,PHASE,RELLOC" , "SOPL_CHIRP" , "Spindle chirp" );
   
   add_table( "SPINDLES" , "" , "Individual-level summaries of m-spindles [collate]" );
   add_var( "SPINDLES" , "" , "MSP_DENS" , "m-spindle density" );
@@ -2330,10 +2328,10 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "STOP" , "Spindle stop time (elapsed seconds from EDF start)" );
   
   // experimental
-  hide_param( "SPINDLES" , "if" , "" , "Estimate instantaneous frequency of spindles" );
-  hide_param( "SPINDLES" , "if-frq" , "1" , "Window around target frequency (default 2 hz)" );
-  hide_param( "SPINDLES" , "tlock" , "" , "Flag to request (verbose) average, peak-locked waveforms" );
-  hide_param( "SPINDLES" , "verbose-coupling" , "" , "Add extra tables of EEG/CWT phase/time-locked to SO" );
+  hidden_param( "SPINDLES" , "if" , "" , "Estimate instantaneous frequency of spindles" );
+  hidden_param( "SPINDLES" , "if-frq" , "1" , "Window around target frequency (default 2 hz)" );
+  hidden_param( "SPINDLES" , "tlock" , "" , "Flag to request (verbose) average, peak-locked waveforms" );
+  hidden_param( "SPINDLES" , "verbose-coupling" , "" , "Add extra tables of EEG/CWT phase/time-locked to SO" );
 
 
   // show-coef verbose output
@@ -2371,7 +2369,7 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "t-neg-lwr" , "0" , "SO, lower duration for negative peak (secs)" );
   add_param( "SPINDLES" , "t-neg-upr" , "1" , "SO, upper duration for negative peak (secs)" );
   
-  hide_param( "SPINDLES" , "neg2pos" , "" , "SO, Use negative-to-positive zero crossings" );
+  hidden_param( "SPINDLES" , "neg2pos" , "" , "SO, Use negative-to-positive zero crossings" );
   add_param( "SPINDLES" , "th-mean" , "" , "SO, use mean not median" );
   add_param( "SPINDLES" , "stats-median" , "" , "SO, use median (not mean) when reporting stats over SOs" );  
  
@@ -2919,6 +2917,19 @@ void cmddefs_t::init()
 
 
 
+tfac_t::tfac_t( const strata_t & s )
+{
+  if ( s.levels.size() == 0 ) return;
+  
+  std::map<factor_t,level_t>::const_iterator ff = s.levels.begin();
+  while ( ff != s.levels.end() )
+    {
+      if ( ff->first.factor_name[0] != '_' && ! globals::cmddefs().is_tag( ff->first.factor_name ) )
+	fac.insert( ff->first.factor_name );
+      ++ff;
+    }
+}
+
 
 tfac_t::tfac_t( const std::string & s , const std::string & delim ) { 
   std::vector<std::string> tok = Helper::parse( s , delim );
@@ -3044,9 +3055,8 @@ std::string cmddefs_t::help_commands() const
   while ( ii != dcmds.end() ) { 
     const std::set<std::string> & dc = ii->second;
     std::set<std::string>::const_iterator jj = dc.begin();
-    while ( jj != dc.end() ) {
-      if ( ! hidden_cmd( *jj ) ) 
-	ss << help( *jj , true , false ) ;
+    while ( jj != dc.end() ) {      
+      ss << help( *jj , true , false ) ;
       ++jj;
     }
     ss << "\n";
@@ -3063,9 +3073,8 @@ std::string cmddefs_t::help_commands( const std::string & d ) const
   if ( ii == dcmds.end() ) return "";
   const std::set<std::string> & c = ii->second;
   std::set<std::string>::const_iterator jj = c.begin();
-  while ( jj != c.end() ) { 
-    if ( ! hidden_cmd( *jj ) )
-      ss << help( *jj , false , false ) ;
+  while ( jj != c.end() ) {   
+    ss << help( *jj , false , false ) ;
     ++jj;
   }
   return ss.str();    
@@ -3076,7 +3085,6 @@ std::string cmddefs_t::help_commands( const std::string & d ) const
 std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , bool verbose ) const
 {
   if ( cmds.find( cmd ) == cmds.end() ) return "";
-  if ( hidden_cmd( cmd ) ) return "";
 	
   std::stringstream ss;
   if ( ! verbose ) 
@@ -3110,7 +3118,7 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 	  std::map<std::string,std::string>::const_iterator jj = ii->second.begin();
 	  while ( jj != ii->second.end() ) {
 
-	    if ( hidden_param( cmd , jj->first ) )
+	    if ( is_hidden_param( cmd , jj->first ) )
 	      {
 		++jj;
 		continue;
@@ -3161,12 +3169,6 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 	    {
 	      const tfac_t & tfac = ii->first;
 	      
-	      if ( hidden_table( cmd , tfac ) )
-		{
-		  ++ii;
-		  continue;
-		}
-
 	      ss << "   " << std::left << std::setw( 24 ) << tfac.as_string( " x " ) 
 		 << ii->second << "\n";
 	      
@@ -3189,8 +3191,7 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 		    {
 		      const std::map<std::string,std::string> & v = t.find( ii->first )->second;
 		      std::map<std::string,std::string>::const_iterator vv = v.begin();
-		      while ( vv != v.end() ) {
-			if ( ! hidden_var( cmd , tfac , vv->first ) ) 
+		      while ( vv != v.end() ) {			
 			  ss << "     " 
 			     << std::left 
 			     << std::setw(21) 
@@ -3275,18 +3276,37 @@ void cmddefs_t::set_compressed( const std::string & cmd , const tfac_t & tfac , 
 
 std::set<std::string> cmddefs_t::variables( const std::string & cmd ,  const param_t * param , const tfac_t & tfac  )
 {
-  // add param restriction on the variable list...
+  // TODO: apply param-specified restriction on the variable list...
+  //  --> REVISION: can now be done via REPORT hide/show mechanism, as added below
   std::set<std::string> r;
+
+  // cmd is hidden
+  if ( is_hidden_cmd( cmd ) ) return r;
+
+  // cmd does not exist
   std::map<std::string,std::map<tfac_t,std::map<std::string,std::string> > >::const_iterator ii = ovars.find( cmd );
   if ( ii == ovars.end() ) return r;
+
+  // table is hidden
+  if ( is_hidden_table( cmd, tfac ) ) return r;
+
+  // table does not exist
   const std::map<tfac_t,std::map<std::string,std::string> > & v2 = ii->second;
   std::map<tfac_t,std::map<std::string,std::string> >::const_iterator jj = v2.find( tfac );
   if ( jj == v2.end() ) return r;
+
+  // hidden variables?  
+  // std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > > vhide;  // variables
+  const std::map<std::string,bool> & hvars = vhide[ cmd ][ tfac ];
+  
+  // get variables
   const std::map<std::string,std::string> & v3 = jj->second;
   std::map<std::string,std::string>::const_iterator kk = v3.begin();
   while ( kk != v3.end() )
     {
-      r.insert( kk->first );
+      std::map<std::string,bool>::const_iterator hh = hvars.find( kk->first );
+      if ( hh != hvars.end() && ! hh->second )  // i.e. vhide says 'show'
+	r.insert( kk->first );
       ++kk;
     }
   return r;
@@ -3315,7 +3335,7 @@ void cmddefs_t::add_cmd( const std::string & domain , const std::string & cmd , 
 }
 
 // hidden command description 
-void cmddefs_t::hide_cmd( const std::string & domain , const std::string & cmd , const std::string & desc )
+void cmddefs_t::hidden_cmd( const std::string & domain , const std::string & cmd , const std::string & desc )
 {
   add_cmd( domain, cmd , desc , true );    
 }
@@ -3354,7 +3374,7 @@ void cmddefs_t::add_param( const std::string & cmd , const std::string & param ,
 
 
 // hide parameter for this command
-void cmddefs_t::hide_param( const std::string & cmd , const std::string & param , 
+void cmddefs_t::hidden_param( const std::string & cmd , const std::string & param , 
 			    const std::string & ex ,  // "" if none
 			    const std::string & desc , 
 			    const std::string & requirements )
@@ -3372,7 +3392,7 @@ void cmddefs_t::add_table( const std::string & cmd , const std::string & factors
   ohide[ cmd ][ tfac ] = hide;
 }
 
-void cmddefs_t::hide_table( const std::string & cmd , const std::string & factors , const std::string & desc , bool isz )
+void cmddefs_t::hidden_table( const std::string & cmd , const std::string & factors , const std::string & desc , bool isz )
 {
   add_table( cmd , factors , desc , isz , true );
 }
@@ -3412,7 +3432,7 @@ void cmddefs_t::add_var( const std::string & cmd , const std::string & factors ,
 }
 
 // add hidden variable
-void cmddefs_t::hide_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc )
+void cmddefs_t::hidden_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc )
 {
   add_var( cmd , factors , var , desc , true );
 }
@@ -3442,14 +3462,14 @@ bool cmddefs_t::is_tag( const std::string & tag ) const { return tags.find( tag 
 
 
 
-bool cmddefs_t::hidden_cmd( const std::string & c ) const
+bool cmddefs_t::is_hidden_cmd( const std::string & c ) const
 {
   std::map<std::string,bool>::const_iterator cc = chide.find( c );
   if ( cc == chide.end() ) return false;
   return cc->second;
 }
 
-bool cmddefs_t::hidden_param( const std::string & c , const std::string & p ) const
+bool cmddefs_t::is_hidden_param( const std::string & c , const std::string & p ) const
 {
   std::map<std::string,std::map<std::string,bool> >::const_iterator cc = phide.find( c );
   if ( cc == phide.end() ) return false;
@@ -3458,7 +3478,7 @@ bool cmddefs_t::hidden_param( const std::string & c , const std::string & p ) co
   return pp->second;
 }
 
-bool cmddefs_t::hidden_table( const std::string & c , const tfac_t & tfac ) const
+bool cmddefs_t::is_hidden_table( const std::string & c , const tfac_t & tfac ) const
 {
   std::map<std::string,std::map<tfac_t,bool> >::const_iterator cc = ohide.find( c );
   if ( cc == ohide.end() ) return false;
@@ -3467,7 +3487,7 @@ bool cmddefs_t::hidden_table( const std::string & c , const tfac_t & tfac ) cons
   return tt->second;
 }
 
-bool cmddefs_t::hidden_var( const std::string & c , const tfac_t & tfac , const std::string & v ) const
+bool cmddefs_t::is_hidden_var( const std::string & c , const tfac_t & tfac , const std::string & v ) const
 {
   std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > >::const_iterator cc = vhide.find( c );
   if ( cc == vhide.end() ) return false;
@@ -3478,4 +3498,123 @@ bool cmddefs_t::hidden_var( const std::string & c , const tfac_t & tfac , const 
   return vv->second;
 }
 
+
+// std::map<std::string,bool> chide;  // cmds
+// std::map<std::string,std::map<tfac_t,bool> > ohide;  // tables
+// std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > > vhide;  // variables
+
+
+void cmddefs_t::show_all( const bool status )
+{
+  std::map<std::string,bool>::iterator cc = chide.begin();
+  while ( cc != chide.end() )
+    {
+      show_cmd( cc->first , status );
+      ++cc;
+    }  
+}
+
+void cmddefs_t::show_cmd( const std::string & cmd , const bool status )
+{
+  // don't worry whether this command is actually valid here
+  chide[ cmd ] = ! status ;
+
+  // then hide all tables; under 'show' mode leave lowers as is
+  if ( ! status ) { 
+   std::map<std::string,std::map<tfac_t,bool> >::iterator tt = ohide.find( cmd );
+   if ( tt != ohide.end() )
+     {
+       std::map<tfac_t,bool> & table = tt->second;
+       std::map<tfac_t,bool>::iterator qq = table.begin();
+       while ( qq != table.end() )
+   	{
+   	  show_table( cmd , qq->first , status );
+   	  ++qq;
+   	}
+     }
+  }
+}
+
+void cmddefs_t::show_table( const std::string & cmd , const tfac_t & factors , const bool status )
+{
+  ohide[ cmd ][ factors ] = ! status;
+
+  // only if hiding, then ensure we hide all lower variables
+  if ( ! status ) { 
+    
+    std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > >::iterator it1 = vhide.find( cmd );
+    if ( it1 == vhide.end() ) return;
+    std::map<tfac_t,std::map<std::string,bool> >::iterator it2 = it1->second.find( factors );
+    if ( it2 == it1->second.end() ) return;
+    
+    std::map<std::string,bool> & vars = it2->second;
+    std::map<std::string,bool>::iterator vv = vars.begin();
+    while ( vv != vars.end() )
+      {
+	show_var( cmd , factors , vv->first , status );
+	++vv;
+      }
+  }
+}
+
+void cmddefs_t::show_table( const std::string & cmd , const std::string & factors , const bool status )
+{
+  show_table( cmd , tfac_t( factors ), status );
+}
+
+
+void cmddefs_t::show_var( const std::string & cmd , const tfac_t & factors , const std::string & var , const bool status )
+{
+
+  std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > >::iterator it1 = vhide.find( cmd );
+  if ( it1 == vhide.end() ) return;
+  std::map<tfac_t,std::map<std::string,bool> >::iterator it2 = it1->second.find( factors );
+  if ( it2 == it1->second.end() ) return;
+
+  // always add
+  it2->second[ var ] = ! status;
+  std::cout << " setting " << cmd << " " << factors.as_string() << " " << var << " to show? " << !status << "\n";
+}
+  
+void cmddefs_t::show_var( const std::string & cmd , const std::string & factors , const std::string & var , const bool status )
+{
+  show_var( cmd , tfac_t( factors ), var , status );
+}
+
+
+void cmddefs_t::hide_all()
+{
+  show_all( false );
+}
+
+void cmddefs_t::hide_cmd( const std::string & cmd )
+{
+  show_cmd( cmd , false );
+}
+
+void cmddefs_t::hide_table( const std::string & cmd , const std::string & factors )
+{
+  show_table( cmd, factors, false );
+}
+
+void cmddefs_t::hide_table( const std::string & cmd , const tfac_t & factors )
+{
+  show_table( cmd , factors , false );
+}
+  
+void cmddefs_t::hide_var( const std::string & cmd , const std::string & factors , const std::string & var )
+{
+  show_var( cmd , factors , var , false );
+}
+
+void cmddefs_t::hide_var( const std::string & cmd , const tfac_t & factors , const std::string & var )
+{
+  show_var( cmd , factors , var , false );
+}
+
+
+
 //#pragma GCC pop_options
+
+
+
