@@ -144,7 +144,7 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
       if ( edf.header.is_annotation_channel( signals(s) ) )
 	continue;
       
-      logger << " estimating SO for " << signals.label(s) << "\n";
+      logger << "\n  estimating SO for " << signals.label(s) << "\n";
       
       writer.level( signals.label(s) , globals::signal_strat );
 
@@ -363,8 +363,9 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
   if ( astr != "" && astr != "." )
     {
       
-      logger << "  writing SO annotations to " << astr << " (also half-waves: " << astr << "_pos and " << astr << "_neg)\n";
-      logger << "  for channel " << ch << "\n";
+      logger << "  writing SO annotations to " << astr 
+	     << " (also half-waves: " << astr << "_pos and " << astr << "_neg) ";
+      logger << " for " << ch << "\n";
       
       annot_t * a = edf->timeline.annotations.add( astr );
       
@@ -725,7 +726,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 
   if ( ! par.skip ) 
     {
-      logger << "\n detecting slow waves: " << par.f_lwr << "-" << par.f_upr << "Hz\n";
+      logger << "  detecting slow waves: " << par.f_lwr << "-" << par.f_upr << "Hz\n";
       
       if ( par.t_lwr > 0 )
 	logger << "  - duration " << par.t_lwr << "-" << par.t_upr << "s\n"; 

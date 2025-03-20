@@ -1094,12 +1094,16 @@ void proc_report( edf_t & edf , param_t & param )
   // optionally, fac
   // optionally vars
   
-  const std::string cmd = param.requires( "cmd" );
+  const std::string cmd = param.has( "cmd" ) ? param.value( "cmd" ) : "";
     
   const bool has_table = param.has( "fac" );
 
   const bool has_vars = param.has( "vars" );
- 
+  
+  if ( ( ! ( hide_all || show_all ) ) || has_table || has_vars )
+    if ( ! param.has( "cmd" ) )
+      Helper::halt( "no 'cmd' argument specified" );
+  
   if ( has_vars && ! has_table )
     Helper::halt( "vars specified but no fac" );
   
@@ -1137,10 +1141,7 @@ void proc_report( edf_t & edf , param_t & param )
   //
   
   if ( hide_mode )
-    {
-
-      // hide variables?
-      
+    {      
       if ( has_vars )
 	for (int v=0; v<vars.size(); v++)
 	  globals::cmddefs().hide_var( cmd , fac , vars[v] );	
@@ -1153,29 +1154,19 @@ void proc_report( edf_t & edf , param_t & param )
     }
 
 
-  // show-mode -- similar, except if 'showing' a var or table,
-  //              we need to make sure the higher levels are
-  //              also 'shown'
-  
   if ( show_mode )
-    {
-      
-      globals::cmddefs().show_cmd( cmd );
-
-      if ( has_table )
-	{
-	  globals::cmddefs().show_table( cmd , fac );
-
-	  if ( has_vars )
-	    {
-	      for (int v=0; v<vars.size(); v++)
-		globals::cmddefs().show_var( cmd , fac , vars[v] );
-	    }
-	}
+    {      
+      if ( has_vars )
+	for (int v=0; v<vars.size(); v++)
+	  globals::cmddefs().show_var( cmd , fac , vars[v] );	
+      else if ( has_table )
+	globals::cmddefs().show_table( cmd , fac );	
+      else
+	globals::cmddefs().show_cmd( cmd );
 
       return;
     }
-    
+
 }
 
 

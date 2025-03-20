@@ -1,5 +1,4 @@
 
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -428,6 +427,9 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  // accumulate ITPC
 	  s += exp( dcomp(0,itpc.phase[i]) );
 
+	  //  *************************
+	  //	  std::cout << "  xx " << s <<" " << itpc.phase[i] << " " << exp( dcomp(0,itpc.phase[i]) ) << " " << counted << "\n";
+	  
 	  // and record that this event was included
 	  ++counted;
 	  	 	  
@@ -459,6 +461,10 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
       
       // record ITPC etc
       itpc.itpc.obs = abs( s );
+      
+      //  *************************
+      //      std::cout << " ITPC = " << itpc.itpc.obs << " p = " << exp( -counted * itpc.itpc.obs * itpc.itpc.obs ) << "\n";
+
       itpc.ninc.obs  = counted;
       itpc.pv.obs    = exp( -counted * itpc.itpc.obs * itpc.itpc.obs );   
       itpc.sig.obs   = itpc.pv.obs < 0.05;
@@ -654,7 +660,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 	  
           double itpc_perm =  abs( s );
           itpc.itpc.perm.push_back( itpc_perm );
-	  //	  std::cout << "perm r , s, n = " << r << " "  << itpc_perm << " " << counted << "\n";
+	  //	  std::cout << "perm r , s, n = " << r << " "  << itpc_perm << " " << counted << " " << itpc.itpc.obs << "\n";
 	  // asymptotic significance
 	  double pv = exp( -counted * itpc_perm * itpc_perm ) ;
 	  itpc.pv.perm.push_back( pv ); // nb. not used currently

@@ -119,6 +119,14 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
       hilbert_t hilbert( *slow , Fs[s] , phase_lwr , phase_upr , fir_ripple , fir_tw );
       
       logger << "  done filter-Hilbert...\n";
+
+
+      //
+      // verbose output?
+      //
+
+      const bool verbose = param.has( "verbose" );
+      
       
       //
       // for each event
@@ -128,7 +136,10 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
       while ( ee != evts.end() )
 	{
 	  
+	  //
 	  // get time-points
+	  //
+
 	  annot_t * annot = edf.timeline.annotations.find( *ee );
 	  if ( annot == NULL ) { ++ee; continue; }
 	  
@@ -143,7 +154,7 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
 	  std::set<uint64_t> evt_tp;
 	  
 	  const annot_map_t & events = annot->interval_events;
-
+	  
 	  annot_map_t::const_iterator aa = events.begin();
 	  while ( aa != events.end() )
 	    {	      
@@ -154,12 +165,14 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
 	      
 	      // add to sorted list
 	      evt_tp.insert( atp );
-
+	      
 	      ++aa;
 	    }
 	  
+	  //
 	  // convert tps -> sps;   this might be a discontinous EDF, so we can't just 
 	  // scale by SR;  other ways to do, but given sorted just do something dumb here
+	  //
 	  
 	  const int np = tps->size();
 	  
@@ -168,7 +181,7 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
 	  std::vector<int> evt_sp;
 	  
 	  int idx = 0;
-	  
+	  int cnt = 0;
 	  std::set<uint64_t>::const_iterator ii = evt_tp.begin();
 	  while ( ii != evt_tp.end() )
 	    {
@@ -191,13 +204,25 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
 	      	      
 	      // else implies a match
 	      evt_sp.push_back( idx );	      
+	      ++cnt;
+
+	      // track
+	      if ( verbose ) 
+		{
+		  writer.level( cnt , globals::count_strat );
+		  //writer.value( "T" , (*tps)[idx] );
+		  //writer.value( "SP" , idx );		  
+		}
 
 	      // move to next event
 	      ++ii;
 	    }
 	  
 	  logger << "  mapped " << evt_sp.size() << " of " << evt_tp.size() << " events\n";
-
+	  
+	  if ( verbose ) 
+	    writer.unlevel( globals::count_strat );	  
+	  
 	  //
 	  // coupling analysis
 	  //
@@ -224,17 +249,16 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
 	  if ( itpc.angle.obs > -9 )
 	    writer.value( "ANGLE" , itpc.angle.obs );
 
-	  //                                                                                                                                                                           
-	  // asymptotic significance of coupling test; under                                                                                                                           
-	  // the null, give mean rate of 'significant'                                                                                                                                 
-	  // (P<0.05) coupling                                                                                                                                                         
-	  //                                                                                                                                                                           
+	  //
+	  // asymptotic significance of coupling test; under
+	  // the null, give mean rate of 'significant'
+	  // (P<0.05) coupling
+	  //
 	  
 	  writer.value( "PV" , itpc.pv.obs ) ;
 	  if ( nreps )
 	    writer.value( "SIGPV_NULL" , itpc.sig.mean ) ;
-
-	  
+	  	  
 	  //
 	  // phase bins
 	  //

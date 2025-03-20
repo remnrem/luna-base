@@ -397,15 +397,24 @@ void cmddefs_t::init()
   add_var( "ANNOTS" , "ANNOT,INST" , "COUNT" , "Number of instances of that annotation class and instance ID" );
   add_var( "ANNOTS" , "ANNOT,INST" , "DUR" , "Combined duration (seconds) of all instances of that annotation class and instance ID" );
 
+
+
   add_table( "ANNOTS" , "ANNOT,INST,T" , "Instance-level annotation tabulation" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "START" , "Start time (seconds) of this instance" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "STOP" , "Stop time (seconds) of this instance" );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "START" , "Start time (secs) of this instance" );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "STOP" , "Stop time (secs) of this instance" );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "DUR" , "Annotation duration (secs)" );
   add_var( "ANNOTS" , "ANNOT,INST,T" , "VAL" , "The meta-data for this instance, if any exists (otherwise missing NA)" );
   add_var( "ANNOTS" , "ANNOT,INST,T" , "ALL_MASKED" , "? [show-masked]" );
   add_var( "ANNOTS" , "ANNOT,INST,T" , "ALL_UNMASKED" , "? [show-masked]" );
   add_var( "ANNOTS" , "ANNOT,INST,T" , "SOME_MASKED" , "? [show-masked]" );
   add_var( "ANNOTS" , "ANNOT,INST,T" , "SOME_UNMASKED" , "? [show-masked]" );
   add_var( "ANNOTS" , "ANNOT,INST,T" , "START_MASKED" , "? [show-masked]" );
+
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "CH" , "Any associated channel(s)" );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "START_ELAPSED_HMS" , "Annotation start (elapsed hh:mm:ss)" );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "START_HMS" , "Annotation start" );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "STOP_ELAPSED_HMS" , "Annotation stop (elapsed hh:mm:ss)" );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "STOP_HMS" , "Annotation stop" );
 
   add_table( "ANNOTS" , "E,INTERVAL,INST" , "Per-epoch instance-level annotation tabulation" );
   add_var( "ANNOTS" , "E,INTERVAL,INST" , "AMASK" , "Annotation instance mask status (1=masked/excluded) [epoch]" );
@@ -485,6 +494,14 @@ void cmddefs_t::init()
   add_var( "EPOCH" , "" , "DUR" , "Epoch duration (seconds)" );
   add_var( "EPOCH" , "" , "INC" , "Epoch increment (seconds)" );
   add_var( "EPOCH" , "" , "NE" , "Number of epochs" );
+  add_var( "EPOCH" , "" , "FIXED_DUR" , "0/1 fixed duration epochs" );
+  add_var( "EPOCH" , "" , "GENERIC" , "0/1 generic epochs" );
+  add_var( "EPOCH" , "" , "OFFSET" , "Offset" );
+  add_var( "EPOCH" , "" , "TOT_DUR" , "Total epoch duration" );
+  add_var( "EPOCH" , "" , "TOT_PCT" , "Percent of record epoched" );
+  add_var( "EPOCH" , "" , "TOT_REC" , "Total recrd duration" );
+  add_var( "EPOCH" , "" , "TOT_SPANNED" , "Total duration spanned by epoch" );
+  add_var( "EPOCH" , "" , "TOT_UNSPANNED" , "Total duration spanned by epoch" );
 
   add_table( "EPOCH" , "E" , "Per-epoch interval information [verbose]" );
   add_var( "EPOCH" , "E" , "E1" , "Current epoch number (which may differ from E if the EDF has been restructured)" );
@@ -537,7 +554,6 @@ void cmddefs_t::init()
   add_param( "MASK" , "total" , "" , "Mask all epochs" );
   add_param( "MASK" , "exclude-all" , "" , "Mask all epochs" );
 
-
   add_param( "MASK" , "epoch" , "1-10" , "Select epochs 1 to 10" );
   add_param( "MASK" , "sec" , "60-120" , "Select epochs overlapping this interval" );
   add_param( "MASK" , "hms" , "8:00-9:00" , "Select epochs overlapping this interval" );
@@ -548,6 +564,7 @@ void cmddefs_t::init()
   add_param( "MASK" , "leading" , "W" , "Remove all leading epochs matching W" );
   add_param( "MASK" , "flanked" , "REM,2" , "Select only REM epochs flanked by 2+ REM epochs before/after" );
   
+  // MASK / EMASK 
   
   add_table( "MASK" , "EMASK" , "Output stratified by mask" );
   add_var( "MASK" , "EMASK", "N_MATCHES" , "Number of epochs that match the condition (e.g. having annotation A)");
@@ -556,6 +573,11 @@ void cmddefs_t::init()
   add_var( "MASK" , "EMASK", "N_UNCHANGED" , "Number of epochs whose mask status was not changed by this operation");
   add_var( "MASK" , "EMASK", "N_RETAINED" , "Number of epochs retained after this operation");
   add_var( "MASK" , "EMASK", "N_TOTAL" , "Total number of epochs");
+
+  add_var( "MASK" , "EMASK", "MASK_MODE" , "Mask mode" );
+  add_var( "MASK" , "EMASK", "MATCH_LOGIC" , "Match logic" );
+  add_var( "MASK" , "EMASK", "MATCH_TYPE" , "Match type" );
+
   
   // DUMP-MASK
   
@@ -576,6 +598,8 @@ void cmddefs_t::init()
   add_var( "RE" , "" , "DUR2" , "Duration post-restructuring (secs)");
   add_var( "RE" , "" , "NR1" , "Duration pre-restructuring (records)");
   add_var( "RE" , "" , "NR2" , "Duration post-restructuring (records)");
+  add_var( "RE" , "" , "NA" , "Number of annotations" );
+  add_var( "RE" , "" , "NS" , "Number of signals" );
 
   add_cmd( "mask"   , "RESTRUCTURE" , "Restructure an EDF (drop channels/epochs)" );
   add_url( "RESTRUCTURE" , "masks/#restructure" );
@@ -585,6 +609,8 @@ void cmddefs_t::init()
   add_var( "RESTRUCTURE" , "" , "DUR2" , "Duration post-restructuring (secs)");
   add_var( "RESTRUCTURE" , "" , "NR1" , "Duration pre-restructuring (records)");
   add_var( "RESTRUCTURE" , "" , "NR2" , "Duration post-restructuring (records)");
+  add_var( "RESTRUCTURE" , "" , "NA" , "Number of annotations" );
+  add_var( "RESTRUCTURE" , "" , "NS" , "Number of signals" );
 
 
   //
@@ -633,6 +659,7 @@ void cmddefs_t::init()
 
   add_table( "MEANS" , "CH,ANNOT,INST" , "Annotation class/instance means, by channel" );
   add_var( "MEANS" , "CH,ANNOT,INST" , "M" , "Mean" );  
+  add_var( "MEANS" , "CH,ANNOT,INST" , "S" , "Number of samples" );
   add_var( "MEANS" , "CH,ANNOT,INST" , "L" , "Left-flanking mean (if 'w' set)" );
   add_var( "MEANS" , "CH,ANNOT,INST" , "R" , "Right-flanking mean (if 'w' set)" );
   add_var( "MEANS" , "CH,ANNOT,INST" , "M1" , "Mean 0-1 normalized" );  
@@ -1839,7 +1866,14 @@ void cmddefs_t::init()
   add_var( "MTM" , "CH" , "SPEC_SLOPE_MD" , "Spectral slope (median)" );
   add_var( "MTM" , "CH" , "SPEC_SLOPE_MN" , "Spectral slope (mean over epochs)" );
   add_var( "MTM" , "CH" , "SPEC_SLOPE_SD" , "Spectral slope (SD over epochs)" );
-  
+  add_var( "MTM" , "CH" , "WREL_PK_FREQ" , "WREL peak (frequency)" );
+  add_var( "MTM" , "CH" , "WREL_PK_AMPL" , "WREL peak (amplitude)" );
+  add_var( "MTM" , "CH" , "WMTM_PK_FREQ" , "WMTM peak (frequency)" );
+  add_var( "MTM" , "CH" , "WMTM_PK_AMPL" , "WMTM peak (amplitude)" );
+  add_var( "MTM" , "CH" , "MTM_PK_FREQ" , "MTM peak (frequency)" );
+  add_var( "MTM" , "CH" , "MTM_PK_AMPL" , "MTM peak (amplitude)" );
+
+
   add_table( "MTM", "CH,SEG", "Segment timing details" );
   add_var( "MTM" , "CH,SEG" , "START" , "Start time (seconds)" );
   add_var( "MTM" , "CH,SEG" , "STOP" , "Stop time (seconds)");
@@ -1849,6 +1883,9 @@ void cmddefs_t::init()
   add_var( "MTM" , "CH,F" , "MTM" , "Power" );
   add_var( "MTM" , "CH,F" , "MTM_MD" , "Median power" );
   add_var( "MTM" , "CH,F" , "MTM_SD" , "Power SD" );
+  add_var( "MTM" , "CH,F" , "WMTM" , "Weighted power (variable epoch size)" );
+  add_var( "MTM" , "CH,F" , "WREL" , "Weighted relative power (variable epoch size)" );
+
 
   add_table( "MTM" , "CH,B1,B2" , "Whole-night, per-channel bandpower ratios" );
   add_var( "MTM" , "CH,B1,B2" , "RATIO" , "Band power ratio" );
@@ -2282,6 +2319,21 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "CH,F" , "EMPF" , "Relative frequency of above-thresholds points based on EMPTH" );
   add_var( "SPINDLES" , "CH,F" , "MEAN_OVER_MEDIAN" , "Ratio of mean to median, to index skewness of the wavelet coefficients" );
 
+  add_var( "SPINDLES" , "CH,F" , "CWT_TH" , "CWT threshold" );
+  add_var( "SPINDLES" , "CH,F" , "FRNG2" , "Range of spindle frequencies" );
+  add_var( "SPINDLES" , "CH,F" , "FRQ1" , "Frequency in spindle first half" );
+  add_var( "SPINDLES" , "CH,F" , "FRQ2" , "Frequency in spindle second half" );
+  add_var( "SPINDLES" , "CH,F" , "FVAR2" , "Variation in spindle frequency" );
+  add_var( "SPINDLES" , "CH,F" , "N" , "Number of spindles" );
+  add_var( "SPINDLES" , "CH,F" , "P01" , "Pre-QC" );
+  add_var( "SPINDLES" , "CH,F" , "P02" , "Mid-QC" );
+  add_var( "SPINDLES" , "CH,F" , "SEC_AMP" , "Midpoint based on CWT" );
+  add_var( "SPINDLES" , "CH,F" , "SEC_P2P" , "Midpoint based on peak-to-peak" );
+  add_var( "SPINDLES" , "CH,F" , "SEC_TROUGH" , "Midpoint based on trough" );
+  add_var( "SPINDLES" , "CH,F" , "SYMM_AMP" , "Mean spindle symmetry metric (based on CWT)" );
+  add_var( "SPINDLES" , "CH,F" , "SYMM_TROUGH" , "Mean spindle symmetry metric (based on trough)" );
+  
+  
   add_table( "SPINDLES" , "CH,F,TH" , "Between-class variance over range of thresholds" );
   add_var( "SPINDLES" , "CH,F,TH" , "SIGMAB" , "Between-class variance for given threshold" );
 
@@ -3564,81 +3616,92 @@ bool cmddefs_t::is_hidden_var( const std::string & c , const tfac_t & tfac , con
 // std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > > vhide;  // variables
 
 
-void cmddefs_t::show_all( const bool status )
+void cmddefs_t::show_all( const bool show )
 {
   std::map<std::string,bool>::iterator cc = chide.begin();
   while ( cc != chide.end() )
     {
-      show_cmd( cc->first , status );
+      show_cmd( cc->first , show );
       ++cc;
     }  
 }
 
-void cmddefs_t::show_cmd( const std::string & cmd , const bool status )
+void cmddefs_t::show_cmd( const std::string & cmd , const bool show )
 {
   // don't worry whether this command is actually valid here
-  chide[ cmd ] = ! status ;
+  chide[ cmd ] = ! show ;
 
-  // then hide all tables; under 'show' mode leave lowers as is
-  if ( ! status ) { 
-   std::map<std::string,std::map<tfac_t,bool> >::iterator tt = ohide.find( cmd );
-   if ( tt != ohide.end() )
-     {
-       std::map<tfac_t,bool> & table = tt->second;
-       std::map<tfac_t,bool>::iterator qq = table.begin();
-       while ( qq != table.end() )
+  // hide/show all tales
+  std::map<std::string,std::map<tfac_t,bool> >::iterator tt = ohide.find( cmd );
+  if ( tt != ohide.end() )
+    {
+      std::map<tfac_t,bool> & table = tt->second;
+      std::map<tfac_t,bool>::iterator qq = table.begin();
+      while ( qq != table.end() )
    	{
-   	  show_table( cmd , qq->first , status );
+   	  show_table( cmd , qq->first , show );
    	  ++qq;
    	}
-     }
-  }
+    }
 }
 
-void cmddefs_t::show_table( const std::string & cmd , const tfac_t & factors , const bool status )
+void cmddefs_t::show_table( const std::string & cmd , const tfac_t & factors , const bool show )
 {
-  ohide[ cmd ][ factors ] = ! status;
-
-  // only if hiding, then ensure we hide all lower variables
-  if ( ! status ) { 
+  ohide[ cmd ][ factors ] = ! show;
+  
+  // if showing this table, we need to make sure the cmd is shown too
+  // if hiding this table, we can leave the cmd as is
+  if ( show ) chide[ cmd ] = false;
     
-    std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > >::iterator it1 = vhide.find( cmd );
-    if ( it1 == vhide.end() ) return;
-    std::map<tfac_t,std::map<std::string,bool> >::iterator it2 = it1->second.find( factors );
-    if ( it2 == it1->second.end() ) return;
-    
-    std::map<std::string,bool> & vars = it2->second;
-    std::map<std::string,bool>::iterator vv = vars.begin();
-    while ( vv != vars.end() )
-      {
-	show_var( cmd , factors , vv->first , status );
-	++vv;
-      }
-  }
+  // and then also hide/show all variables in this table
+  std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > >::iterator it1 = vhide.find( cmd );
+  if ( it1 == vhide.end() ) return;
+  std::map<tfac_t,std::map<std::string,bool> >::iterator it2 = it1->second.find( factors );
+  if ( it2 == it1->second.end() ) return;
+  
+  std::map<std::string,bool> & vars = it2->second;
+  std::map<std::string,bool>::iterator vv = vars.begin();
+  while ( vv != vars.end() )
+    {
+      show_var( cmd , factors , vv->first , show );
+      ++vv;
+    }
 }
 
-void cmddefs_t::show_table( const std::string & cmd , const std::string & factors , const bool status )
+void cmddefs_t::show_table( const std::string & cmd , const std::string & factors , const bool show )
 {
-  show_table( cmd , tfac_t( factors ), status );
+  show_table( cmd , tfac_t( factors ), show );
 }
 
 
-void cmddefs_t::show_var( const std::string & cmd , const tfac_t & factors , const std::string & var , const bool status )
+void cmddefs_t::show_var( const std::string & cmd , const tfac_t & factors , const std::string & var , const bool show )
 {
 
   std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > >::iterator it1 = vhide.find( cmd );
   if ( it1 == vhide.end() ) return;
   std::map<tfac_t,std::map<std::string,bool> >::iterator it2 = it1->second.find( factors );
   if ( it2 == it1->second.end() ) return;
-
+  
   // always add
-  it2->second[ var ] = ! status;
-  std::cout << " setting " << cmd << " " << factors.as_string() << " " << var << " to show? " << !status << "\n";
+  it2->second[ var ] = ! show ;
+
+  // if showing this variable, we need to make sure the cmd and table
+  // are shown; but we don't want to run show_cmd() as that also recursively will 
+  // set all tables/vars below; so just tweak the main vars here
+  
+  // if hiding this variable, we can leave as is
+
+  if ( show ) 
+    {
+      chide[ cmd ] = false;
+      ohide[ cmd ][ factors ] = false;
+    }
+
 }
   
-void cmddefs_t::show_var( const std::string & cmd , const std::string & factors , const std::string & var , const bool status )
+void cmddefs_t::show_var( const std::string & cmd , const std::string & factors , const std::string & var , const bool show )
 {
-  show_var( cmd , tfac_t( factors ), var , status );
+  show_var( cmd , tfac_t( factors ), var , show );
 }
 
 
