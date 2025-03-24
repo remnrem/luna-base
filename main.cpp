@@ -119,27 +119,29 @@ int main(int argc , char ** argv )
   // help mode
   //
 
-  if ( argc >= 2 && strcmp( argv[1] , "-h" ) == 0 )
+  if ( argc >= 2 && ( strcmp( argv[1] , "-h" ) == 0 || strcmp( argv[1] , "-H" ) == 0 ) ) 
     {
       
       global.api();
+
+      const bool primary = strcmp( argv[1] , "-h" ) == 0;
       
       if ( argc == 2 )  // -h 
 	{
 
-	  std::cerr << "\n" << usage_msg << "\n\n";
+	  std::cerr << "\n" << usage_msg << "\n";
 
 	  std::cerr << "List of domains\n"
-		    << "---------------\n\n";
+		    << "---------------\n";
 	  
 	  std::cerr << globals::cmddefs().help_domains()
 		    << "\n";
 
-	  std::cerr << "for commands within a domain, add the domain label after -h, e.g.\n"
-		    << "\n  luna -h annot\n\n";
+	  std::cerr << "For commands within a domain, add the domain label after -h, e.g.\n"
+		    << "  luna -h annot\n\n";
 
-	  std::cerr << "for options and output for a given command, add the (upper-case) command after -h, e.g.\n"
-		    << "\n  luna -h SIGSTATS\n\n";
+	  std::cerr << "For options and output for a given command, add the (upper-case) command after -h, e.g.\n"
+		    << "  luna -h SIGSTATS\n\n";
 
 	}
       else // --h all
@@ -155,13 +157,19 @@ int main(int argc , char ** argv )
 	  // -h {domain}  list all commands (non-verbose)
 	  else if ( globals::cmddefs().is_domain(p) ) 
 	    {
-	      std::cerr << "\n" << globals::cmddefs().help_commands( p ) << "\n";
+	      std::string str = p + " : " + globals::cmddefs().help_domain(p);
+	      std::cerr << "\n"
+			<< str << "\n"
+			<< std::string(str.size(),'-') 
+			<< "\n\n"
+			<< globals::cmddefs().help_commands( p , primary )
+			<< "\n";
 	    }
 	  
 	  // -h {cmd}  list all options/tables (verbose)
 	  else if ( globals::cmddefs().is_cmd(p) ) 
 	    {
-	      std::cerr << globals::cmddefs().help( p , true , true ) << "\n";
+	      std::cerr << globals::cmddefs().help( p , true , true , primary ) << "\n";
 	    }
 	  
 	  // otherwise, complain

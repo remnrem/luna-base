@@ -44,10 +44,10 @@ void cmddefs_t::init()
   //
   // parameters
   //
-
+  
   allz = false;
   nonez = false;
-
+  
   /////////////////////////////////////////////////////////////////////////
   //
   // Document domains, commands, parameters, output tables and variables 
@@ -71,75 +71,124 @@ void cmddefs_t::init()
   add_domain( "expr"       , "Expressions"      , "Evaluating more advanced annotation-based expressions" );
   add_domain( "epoch"      , "Epochs"           , "Epoching signals and epoch-level annotations" );
   add_domain( "mask"       , "Masks"            , "Masking epochs based on annotations and other criteria" );
+  add_domain( "freeze"     , "Freezes & caches" , "EDF freezes and cache mechanisms" );
+  add_domain( "canon"      , "Canonoical signals" , "Canonical signal mapping" );
   add_domain( "manip"      , "Manipulations"    , "Manipulating signal data" );
+  add_domain( "align"      , "Record alignment" , "Signal/annotation alignment" );
   add_domain( "output"     , "Outputs"          , "Commands to output signals in different formats" );
   add_domain( "filter"     , "FIR filters"      , "FIR filter design and application" );
   add_domain( "artifact"   , "Artifacts"        , "Artifacts detection/correction routines" );
   add_domain( "hypno"      , "Hypnograms"       , "Characterizations of hypnograms" );
   add_domain( "stage"      , "Staging"          , "Automated staging/stage evaluation" );
   add_domain( "power"      , "Time/frequency analysis" , "TF including power spectral density estimation" );
-  add_domain( "trans"      , "Spindles and SO"  , "Spindles and slow oscillations" );
+  add_domain( "trans"      , "NREM transients (spindle/SO)"  , "Spindles and slow oscillations" );
   add_domain( "cc"         , "Coupling/connectvitiy" , "Coherence and other topographical analyses" );
   add_domain( "interval"   , "Interval-based analysis" , "Analyses and summaries based on time-domain intervals" );
   add_domain( "cfc"        , "Cross-frequency"  , "Phase-amplitude coupling" );
-  add_domain( "misc"       , "Misc"             , "Misc. commands" );
-  add_domain( "exp"        , "Experimental"     , "Experimental features: under heavy development, for internal use only" );
-  add_domain( "cmdline"    , "Command-line"     , "Functions that do not operate on EDFs" );
-  add_domain( "assoc"      , "Association"      , "Association models" );
-  add_domain( "pred"       , "Prediction"       , "Prediction models" );
-  add_domain( "simul"      , "Simulation"       , "Basic signal simulation" );
-  add_domain( "freeze"     , "Freezes & caches" , "EDF freezes and cache mechanisms" ); 
-  add_domain( "canon"      , "Canonoical signals" , "Canonical signal mapping" );
-  add_domain( "align"      , "Record alignment" , "Signal/annotation alignment" );
   add_domain( "psc"        , "Principal spectral components" , "PSC command" );
   add_domain( "spatial"    , "Topographical analysis" , "EEG channel locations, interpolation and surface Laplacian" );
   add_domain( "multi"      , "Multi-channel analysis" , "ICA and PCA" );
   add_domain( "ms"         , "EEG microstate analysis" , "Segmentation, backfitting and sequence analysis" );
   add_domain( "cluster"    , "Clustering"  , "PDC-based epoch/channel clustering " ); 
-  
+  add_domain( "assoc"      , "Association"      , "Association models" );
+  add_domain( "pred"       , "Prediction"       , "Prediction models" );
+  add_domain( "simul"      , "Simulation"       , "Basic signal simulation" );
+  add_domain( "helpers"    , "Helper utilities" , "Misc. utility functions" );
+  add_domain( "exp"        , "Experimental"     , "Experimental features: under heavy development, for internal use only" );
+
 
   /////////////////////////////////////////////////////////////////////////////////
   //
   // COMMAND-LINE OPTIONS
   //
   /////////////////////////////////////////////////////////////////////////////////
-    
+
+  //
+  // -h (help)
+  //
+
   add_cmd( "cmdline" , "-h" , "Help functions" );
 
+  //
+  // --version
+  //
+  
   add_cmd( "cmdline" , "--version" , "Show version (or -v)" );
 
+  //
+  // --build
+  //
+
   add_cmd( "cmdline" , "--build" , "Scan folders recursively to geneate a sample list" );
+  add_param( "--build" , "-nsrr" , "" , "Use NSRR annotation extension, i.e. `-ext=-nsrr.xml`" );
   add_param( "--build" , "-edfid" , "" , "Use filename as ID, instead of looking in each EDF header" );
   add_param( "--build" , "-nospan" , "" , "Do not match similarly-named files across folders" );
   add_param( "--build" , "-ext" , "-ext=txt,eannot,annot" , "Consider these extensions as annotation files" );
 
+  //
+  // --validate
+  //
+
   add_cmd( "cmdline" , "--validate" , "Validate EDFs/annotation files in a sample list" );
   add_param( "--validate" , "slist" , "slist=s.lst" , "Specficy the sample list" );
+
+  add_table( "--validate" , "" , "Primary VALIDATE output" );
+  add_var( "--validate" , "" , "EDF" , "Valid/invalid EDF (1=valid)" );
+  add_var( "--validate" , "" , "ANNOTS" , "Valid/invalid annotations (1=valid)" );
+
+  //
+  // --repath
+  //
+
+  add_cmd( "cmdline" , "--repath" , "Swap out file paths in a sample list" );
+  add_param( "--repath" , "{1st arg}" , "/home/john/" , "First argument: match string" );
+  add_param( "--repath" , "{2nd arg}" , "/home/mary/" , "Second argument: replacement string" );
+
   
-  add_cmd( "cmdline" , "--xml" , "Dump annotations from an XML annotation file (to console)" );
 
-  add_cmd( "cmdline" , "--xml2" , "Dump entire XML tree (to console)" );
 
-  // expression evaluation
+  //
+  // --merge
+  //
+
+  add_cmd( "cmdline" , "--merge" , "Merge two or more EDFS" );  
+  add_param( "--merge" , "slist" , "slist=s.lst" , "Specficy the sample list" );
+
+  //
+  // --bind
+  //
+
+  add_cmd( "cmdline" , "--bind" , "Combine two or more channels to a single EDF" );
+  add_param( "--bind" , "slist" , "slist=s.lst" , "Specficy the sample list" );
+
+  //
+  // --otsu
+  //
+
+  add_cmd( "cmdline" , "--otsu" , "Calculate thresholds based on Otsu's method (external data)" );
+  add_param( "--otsu" , "slist" , "slist=s.lst" , "Specficy the sample list" );
+
+
+  //
+  // --eval 
+  //
+
   add_cmd( "cmdline" , "--eval" , "" );
   add_cmd( "cmdline" , "--eval-verbose" , "" );
- 
-  add_cmd( "cmdline" , "--fir" , " Or --fir-design" );
+
+  //
+  // --fir
+  //
+
+  add_cmd( "cmdline" , "--fir" , "Or --fir-design" );
+
+  
+  //
+  // --cwt
+  //
+
   add_cmd( "cmdline" , "--cwt" , "Or --cwt-design" );
   
-
-
-  //  add_cmd( "cmdline" , "--pdlib" , "" );
-
-
-  // -o
-  // -t 
-  // -a 
-  // -s
-  // @parameter file
-  // x=y ... including special variables
-  // ID
-  // 1 2 
 
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -148,7 +197,20 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
 
-
+  // DESC 	Simple description of an EDF, sent to the console
+  // SUMMARY 	More verbose description, sent to the console
+  // HEADERS 	Tabulate (channel-specific) EDF header information
+  // CONTAINS 	Indicate whether certain signals/stages/annotations are present
+  // ALIASES 	Display aliases assigned for channels and annotations
+  // TYPES 	Display current channel types
+  // VARS 	Display current individual-level variables
+  // TAG 	Generic command to add a tag (level/factor) to the output
+  // STATS 	Basic signal statistics (min/max, mean, RMS, etc)
+  // SIGSTATS 	Hjorth parameters and other signal statistics
+  // TABULATE 	Tabulate discrete values in a signal
+  // DUPES      Finds flat signals and digital duplicates
+  
+  
   //
   // DESC
   //
@@ -161,43 +223,71 @@ void cmddefs_t::init()
   // SUMMARY
   //
 
-  add_cmd( "summ" , "SUMMARY" , "More verbose description, sent to the console" );
-
+  add_cmd1( "summ" , "SUMMARY" , "More verbose description, sent to the console" );
   
 
   //
   // HEADERS
   //
   
-  add_cmd( "summ" , "HEADERS" , "Tabulate (channel-specific) EDF header information" );
+  add_cmd1( "summ" , "HEADERS" , "Tabulate (channel-specific) EDF header information" );
   
-  add_table( "HEADERS" , "" , "Basic EDF header information" );
+  add_table1( "HEADERS" , "" , "Basic EDF header information" );
   add_var( "HEADERS" , "" , "NR" , "Number of records" );
-  add_var( "HEADERS" , "" , "NS" , "Number of signals/channels" );
-  add_var( "HEADERS" , "" , "EDF_ID" , "ID in the EDF header" );
-  add_var( "HEADERS" , "" , "START_TIME" , "Start time in the EDF header" );
+  add_var1( "HEADERS" , "" , "NS" , "Number of signals/channels" );
+  add_var1( "HEADERS" , "" , "EDF_ID" , "ID in the EDF header" );
+  add_var1( "HEADERS" , "" , "START_TIME" , "Start time in the EDF header" );
   add_var( "HEADERS" , "" , "STOP_TIME" , "Stop time" );
-  add_var( "HEADERS" , "" , "START_DATE" , "Start date in the EDF header" );
+  add_var1( "HEADERS" , "" , "START_DATE" , "Start date in the EDF header" );
   add_var( "HEADERS" , "" , "REC_DUR" , "Duration of each record (seconds)" );
-  add_var( "HEADERS" , "" , "TOT_DUR_SEC" , "Current EDF duration (seconds)" );
-  add_var( "HEADERS" , "" , "TOT_DUR_HMS" , "Current EDF duration (hh:mm:ss)" );
-  add_var( "HEADERS" , "" , "EDF_TYPE" , "EDF, EDF+C or EDF+D" );
+  add_var1( "HEADERS" , "" , "TOT_DUR_SEC" , "Current EDF duration (seconds)" );
+  add_var1( "HEADERS" , "" , "TOT_DUR_HMS" , "Current EDF duration (hh:mm:ss)" );
+  add_var1( "HEADERS" , "" , "EDF_TYPE" , "EDF, EDF+C or EDF+D" );
   add_var( "HEADERS" , "" , "NS_ALL" , "Number of signals in original EDF" );
   add_var( "HEADERS" , "" , "REC_DUR_HMS" , "Original recording duration (hh:mm:ss)" );
   add_var( "HEADERS" , "" , "REC_DUR_SEC" , "Original recording duration (seconds)" );
   
-  add_table( "HEADERS" , "CH" , "Per-channel header information" );
+  add_table1( "HEADERS" , "CH" , "Per-channel header information" );
   add_var( "HEADERS" , "CH" , "DMAX" , "Digital max" );
   add_var( "HEADERS" , "CH" , "DMIN" , "Digital min" );
-  add_var( "HEADERS" , "CH" , "PDIM", "Physical dimension" );
-  add_var( "HEADERS" , "CH" , "PMAX", "Physical min" );
-  add_var( "HEADERS" , "CH" , "PMIN", "Physical max" );
-  add_var( "HEADERS" , "CH" , "SR", "Sample rate (Hz)" );
+  add_var1( "HEADERS" , "CH" , "PDIM", "Physical dimension" );
+  add_var1( "HEADERS" , "CH" , "PMAX", "Physical min" );
+  add_var1( "HEADERS" , "CH" , "PMIN", "Physical max" );
+  add_var1( "HEADERS" , "CH" , "SR", "Sample rate (Hz)" );
   add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
   add_var( "HEADERS" , "CH" , "TRANS", "Transducer type" );
   add_var( "HEADERS" , "CH" , "POS", "Position in EDF" );
   add_var( "HEADERS" , "CH" , "TYPE", "Channel type (from Luna TYPES)" );
 
+  //
+  // CONTAINS
+  //
+  
+  add_cmd( "manip" , "CONTAINS" , "Tests for particular signals/annotations/staging being present" );
+  add_url( "CONTAINS" , "manipulatons/#contains" );
+  add_param( "CONTAINS" , "sig" , "EMG,ECG" , "Test for these signals" );
+  add_param( "CONTAINS" , "annots" , "apnea,hypopnea" , "Test for these annotations" );
+  add_param( "CONTAINS" , "stages" , "" , "Test for valid staging" );
+  add_param( "CONTAINS" , "skip" , "" , "Skip to next EDF on failure" );
+
+  add_table( "CONTAINS" , "" , "Base" );
+  add_var( "CONTAINS" , "" , "STAGE_COUNTS" , "Sleep stage counts" );
+  add_var( "CONTAINS" , "" , "UNIQ_STAGES" , "Number of unique stage labels" );
+  add_var( "CONTAINS" , "" , "NA_REQ" , "Number of required annots" );
+  add_var( "CONTAINS" , "" , "NA_OBS" , "Number of observed annots" );
+
+  add_var( "CONTAINS" , "" , "NS_OBS" , "Number of required channels" );
+  add_var( "CONTAINS" , "" , "NS_REQ" , "Number of observed channels" );
+  add_var( "CONTAINS" , "" , "NS_TOT" , "Tot number of channels" );
+
+  add_table( "CONTAINS" , "ANNOT" , "Annotation informationm" );
+  add_var( "CONTAINS" , "CH" , "PRESENT" , "Annotation resent" );
+
+  add_table( "CONTAINS" , "CH" , "Channel informationm" );
+  add_var( "CONTAINS" , "CH" , "PRESENT" , "Channel present" );
+
+
+  
   //
   // ALIASES
   //
@@ -210,6 +300,17 @@ void cmddefs_t::init()
   add_table( "ALIASES" , "ANNOT" , "Annotation aliasing" );
   add_var( "ALIASES" , "ANNOT" , "ORIG" , "Original annotation label" );
 
+
+  //
+  // TYPES
+  //
+
+  //
+  // VARS
+  //
+
+  
+  
   //
   // TAG
   //
@@ -217,6 +318,7 @@ void cmddefs_t::init()
   add_cmd( "summ" , "TAG" , "Generic command to add a tag (level/factor) to the output" );  
   add_param( "TAG" , ""    , "RUN/L1" , "Add tag with level L1 to factor RUN in output" );
   add_param( "TAG" , "tag" , "RUN/L1" , "Identical to the above, but explicitly using the tag option" );
+
   
   //
   // STATS
@@ -287,93 +389,112 @@ void cmddefs_t::init()
   add_var( "STATS" , "CH,E" , "P99" , "99th percentile" );
 
 
-  // xxx TODO
-  // 
-  // CONTAINS
-  // TYPES
-  // VARS
-  // STATS
+  //
   // SIGSTATS
+  //
+
+    // SIGSTATS
+
+  add_cmd( "artifact" , "SIGSTATS" , "Per-epoch outlier detection (RMS, Hjorth parameters, clipped signals)" );
+  add_url( "SIGSTATS" , "artifacts/#sigstats" );
+  add_param( "SIGSTATS" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+
+  add_param( "SIGSTATS" , "verbose" , "" , "Report epoch-level statistics" );
+  add_param( "SIGSTATS" , "epoch" , "" , "Report epoch-level statistics (same as verbose)" );
+  add_param( "SIGSTATS" , "chep" , "" , "Set CHEP mask for outlier epochs" );
+  add_param( "SIGSTATS" , "astats" , "3,3" , "Between-epoch, betwee-channel filtering" );
+  add_param( "SIGSTATS" , "cstats" , "2" , "Within-epoch, between-channel filtering" );
+
+  add_param( "SIGSTATS" , "rms" , "" , "Calculate/mask on RMS" );
+  add_param( "SIGSTATS" , "clipped" , "0.05" , "Calculate/mask on signal clipping" );
+  add_param( "SIGSTATS" , "flat" , "0.05" , "Calculate/mask on signal clipping" );
+  add_param( "SIGSTATS" , "max" , "0.05" , "Calculate/mask on signal clipping" );
+
+  add_param( "SIGSTATS" , "threshold" , "2,2" , "Set eppoch masks based on SD unit (iterative) outlier detection" );
+  add_param( "SIGSTATS" , "th" , "2,2" , "Same as 'threshold'" );
+  add_param( "SIGSTATS" , "cstats" , "2" , "Run channel-comparisons, with threshold in SD units" );
+  add_param( "SIGSTATS" , "cstats-unmasked-only" , "" , "Channel-comparisons only for unmasked epochs" );
+
+  add_table( "SIGSTATS" , "CH" , "Per-channel whole-signal statistics" );
+  add_var( "SIGSTATS" , "CH" , "CLIP" , "Proportion of clipped sample points" );
+  add_var( "SIGSTATS" , "CH" , "FLAT" , "Proportion of flat sample points" );
+  add_var( "SIGSTATS" , "CH" , "MAX" , "Proportion of max sample points" );
+  add_var( "SIGSTATS" , "CH" , "H1" , "First Hjorth parameter (activity)" );
+  add_var( "SIGSTATS" , "CH" , "H2" , "Second Hjorth parameter (mobility)" );
+  add_var( "SIGSTATS" , "CH" , "H3" , "Third Hjorth parameter (complexity)" );
+  add_var( "SIGSTATS" , "CH" , "RMS" , "Signal root mean square" );
+
+  add_var( "SIGSTATS" , "CH" , "P_H1" , "Proportion flagged epochs for H1 [cstats]" );
+  add_var( "SIGSTATS" , "CH" , "P_H2" , "Proportion flagged epochs for H2 [cstats]" );
+  add_var( "SIGSTATS" , "CH" , "P_H3" , "Proportion flagged epochs for H3 [cstats]" );
+  add_var( "SIGSTATS" , "CH" , "P_OUT" , "Proportion flagged epochs for H1, H2 or H3 [cstats]" );
+
+  add_var( "SIGSTATS" , "CH" , "Z_H1" , "Z score for H1 [cstats]" );
+  add_var( "SIGSTATS" , "CH" , "Z_H2" , "Z score for H2 [cstats]" );
+  add_var( "SIGSTATS" , "CH" , "Z_H3" , "Z score for H3 [cstats]" );
+
+  add_var( "SIGSTATS" , "CH" , "CNT_ACT" , "Number of epochs flagged based on H1 [mask]" );
+  add_var( "SIGSTATS" , "CH" , "CNT_MOB" , "Number of epochs flagged based on H2 [mask]" );
+  add_var( "SIGSTATS" , "CH" , "CNT_CMP" , "Number of epochs flagged based on H3 [mask]" );
+  add_var( "SIGSTATS" , "CH" , "CNT_CLP" , "Number of epochs flagged based on clipping metric" );
+  add_var( "SIGSTATS" , "CH" , "CNT_RMS" , "Number of epochs flagged based on RMS" );
+
+  add_var( "SIGSTATS" , "CH" , "FLAGGED_EPOCHS" , "Number of epochs flagged as outliers [mask]" );
+  add_var( "SIGSTATS" , "CH" , "ALTERED_EPOCHS" , "Number of epochs whose mask was altered [mask]" );
+  add_var( "SIGSTATS" , "CH" , "TOTAL_EPOCHS" , "Total number of masked epochs [mask]" );
+
+  add_table( "SIGSTATS" , "CH,E" , "Per-channel per-epoch statistics [epoch]" );
+  add_var( "SIGSTATS" , "CH,E" , "H1" , "First Hjorth parameter (activity)" );
+  add_var( "SIGSTATS" , "CH,E" , "H2" , "Second Hjorth parameter (mobility)" );
+  add_var( "SIGSTATS" , "CH,E" , "H3" , "Third Hjorth parameter (complexity)" );
+  hidden_var( "SIGSTATS" , "CH,E" , "CLIP" , "Proportion of clipped sample points" );
+  hidden_var( "SIGSTATS" , "CH,E" , "FLAT" , "Proportion of flat sample points" );
+  hidden_var( "SIGSTATS" , "CH,E" , "MAX" , "Proportion of max sample points" );
+  hidden_var( "SIGSTATS" , "CH,E" , "RMS" , "Signal root mean square" );
+
+  //
   // TABULATE
-  // DUPES
-  //  move TLOCK --> elsewhere
-
-  //
-  // TLOCK  
   //
 
-  add_cmd( "summ"   , "TLOCK" , "Time-locked signal summaries" );
-  add_param( "TLOCK" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
-  add_param( "TLOCK" , "cache" , "" , "Sample-point peak cache (req.)" );
-
-  add_param( "TLOCK" , "tolog" , "" , "Take log of input signals" );
-  add_param( "TLOCK" , "verbose" , "" , "Output individual intervals" );
-
-  add_param( "TLOCK" , "w" , "2" , "Window size around peaks (seconds) (req.)");
-  add_param( "TLOCK" , "phase" , "20" , "Expect phase values (radians) and summarize in, e.g. 20 bins" );
-
-  // issue: hard to specify, as factors can appear on-the-fly (based on cache)
-  //        so just hard code a couple of common scenarios here:   CH    and CH x F
-
-  // generic by channel
-  add_table( "TLOCK" , "CH,sCH" , "Spindle peak time-locked counts" );
-  add_var( "TLOCK" , "CH,sCH" , "N" , "Number of included peaks" );
-  add_var( "TLOCK" , "CH,sCH" , "N_ALL" , "Total number of included peaks" );
-
-  add_table( "TLOCK" , "CH,SEC,sCH" , "Spindle peak time-locked summaries" );
-  add_var( "TLOCK" , "CH,SEC,sCH" , "M" , "Signal mean" );
-
-  add_table( "TLOCK" , "N,SEC,CH,sCH" , "Spindle peak time-locked counts" );
-  add_var( "TLOCK" , "N,SEC,CH,sCH" , "V" , "Signal value" );
-  set_compressed( "TLOCK" , tfac_t( "N,SEC,CH,sCH" ) );
   
-  // spindle peaks ( by channel & freq) 
-  add_table( "TLOCK" , "CH,sCH,sF" , "Spindle peak time-locked counts" );
-  add_var( "TLOCK" , "CH,sCH,sF" , "N" , "Number of included peaks" );
-  add_var( "TLOCK" , "CH,sCH,sF" , "N_ALL" , "Total number of included peaks" );
-
-  add_table( "TLOCK" , "CH,SEC,sCH,sF" , "Spindle peak time-locked summaries" );
-  add_var( "TLOCK" , "CH,SEC,sCH,sF" , "M" , "Signal mean" );
-
-  add_table( "TLOCK" , "N,SEC,CH,sCH,sF" , "Spindle peak time-locked counts" );
-  add_var( "TLOCK" , "N,SEC,CH,sCH,sF" , "V" , "Signal value" );
-  set_compressed( "TLOCK" , tfac_t( "N,SEC,CH,sCH,sF" ) );
-
 
   //
-  // PEAKS
+  // DUPES
   //
 
-  add_cmd( "misc"   , "PEAKS" , "Peak finder (maxima)" );
-  add_param( "PEAKS" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
-  add_param( "PEAKS" , "cache" , "c1" , "Sample-point peak cache (req.)" );
 
-  add_param( "PEAKS" , "epoch" , "" , "Also find minima" );
-  add_param( "PEAKS" , "clipped" , "3" , "Clipped regions = 3 consecutive points (0 = ignore clipping)" );
-  add_param( "PEAKS" , "min" , "" , "Also find minima" );
-  add_param( "PEAKS" , "min-only" , "" , "Only find minima" );
-  add_param( "PEAKS" , "percentile" , "20" , "Only report top 20% of peaks" );
 
-    
+
   /////////////////////////////////////////////////////////////////////////////////
   //
   // ANNOTATIONS
   //
   /////////////////////////////////////////////////////////////////////////////////
+
+  // --xml, --xml2  View NSRR XML annotation files
+  // REMAP          Apply annotation remappings after loading
+  // ANNOTS         Tabulate all annotations
+  // MAKE-ANNOTS    Make new annotations
+  // WRITE-ANNOTS   Write annotations as .annot or .xml
+  // META           Add meta-data to annotations
+  // SPANNING       Report on coverage of annotations
+  // ESPAN          Epoch-based annotation coverage
+  // A2S            Add a 0/1 signal based on an annotation
+  // S2A            Add an annotation based on ranged values of a signal
+
   
   //
   // --xml
   //
-
-  add_cmd( "annot" , "--xml" , "Quickly view an NSRR XML annotation file" );
-  add_note( "--xml" , "Command line option\n  luna --xml file.xml" );
+  
+  add_cmd( "cmdline" , "--xml" , "Dump annotations from an XML annotation file (to console)" );
 
   //
   // --xml2
   //
 
-  add_cmd( "annot" , "--xml2" , "Verbose dump of XML tree" );
-  add_note( "--xml2" , "Command line option\n  luna --xml2 file.xml" );
+  add_cmd( "cmdline" , "--xml2" , "Dump entire XML tree (to console)" );
+
 
   //
   // ANNOTS
@@ -396,8 +517,6 @@ void cmddefs_t::init()
   add_table( "ANNOTS" , "ANNOT,INST" , "Instance-level annotation summary" );
   add_var( "ANNOTS" , "ANNOT,INST" , "COUNT" , "Number of instances of that annotation class and instance ID" );
   add_var( "ANNOTS" , "ANNOT,INST" , "DUR" , "Combined duration (seconds) of all instances of that annotation class and instance ID" );
-
-
 
   add_table( "ANNOTS" , "ANNOT,INST,T" , "Instance-level annotation tabulation" );
   add_var( "ANNOTS" , "ANNOT,INST,T" , "START" , "Start time (secs) of this instance" );
@@ -458,18 +577,453 @@ void cmddefs_t::init()
   add_var( "SPANNING" , "" , "UNSPANNED_SEC" , "Duration of EDF unspanned by 1+ of these annotations (secs)" );
   add_var( "SPANNING" , "" , "UNSPANNED_HMS" , "Duration of EDF unspanned by 1+ of these annotations (hh:mm:ss)" );
 
-
-  // xxx TO ADD
+  //
   // REMAP
-  // ANNOTS
+  //
+
+  //
   // MAKE-ANNOTS
+  //
+
+  //
   // WRITE-ANNOTS
+  //
+
+  add_cmd( "output" , "WRITE-ANNOTS" , "Write all annotations to file" );
+  add_url( "WRITE-ANNOTS" , "outputs/#write-annots" );
+  
+  add_param( "WRITE-ANNOTS" , "file" , "f1.xml" , "Required filename for output" );
+  add_param( "WRITE-ANNOTS" , "luna" , "" , "Output in Luna .annot format instead of XML" );
+
+  //
   // META
-  // SPANNING
+  //
+
+  //
   // ESPAN
+  //
+
+  //
   // A2S
+  //
+
+
+  //
   // S2A
+  //
+  
   // ALIGN-ANNOTS
+
+  
+
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // EXPRESSIONS
+  //
+  /////////////////////////////////////////////////////////////////////////////////
+
+  // EVAL      Evaluate annotation-based general expressions
+  // TRANS     Arbitrary transformations of signal data
+  // DERIVE    Derive summary statistics based on annotation meta-data
+
+
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // EPOCHS
+  //
+  /////////////////////////////////////////////////////////////////////////////////
+
+  // EPOCH           Specify epochs
+  // EPOCH-ANNOT     Load epoch-wise annotations from a .eannot-format file
+
+
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // MASKS
+  //
+  /////////////////////////////////////////////////////////////////////////////////
+
+  // MASK             Mask epochs based on annotations and other features (standard mask)
+  // DUMP-MASK        Output epoch-level mask information (standard mask)
+  // RESTRUCTURE, RE  Remove masked out epochs (and channels) based on the standard mask
+  // CHEP 	      Process CHannel/EPoch CHEP masks and modify the standard mask based on them
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // FREEZES/CACHES
+  //
+  /////////////////////////////////////////////////////////////////////////////////
+
+  // FREEZE            Make a named freeze of the current datatset
+  // THAW              Revert to a previous data freeze
+  // CLEAN-FREEZER     Empty the freezer
+  // CACHE             Cache operations
+
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // CANONICAL SIGNALS
+  //
+  /////////////////////////////////////////////////////////////////////////////////
+
+  // CANONICAL   Generate canonical signals
+
+  
+  
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // MANIPULATIONS 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // SIGNALS         Retain/remove specific EDF channels
+  // RENAME          Rename channels
+  // COPY            Duplicate one or more EDF channels
+  // RESAMPLE        Resample signal(s)
+  // ENFORCE-SR      Require a particular sample rate
+  // REFERENCE       Re-reference signals
+  // DEREFERENCE     De-reference signals
+  // MINMAX          Set digital/physical min/max across channels
+  // uV              Rescale units to uV
+  // mV              Rescale units to mV
+  // FLIP            Flip polarity of signal
+  // ZC              Mean-center signal
+  // ROBUST-NORM     Robust normalisation
+  // COMBINE         Combine two or more channels into a new channel (e.g. sum/mean)
+  // SCALE           Rescale a channel (min/max scaling)
+  // SHIFT           Shift a signal
+  // SCRAMBLE        Scramble a signal
+  // TIME-TRACK      Add a time-track to an EDF
+  // RECORD-SIZE     Change EDF record size
+  // EDF-MINUS       Realign EDF records, annotations and epochs
+  // ANON            Strip ID information from EDF header
+  // SET-HEADERS     Directly specify certain EDF headers
+  // SET-VAR         Directly specify Luna variables
+  // SET-TIMESTAMPS  Directly specify EDF record time-stamps
+  // RECTIFY         Rectify a signal
+  // REVERSE         Reverse a signal
+  // MOVING-AVERAGE  Moving average (or median) of a signal
+
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // ALIGNMENT 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // EDF-MINUS       
+  // ALIGN-EPOCHS    Align epochs between files
+  // ALIGN-ANNOTS    Realign annotations given an ALIGN-EPOCHS solution
+  // INSERT          Insert new channels, allowing for varying sample rates
+
+
+  //
+  // EDF-MINUS
+  //
+
+
+  //
+  // ALIGN-EPOCHS
+  //
+
+ 
+  //
+  // ALIGN-ANNOTS
+  //
+
+
+  //
+  // INSERT
+  //
+
+
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // OUTPUTS 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // WRITE        Write a new EDF file
+  // MATRIX       Dump signals (and annotations) to a file
+  // HEAD         Show a small interval of signal data
+  // DUMP-RECORDS Dump annotations and signals, by EDF record
+  // RECS         Dump basic information on EDF record structure
+  // SEGMENTS     Dump (discontinuous EDF+) intervals
+  // SEDF         Generate a "summary EDF"
+    
+  
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // FILTERS 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+  
+  // FILTER          Apply a FIR filter to one or more signals
+  // FILTER-DESIGN   Display filter properties
+
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // ARTIFACTS 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // CHEP-MASK       CHannel/EPoch (CHEP) outlier detection
+  // ARTIFACTS       Per-epoch Buckelmueller et al. (2006) artifact detection
+  // LINE-DENOISE    Line denoising via spectrum interpolation
+  // SUPPRESS-ECG    Correct cardiac artifact based on ECG
+  // ALTER           Reference-channel regression-based artifact correction
+  // EDGER           Utility to flag likely artifactual leading/trailing intervals
+  
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // HYPNOGRAMS 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // HYPNO  Sleep macro-architecture summaries
+  // STAGE  Output sleep stages per epoch
+  // DYNAM  Summarize epoch-level outputs by NREM cycles
+
+
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // STAGING TOOLS (SOAP/POPS) 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // RUN-POPS                  A high-level convenience wrapper around POPS
+  // POPS                      Apply automated sleep stage prediction
+  // EVAL-STAGES               Apply POPS evaluation metrics to external predictions
+  // --eval-stages             Similar to above, but without an attached EDF
+  // POPS train training mode  Create level 1 feature matrices for training
+  // --pops training mode      Combine trainers for level 2 features and train POPS models
+                                        
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // T/F ANALYSIS 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // PSD      Welch's method for power spectral density estimation
+  // MTM      Multi-taper method for power spectral density estimation
+  // FFT      Basic discrete Fourier transform of a signal
+  // IRASA      Irregular-resampling auto-spectral analysis
+  // HILBERT      Hilbert transform
+  // CWT      Continuous wavelet transform
+  // CWT-DESIGN Complex Morlet wavelet properties
+  // PCOUPL      Generic phase coupling
+  // EMD      Empirical mode decomposition
+  // MSE      Multi-scale entropy statistics
+  // LZW      LZW compression (information content) index
+  // 1FNORM      Remove the 1/f trend from a signal
+  // TV      Total variation denoiser
+  // ACF      Autocorrelation function
+
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // NREM TRANSIENTS 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // SPINDLES      Wavelet-based spindle detection
+  // SO      Slow oscillation detection
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // COUPLING/CONNECTIVITY 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // COH      Pairwise channel coherence
+  // CORREL      Pairwise channel correlation
+  // CC      Coupling (dPAC) and connectivity (wPLI)
+  // PSI      Phase slope index (PSI) connectivity metric
+  // XCORR      Cross-correlation
+  // MI      Mutual information
+  // TSYNC      Cross-correlation and phase delay (alternate implementation)
+  // GP      Granger prediction
+    
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  //  INTERVALS
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // OVERLAP      Annotation overlap/enrichment (single-sample)
+  // --overlap      Annotation overlap/enrichment (multi-sample)
+  // MEANS      Signal means by annotation
+  // PEAKS      Detect and cache signal peaks
+  // Z-PEAKS      Detect and cache signal peaks, alternative method
+  // TLOCK      Time-locked (e.g. peak-locked) signal averaging
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // PSC 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  
+  // --psc    Estimate PSCs from samples of spectral/connectivity metrics
+  // PSC      Project new samples into an existing PSC space
+  
+
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // SPATIAL
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // CLOCS          Specify EEG channel locations
+  // SL             Surface Laplacian spatial filtering
+  // INTERPOLATE    Epoch-wise interpolation of bad channels
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // MULTI-CHANNEL 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // ICA        Fit ICA model to signal data
+  // ADJUST     Adjust original signals given one or more ICs
+  // SVD        Apply time-series PCA to multiple channels
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // MICROSTATS
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // MS             EEG microstate analysis
+  // --kmer         (Group-level) permutation-based analysis of state sequences
+  // --cmp-maps     Group/individual map spatial analysis
+  // --label-maps   Label maps given a template
+  // --correl-maps  Spatial correlations between maps
+
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // CLUSTERING 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // EXE      Epoch-by-epoch or channel-by-channel time-series clustering
+
+
+
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // ASSOCIATION
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // GPA     General permutation-based association analysis for one or more sets of metrics
+  // CPT     Cluster-based permutation to one or more sets of metrics  
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // PREDICTION 
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+  
+  // PREDICT      Make a prediction given a model and pre-calculated features
+
+
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // SIMULATION
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+  
+  // SIMUL      Simple approach to simulate time-series given a power spectrum
+  // SIGGEN      Generate/spike in artificial test signals
+    
+  
+  /////////////////////////////////////////////////////////////////////////////////
+  //
+  // HELPERS
+  //
+  /////////////////////////////////////////////////////////////////////////////////  
+
+  // --build      Generate a sample list automatically
+  // --validate      Validate all EDFs and annotation files in a project
+  // --repath      Change root filepaths in a sample list
+  // --merge      Merge (concatenate) multiple EDFs
+  // --bind      Merge (column/channel bind) multiple EDFs
+  // --xml      View NSRR XML annotation files
+  // --xml2      View NSRR XML annotation files (verbose)
+  // --otsu      Calculate thresholds based on Otsu's method (external data)
+  // OTSU      Calculate thresholds based on Otsu's method (internal channel)
+    
+  
+
+    
+  
+  //
+  // TLOCK  
+  //
+
+  add_cmd( "summ"   , "TLOCK" , "Time-locked signal summaries" );
+  add_param( "TLOCK" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  add_param( "TLOCK" , "cache" , "" , "Sample-point peak cache (req.)" );
+
+  add_param( "TLOCK" , "tolog" , "" , "Take log of input signals" );
+  add_param( "TLOCK" , "verbose" , "" , "Output individual intervals" );
+
+  add_param( "TLOCK" , "w" , "2" , "Window size around peaks (seconds) (req.)");
+  add_param( "TLOCK" , "phase" , "20" , "Expect phase values (radians) and summarize in, e.g. 20 bins" );
+
+  // issue: hard to specify, as factors can appear on-the-fly (based on cache)
+  //        so just hard code a couple of common scenarios here:   CH    and CH x F
+
+  // generic by channel
+  add_table( "TLOCK" , "CH,sCH" , "Spindle peak time-locked counts" );
+  add_var( "TLOCK" , "CH,sCH" , "N" , "Number of included peaks" );
+  add_var( "TLOCK" , "CH,sCH" , "N_ALL" , "Total number of included peaks" );
+
+  add_table( "TLOCK" , "CH,SEC,sCH" , "Spindle peak time-locked summaries" );
+  add_var( "TLOCK" , "CH,SEC,sCH" , "M" , "Signal mean" );
+
+  add_table( "TLOCK" , "N,SEC,CH,sCH" , "Spindle peak time-locked counts" );
+  add_var( "TLOCK" , "N,SEC,CH,sCH" , "V" , "Signal value" );
+  set_compressed( "TLOCK" , tfac_t( "N,SEC,CH,sCH" ) );
+  
+  // spindle peaks ( by channel & freq) 
+  add_table( "TLOCK" , "CH,sCH,sF" , "Spindle peak time-locked counts" );
+  add_var( "TLOCK" , "CH,sCH,sF" , "N" , "Number of included peaks" );
+  add_var( "TLOCK" , "CH,sCH,sF" , "N_ALL" , "Total number of included peaks" );
+
+  add_table( "TLOCK" , "CH,SEC,sCH,sF" , "Spindle peak time-locked summaries" );
+  add_var( "TLOCK" , "CH,SEC,sCH,sF" , "M" , "Signal mean" );
+
+  add_table( "TLOCK" , "N,SEC,CH,sCH,sF" , "Spindle peak time-locked counts" );
+  add_var( "TLOCK" , "N,SEC,CH,sCH,sF" , "V" , "Signal value" );
+  set_compressed( "TLOCK" , tfac_t( "N,SEC,CH,sCH,sF" ) );
+
+
+  //
+  // PEAKS
+  //
+
+  add_cmd( "interval"   , "PEAKS" , "Peak finder (maxima)" );
+  add_param( "PEAKS" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  add_param( "PEAKS" , "cache" , "c1" , "Sample-point peak cache (req.)" );
+
+  add_param( "PEAKS" , "epoch" , "" , "Also find minima" );
+  add_param( "PEAKS" , "clipped" , "3" , "Clipped regions = 3 consecutive points (0 = ignore clipping)" );
+  add_param( "PEAKS" , "min" , "" , "Also find minima" );
+  add_param( "PEAKS" , "min-only" , "" , "Only find minima" );
+  add_param( "PEAKS" , "percentile" , "20" , "Only report top 20% of peaks" );
+
+    
+
   
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -678,31 +1232,7 @@ void cmddefs_t::init()
   add_param( "SIGNALS" , "drop" , "EMG,ECG" , "Drop channels EMG and ECG" );
   add_param( "SIGNALS" , "keep" , "C3,C4" , "Drop all channels except C3 and C4" );
 
-  
-  // CONTAINS
 
-  add_cmd( "manip" , "CONTAINS" , "Tests for particular signals/annotations/staging being present" );
-  add_url( "CONTAINS" , "manipulatons/#contains" );
-  add_param( "CONTAINS" , "sig" , "EMG,ECG" , "Test for these signals" );
-  add_param( "CONTAINS" , "annots" , "apnea,hypopnea" , "Test for these annotations" );
-  add_param( "CONTAINS" , "stages" , "" , "Test for valid staging" );
-  add_param( "CONTAINS" , "skip" , "" , "Skip to next EDF on failure" );
-
-  add_table( "CONTAINS" , "" , "Base" );
-  add_var( "CONTAINS" , "" , "STAGE_COUNTS" , "Sleep stage counts" );
-  add_var( "CONTAINS" , "" , "UNIQ_STAGES" , "Number of unique stage labels" );
-  add_var( "CONTAINS" , "" , "NA_REQ" , "Number of required annots" );
-  add_var( "CONTAINS" , "" , "NA_OBS" , "Number of observed annots" );
-
-  add_var( "CONTAINS" , "" , "NS_OBS" , "Number of required channels" );
-  add_var( "CONTAINS" , "" , "NS_REQ" , "Number of observed channels" );
-  add_var( "CONTAINS" , "" , "NS_TOT" , "Tot number of channels" );
-
-  add_table( "CONTAINS" , "ANNOT" , "Annotation informationm" );
-  add_var( "CONTAINS" , "CH" , "PRESENT" , "Annotation resent" );
-
-  add_table( "CONTAINS" , "CH" , "Channel informationm" );
-  add_var( "CONTAINS" , "CH" , "PRESENT" , "Channel present" );
 
 
   
@@ -864,13 +1394,6 @@ void cmddefs_t::init()
   add_var( "SEGMENTS" , "SEG" , "STOP_HMS" , "Segment stop (hh:mm:ss)" );
 
 
-  // WRITE-ANNOTS
-  
-  add_cmd( "output" , "WRITE-ANNOTS" , "Write all annotations to file" );
-  add_url( "WRITE-ANNOTS" , "outputs/#write-annots" );
-  
-  add_param( "WRITE-ANNOTS" , "file" , "f1.xml" , "Required filename for output" );
-  add_param( "WRITE-ANNOTS" , "luna" , "" , "Output in Luna .annot format instead of XML" );
 
   
   /////////////////////////////////////////////////////////////////////////////////
@@ -912,64 +1435,6 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
 
-  // SIGSTATS
-
-  add_cmd( "artifact" , "SIGSTATS" , "Per-epoch outlier detection (RMS, Hjorth parameters, clipped signals)" );
-  add_url( "SIGSTATS" , "artifacts/#sigstats" );
-  add_param( "SIGSTATS" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
-
-  add_param( "SIGSTATS" , "verbose" , "" , "Report epoch-level statistics" );
-  add_param( "SIGSTATS" , "epoch" , "" , "Report epoch-level statistics (same as verbose)" );
-  add_param( "SIGSTATS" , "chep" , "" , "Set CHEP mask for outlier epochs" );
-  add_param( "SIGSTATS" , "astats" , "3,3" , "Between-epoch, betwee-channel filtering" );
-  add_param( "SIGSTATS" , "cstats" , "2" , "Within-epoch, between-channel filtering" );
-
-  add_param( "SIGSTATS" , "rms" , "" , "Calculate/mask on RMS" );
-  add_param( "SIGSTATS" , "clipped" , "0.05" , "Calculate/mask on signal clipping" );
-  add_param( "SIGSTATS" , "flat" , "0.05" , "Calculate/mask on signal clipping" );
-  add_param( "SIGSTATS" , "max" , "0.05" , "Calculate/mask on signal clipping" );
-
-  add_param( "SIGSTATS" , "threshold" , "2,2" , "Set eppoch masks based on SD unit (iterative) outlier detection" );
-  add_param( "SIGSTATS" , "th" , "2,2" , "Same as 'threshold'" );
-  add_param( "SIGSTATS" , "cstats" , "2" , "Run channel-comparisons, with threshold in SD units" );
-  add_param( "SIGSTATS" , "cstats-unmasked-only" , "" , "Channel-comparisons only for unmasked epochs" );
-
-  add_table( "SIGSTATS" , "CH" , "Per-channel whole-signal statistics" );
-  add_var( "SIGSTATS" , "CH" , "CLIP" , "Proportion of clipped sample points" );
-  add_var( "SIGSTATS" , "CH" , "FLAT" , "Proportion of flat sample points" );
-  add_var( "SIGSTATS" , "CH" , "MAX" , "Proportion of max sample points" );
-  add_var( "SIGSTATS" , "CH" , "H1" , "First Hjorth parameter (activity)" );
-  add_var( "SIGSTATS" , "CH" , "H2" , "Second Hjorth parameter (mobility)" );
-  add_var( "SIGSTATS" , "CH" , "H3" , "Third Hjorth parameter (complexity)" );
-  add_var( "SIGSTATS" , "CH" , "RMS" , "Signal root mean square" );
-
-  add_var( "SIGSTATS" , "CH" , "P_H1" , "Proportion flagged epochs for H1 [cstats]" );
-  add_var( "SIGSTATS" , "CH" , "P_H2" , "Proportion flagged epochs for H2 [cstats]" );
-  add_var( "SIGSTATS" , "CH" , "P_H3" , "Proportion flagged epochs for H3 [cstats]" );
-  add_var( "SIGSTATS" , "CH" , "P_OUT" , "Proportion flagged epochs for H1, H2 or H3 [cstats]" );
-
-  add_var( "SIGSTATS" , "CH" , "Z_H1" , "Z score for H1 [cstats]" );
-  add_var( "SIGSTATS" , "CH" , "Z_H2" , "Z score for H2 [cstats]" );
-  add_var( "SIGSTATS" , "CH" , "Z_H3" , "Z score for H3 [cstats]" );
-
-  add_var( "SIGSTATS" , "CH" , "CNT_ACT" , "Number of epochs flagged based on H1 [mask]" );
-  add_var( "SIGSTATS" , "CH" , "CNT_MOB" , "Number of epochs flagged based on H2 [mask]" );
-  add_var( "SIGSTATS" , "CH" , "CNT_CMP" , "Number of epochs flagged based on H3 [mask]" );
-  add_var( "SIGSTATS" , "CH" , "CNT_CLP" , "Number of epochs flagged based on clipping metric" );
-  add_var( "SIGSTATS" , "CH" , "CNT_RMS" , "Number of epochs flagged based on RMS" );
-
-  add_var( "SIGSTATS" , "CH" , "FLAGGED_EPOCHS" , "Number of epochs flagged as outliers [mask]" );
-  add_var( "SIGSTATS" , "CH" , "ALTERED_EPOCHS" , "Number of epochs whose mask was altered [mask]" );
-  add_var( "SIGSTATS" , "CH" , "TOTAL_EPOCHS" , "Total number of masked epochs [mask]" );
-
-  add_table( "SIGSTATS" , "CH,E" , "Per-channel per-epoch statistics [epoch]" );
-  add_var( "SIGSTATS" , "CH,E" , "H1" , "First Hjorth parameter (activity)" );
-  add_var( "SIGSTATS" , "CH,E" , "H2" , "Second Hjorth parameter (mobility)" );
-  add_var( "SIGSTATS" , "CH,E" , "H3" , "Third Hjorth parameter (complexity)" );
-  hidden_var( "SIGSTATS" , "CH,E" , "CLIP" , "Proportion of clipped sample points" );
-  hidden_var( "SIGSTATS" , "CH,E" , "FLAT" , "Proportion of flat sample points" );
-  hidden_var( "SIGSTATS" , "CH,E" , "MAX" , "Proportion of max sample points" );
-  hidden_var( "SIGSTATS" , "CH,E" , "RMS" , "Signal root mean square" );
 
 
   // ARTIFACTS
@@ -2102,7 +2567,7 @@ void cmddefs_t::init()
   
   add_param( "GPA", "winsor" , "0.05" , "Winsorize all variables at this threshold" );
   add_param( "GPA", "qc" , "F" , "Turn off QC checks (if set to F)");
-	     
+        
   add_param( "GPA", "p" , "0.01" , "Only output results below this significance" );
   add_param( "GPA", "padj" , "0.05" , "Only output results below this adjusted significance" );
   
@@ -2623,11 +3088,11 @@ void cmddefs_t::init()
   add_var( "SO" , "CH" , "SO_AMP_NEG" , "SO amplitude (negative peak)" );
   add_var( "SO" , "CH" , "SO_AMP_POS" , "SO amplitude (positive peak)" );
   add_var( "SO" , "CH" , "SO_AMP_P2P" , "SO peak-to-peak amplitude" );
-  add_var( "SO" , "CH" , "SO_DUR" , "SO duration (secs)" );	   
+  add_var( "SO" , "CH" , "SO_DUR" , "SO duration (secs)" );      
   add_var( "SO" , "CH" , "SO_DUR_NEG" , "Negative peak duration (secs)" );
   add_var( "SO" , "CH" , "SO_DUR_POS", "Positive peak duration (secs)" );
-  add_var( "SO" , "CH" , "SO_TRANS" , "SO transition (secs)" );	   
-  add_var( "SO" , "CH" , "SO_TRANS_FREQ" , "SO transition freq (Hz)" );	   
+  add_var( "SO" , "CH" , "SO_TRANS" , "SO transition (secs)" );      
+  add_var( "SO" , "CH" , "SO_TRANS_FREQ" , "SO transition freq (Hz)" );      
   add_var( "SO" , "CH" , "SO_SLOPE_POS1" , "Positive peak rising slope" );
   add_var( "SO" , "CH" , "SO_SLOPE_POS2" , "Positive peak falling slope" );
   add_var( "SO" , "CH" , "SO_SLOPE_NEG1" , "Negative peak falling slope" );
@@ -3037,7 +3502,7 @@ tfac_t::tfac_t( const strata_t & s )
   while ( ff != s.levels.end() )
     {
       if ( ff->first.factor_name[0] != '_' && ! globals::cmddefs().is_tag( ff->first.factor_name ) )
-	fac.insert( ff->first.factor_name );
+   fac.insert( ff->first.factor_name );
       ++ff;
     }
 }
@@ -3048,7 +3513,7 @@ tfac_t::tfac_t( const std::string & s , const std::string & delim ) {
   for (int i=0;i<tok.size();i++) 
     {
       if ( tok[i][0] != '_' && ! globals::cmddefs().is_tag( tok[i] ) )
-	fac.insert( tok[i] );
+   fac.insert( tok[i] );
     } 
 }
 
@@ -3105,12 +3570,18 @@ std::string cmddefs_t::help_domains( ) const
   while ( ii != domain_desc.end() ) { 
     ss << std::left << std::setw( 10 ) << ii->first << " " 
        << std::setw( 28 ) << domain_label.find( ii->first )->second << "\n";
-      //<< ii->second << "\n";
+    //<< ii->second << "\n";
     ++ii;
   }
   return ss.str();
 }
 
+std::string cmddefs_t::help_domain( const std::string & d ) const
+{
+  std::map<std::string,std::string>::const_iterator ii = domain_desc.find( d );
+  if ( ii != domain_desc.end() ) return ii->second;
+  return "";
+}
 
 bool cmddefs_t::check( const std::string & cmd ) const
 {
@@ -3148,10 +3619,10 @@ bool cmddefs_t::check( const std::string & cmd , const std::set<std::string> & k
   while ( kk != k.end() )
     {
       if ( p.find( *kk ) == p.end() ) 
-	{
-	  unknown->insert( *kk );
-	  okay = false; 
-	}
+   {
+     unknown->insert( *kk );
+     okay = false; 
+   }
       ++kk;
     }
   
@@ -3178,15 +3649,16 @@ std::string cmddefs_t::help_commands() const
 }
 
 // all commands in a domain
-std::string cmddefs_t::help_commands( const std::string & d ) const 
+std::string cmddefs_t::help_commands( const std::string & d , const bool primary ) const 
 {
   std::stringstream ss;
   std::map<std::string,std::set<std::string> >::const_iterator ii = dcmds.find( d );
   if ( ii == dcmds.end() ) return "";
   const std::set<std::string> & c = ii->second;
   std::set<std::string>::const_iterator jj = c.begin();
-  while ( jj != c.end() ) {   
-    ss << help( *jj , false , false ) ;
+  while ( jj != c.end() ) {
+    if ( ( ! primary ) || is_primary_cmd( *jj ) ) 
+      ss << help( *jj , false , false ) ;
     ++jj;
   }
   return ss.str();    
@@ -3194,15 +3666,15 @@ std::string cmddefs_t::help_commands( const std::string & d ) const
   
 // verbose describe commands [cmd] 
 
-std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , bool verbose ) const
+std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , bool verbose , bool primary ) const
 {
   if ( cmds.find( cmd ) == cmds.end() ) return "";
-	
+  
   std::stringstream ss;
   if ( ! verbose ) 
     {
       if ( show_domain_label )
-	ss << std::left << std::setw( 18 ) << domain_label.find( cdomain.find( cmd )->second )->second  << " " ;
+     ss << std::left << std::setw( 18 ) << domain_label.find( cdomain.find( cmd )->second )->second  << " " ;
       
       ss << std::left << std::setw( 12 ) << cmd << " "
 	 << cmds.find( cmd )->second << "\n";    
@@ -3212,10 +3684,10 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
       ss << "\n";
       ss << cmd << " : " << cmds.find( cmd )->second 
 	 << " (" << domain_label.find( cdomain.find( cmd )->second )->second  << ")\n"; 
-
+      
       if ( curl.find( cmd ) != curl.end() ) 
 	ss << std::string( cmd.size() , ' ' ) << " : " << url_root << curl.find( cmd )->second << "\n";
-
+      
       //
       // params
       //
@@ -3229,8 +3701,8 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 	{
 	  std::map<std::string,std::string>::const_iterator jj = ii->second.begin();
 	  while ( jj != ii->second.end() ) {
-
-	    if ( is_hidden_param( cmd , jj->first ) )
+	    
+	    if ( primary && ! is_primary_par( cmd , jj->first ) )
 	      {
 		++jj;
 		continue;
@@ -3280,6 +3752,13 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 	  while ( ii != tab.end() )
 	    {
 	      const tfac_t & tfac = ii->first;
+
+	      // skip if not primary?
+	      if ( primary && ! is_primary_tbl( cmd , tfac ) )
+		{
+		  ++ii;
+		  continue;
+		}
 	      
 	      ss << "   " << std::left << std::setw( 24 ) << tfac.as_string( " x " ) 
 		 << ii->second << "\n";
@@ -3303,12 +3782,19 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 		    {
 		      const std::map<std::string,std::string> & v = t.find( ii->first )->second;
 		      std::map<std::string,std::string>::const_iterator vv = v.begin();
-		      while ( vv != v.end() ) {			
-			  ss << "     " 
-			     << std::left 
-			     << std::setw(21) 
-			     << vv->first << " " 
-			     << vv->second << "\n";
+		      while ( vv != v.end() ) {
+
+			if ( primary && ! is_primary_var( cmd , tfac , vv->first ) ) 
+			  {
+			    ++vv;
+			    continue;
+			  }
+			
+			ss << "     " 
+			   << std::left 
+			   << std::setw(21) 
+			   << vv->first << " " 
+			   << vv->second << "\n";
 			++vv;
 		      }
 		       
@@ -3385,6 +3871,19 @@ void cmddefs_t::set_compressed( const std::string & cmd , const tfac_t & tfac , 
 }
 
 
+void cmddefs_t::set_compressed( const std::string & cmd , const bool b )
+{
+  std::map<std::string,std::map<tfac_t,bool> >::iterator ii = ofacs.find( cmd );
+  if ( ii == ofacs.end() ) return;
+
+  std::map<tfac_t,bool>::iterator jj = ii->second.begin();
+  while ( jj != ii->second.end() )
+    {
+      jj->second = b;
+      ++jj;
+    }
+}
+
 
 std::set<std::string> cmddefs_t::variables( const std::string & cmd ,  const param_t * param , const tfac_t & tfac  )
 {
@@ -3424,6 +3923,38 @@ std::set<std::string> cmddefs_t::variables( const std::string & cmd ,  const par
   return r;
 }
 
+//
+// 'primary' commands (for -h listing) 
+//
+
+bool cmddefs_t::is_primary_cmd( const std::string & cmd ) const
+{
+  return pri_cmd.find( cmd ) != pri_cmd.end() ;
+}
+
+bool cmddefs_t::is_primary_par( const std::string & cmd , const std::string & param ) const
+{
+  std::map<std::string,std::set<std::string> >::const_iterator ii = pri_par.find( cmd );
+  if ( ii == pri_par.end() ) return false;
+  return ii->second.find( param ) != ii->second.end();
+}
+
+bool cmddefs_t::is_primary_tbl( const std::string & cmd , const tfac_t & tfac ) const
+{
+  std::map<std::string,std::set<tfac_t> >::const_iterator ii = pri_tbl.find( cmd );
+  if ( ii == pri_tbl.end() ) return false;
+  return ii->second.find( tfac ) != ii->second.end();
+}
+
+bool cmddefs_t::is_primary_var( const std::string & cmd , const tfac_t & tfac , const std::string & var ) const
+{
+  std::map<std::string,std::map<tfac_t,std::set<std::string> > >::const_iterator ii = pri_var.find( cmd );
+  if ( ii == pri_var.end() ) return false;
+  std::map<tfac_t,std::set<std::string> >::const_iterator jj = ii->second.find( tfac );
+  if ( jj == ii->second.end() ) return false;
+  return jj->second.find( var ) != jj->second.end();
+}
+
 
 // domain description
 void cmddefs_t::add_domain( const std::string & domain , const std::string & label ,  const std::string & desc )
@@ -3438,6 +3969,12 @@ bool cmddefs_t::is_domain( const std::string & d )
 }
 
 // command description 
+void cmddefs_t::add_cmd1( const std::string & domain , const std::string & cmd , const std::string & desc , const bool hide )
+{
+  pri_cmd.insert( cmd );
+  add_cmd( domain, cmd, desc, hide );
+}
+
 void cmddefs_t::add_cmd( const std::string & domain , const std::string & cmd , const std::string & desc , const bool hide )
 {
   dcmds[ domain ].insert( cmd );
@@ -3472,6 +4009,16 @@ void cmddefs_t::add_note( const std::string & cmd , const std::string & note )
 }
 
 // parameters for this command
+void cmddefs_t::add_param1( const std::string & cmd , const std::string & param , 
+			    const std::string & ex ,  // "" if none
+			    const std::string & desc , 
+			    const std::string & requirements  ,
+			    const bool hide  )
+{
+  pri_par[ cmd ].insert( param );
+  add_param( cmd , param , ex , desc , requirements , hide );
+}
+
 void cmddefs_t::add_param( const std::string & cmd , const std::string & param , 
 			   const std::string & ex ,  // "" if none
 			   const std::string & desc , 
@@ -3496,6 +4043,12 @@ void cmddefs_t::hidden_param( const std::string & cmd , const std::string & para
 
 
 // output from this command , "CMD" , "F,B,CH,E" , "desc" , is compressed Y/N
+void cmddefs_t::add_table1( const std::string & cmd , const std::string & factors , const std::string & desc , bool isz , bool hide )
+{
+  pri_tbl[ cmd ].insert( tfac_t( factors ) );
+  add_table( cmd , factors , desc , isz , hide );
+}
+
 void cmddefs_t::add_table( const std::string & cmd , const std::string & factors , const std::string & desc , bool isz , bool hide )
 {
   tfac_t tfac( factors );
@@ -3535,6 +4088,12 @@ void cmddefs_t::ensure_table( const std::string & cmd , const std::string & fact
 
 
 // add variable
+void cmddefs_t::add_var1( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const bool hide )
+{
+  pri_var[ cmd ][ tfac_t( factors ) ].insert( var );
+  add_var( cmd , factors , var , desc , hide );
+}
+
 void cmddefs_t::add_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const bool hide )
 {
   tfac_t tfac( factors );

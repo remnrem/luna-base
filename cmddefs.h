@@ -89,6 +89,8 @@ class cmddefs_t
   void init();
 #endif
 #endif
+
+
   
   // domain description
   void add_domain( const std::string & domain , const std::string & label ,  const std::string & desc );
@@ -138,6 +140,8 @@ class cmddefs_t
 
   // register extra col for output (controlled by caller)
   void register_var( const std::string & cmd , const std::string & factors , const std::string & var , const bool value = true );
+  
+  
   //
   // check parameters
   //
@@ -146,18 +150,52 @@ class cmddefs_t
   
   bool check( const std::string & cmd , const std::set<std::string> & k , std::set<std::string> * ) const ; // params
 
+
+  //
+  // 'primary' cmd/tables/vars/param
+  //
+
+  void add_cmd1( const std::string & domain ,
+		 const std::string & cmd ,
+		 const std::string & desc ,
+		 const bool hide = false );
+
+  
+  void add_param1( const std::string & cmd , const std::string & param , 
+		   const std::string & ex ,  // "" if none
+		   const std::string & desc , 
+		   const std::string & requirements = "" ,
+		   const bool hide = false );
+
+  
+  void add_table1( const std::string & cmd ,
+		   const std::string & factors ,
+		   const std::string & desc ,
+		   bool isz = false ,
+		   bool hide = false );
+
+  void add_var1( const std::string & cmd ,
+		 const std::string & factors ,
+		 const std::string & var ,
+		 const std::string & desc ,
+		 const bool hide = false );
+
+  
   //
   // show help
   //
 
   // describe one command 
-  std::string help( const std::string & cmd , bool show_domain_label = true , bool verbose = false ) const;
+  std::string help( const std::string & cmd , bool show_domain_label = true , bool verbose = false , bool primary = false ) const;
 
   // list all domains
   std::string help_domains() const;
+
+  // desc for a domain
+  std::string help_domain( const std::string & d ) const;
   
   // list all commands in a domain
-  std::string help_commands( const std::string & d ) const;
+  std::string help_commands( const std::string & d , const bool primary ) const;
 
   // list all commands 
   std::string help_commands() const;
@@ -185,8 +223,7 @@ class cmddefs_t
   void show_var( const std::string & cmd, const std::string & factors, const std::string & var, const bool status = true );
   void show_var( const std::string & cmd, const tfac_t & factors, const std::string & var, const bool status = true );
   
-
-
+  
 
   
   //
@@ -203,6 +240,10 @@ class cmddefs_t
   // allow change after table has been registered  
   void set_compressed( const std::string & cmd , 
 		       const tfac_t & tfac , 
+		       const bool b = true
+		       );
+
+  void set_compressed( const std::string & cmd , 		       
 		       const bool b = true
 		       );
   
@@ -256,6 +297,20 @@ class cmddefs_t
 
   // cmd->param->param->requirements (free-text)
   std::map<std::string,std::map<std::string,std::string> > preq;
+
+  //
+  // primary cmd/tables/params/vars (i.e. for help function)
+  //
+  
+  bool is_primary_cmd( const std::string & cmd ) const;
+  bool is_primary_par( const std::string & cmd , const std::string & param ) const;
+  bool is_primary_tbl( const std::string & cmd , const tfac_t & tfac ) const;
+  bool is_primary_var( const std::string & cmd , const tfac_t & tfac , const std::string & var ) const;
+
+  std::set<std::string> pri_cmd;
+  std::map<std::string,std::set<std::string> > pri_par;
+  std::map<std::string,std::set<tfac_t> > pri_tbl;
+  std::map<std::string,std::map<tfac_t,std::set<std::string> > > pri_var;
   
   //
   // output

@@ -1060,15 +1060,23 @@ void proc_report( edf_t & edf , param_t & param )
   const bool show_mode = param.has( "show" );
 
   const bool hide_all = param.has( "hide-all" );
-  const bool show_all = param.has( "show-all" );
 
+  const bool show_all = param.has( "show-all" );
+  
   const bool ensure_mode = param.has( "ensure" );
 
-  if ( ! ( ensure_mode || hide_mode || show_mode || hide_all || show_all ) )
-    Helper::halt( "nothing to do with REPORT: specify hide/show, hide-all/show-all or ensure" );
+  const bool compress_mode = param.has( "compress" );
+  
+  
+  if ( ! ( compress_mode || ensure_mode || hide_mode || show_mode || hide_all || show_all ) )
+    Helper::halt( "nothing to do with REPORT: specify hide/show, hide-all/show-all, compress or ensure" );
 
-  if ( ensure_mode && ( hide_mode || show_mode || hide_all || show_all ) )
+  if ( ( compress_mode || ensure_mode ) && ( hide_mode || show_mode || hide_all || show_all ) )
     Helper::halt( "if using ensure mode, cannot specify hide/show commands" );
+
+  if ( compress_mode && ensure_mode )
+    Helper::halt( "cannot specify both compress and ensure" );
+  
   
   // allow hide-all or show-all to be combined w/ a show or hide command
 
@@ -1119,6 +1127,25 @@ void proc_report( edf_t & edf , param_t & param )
   if ( has_vars )
     vars = param.strvector( "vars" );
 
+  //
+  // compress mode
+  //
+
+  if ( compress_mode )
+    {
+      if ( has_table )
+	{
+	  logger << "  setting " << cmd << "/" << fac << " text-table output to compressed\n";
+	  globals::cmddefs().set_compressed( cmd , tfac_t( fac ) );
+	}
+      else
+        {
+	  logger << "  setting " << cmd << " text-table output to compressed\n";
+	  globals::cmddefs().set_compressed( cmd );
+	}
+      return;
+    }
+  
   //
   // logging check
   //
