@@ -442,10 +442,18 @@ bool cmd_t::read( const std::string * str , bool silent )
 	  Helper::safe_getline( std::cin , s );
 	  if ( std::cin.eof() ) break;
 	  if ( s == "" ) continue;	  
+
+	  s = Helper::ltrim( s ) ;
 	  
 	  // is this a continuation line?
-	  bool continuation = s[0] == ' ' || s[0] == '\t';
-
+	  // ... or + as first character
+	  bool continuation = s.substr(0,1) == "+" || s.substr(0,3) == "..." ;
+	  if ( continuation )
+	    {
+	      if ( s.substr(0,1) == "+" ) s = s.substr(1);
+	      else s = s.substr(3);
+	    }
+	      
 	  // only read up to a % comment, although this may be quoted
 	  if ( s.find( "%" ) != std::string::npos ) 
 	    {
