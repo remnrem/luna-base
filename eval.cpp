@@ -265,25 +265,41 @@ void cmd_t::populate_commands()
 //
 // ----------------------------------------------------------------------------------------
 
-void cmd_t::replace_wildcards( const std::string & id )
+void cmd_t::dynamic_parse( const std::string & id )
 {
-  
+  // new version of cmd_t::replace_wildcards()
+  // which dynamically goes through and does
+  //   - variable substitutions
+  //   - loop unrolling
+  //   - block conditionals
+  // in a single pass;
+
+  // no commands are evaluated, but this is called per-person to allow generic
+  // dynamic specification of scripts: i.e. variables cannot depend on the outputs 
+  // of luna commands;
+
+  // dynamic_parse() should be a drop-in replacement for replace_wildcards()
+  //  e.g. called from lunapi_t too
   //
-  // get copy of original script;  comments, newlines vesrus '&' will already have
-  // been taken care of
+  // all the main work is done in proc_all()
+  //
+
+  //
+  // main input == line (std::string)
+  //   - will contain the original script
+  //   - comments, newlines versus '&' have been taken care of
   //
   
-  std::string iline = line;
   
   //
   // If the script contains an ID wildcard, confirm that ID does not already contain the wildcard 
   //
   
-  if ( iline.find( globals::indiv_wildcard ) != std::string::npos && 
+  if ( line.find( globals::indiv_wildcard ) != std::string::npos && 
        id.find( globals::indiv_wildcard ) != std::string::npos ) 
     Helper::halt( "ID " + id + " contains ID-wildcard character " 
 		  + globals::indiv_wildcard + " (i.e. use wildcard=X to specify in a different one)" );
- 
+  
 
   //
   // Copy a set of variables, where any i-vars will overwrite an existing var
@@ -299,62 +315,21 @@ void cmd_t::replace_wildcards( const std::string & id )
 	  allvars[ vv->first ] = vv->second;
 	  ++vv;
 	}
-    }
+    }  
 
   
   //
-  //
-  // remove any conditional blocks, where variable should be var=1 (in) or var=0 (out)
-  // or a value for add=variable,var2 for var=1 var=2
+  // Parse into lines
   //
 
-  // [[var1
-  //   block
-  // ]]var1
-  
-  Helper::process_block_conditionals( &iline , allvars );
+  std::vector<std::string> tok = Helper::quoted_parse( line , "\n" );
+    
   
   //
-  // Now go line-by-line, to allow variables defined on-the-fly to feature in 
-  // expansions, i.e. to build up expansions
+  // expand loops, conditionals and varaibles
   //
-
-  std::vector<std::string> cline = Helper::parse( iline , "\n" );
   
-  iline = "";
-  
-  for (int l=0; l<cline.size(); l++)
-    {
-
-      std::string currline = cline[l];
-      
-      //
-      // swap in any variables (and allows for them being defined on-the-fly)
-      //
-      
-      Helper::swap_in_variables( &currline , &allvars );
-
-      //
-      // expand [term][1:10] [ == (term)[list] ] or [list](term) sequences
-      //
-
-      Helper::expand_numerics( &currline );
-      
-      iline += currline + "\n";
-      
-    }
-
-  //
-  // Parse into commands/options
-  //
-
-  std::vector<std::string> tok = Helper::quoted_parse( iline , "\n" );
-
-  //
-  // expand loops
-  //
-
-  tok = cmd_t::proc_forloops( tok );
+  tok = cmd_t::proc_all( tok , &allvars );
 
   //
   // command(s): do this just for printing; real parsing will include variables, etc
@@ -379,15 +354,153 @@ void cmd_t::replace_wildcards( const std::string & id )
 	}
     }
   
+
   // replace in all 'params' any instances of 'globals::indiv_wildcard' with 'id'
   // ALSO, will expand any @{includes} from files (which may contain ^ ID wildcards
   // in their names,  e..g.    CHEP bad-channels=@{aux/files/bad-^.txt}  
   
   for (int p = 0 ; p < params.size(); p++ )
     params[p].update( id , globals::indiv_wildcard );
+  
+}
 
+
+void cmd_t::replace_wildcards( const std::string & id )
+{
+
+  // ***** REDUNDANT *****
+  // use the alternate form (defined above) instead of this legacy version
+  //  - i.e. the code in this function can be removed when dynamic_parse()
+  //         is well established
+  // ***** REDUNDANT *****
+
+  // ---->  i.e. use dynamic_parse() instead
+  
+  return dynamic_parse( id );
+
+
+  // all text below if commented out now
+  
+  //
+  // get copy of original script;  comments, newlines vesrus '&' will already have
+  // been taken care of
+  //
+  
+//  std::string iline = line;
+
+  
+  //
+  // If the script contains an ID wildcard, confirm that ID does not already contain the wildcard 
+  //
+  
+//  if ( iline.find( globals::indiv_wildcard ) != std::string::npos && 
+//       id.find( globals::indiv_wildcard ) != std::string::npos ) 
+//    Helper::halt( "ID " + id + " contains ID-wildcard character " 
+//		  + globals::indiv_wildcard + " (i.e. use wildcard=X to specify in a different one)" );
+ 
+
+  //
+  // Copy a set of variables, where any i-vars will overwrite an existing var
+  //
+  
+//  std::map<std::string,std::string> allvars = vars;
+//  if ( ivars.find( id ) != ivars.end() )
+//    {
+//      const std::map<std::string,std::string> & newvars = ivars.find( id )->second;
+//      std::map<std::string,std::string>::const_iterator vv = newvars.begin();      
+//      while ( vv != newvars.end() )
+//	{
+//	  allvars[ vv->first ] = vv->second;
+//	  ++vv;
+//	}
+//    }
+
+  
+  //
+  // REMOVED:  IF/NOT/FI (or ENDIF) are now the canonical options 
+  // remove any conditional blocks, where variable should be var=1 (in) or var=0 (out)
+  // or a value for add=variable,var2 for var=1 var=2
+  //
+  
+  // [[var1
+  //   block
+  // ]]var1  
+  // Helper::process_block_conditionals( &iline , allvars );
+  
+  //
+  // Now go line-by-line, to allow variables defined on-the-fly to feature in 
+  // expansions, i.e. to build up expansions
+  //
+
+  // std::vector<std::string> cline = Helper::parse( iline , "\n" );
+  
+  // iline = "";
+  
+  // for (int l=0; l<cline.size(); l++)
+  //   {
+
+  //     std::string currline = cline[l];
+      
+  //     //
+  //     // swap in any variables (and allows for them being defined on-the-fly)
+  //     //
+      
+  //     Helper::swap_in_variables( &currline , &allvars );
+
+  //     //
+  //     // expand [term][1:10] [ == (term)[list] ] or [list](term) sequences
+  //     //
+
+  //     Helper::expand_numerics( &currline );
+      
+  //     iline += currline + "\n";
+      
+  //   }
+
+  //
+  // Parse into commands/options
+  //
+
+  //  std::vector<std::string> tok = Helper::quoted_parse( iline , "\n" );
+
+  //
+  // expand loops
+  //
+
+  //  tok = cmd_t::proc_forloops( tok );
+
+  //
+  // command(s): do this just for printing; real parsing will include variables, etc
+  //
+  
+  // params.clear();
+  // cmds.clear();
+
+  // for (int c=0;c<tok.size();c++)
+  //   {      
+  //     std::vector<std::string> ctok = Helper::quoted_parse( tok[c] , "\t " );
+      
+  //     // may be 0 if a line was a variable declaration
+  //     if ( ctok.size() >= 1 ) 
+  // 	{
+  // 	  //std::cout << "adding [" << ctok[0] << "]\n";
+  // 	  cmds.push_back( ctok[0] );
+	  
+  // 	  param_t param;
+  // 	  for (int j=1;j<ctok.size();j++) param.parse( ctok[j] );
+  // 	  params.push_back( param );
+  // 	}
+  //   }
+  
+  // // replace in all 'params' any instances of 'globals::indiv_wildcard' with 'id'
+  // // ALSO, will expand any @{includes} from files (which may contain ^ ID wildcards
+  // // in their names,  e..g.    CHEP bad-channels=@{aux/files/bad-^.txt}  
+  
+  // for (int p = 0 ; p < params.size(); p++ )
+  //   params[p].update( id , globals::indiv_wildcard );
    
 }
+
 
 bool cmd_t::read( const std::string * str , bool silent )
 {
@@ -408,7 +521,8 @@ bool cmd_t::read( const std::string * str , bool silent )
   
   // Commands are delimited by & symbols (i.e. multi-line statements allowed)
 
-  // for can have \ which means a continuation on the next line
+  //   line continuations must start with + or ... (after whitespace)  
+  // also, can have \ which means a continuation on the next line
   //  i.e replace \\n with space
   
   std::istringstream allinput;
@@ -505,7 +619,7 @@ bool cmd_t::read( const std::string * str , bool silent )
   
   // take everything
   line = allinput.str();
-  
+
   // change any '&' (back) to '\n', unless they are quoted (" or #)
   bool inquote = false;
   for (int i=0;i<line.size();i++) 
@@ -538,8 +652,7 @@ bool cmd_t::read( const std::string * str , bool silent )
   // but as we now use ivars as well as vars, hold on this till
   // later, in update()
   //
-  
-  
+    
 
   //
   // Initial reporting of commands read
@@ -561,7 +674,7 @@ bool cmd_t::read( const std::string * str , bool silent )
   for (int c=0;c<tok.size();c++)
     {      
       std::vector<std::string> ctok = Helper::quoted_parse( tok[c] , "\t " );
-
+            
       // may be 0 if a line was a variable declaration
       if ( ctok.size() >= 1 ) 
 	{
@@ -652,60 +765,6 @@ bool cmd_t::eval( edf_t & edf )
       logger << " ..................................................................\n"
 	     << " CMD #" << c+1 << ": " << cmd(c) << "\n";
       logger << "   options: " << param(c).dump( "" , " " ) << "\n";
-
-      //
-      // Deal with conditionals first: if if_count>1, implies to
-      // ignore -- unless we come across an ENDIF/FI
-      //
-      
-      if ( if_count )
-	{
-	  
-	  if ( is( c, "ENDIF" ) || is( c, "FI" ) )
-	    {
-	      if_condition = "";
-	      --if_count;
-	    }
-	  else
-	    logger << "  skipping this command due to prior IF: " << if_condition << "\n";
-	  
-	  continue;
-	}
-      else if ( is( c, "IF" ) || is( c, "IFNOT" ) )
-	{
-	  
-	  param_t par = param(c);
-	  bool ifnot = is( c, "IFNOT" ) ;
-	  
-	  std::string var = par.single_value();
-	  bool val = cmd_t::pull_ivar_bool( edf.id , var );	      
-
-	  if ( ifnot ) // requires F
-	    {
-	      if ( val )
-		{
-		  if_count++;
-                  if_condition = var + " == " + (val?"T":"F") + " (required F)";
-		}
-	    }
-	  else // requires T
-	    {
-	      if ( ! val )
-		{
-		  if_count++;
-		  if_condition = var + " == " + (val?"T":"F") + " (required F)";
-		}
-	    }
-	  
-	  continue;
-	}
-      
-      //
-      // ignore END/FI for executed blocks
-      //
-      
-      if ( is( c, "ENDIF" ) || is( c, "FI" ) )
-	continue;
 
       
       //
@@ -834,6 +893,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "META" ) )         { fnd = true; proc_set_annot_metadata( edf, param(c) );  }
       if ( (!fnd) && is( c, "OVERLAP") )       { fnd = true; proc_annotate( edf, param(c) ); }
       if ( (!fnd) && is( c, "EXTEND" ) )       { fnd = true; proc_extend_annots( edf, param(c) ); }
+      if ( (!fnd) && is( c, "AXA") )           { fnd = true; proc_annot_crosstabs( edf, param(c) ); }
       if ( (!fnd) && is( c, "A2S" ) )          { fnd = true; proc_annot2signal( edf, param(c) ); }
       if ( (!fnd) && is( c, "S2A" ) )          { fnd = true; proc_signal2annot( edf, param(c) ); }
       if ( (!fnd) && is( c, "A2C" ) )          { fnd = true; proc_annot2cache( edf , param(c) ); }
@@ -3243,6 +3303,12 @@ void proc_annotate( edf_t & edf , param_t & param )
 }
 
 
+// AXA : annotation cross-tabs
+void proc_annot_crosstabs( edf_t & edf , param_t & param )
+{
+  edf.timeline.annot_crosstabs( param );
+}
+
 // A2S : make signbal from ANNOTS
 void proc_annot2signal( edf_t & edf , param_t & param )
 {
@@ -4571,6 +4637,19 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   if ( Helper::iequals( tok0 , "devel" ) )
     {
       globals::devel = Helper::yesno( tok1 );
+      return;
+    }
+  
+  if ( Helper::iequals( tok0 , "show-assignments" ) )
+    {
+      globals::verbose_var_assignment = Helper::yesno( tok1 );
+      return;
+    }
+
+  // mirror inputs in console log
+  if ( Helper::iequals( tok0 , "mirror" ) )
+    {
+      globals::mirror = Helper::yesno( tok1 );
       return;
     }
 
@@ -6108,28 +6187,91 @@ std::map<std::string,std::string>  cmd_t::indiv_var_map( const std::string & id 
 }
 
 
-std::vector<std::string> cmd_t::proc_forloops( const std::vector<std::string> & lines )
+
+std::vector<std::string> cmd_t::proc_all( const std::vector<std::string> & lines ,
+					  std::map<std::string,std::string> * allvars )
 {
 
-  std::vector<std::string> r;
-  // allow multiple nested FOR UNTIL statements
-  int fors = 0 , untils = 0;
+  // per line:
 
+  // swap in new vars (which may be defined on-the-fly) 
+  //       Helper::swap_in_variables( &currline , &allvars );
+
+  // expand numerics [x][y]
+  //       Helper::expand_numerics( &currline );
+  
+    
+  std::vector<std::string> r;
+  
+  //
+  // initial checks for balanced LOOP/END-LOOP pairs in the unexpanded case
+  //  -- i.e. this should always be balanced;
+  //  -- we may need to check on-the-fly too, e.g. as a conditional may create issues
+  //  --
+  //    FOR index=a vals=1,2,3
+  //
+  //    IF x
+  //       ...
+  //       END-LOOP
+  //    FI
+  //
+  //    IFNOT x
+  //      ...
+  //      END-LOOP
+  //    FI
+  //
+  //    So best to check on-the-fly only
+
+  std::vector<int> fdep, idep;
+  
   for (int i=0; i<lines.size(); i++)
     {
       std::vector<std::string> ctok = Helper::quoted_parse( lines[i] , "\t " );
       if ( ctok.size() == 0 ) continue;
-      const std::string str = Helper::toupper( ctok[0] );
-      if      ( str == "LOOP" ) ++fors;
-      else if ( str == "END-LOOP" ) ++untils; 
-    }
-  
-  if ( fors != untils )
-    Helper::halt( "unbalanced number of LOOP/END-LOOP commands in the script" );
+      const std::string str = Helper::toupper( ctok[0] );      
 
-  // nothing to do? 
-  if ( fors == 0 ) return lines;
+      const bool is_for = str == "LOOP";
+      const bool is_until = str == "END-LOOP";
+      const bool is_if = str == "IF" || str == "IFNOT";
+      const bool is_fi =  str == "FI" || str == "ENDIF";
+
+      // for a new FOR, track the depth of IF      
+      if ( is_for ) fdep.push_back( idep.size() );
+
+      // and vice versa
+      if ( is_if ) idep.push_back( fdep.size() );
+
+      // loop ending out, ensure the current opposite depth == the opening one
+      if ( is_until )
+	{
+	  if ( fdep.size() == 0 ) Helper::halt( "unbalanced LOOP/END-LOOP pairs" );
+	  if ( fdep[ fdep.size() - 1 ] != idep.size() )
+	    Helper::halt( "non-nested IF/LOOP pairings" );	  
+	  fdep.pop_back();
+	}
+
+      // and vice versa
+      if ( is_fi )
+	{
+	  if ( idep.size() == 0 ) Helper::halt( "unbalanced IF/FI pairs" );
+	  if ( idep[ idep.size() - 1 ] != fdep.size() )
+	    Helper::halt( "non-nested IF/LOOP pairings" );	  
+	  idep.pop_back();
+	}      	      
+    }
+
+
+  //
+  // count loops and ifs
+  //
   
+  int loop_count = 0;
+  
+  int if_count = 0;
+  bool excise = false;
+  std::string if_condition = "";
+  
+    
   // make expansions
   
   std::vector<std::string> keys;    // for nested loops, last is the inner
@@ -6139,27 +6281,179 @@ std::vector<std::string> cmd_t::proc_forloops( const std::vector<std::string> & 
   std::map<std::string,int> repeat_pointer; // line to loop back to 
 
   std::string inner = ""; // inner loop
-  const int nl = lines.size();
 
+
+  if ( globals::mirror )
+    logger << "\n ------------------------------------------------------------\n"
+	   << " mirrored command inputs:\n\n";
+  
+  
+  //
+  // Primary iteration through 
+  //
+
+  const int nl = lines.size();
+  
   for (int i=0; i<nl; i++)
     {
-
-      // swap any loop indexes (e.g. as they may feature in a LOOP vals= arg)
       
+      
+      // line to process
       std::string l1 = lines[i];
+
+      //
+      // only do these substitutions/expansions, etc, if not
+      // excised (to avoid ${var} assignments)
+      //
       
-      std::map<std::string,std::string>::const_iterator vv = vals.begin();
-      while ( vv != vals.end() )
+      if ( ! excise ) 
 	{
-	  l1 = Helper::search_replace( l1 , vv->first , vv->second ) ;
-	  ++vv;
+	  
+	  //
+	  // Also, swap any loop indexes (e.g. as they may feature in a LOOP vals=arg)
+	  //
+	  
+	  std::map<std::string,std::string>::const_iterator vv = vals.begin();
+	  while ( vv != vals.end() )
+	    {
+	      l1 = Helper::search_replace( l1 , vv->first , vv->second ) ;
+	      ++vv;
+	    }
+	  
+	  //
+	  // Swap in any known variables
+	  //
+	  
+	  Helper::swap_in_variables( &l1 , allvars , false , true ); // F = don't allow missing, T = silent                           
+	  
+	  //
+	  // Expand any numerics [][]  -- calls xsigs()
+	  //
+	  
+	  Helper::expand_numerics( &l1 );
+
 	}
 
-      // parse
+      
+      //
+      // Parse for IF/FI or LOOP/END-LOOP
+      //
+      
       std::vector<std::string> ctok = Helper::quoted_parse( l1 , "\t " );
+
       if ( ctok.size() == 0 ) continue;
+
       const std::string str = Helper::toupper( ctok[0] );
+      	
+      //
+      // Deal with conditionals first: if if_count>1, implies to
+      // ignore -- unless we come across an ENDIF/FI
+      //
+            
+      const bool is_if = str == "IF" || str == "IFNOT" ;
+      const bool is_fi = str == "ENDIF" || str == "FI" ;     
+
+      if ( is_fi && if_count == 0 )
+	Helper::halt( "unbalanced IF/FI conditionals encountered" );
+
+      // get an IF/IFNOT condition
+      if ( is_if )
+	{
+	  if ( ctok.size() !=2 ) 
+	    Helper::halt( str + " command expecting a single logical expression: " + l1 );
+	  
+	  // save condition:
+
+	  // IF ${x}   or   IF #{x}   IF ?{x} 
+	  //  this may be a variable/index,
+	  //    e.g. which must be set if so, but by here will aleady have been parsed (e.g. to a truth value)
+
+	  if_condition = ctok[1];
+	  
+	}
+
+      //
+      // are we currently inside a spliced-out section?
+      //  -- if so, move on unless we have an FI/ENDIF here?
+      //
+      
+      if ( excise )
+	{
+	  
+	  //
+	  // Pay attention to any ENDIF/FI statements
+	  //
+	  
+	  if ( is_fi )
+	    {
+	      if_condition = "";
+	      
+	      if ( if_count == 0 )
+		Helper::halt( "unbalanced IF/FI pairs: " + l1 );
+
+	      --if_count;
+
+	      if ( if_count == 0 )
+		excise = false; 
+	      
+	    }
+
+	  // if we encounter an IF when spliced, still increase the count, but
+	  // this has no effect on the splice status
+	  if ( is_if )
+	    {
+	      ++if_count;
+	    }
+	  
+	  // but in all cases, continue to skip these lines due to a prior IF
+	  continue;
+	  
+	}
+      else if ( is_if )
+	{
+	  
+	  const bool ifnot = str == "IFNOT";
+	  
+	  const bool val = Helper::yesno( if_condition );
+
+	  // track depth of IFs
+	  ++if_count;
+	  
+	  if ( ifnot ) // requires F
+	    {
+	      if ( val ) excise = true;		
+	    }
+	  else // requires T
+	    {
+	      if ( ! val ) excise = true;		
+	    }
+	  
+	  continue;
+	}
+      
+      //
+      // ignore END/FI for executed blocks
+      //
+      
+      if ( is_fi )
+	{
+	  if ( if_count == 0 )
+	    Helper::halt( "unbalanced IF/FI pairs: " + l1 );
+	  
+	  --if_count;
+	  
+	  if ( if_count == 0 )
+	    excise = false;
+	  
+	  continue;
+	}
+
+      //
+      // Now handle loops
+      //
+
       const bool is_repeat = str == "LOOP";
+
       const bool is_until  = str == "END-LOOP";
       
       //
@@ -6168,12 +6462,18 @@ std::vector<std::string> cmd_t::proc_forloops( const std::vector<std::string> & 
       
       if ( is_repeat )
 	{
-	  
-	  // LOOP index=x vals=1,2,3,4
-	  
+
+	  // track depth of loops
+	  ++loop_count;
+
+	  // LOOP index=x vals=1,2,3,4	  
 	  param_t param;
           for (int j=1;j<ctok.size();j++)
 	    param.parse( ctok[j] );
+
+	  // use separate #{} for loop indexes, as we
+	  // are not allowed to assign to them, unlike ${var=value}
+	  // pairs; also ${a} != #{a}
 	  
 	  inner = "#{" + param.requires( "index" ) + "}";
 	  
@@ -6182,13 +6482,12 @@ std::vector<std::string> cmd_t::proc_forloops( const std::vector<std::string> & 
 	  
 	  // note this is the current inner loop (end element)
 	  keys.push_back( inner );
-
-	  // allow [1:n] expansion for sequences here
+	  
+	  // at this point, variables and other expansions should have been resolved
 	  const std::string expr = param.value( "vals" ) ;
-	  if ( expr.find( "${" ) != std::string::npos )
-	    Helper::halt( "currently, LOOP vals cannot contain variables" );	  
 
-	  seqs[ inner ] = Helper::parse( Helper::xsigs( expr ) , "," );
+	  // allow inc/exc too?
+	  seqs[ inner ] = Helper::parse( Helper::incexc( Helper::xsigs( expr ) ) , "," );
 	  
 	  if ( seqs[ inner ].size() == 0 )
 	    Helper::halt( "empty vals in LOOP for " + inner );
@@ -6201,6 +6500,7 @@ std::vector<std::string> cmd_t::proc_forloops( const std::vector<std::string> & 
 	  	  
 	}
       
+
       //
       // Or loop back or ending an existing one?
       //
@@ -6214,7 +6514,7 @@ std::vector<std::string> cmd_t::proc_forloops( const std::vector<std::string> & 
 	  // all done?
 	  const bool closeout = seqs[ inner ].size() == slots[ inner ] ;
 
-	  if ( ! closeout )
+	  if ( ! closeout ) // i.e. will be looping back
 	    {
 	      // update value
 	      vals[ inner ] = seqs[ inner ][ slots[ inner ] ];
@@ -6223,8 +6523,16 @@ std::vector<std::string> cmd_t::proc_forloops( const std::vector<std::string> & 
 	      i = repeat_pointer[ inner ];
 
 	    }
-	  else
+	  else // i.e. done w/ the loop
 	    {
+
+	      // track loop depth
+	      if ( loop_count == 0 )
+		Helper::halt( "unbalanced LOOP/END-LOOPs: " + l1 );
+	      else
+		--loop_count;
+
+	      
 	      seqs.erase( seqs.find( inner ) );	      
 	      slots.erase( slots.find( inner ) );
 	      vals.erase( vals.find( inner ) );
@@ -6243,19 +6551,184 @@ std::vector<std::string> cmd_t::proc_forloops( const std::vector<std::string> & 
 	    }
 	  
 	}
-
+      
       
       //
       // Otherwise, just track this line - but swapping in any loop variables
       //
       
       if ( ! ( is_repeat || is_until ) )
-	r.push_back( l1 );	      
-     
+	{
+	  r.push_back( l1 );	      
+	  if ( globals::mirror )
+	    logger << "  " << Helper::ltrim( l1 ) << "\n";
+	}
+      
       // next input line
     }
+
+  if ( globals::mirror )
+    logger << "\n ------------------------------------------------------------\n\n";
   
   return r;
+
+}
+
+
+std::vector<std::string> cmd_t::proc_forloops( const std::vector<std::string> & lines )
+{
+
+  std::vector<std::string> r;
+  return r;
+
+  
+  // // allow multiple nested FOR UNTIL statements
+  // int fors = 0 , untils = 0;
+
+  // for (int i=0; i<lines.size(); i++)
+  //   {
+  //     std::vector<std::string> ctok = Helper::quoted_parse( lines[i] , "\t " );
+  //     if ( ctok.size() == 0 ) continue;
+  //     const std::string str = Helper::toupper( ctok[0] );
+  //     if      ( str == "LOOP" ) ++fors;
+  //     else if ( str == "END-LOOP" ) ++untils; 
+  //   }
+  
+  // if ( fors != untils )
+  //   Helper::halt( "unbalanced number of LOOP/END-LOOP commands in the script" );
+
+  // // nothing to do? 
+  // if ( fors == 0 ) return lines;
+  
+  // // make expansions
+  
+  // std::vector<std::string> keys;    // for nested loops, last is the inner
+  // std::map<std::string,int> slots;  // for a given loop, which slot we at?
+  // std::map<std::string,std::vector<std::string> > seqs; // for a given loop, what are the slots?
+  // std::map<std::string,std::string> vals; // swap in this value
+  // std::map<std::string,int> repeat_pointer; // line to loop back to 
+
+  // std::string inner = ""; // inner loop
+  // const int nl = lines.size();
+
+  // for (int i=0; i<nl; i++)
+  //   {
+
+  //     // swap any loop indexes (e.g. as they may feature in a LOOP vals= arg)
+      
+  //     std::string l1 = lines[i];
+      
+  //     std::map<std::string,std::string>::const_iterator vv = vals.begin();
+  //     while ( vv != vals.end() )
+  // 	{
+  // 	  l1 = Helper::search_replace( l1 , vv->first , vv->second ) ;
+  // 	  ++vv;
+  // 	}
+
+  //     // parse
+  //     std::vector<std::string> ctok = Helper::quoted_parse( l1 , "\t " );
+  //     if ( ctok.size() == 0 ) continue;
+  //     const std::string str = Helper::toupper( ctok[0] );
+  //     const bool is_repeat = str == "LOOP";
+  //     const bool is_until  = str == "END-LOOP";
+      
+  //     //
+  //     // Are we starting a new loop? 
+  //     //
+      
+  //     if ( is_repeat )
+  // 	{
+	  
+  // 	  // LOOP index=x vals=1,2,3,4
+	  
+  // 	  param_t param;
+  //         for (int j=1;j<ctok.size();j++)
+  // 	    param.parse( ctok[j] );
+	  
+  // 	  inner = "#{" + param.requires( "index" ) + "}";
+	  
+  // 	  // set repeat pointer to start of loop
+  // 	  repeat_pointer[ inner ] = i;
+	  
+  // 	  // note this is the current inner loop (end element)
+  // 	  keys.push_back( inner );
+
+  // 	  // allow [1:n] expansion for sequences here
+  // 	  const std::string expr = param.value( "vals" ) ;
+  // 	  if ( expr.find( "${" ) != std::string::npos )
+  // 	    Helper::halt( "currently, LOOP vals cannot contain variables" );	  
+
+  // 	  // allow inc/exc too?
+  // 	  seqs[ inner ] = Helper::parse( Helper::incexc( Helper::xsigs( expr ) ) , "," );
+	  
+  // 	  if ( seqs[ inner ].size() == 0 )
+  // 	    Helper::halt( "empty vals in LOOP for " + inner );
+
+  // 	  // set at first slot
+  // 	  slots[ inner ] = 0;
+
+  // 	  // set value
+  // 	  vals[ inner ] = seqs[ inner ][ slots[ inner ] ];
+	  	  
+  // 	}
+      
+  //     //
+  //     // Or loop back or ending an existing one?
+  //     //
+
+  //     if ( is_until )
+  // 	{
+	  
+  // 	  // advance to next slot
+  //         slots[ inner ]++;
+	  
+  // 	  // all done?
+  // 	  const bool closeout = seqs[ inner ].size() == slots[ inner ] ;
+
+  // 	  if ( ! closeout )
+  // 	    {
+  // 	      // update value
+  // 	      vals[ inner ] = seqs[ inner ][ slots[ inner ] ];
+	      
+  // 	      // reset point to read from in input
+  // 	      i = repeat_pointer[ inner ];
+
+  // 	    }
+  // 	  else
+  // 	    {
+  // 	      seqs.erase( seqs.find( inner ) );	      
+  // 	      slots.erase( slots.find( inner ) );
+  // 	      vals.erase( vals.find( inner ) );
+  // 	      repeat_pointer.erase( repeat_pointer.find( inner ) );
+	      
+  // 	      if ( keys.size() == 1 )
+  // 		{
+  // 		  inner = "";
+  // 		  keys.clear();
+  // 		}
+  // 	      else
+  // 		{
+  // 		  keys.pop_back();
+  // 		  inner = keys.back();
+  // 		}
+  // 	    }
+	  
+  // 	}
+
+      
+  //     //
+  //     // Otherwise, just track this line - but have swapped in any loop variables
+  //     //
+      
+  //     if ( ! ( is_repeat || is_until ) )
+  // 	{
+  // 	  r.push_back( l1 );	      
+  // 	}
+  //     // next input line
+  //   }
+
+  
+  // return r;
 }
 
 void cmd_t::dump()

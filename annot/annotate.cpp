@@ -631,23 +631,21 @@ void annotate_t::set_options( param_t & param )
   // requires 1+ seed: look at enrichment of ALL combinations of seeds
   // allow wildcards:
   //sseeds = param.strset( "seed" );
-  sseeds = annotate_t::root_match( param.strset( "seed" ) , edf->timeline.annotations.names() );
+  sseeds = annotate_t::root_match( param.strset_xsigs( "seed" ) , edf->timeline.annotations.names() );
 
-  
   // from each seed, look at all enrichment w/ all other annots
   //  non-seed annotations are not permuted
   if ( param.has( "other" ) )
     {
       //sannots = param.strset( "other" );
-      sannots = annotate_t::root_match( param.strset( "other" ) , edf->timeline.annotations.names() );
-
+      sannots = annotate_t::root_match( param.strset_xsigs( "other" ) , edf->timeline.annotations.names() );
     }
   
   // background (i.e. defines the space; only select/permute within contiguous blocks of these regions)
   if ( param.has( "bg" ) ) 
     {
       ///sbgs = param.strset( "bg" );
-      sbgs = annotate_t::root_match( param.strset( "bg" ) , edf->timeline.annotations.names() );      
+      sbgs = annotate_t::root_match( param.strset_xsigs( "bg" ) , edf->timeline.annotations.names() );      
     }
   
   // edge for background -- i.e. if elements could not be placed within X seconds of background segment edge,
@@ -662,7 +660,7 @@ void annotate_t::set_options( param_t & param )
   if ( param.has( "xbg" ) )
     {
       //sxbgs = param.strset( "xbg" );
-      sxbgs = annotate_t::root_match( param.strset( "xbg" ) , edf->timeline.annotations.names() );
+      sxbgs = annotate_t::root_match( param.strset_xsigs( "xbg" ) , edf->timeline.annotations.names() );
     }
   
   if ( param.has( "xbg" ) && ! param.has( "bg" ) )

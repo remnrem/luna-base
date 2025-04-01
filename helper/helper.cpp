@@ -2009,7 +2009,7 @@ void Helper::expand_numerics( std::string * t )
 std::string Helper::xsigs( const std::string & t )
 {
 
-  // [seq][seq]
+  // [seq][seq]     
   
   // expand [SIG][1:4] to SIG1,SIG2,SIG3,SIG4  
   // expand [a,b,c][1:4] to a1,a2,a3,a4,b1,b2,b3,b4,c1,c2,c3,c4
@@ -2024,7 +2024,10 @@ std::string Helper::xsigs( const std::string & t )
   // three-way concatenation [a][b][c] 
   //    [[a][b]][c]
 
-  // special case: if we see a loop-index [ch][#{i}] then
+  // REDUNDANT: we don't do this now, as now we try to eval
+  // all variable substitutions sequentially, so no need for
+  // a special case
+  // OLD: special case: if we see a loop-index [ch][#{i}] then
   // postpone evaluation... wait until the #{} have been expanded...
   
   // txt locations
@@ -2064,8 +2067,8 @@ std::string Helper::xsigs( const std::string & t )
 	  std::string s = t.substr( j , k - j + 1 );
 
 	  // check we/ don't have a loop index
-	  const bool has_loop_index = s.find( "#{" ) != std::string::npos;
-	  if ( has_loop_index ) continue;
+	  // const bool has_loop_index = s.find( "#{" ) != std::string::npos;
+	  // if ( has_loop_index ) continue;
 	  
 	  // split into two tokens
 	  // but all first to be empty
@@ -2172,7 +2175,7 @@ std::string Helper::xsigs( const std::string & t )
   // nothing to do
   //
   
-  if ( splices.size() == 0 ) return t;
+  if ( splices.size() == 0 ) return t  ;
 
   //
   // splice in...
@@ -2211,38 +2214,122 @@ std::string Helper::xsigs( const std::string & t )
   // now add final part
   s += t.substr( p );
   
-  return s;
-
+  // apply any [x]  [-x] filtering too
+  return s ;
+  
 }
 
 
-
-
-void Helper::swap_in_variables( std::string * t , std::map<std::string,std::string> * vars , const bool allow_missing )
+std::string Helper::incexc( const std::string & xx )
 {
 
+  //
+  // Process any includes/excludes
+  //
+   
+  std::vector<std::string> tok = Helper::quoted_parse( xx , "," );
+  
+  std::set<std::string> includes, excludes;
+  
+  for (int t=0;t<tok.size();t++)
+    {
+      // only match [x] or [-x]
+      if ( ! ( tok[t][0] == '[' && tok[t][ tok[t].size() -1 ] == ']' ) ) continue;
+      std::string str = tok[t].substr(1,tok[t].size() - 2 );
+      if ( str == "" ) continue;
+      bool exc = str[0] == '-';      
+      if ( exc ) excludes.insert( Helper::toupper( str.substr(1) ) );
+      else includes.insert( Helper::toupper( str ) );
+    }
+  
+  //
+  // nothing to do?
+  //
+
+  if ( includes.size() == 0 && excludes.size() == 0 )
+    return xx;
+
+ 
+  //
+  // now primary parsing  
+  //
+  
+  std::string s;
+  
+  for (int t=0;t<tok.size();t++)
+    {
+      // now we can skip exclude rules
+      if ( tok[t][0] == '[' && tok[t][ tok[t].size() -1 ] == ']' ) continue;
+      
+      // apply any include/exclude rile: note - these only work on the
+      // raw input strings (currently), not on any alias terms
+      //  ... should be acceptable but note in docs
+
+      std::string str = Helper::toupper( tok[t] );
+      //std::cout << " str {" << str << "}\n";
+      bool okay = true;
+      std::set<std::string>::const_iterator ii = includes.begin();
+      while ( ii != includes.end() )
+	{
+	  if ( str.find( *ii ) == std::string::npos ) okay = false;
+	  ++ii;
+	}
+      
+      std::set<std::string>::const_iterator xx = excludes.begin();
+      while( xx !=excludes.end() )
+	{
+	  if ( str.find( *xx ) != std::string::npos ) okay = false;
+	  ++xx;
+	}
+      //      std::cout << "  okay = " << okay << "\n";
+      
+      // include?
+      if ( okay )
+	{
+	  if ( s == "" ) s = tok[t];
+	  else s += "," + tok[t];
+	}
+    }
+  return s;
+}
+
+
+void Helper::swap_in_variables( std::string * t , std::map<std::string,std::string> * vars , const bool allow_missing , const bool silent )
+{
+  // comments will have been stripped out
   // variable must be in the form   ${var} 
   // definitions can be as ${var=values,etc}
-    
+  // appends can be in form ${var+=val1,val2}
+  // allow for ?{x} which are evaluated as T/F and allow missing always
+  
   int open = 0;
   std::string s;
   for (int i=0;i<t->size();i++)
     {
-      if ( (*t)[i] != '$' ) { s = s + (*t)[i]; continue; } 
+
+      // if here at last char : cannot be the start of a valid variable
+      if ( i == t->size() - 1 ) { s = s + (*t)[i]; continue; } 
+      
+      // otherwise scan for '${' or '?{'
+      if ( ! ( ( (*t)[i] == '$' || (*t)[i] == '?' ) && (*t)[i+1] == '{' ) ) { s = s + (*t)[i]; continue; } 
+
+      // looks like we've found the start of a variable 
+      const bool boolvar = (*t)[i] == '?' ;
+
       ++i;
       
-      if ( i == t->size() ) Helper::halt( "badly formed variable:" + *t );
-      if ( (*t)[i] != '{' ) Helper::halt( "badly formed variable:" + *t );
+      if ( i == t->size() ) Helper::halt( "badly formed variable(N):" + *t );
+      if ( (*t)[i] != '{' ) Helper::halt( "badly formed variable({):" + *t );
       ++open;
       std::string varname;
       while (1)
-	{
+	{	  
 	  ++i;
-	  if ( i == t->size() ) Helper::halt( "badly formed variable" );
+	  if ( i == t->size() ) Helper::halt( "badly formed variable(X)" );
 	  	  
 	  if ( (*t)[i] != '}' || open > 1 ) 
 	    {
-	      varname += (*t)[i];
+	      varname += (*t)[i];	      
 	      if ( (*t)[i] == '}' ) --open;
 	      if ( (*t)[i] == '{' ) ++open;
 	    }	  
@@ -2258,18 +2345,22 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 	      // append definition?
 	      else if ( varname.find( "+=" ) != std::string::npos )
 		{
+
+		  if ( boolvar ) Helper::halt( "cannot use += syntax with ?{x} variables" );
+		  
 		  std::vector<std::string> tok = Helper::parse( varname , "=" );
 		  
 		  if ( tok.size() != 2 ) Helper::halt( "bad format for ${var+=value} definition" );
 		  // recursively swap in any existing variables in the defiinition
 		  // ${a+=${b}} 
-		  Helper::swap_in_variables( &tok[1] , vars );
+		  Helper::swap_in_variables( &tok[1] , vars , allow_missing , silent );
 		  
 		  // allow for expansions too
 		  std::string lvalue = tok[0].substr( 0 , tok[0].size() - 1 ); // skip "+" of "+=" 
 		  std::string evalue = (*vars)[ lvalue ] == "" ? tok[1] : ( "," + tok[1] )  ;
 		  Helper::expand_numerics( &evalue );		  
-		  logger << "  appending variable ${" << lvalue << "} = " << (*vars)[ lvalue ] << evalue << "\n";
+		  if ( globals::verbose_var_assignment || ! silent )
+		    logger << "   appending variable ${" << lvalue << "} = " << (*vars)[ lvalue ] << evalue << "\n";
 		  (*vars)[ lvalue ] += evalue;
 		  break;
 		}
@@ -2279,15 +2370,24 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		  std::vector<std::string> tok = Helper::parse( varname , "=" );
 		  
 		  if ( tok.size() != 2 ) Helper::halt( "bad format for ${var=value} definition" );
-		  // recursively swap in any existing variables in the defiinition
+		  // recursively swap in any existing variables in the definition
 		  // ${a=${b}} 
-		  Helper::swap_in_variables( &tok[1] , vars );
+		  Helper::swap_in_variables( &tok[1] , vars , allow_missing , silent );
 		  
 		  // allow for expansions too
 		  std::string evalue = tok[1];
-		  Helper::expand_numerics( &evalue );
-		  logger << "  setting variable ${" << tok[0] << "} = " << evalue << "\n";
+		  if ( ! boolvar ) Helper::expand_numerics( &evalue );		    
+		  if ( boolvar ) evalue = Helper::yesno( evalue ) ? "1" : "0" ;		  
+		  if ( globals::verbose_var_assignment || ! silent ) 
+		    logger << "   setting variable ${" << tok[0] << "} = " << evalue << "\n";
 		  (*vars)[ tok[0] ] = evalue;
+		  break;
+		}
+	      else if ( boolvar )
+		{
+		  bool missing = vars->find( varname ) == vars->end();
+		  bool val = Helper::yesno( missing ? "0" : vars->find( varname )->second );
+		  s += ( val ? "1" : "0" );
 		  break;
 		}
   	      else if ( vars->find( varname ) == vars->end() )

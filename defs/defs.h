@@ -408,6 +408,10 @@ struct globals
 
   // devel
   static bool devel;
+
+  static bool verbose_var_assignment;
+
+  static bool mirror;
   
   // global functions: primary initiation of all globals
   void init_defs();

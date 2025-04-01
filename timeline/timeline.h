@@ -178,6 +178,8 @@ struct timeline_t
 
   void list_spanning_annotations( const param_t & param );
 
+  void annot_crosstabs( const param_t & param );
+  
   void annot2signal( const param_t & param );
   
   void signal2annot( const param_t & param );

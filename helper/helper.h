@@ -115,13 +115,15 @@ namespace Helper
 
   std::string search_replace( std::string s , const std::string & a , const std::string & b , const bool only_root = false );
   
-  void swap_in_variables( std::string * , std::map<std::string,std::string> * , const bool allow_missing = false );
+  void swap_in_variables( std::string * , std::map<std::string,std::string> * , const bool allow_missing = false , const bool silent = false );
 
   bool swap_in_includes( std::string * , const std::string & delim = "," );
 			
   void expand_numerics( std::string * );
 
   std::string xsigs( const std::string & );
+
+  std::string incexc( const std::string & );
 
   void process_block_conditionals( std::string * , const std::map<std::string,std::string> & );
 

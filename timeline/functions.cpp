@@ -42,12 +42,14 @@ extern logger_t logger;
 //  ANNOTS
 //  MEANS
 //  META
+//  AXA
 
 // also:
 //  internal annot2sp() function (used by spindles analysis)
 
 void timeline_t::annot2signal( const param_t & param )
 {
+
   // create a new signal based on one or more annotations
   if ( ! param.has( "annot" ) ) Helper::halt( "no annotations specified: e.g. annot=A1,A2" );
   std::vector<std::string> anames = param.strvector_xsigs( "annot" );
@@ -307,12 +309,19 @@ void timeline_t::signal2annot( const param_t & param )
   // Parse encodings
   //
 
+  // encode first (label) with XX,1  XX,2  etc to allow
+  // duplicate labels; but remove those when printing to annots
   std::map<std::string,std::pair<double,double> > e;
 
+  int num_digs = MiscMath::num_digits( enc.size() );
+  
   for (int i=0; i<enc.size(); i += nxy )
     {
-      std::string label = enc[i];
-      
+
+      // make each label unique , i.e. to have a one-to-many mapping
+      // of labels to ranges
+      std::string label = enc[i] + "," + Helper::zero_pad(i , num_digs) ;
+          
       double ex = 0 ;
       if ( ! Helper::str2dbl( enc[i+1] , &ex ) )
 	Helper::halt( "bad numeric value for encoding" + enc[i+1] );
@@ -366,12 +375,9 @@ void timeline_t::signal2annot( const param_t & param )
 
   for (int s=0; s<ns; s++)
     {
-
       
       if ( edf->header.is_annotation_channel( signals(s) ) )
 	continue;
-
-
       
       //
       // get signal data
@@ -451,7 +457,12 @@ void timeline_t::signal2annot( const param_t & param )
       while ( ee != e.end() )
 	{
 	  
-	  const std::string & label = ee->first; 
+	  const std::string & label = ee->first;	  
+
+	  // remove xxx,N uniquificaiton
+	  const std::vector<std::string> ll = Helper::parse( label , "," );
+	  const std::string display_label = ll.size() == 0 ? "." : ll[0] ;
+      	    
 	  double ex = ee->second.first;
 	  double ey = ee->second.second;
 	  
@@ -459,8 +470,8 @@ void timeline_t::signal2annot( const param_t & param )
 	  //   (note: if exists, then add() returns existing set, so earier
 	  //          to use add() rather than find() ) 
 	  
-	  std::string class_label = use_class ? class_name : label ;
-	  std::string inst_label  = use_class ? label      : "."   ;
+	  std::string class_label = use_class ? class_name : display_label ;
+	  std::string inst_label  = use_class ? display_label      : "."   ;
 	  if ( add_ch_label ) class_label += "_" + ch_label;
 	  
 	  annot_t * a = annotations.add( class_label );
@@ -589,7 +600,7 @@ void timeline_t::list_spanning_annotations( const param_t & param )
   //
   // which signals: either look at all, or the requested set
   //
-
+  
   std::vector<std::string> requested = param.has( "annot" ) && param.value( "annot" ) != "." 
     ? param.strvector_xsigs( "annot" ) 
     : annotations.names() ;
@@ -1394,13 +1405,19 @@ int timeline_t::annot2sp( edf_t & edf , const std::string & astr ,
 void timeline_t::signal_means_by_annot( const param_t & param )
 {
 
+  
   //
   // annots
   //
 
+  // for root-match
+  std::vector<std::string> names = annotations.names();
+  
   if ( ! param.has( "annot" ) ) Helper::halt( "no annotations specified: e.g. annot=A1,A2" );
-  std::vector<std::string> anames = param.strvector_xsigs( "annot" );
 
+  std::vector<std::string> anames = Helper::set2vec( annotate_t::root_match( param.strset_xsigs( "annot" ) , names ) );
+
+  
   //
   // ignore annotation instannce IDs?
   //
@@ -2297,3 +2314,278 @@ void timeline_t::set_annot_metadata( const param_t & param )
 }
 
 
+
+
+//
+// Implements AXA 
+//
+
+void timeline_t::annot_crosstabs( const param_t & param )
+{
+
+  // for root-match
+  std::vector<std::string> names = annotations.names();
+  
+  // get list of annotations
+  std::vector<std::string> requested = param.has( "annot" ) && param.value( "annot" ) != "."
+    ? param.strvector_xsigs( "annot" )
+    : names ; 
+  
+  // allow root-matching
+  //  requested = Helper::set2vec( annotate_t::root_match( Helper::vec2set( requested ) , names ) );
+  
+  // group annots by class only, or also by instance IDs?
+  const bool by_instance = param.has( "by-instance" );
+
+  // flatten event?
+  const bool flatten = param.has( "flatten" ) ? param.yesno( "flatten" ) : false;
+
+  // event-level output?
+  const bool verbose = param.has( "verbose" ) ? param.yesno( "verbose" ) : false;
+
+  // within channel only? 
+  //  note: some annotations might not have a channel specified,
+  //        in which case the catch all "." counts as a 'channel'
+  const bool within_channel = param.has( "within-channel" );
+  
+  
+  // count implied annotations 
+  if ( requested.size() == 0 )
+    Helper::halt( "no annotations" );
+  
+  //
+  // build up table of events
+  //
+
+  // ch -> annot -> interval lists
+  std::map<std::string,std::map<std::string,std::set<interval_t> > > events;
+  
+  //
+  // iterate over each annotation
+  //
+  
+  for (int a = 0 ; a < requested.size() ; a++ ) 
+    {
+      
+      annot_t * annot = annotations.find( requested[a] );
+      
+      if ( annot == NULL ) continue;
+      
+      const int num_events = annot->num_interval_events();
+      
+      logger << "  found " << num_events << " instances of " << requested[a] << "\n";
+      
+      //
+      // iterator over interval/event map
+      //
+
+      const std::string label = requested[a];
+      
+      annot_map_t::const_iterator ii = annot->interval_events.begin();
+      while ( ii != annot->interval_events.end() )
+	{	  
+	  
+	  const instance_idx_t & instance_idx = ii->first;
+	  
+	  // add to the list
+
+	  const std::string ch_str = within_channel ? instance_idx.ch_str : "." ;
+	  const std::string label1  = label + ( by_instance ? "_" + instance_idx.id : "" ); 
+
+	  // record
+
+	  events[ ch_str ][ label1 ].insert( instance_idx.interval );
+	  
+	  ++ii;
+	}
+      
+    }
+
+  //
+  // Flatten all events first?
+  //  - if within channel, then flattening only happens w/in channels too
+  //
+
+  if ( flatten )
+    {
+      std::map<std::string,std::map<std::string,std::set<interval_t> > >::iterator aa = events.begin();
+      while ( aa != events.end() )
+	{
+	  std::map<std::string,std::set<interval_t> > & events1 = aa->second;
+	  std::map<std::string,std::set<interval_t> >::iterator ee = events1.begin();
+	  while ( ee != events1.end() )
+	    {	      
+	      int n1 = ee->second.size();
+	      ee->second = annotate_t::flatten( ee->second );
+	      int n2 = ee->second.size();
+	      if ( n2 < n1 ) logger << "  reduced " << ee->first << " from " << n1 << " to " << n2 << " events\n";
+	      ++ee;
+	    }
+	  ++aa;
+	}
+    }
+  
+  
+  //
+  // Over each channel
+  //
+
+  std::map<std::string,std::map<std::string,std::set<interval_t> > >::const_iterator ch = events.begin();
+  while ( ch != events.end() )
+    {
+      
+      // track channel?
+
+      if ( within_channel )
+	writer.level( ch->first , globals::signal_strat );
+
+
+      //
+      // Pull out annotations (for this channel) 
+      //
+      
+      const std::map<std::string,std::set<interval_t> > & events1 = ch->second;
+      
+      //
+      // Nothing to do?
+      //
+      
+      if ( events1.size() < 2 )
+	{
+	  logger << "  *** nothing to do, fewer than two annotation classes found";
+	  if ( within_channel ) logger << " for channel " << ch->first ;
+	  logger << "\n";
+	}
+            
+      //
+      // Consider all pairs of events
+      //
+
+      std::map<std::string,std::set<interval_t> >::const_iterator bb = events1.begin();
+      while ( bb != events1.end() )
+	{
+	  
+	  writer.level( bb->first , globals::annot_strat );
+
+	  // we want to keep 'a' 'as is' (i.e. might be flattened, but might not be
+	  //  but for 'b', here we should flatten to make the looks easier.
+	  
+	  const std::set<interval_t> b = annotate_t::flatten( bb->second );
+	  
+	  std::map<std::string,std::set<interval_t> >::const_iterator aa = events1.begin();
+	  while ( aa != events1.end() )
+	    {
+	      
+	      writer.level( aa->first , "SEED" );
+	      
+	      const std::set<interval_t> & a = aa->second;
+
+	      // to track outputs
+	      std::vector<double> sav_p, sav_t, sav_n, sav_a;
+	  
+	      // determine for lists a and b :
+	      //   total % of overlap per all 'a'
+	      //   mean % of overlap per 'a' event
+	      //   num_secs of 'b' given 'a'
+	      
+	      //   % of 'a' with at least some 'b' overlap
+	      
+	      // for each 'seed' (i.e. conditioning event)
+	      std::set<interval_t>::const_iterator seed = a.begin();
+	      while ( seed != a.end() )
+		{
+		  // which b events span this, if any?
+		  
+		  // match logic from annotate.cpp
+		  
+		  // find the first annot not before (at or after) the seed
+		  std::set<interval_t>::const_iterator cc = b.upper_bound( *seed );
+		  
+		  std::set<interval_t>::const_iterator closest = cc;
+		  
+		  std::set<interval_t> overlaps;
+		  
+		  while ( 1 )
+		    {
+		      if ( closest == b.end() ) break;
+		      if ( closest->start >= seed->stop ) break;
+		      ++closest;
+		    }
+		  
+		  // now count back
+		  while ( 1 )
+		    {
+		      if ( closest == b.begin() ) break;		  
+		      --closest;
+		      if ( closest->stop <= seed->start ) break;
+		      interval_t o( closest->start > seed->start ? closest->start : seed->start ,
+				    closest->stop < seed->stop  ? closest->stop : seed->stop );
+		      overlaps.insert( o );		  
+		    }
+		  
+		  const int n_olap = overlaps.size();
+		  
+		  double t_olap = 0;
+		  
+		  std::set<interval_t>::const_iterator oo = overlaps.begin();
+		  while ( oo != overlaps.end() )
+		    {
+		      t_olap += oo->duration_sec();
+		      ++oo;
+		    }
+		  
+		  const double p_olap = t_olap / seed->duration_sec();
+		  
+		  sav_n.push_back( n_olap );
+		  sav_t.push_back( t_olap );
+		  sav_p.push_back( p_olap );
+		  sav_a.push_back( n_olap > 0 );
+		  
+		  
+		  //
+		  // Verbose output?
+		  //
+		  
+		  if ( verbose )
+		    {
+		      std::cout << " olap = " << bb->first << " " << aa->first << " = " << overlaps.size() << "\n";
+		    }
+		  
+		  ++seed;
+		}
+	      
+	      
+	      //
+	      // Now summarize outputs
+	      //
+	      
+	      // mean (or median) per seed interval
+	      writer.value( "P" , MiscMath::mean( sav_p ) );
+	      writer.value( "P_MD" , MiscMath::median( sav_p ) );
+	      
+	      writer.value( "T" , MiscMath::mean( sav_t ) );
+	      writer.value( "T_MD" , MiscMath::median( sav_t ) );
+	      
+	      writer.value( "N" , MiscMath::mean( sav_n ) );
+	      writer.value( "N_MD" , MiscMath::median( sav_n ) );
+	      
+	      writer.value( "A" , MiscMath::mean( sav_a ) );
+	      
+	      // grand totals
+	      writer.value( "TOT_N" , MiscMath::sum( sav_n ) );
+	      writer.value( "TOT_T" , MiscMath::sum( sav_t ) );
+	      
+	      ++aa;
+	    }
+	  writer.unlevel( "SEED" );
+	  
+	  ++bb;
+	}
+      writer.unlevel( globals::annot_strat );
+
+      ++ch;
+    }
+
+  if ( within_channel )
+    writer.unlevel( globals::signal_strat );
+}

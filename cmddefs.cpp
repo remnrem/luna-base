@@ -107,19 +107,19 @@ void cmddefs_t::init()
   // -h (help)
   //
 
-  add_cmd( "cmdline" , "-h" , "Help functions" );
+  add_cmd( "helpers" , "-h" , "Help functions" );
 
   //
   // --version
   //
   
-  add_cmd( "cmdline" , "--version" , "Show version (or -v)" );
+  add_cmd( "helpers" , "--version" , "Show version (or -v)" );
 
   //
   // --build
   //
 
-  add_cmd( "cmdline" , "--build" , "Scan folders recursively to geneate a sample list" );
+  add_cmd( "helpers" , "--build" , "Scan folders recursively to geneate a sample list" );
   add_param( "--build" , "-nsrr" , "" , "Use NSRR annotation extension, i.e. `-ext=-nsrr.xml`" );
   add_param( "--build" , "-edfid" , "" , "Use filename as ID, instead of looking in each EDF header" );
   add_param( "--build" , "-nospan" , "" , "Do not match similarly-named files across folders" );
@@ -129,43 +129,63 @@ void cmddefs_t::init()
   // --validate
   //
 
-  add_cmd( "cmdline" , "--validate" , "Validate EDFs/annotation files in a sample list" );
+  add_cmd( "helpers" , "--validate" , "Validate EDFs/annotation files in a sample list" );
   add_param( "--validate" , "slist" , "slist=s.lst" , "Specficy the sample list" );
 
   add_table( "--validate" , "" , "Primary VALIDATE output" );
   add_var( "--validate" , "" , "EDF" , "Valid/invalid EDF (1=valid)" );
   add_var( "--validate" , "" , "ANNOTS" , "Valid/invalid annotations (1=valid)" );
 
+  
   //
   // --repath
   //
 
-  add_cmd( "cmdline" , "--repath" , "Swap out file paths in a sample list" );
+  add_cmd( "helpers" , "--repath" , "Swap out file paths in a sample list" );
   add_param( "--repath" , "{1st arg}" , "/home/john/" , "First argument: match string" );
   add_param( "--repath" , "{2nd arg}" , "/home/mary/" , "Second argument: replacement string" );
 
   
-
-
   //
   // --merge
   //
 
-  add_cmd( "cmdline" , "--merge" , "Merge two or more EDFS" );  
+  add_cmd( "helpers" , "--merge" , "Merge two or more EDFS" );  
   add_param( "--merge" , "slist" , "slist=s.lst" , "Specficy the sample list" );
+  add_param( "--merge" , "id" , "id=id001" , "Specficy the ID in the new EDF header" );
+  add_param( "--merge" , "edf" , "edf=m.edf" , "Filename for the resulting EDF (instead of merged.edf)" );
+  add_param( "--merge" , "{edfs}" , "f1.edf f2.edf" , "Two or more EDFs" );
 
+  
   //
   // --bind
   //
 
-  add_cmd( "cmdline" , "--bind" , "Combine two or more channels to a single EDF" );
+  add_cmd( "helpers" , "--bind" , "Combine two or more channels to a single EDF" );
   add_param( "--bind" , "slist" , "slist=s.lst" , "Specficy the sample list" );
+  add_param( "--bind" , "id" , "id=id001" , "Specficy the ID in the new EDF header" );
+  add_param( "--bind" , "edf" , "edf=m.edf" , "Filename for the resulting EDF (instead of merged.edf)" );
 
+
+  //
+  // --xml
+  //
+  
+  add_cmd( "helpers" , "--xml" , "Dump annotations from an XML annotation file (to console)" );
+  add_param( "--xml" , "{xml}" , "f1.xml" , "A single XML file" );
+  
+  //
+  // --xml2
+  //
+
+  add_cmd( "helpers" , "--xml2" , "Dump entire XML tree (to console)" );
+  add_param( "--xml2" , "{xml}" , "f1.xml" , "A single XML file" );
+  
   //
   // --otsu
   //
 
-  add_cmd( "cmdline" , "--otsu" , "Calculate thresholds based on Otsu's method (external data)" );
+  add_cmd( "helpers" , "--otsu" , "Calculate thresholds based on Otsu's method (external data)" );
   add_param( "--otsu" , "slist" , "slist=s.lst" , "Specficy the sample list" );
 
 
@@ -173,21 +193,50 @@ void cmddefs_t::init()
   // --eval 
   //
 
-  add_cmd( "cmdline" , "--eval" , "" );
-  add_cmd( "cmdline" , "--eval-verbose" , "" );
+  add_cmd( "helpers" , "--eval" , "Evaluate expressions from stdin (or --eval-verbose)" );
+  add_param( "--eval" , "{expr}" , "2+2" , "Evaluate expression (via stdin)" );
 
   //
   // --fir
   //
 
-  add_cmd( "cmdline" , "--fir" , "Or --fir-design" );
+  add_cmd( "helpers" , "--fir" , "Design FIR (--fir-design)" );
+  add_param( "--fir" , "fs" , "fs=256" , "Sampling rate" );
+  add_param( "--fir" , "bandpass", "bandpass=0.3,35", "Band-pass filter between 0.3 and 35 Hz" );
+  add_param( "--fir" , "lowpass" , "lowpass=35", "Low-pass filter with cutoff of 35 Hz" );
+  add_param( "--fir" , "highpass" , "highpass=0.3", "High-pass filter with cutoff of 0.3 Hz" );
+  add_param( "--fir" , "bandstop", "bandstop=55,65", "Band-stop filter between 0.3 and 35 Hz" );
+  add_param( "--fir" , "ripple", "0.01", "Ripple (proportion); can be two values for bandpass filters)" );
+  add_param( "--fir" , "tw" , "1" , "Transition width (in Hz)" );
+  add_param( "--fir" , "file" , "coef.txt" , "Read FIR coefficients from a file" );
+  add_param( "--fir" , "order" , "10" , "Fix FIR order" );
+  add_param( "--fir" , "rectangular" , "" , "Specify a rectangular window" );
+  add_param( "--fir" , "bartlett" , "" , "Specify a Bartlett window" );
+  add_param( "--fir" , "hann" , "" , "Specify a Hann window" );
+  add_param( "--fir" , "blackman" , "" , "Specify a Blackman window" );
 
+  add_table( "--fir" , "" , "FIR design parameters" );
+  add_var( "--fir" , "" , "FIR" , "Label for FIR filter (constructed from input parameters)" );
+  add_var( "--fir" , "" , "FS" , "Sampling rate (from fs input parameter)" );
+  add_var( "--fir" , "" , "NTAPS" , "Filter order (number of taps)" );
+
+  add_table( "--fir" , "F,FIR" , "Frequency response characteristics" );
+  add_var( "--fir" , "F,FIR" , "F" , "Frequency (Hz)" );
+  add_var( "--fir" , "F,FIR" , "FIR" , "FIR filter label" );
+  add_var( "--fir" , "F,FIR" , "MAG" , "Magnitude" );
+  add_var( "--fir" , "F,FIR" , "MAG_DB" , "Magnitude (dB)" );
+  add_var( "--fir" , "F,FIR" , "PHASE" , "Phase" );
+
+  add_table( "--fir" , "FIR,SEC" , "Impulse response" );
+  add_var( "--fir" , "FIR,SEC" , "SEC" , "Time (seconds)" );
+  add_var( "--fir" , "FIR,SEC" , "FIR" , "FIR filter label" );
+  add_var( "--fir" , "FIR,SEC" , "IR" , "Impulse response" );
   
   //
   // --cwt
   //
 
-  add_cmd( "cmdline" , "--cwt" , "Or --cwt-design" );
+  add_cmd( "helpers" , "--cwt" , "Or --cwt-design" );
   
 
 
@@ -215,8 +264,8 @@ void cmddefs_t::init()
   // DESC
   //
 
-  add_cmd( "summ" , "DESC" , "Simple description of an EDF, sent to the console" );
-  add_param( "DESC" , "channels" , "" , "Only write channel names, one-per-line" );
+  add_cmd1( "summ" , "DESC" , "Simple description of an EDF, sent to the console" );
+  add_param1( "DESC" , "channels" , "" , "Only write channel names, one-per-line" );
 
   
   //
@@ -233,14 +282,14 @@ void cmddefs_t::init()
   add_cmd1( "summ" , "HEADERS" , "Tabulate (channel-specific) EDF header information" );
   
   add_table1( "HEADERS" , "" , "Basic EDF header information" );
-  add_var( "HEADERS" , "" , "NR" , "Number of records" );
+  add_var1( "HEADERS" , "" , "NR" , "Number of records" );
   add_var1( "HEADERS" , "" , "NS" , "Number of signals/channels" );
-  add_var1( "HEADERS" , "" , "EDF_ID" , "ID in the EDF header" );
+  add_var( "HEADERS" , "" , "EDF_ID" , "ID in the EDF header" );
   add_var1( "HEADERS" , "" , "START_TIME" , "Start time in the EDF header" );
-  add_var( "HEADERS" , "" , "STOP_TIME" , "Stop time" );
+  add_var1( "HEADERS" , "" , "STOP_TIME" , "Stop time" );
   add_var1( "HEADERS" , "" , "START_DATE" , "Start date in the EDF header" );
   add_var( "HEADERS" , "" , "REC_DUR" , "Duration of each record (seconds)" );
-  add_var1( "HEADERS" , "" , "TOT_DUR_SEC" , "Current EDF duration (seconds)" );
+  add_var( "HEADERS" , "" , "TOT_DUR_SEC" , "Current EDF duration (seconds)" );
   add_var1( "HEADERS" , "" , "TOT_DUR_HMS" , "Current EDF duration (hh:mm:ss)" );
   add_var1( "HEADERS" , "" , "EDF_TYPE" , "EDF, EDF+C or EDF+D" );
   add_var( "HEADERS" , "" , "NS_ALL" , "Number of signals in original EDF" );
@@ -481,20 +530,9 @@ void cmddefs_t::init()
   // ESPAN          Epoch-based annotation coverage
   // A2S            Add a 0/1 signal based on an annotation
   // S2A            Add an annotation based on ranged values of a signal
-
+  // AXA
   
-  //
-  // --xml
-  //
   
-  add_cmd( "cmdline" , "--xml" , "Dump annotations from an XML annotation file (to console)" );
-
-  //
-  // --xml2
-  //
-
-  add_cmd( "cmdline" , "--xml2" , "Dump entire XML tree (to console)" );
-
 
   //
   // ANNOTS
@@ -539,7 +577,39 @@ void cmddefs_t::init()
   add_var( "ANNOTS" , "E,INTERVAL,INST" , "AMASK" , "Annotation instance mask status (1=masked/excluded) [epoch]" );
   add_var( "ANNOTS" , "E,INTERVAL,INST" , "EMASK" , "Epoch mask status (1=masked/excluded) [epoch]" );
 
+  //
+  // AXA
+  //
 
+  add_cmd( "annot" , "AXA" , "Pairwise annotation cross-tabs" );
+  add_url( "AXA" , "annotations/#axa" );
+  add_param( "AXA" , "annot" , "N2,N3,arousal,apnea" , "Annotations to query" );
+  add_param( "AXA" , "by-instance" , "" , "Define distinct annotations using class/instance ID" );
+  
+  add_table( "AXA" , "SEED,ANNOT" , "AXA pairwise metrics" );
+  add_var( "AXA" , "SEED,ANNOT" , "P" , "Mean proportion of each seed spanned by annotation" );
+  add_var( "AXA" , "SEED,ANNOT" , "P_MD" , "Median proportion of each seed spanned by annotation" );
+  add_var( "AXA" , "SEED,ANNOT" , "T" , "Mean time (secs) spanned by annotation per seed event" );
+  add_var( "AXA" , "SEED,ANNOT" , "T_MD" , "Median time (secs) spanned by annotation per seed event" );
+  add_var( "AXA" , "SEED,ANNOT" , "N" , "Mean number of spanning annotations per seed event" );
+  add_var( "AXA" , "SEED,ANNOT" , "N_MD" , "Median number of spanning annotations per seed event" );
+  add_var( "AXA" , "SEED,ANNOT" , "A" , "Proportion of seeds with any spanning annotation" );
+  add_var( "AXA" , "SEED,ANNOT" , "TOT_N" , "Total number of (flattened) annotations spanning all seeds" );
+  add_var( "AXA" , "SEED,ANNOT" , "TOT_N" , "Total duration (secs) of (flattened) annotations spanning all seeds" );
+
+  add_table( "AXA" , "CH,SEED,ANNOT" , "AXA pairwise metrics, within-channel" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "P" , "Mean proportion of each seed spanned by annotation" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "P_MD" , "Median proportion of each seed spanned by annotation" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "T" , "Mean time (secs) spanned by annotation per seed event" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "T_MD" , "Median time (secs) spanned by annotation per seed event" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "N" , "Mean number of spanning annotations per seed event" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "N_MD" , "Median number of spanning annotations per seed event" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "A" , "Proportion of seeds with any spanning annotation" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "TOT_N" , "Total number of (flattened) annotations spanning all seeds" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "TOT_N" , "Total duration (secs) of (flattened) annotations spanning all seeds" );
+
+  
+  
   //
   // SPANNING
   //
@@ -2278,7 +2348,7 @@ void cmddefs_t::init()
   // PSC  (nb. --psc uses PSC command label internally)
   //
 
-  add_cmd( "cmdline" , "--psc" , "Create PSC from power spectra from multiple individuals" );
+  add_cmd( "helpers" , "--psc" , "Create PSC from power spectra from multiple individuals" );
   add_url( "--psc" , "psc/#build-psc" );
   add_param( "--psc" , "spectra" , "psd1.txt,psd2.txt" , "File list of PSD/COH output" );
   add_param( "--psc" , "v" , "PSD,COH" , "List of variables to extract" );
@@ -2708,17 +2778,16 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
 
-  add_cmd( "transients" , "SPINDLES" , "Wavelet-based sleep spindle detection" );
+  add_cmd1( "transients" , "SPINDLES" , "Wavelet-based sleep spindle detection" );
   add_url( "SPINDLES" , "spindles-so/#spindles" );
 
-  add_param( "SPINDLES" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
-
-  add_param( "SPINDLES" , "fc" , "11,15" , "Restrict analysis to these channels (otherwise, all channels are included)" );
-  add_param( "SPINDLES" , "cycles" , "12" , "Number of cycles (default 7)" );
-  add_param( "SPINDLES" , "th" , "6" , "Multiplicative threshold for core spindle detection (default 4.5)" );
-  add_param( "SPINDLES" , "th2" , "3" , "Multiplicative threshold for non-core spindle detection (default=2)" );
-  add_param( "SPINDLES" , "median" , "" , "Flag to indicate that the median, not mean, is used for thresholding" );
-  add_param( "SPINDLES" , "q" , "0.3" , "Quality metric criterion for individual spindles (default 0)" );
+  add_param1( "SPINDLES" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  add_param1( "SPINDLES" , "fc" , "11,15" , "Restrict analysis to these channels (otherwise, all channels are included)" );
+  add_param1( "SPINDLES" , "cycles" , "12" , "Number of cycles (default 7)" );
+  add_param1( "SPINDLES" , "th" , "6" , "Multiplicative threshold for core spindle detection (default 4.5)" );
+  add_param1( "SPINDLES" , "th2" , "3" , "Multiplicative threshold for non-core spindle detection (default=2)" );
+  add_param1( "SPINDLES" , "median" , "" , "Flag to indicate that the median, not mean, is used for thresholding" );
+  add_param1( "SPINDLES" , "q" , "0.3" , "Quality metric criterion for individual spindles (default 0)" );
 
   add_param( "SPINDLES" , "fc-lower" , "9" , "Lower limit if iterating over multiple F_C values" );
   add_param( "SPINDLES" , "fc-upper" , "16" , "Upper limit if iterating over multiple F_C values" );
