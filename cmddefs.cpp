@@ -2757,6 +2757,8 @@ void cmddefs_t::init()
 
   add_table( "SPINDLES" , "CH,F" , "Individual-level output" );
   add_var( "SPINDLES" , "CH,F" , "DENS" , "Spindle density (count per minute)" );
+  add_var( "SPINDLES" , "CH,F" , "CDENS" , "Coupled spindle density (count per minute)" );
+  add_var( "SPINDLES" , "CH,F" , "UDENS" , "Uncoupled spindle density (count per minute)" );
   add_var( "SPINDLES" , "CH,F" , "AMP" , "Mean spindle amplitude (uV or mV units)" );
   add_var( "SPINDLES" , "CH,F" , "ACT_MX" , "Mean max spindle activity (normed CWT)" );
   add_var( "SPINDLES" , "CH,F" , "ACT_MN" , "Mean average spindle activity (normed CWT)" );
@@ -2998,7 +3000,23 @@ void cmddefs_t::init()
   add_var( "SPINDLES" , "CH,N" , "SLOPE_NEG1" , "Negative peak falling slope" );
   add_var( "SPINDLES" , "CH,N" , "SLOPE_NEG2" , "Negative peak rising slope" );
   
-  
+  //
+  // SP/SO coupling (w/out ANCHOR)
+  //
+
+  add_table( "SPINDLES" , "CH,F" , "SP/SO coupling stats" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG" , "SO/SP coupling: magnitude (original statistic)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_NULL" , "SO/SP coupling: meanmagnitude under null" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_Z" , "SO/SP coupling: magnitude (empirical Z)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_EMP" , "SO/SP coupling: magnitude (empirical P)" );  
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP" , "SO/SP coupling: overlap (original statistic)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_NULL" , "SO/SP coupling: mean overlap under null" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_Z" , "SO/SP coupling: overlap (empirical Z)" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (empirical P)" );  
+  add_var( "SPINDLES" , "CH,F" , "COUPL_ANGLE" , "SO/SP coupling: mean SO phase angle at spindle peak" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_PV" , "SO/SP coupling: asymptotic ITPC p-value" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_SIGPV_NULL" , "SO/SP coupling: null rate of asymptotic ITPC p-value < 0.05" );
+
 
   //
   // SP/SO coupling options

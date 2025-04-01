@@ -1048,8 +1048,13 @@ double MiscMath::overdispersion( const std::vector<int> & a , double * pv )
   // for now, just add some upper bound, come back and fix this
   int mx = 0;
   for (int i=0;i<n;i++) if ( a[i] > mx ) mx = a[i];
-  if ( mx > 100 ) Helper::halt("bailed in overdispersion test..." );
-  
+  if ( mx > 100 ) 
+    {
+      logger << "  **** warning - problem with overdispersion metric calculation...\n";
+      //Helper::halt("bailed in overdispersion test..." );
+      return 0;
+  }
+    
   const double m = mean( a );
   const double s2 = variance( a );
 
