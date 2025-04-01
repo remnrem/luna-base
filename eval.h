@@ -117,7 +117,11 @@ class cmd_t
 
   static void attach_idmapper( const std::string & file );
 
+  // old proc_forloops() [loops only] called by replace_wildcards()
   static std::vector<std::string> proc_forloops( const std::vector<std::string> & s );
+
+  // new proc_forloops() called by dynamic_parse() [new replace_wildcards() ]
+  static std::vector<std::string> proc_all( const std::vector<std::string> & s , std::map<std::string,std::string> * );
   
   static std::string remap_id( const std::string & id )
   {
@@ -138,7 +142,9 @@ class cmd_t
   void reset() ;
 
   static void define_channel_type_variables( edf_t & );
-  
+
+  void dynamic_parse( const std::string & id );
+    
   void replace_wildcards( const std::string & id );
 
   bool eval( edf_t & ) ;
@@ -332,6 +338,7 @@ void proc_hypoxic_burden( edf_t & , param_t & );
 void proc_annotate( edf_t & , param_t & );
 void proc_annot2signal( edf_t & , param_t & );
 void proc_signal2annot( edf_t & , param_t & );
+void proc_annot_crosstabs( edf_t & , param_t & );
 void proc_sig_annot_mean( edf_t & , param_t & );
 void proc_annot2cache( edf_t & , param_t & );
 void proc_cache2annot( edf_t & , param_t & );

@@ -63,7 +63,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   // but can also include key=value pairs, with keys:
   //   id
   //   edf
-  //   sample-list
+  //   silst | sample-list
   //   fixed=T
     
   for (int i=0; i<tok.size(); i++)
@@ -77,6 +77,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	{
 	  if ( tok2[0] == "id" ) id = tok2[1];
 	  else if ( tok2[0] == "edf" ) filename = tok2[1];
+	  else if ( tok2[0] == "slist" ) slist = tok2[1];
 	  else if ( tok2[0] == "sample-list" ) slist = tok2[1];
 	  else if ( tok2[0] == "fixed" ) use_fixed_order = Helper::yesno( tok2[1] );
 	  logger << "  setting option: " << tok2[0] << " = " << tok2[1] << "\n";
@@ -520,7 +521,7 @@ void Helper::bind_EDFs( const std::vector<std::string> & tok )
   // but can also include key=value pairs, with keys:
   //   id
   //   edf
-  //   sample-list
+  //   slist | sample-list
   
   for (int i=0; i<tok.size(); i++)
     {
@@ -533,6 +534,7 @@ void Helper::bind_EDFs( const std::vector<std::string> & tok )
 	{
 	  if ( tok2[0] == "id" ) id = tok2[1];
 	  else if ( tok2[0] == "edf" ) filename = tok2[1];
+	  else if ( tok2[0] == "slist" ) slist = tok2[1];	  
 	  else if ( tok2[0] == "sample-list" ) slist = tok2[1];	  
 	  logger << "  setting option: " << tok2[0] << " = " << tok2[1] << "\n";
 	  continue;

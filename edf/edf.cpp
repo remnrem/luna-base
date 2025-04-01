@@ -3115,7 +3115,7 @@ void edf_t::reference( const signal_list_t & signals0 ,
 		       bool dereference ,
 		       const bool verbose )
 {
-
+  
   // copy as we may modify this
   signal_list_t signals = signals0;
   

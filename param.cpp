@@ -279,7 +279,7 @@ std::set<std::string> param_t::strset_xsigs( const std::string & k , const std::
 {
   std::set<std::string> s;
   if ( ! has(k) ) return s;
-  const std::string t = Helper::xsigs( value(k,uppercase) );
+  const std::string t = Helper::incexc( Helper::xsigs( value(k,uppercase) ) );
   std::vector<std::string> tok = Helper::quoted_parse( t , delim );
   for (int i=0;i<tok.size();i++)
     s.insert( Helper::unquote( tok[i]) );
@@ -296,14 +296,15 @@ std::vector<std::string> param_t::strvector( const std::string & k , const std::
   return s;
 }
 
-// embed [x][y] expansion in strvector
+// embed [x][y] expansion in strvector, as well as [x] & [-x] inc/exc
 std::vector<std::string> param_t::strvector_xsigs( const std::string & k , const std::string delim , const bool uppercase ) const
 {  
   std::vector<std::string> s;
   if ( ! has(k) ) return s;
 
   // first get string and process for xsigs, then tokenize
-  const std::string t = Helper::xsigs( value(k,uppercase) );
+  const std::string t = Helper::incexc( Helper::xsigs( value(k,uppercase) ) );  
+  //  std::cout << "\n\nt [" << t << "]\n";
   std::vector<std::string> tok = Helper::quoted_parse( t , delim );
   for (int i=0;i<tok.size();i++)
     s.push_back( Helper::unquote( tok[i]) );

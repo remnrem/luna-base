@@ -152,7 +152,7 @@ class cmddefs_t
 
 
   //
-  // 'primary' cmd/tables/vars/param
+  // add 'hidden' commands cmd/tables/vars/param
   //
 
   void add_cmd1( const std::string & domain ,
@@ -173,7 +173,7 @@ class cmddefs_t
 		   const std::string & desc ,
 		   bool isz = false ,
 		   bool hide = false );
-
+  
   void add_var1( const std::string & cmd ,
 		 const std::string & factors ,
 		 const std::string & var ,
