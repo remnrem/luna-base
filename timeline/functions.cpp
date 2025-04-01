@@ -309,12 +309,19 @@ void timeline_t::signal2annot( const param_t & param )
   // Parse encodings
   //
 
+  // encode first (label) with XX,1  XX,2  etc to allow
+  // duplicate labels; but remove those when printing to annots
   std::map<std::string,std::pair<double,double> > e;
 
+  int num_digs = MiscMath::num_digits( enc.size() );
+  
   for (int i=0; i<enc.size(); i += nxy )
     {
-      std::string label = enc[i];
-      
+
+      // make each label unique , i.e. to have a one-to-many mapping
+      // of labels to ranges
+      std::string label = enc[i] + "," + Helper::zero_pad(i , num_digs) ;
+          
       double ex = 0 ;
       if ( ! Helper::str2dbl( enc[i+1] , &ex ) )
 	Helper::halt( "bad numeric value for encoding" + enc[i+1] );
@@ -368,12 +375,9 @@ void timeline_t::signal2annot( const param_t & param )
 
   for (int s=0; s<ns; s++)
     {
-
       
       if ( edf->header.is_annotation_channel( signals(s) ) )
 	continue;
-
-
       
       //
       // get signal data
@@ -453,7 +457,12 @@ void timeline_t::signal2annot( const param_t & param )
       while ( ee != e.end() )
 	{
 	  
-	  const std::string & label = ee->first; 
+	  const std::string & label = ee->first;	  
+
+	  // remove xxx,N uniquificaiton
+	  const std::vector<std::string> ll = Helper::parse( label , "," );
+	  const std::string display_label = ll.size() == 0 ? "." : ll[0] ;
+      	    
 	  double ex = ee->second.first;
 	  double ey = ee->second.second;
 	  
@@ -461,8 +470,8 @@ void timeline_t::signal2annot( const param_t & param )
 	  //   (note: if exists, then add() returns existing set, so earier
 	  //          to use add() rather than find() ) 
 	  
-	  std::string class_label = use_class ? class_name : label ;
-	  std::string inst_label  = use_class ? label      : "."   ;
+	  std::string class_label = use_class ? class_name : display_label ;
+	  std::string inst_label  = use_class ? display_label      : "."   ;
 	  if ( add_ch_label ) class_label += "_" + ch_label;
 	  
 	  annot_t * a = annotations.add( class_label );
@@ -1396,13 +1405,19 @@ int timeline_t::annot2sp( edf_t & edf , const std::string & astr ,
 void timeline_t::signal_means_by_annot( const param_t & param )
 {
 
+  
   //
   // annots
   //
 
+  // for root-match
+  std::vector<std::string> names = annotations.names();
+  
   if ( ! param.has( "annot" ) ) Helper::halt( "no annotations specified: e.g. annot=A1,A2" );
-  std::vector<std::string> anames = param.strvector_xsigs( "annot" );
 
+  std::vector<std::string> anames = Helper::set2vec( annotate_t::root_match( param.strset_xsigs( "annot" ) , names ) );
+
+  
   //
   // ignore annotation instannce IDs?
   //
@@ -2304,13 +2319,20 @@ void timeline_t::set_annot_metadata( const param_t & param )
 //
 // Implements AXA 
 //
+
 void timeline_t::annot_crosstabs( const param_t & param )
 {
+
+  // for root-match
+  std::vector<std::string> names = annotations.names();
   
   // get list of annotations
   std::vector<std::string> requested = param.has( "annot" ) && param.value( "annot" ) != "."
     ? param.strvector_xsigs( "annot" )
-    : annotations.names() ;
+    : names ; 
+  
+  // allow root-matching
+  //  requested = Helper::set2vec( annotate_t::root_match( Helper::vec2set( requested ) , names ) );
   
   // group annots by class only, or also by instance IDs?
   const bool by_instance = param.has( "by-instance" );
@@ -2396,7 +2418,7 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	      int n1 = ee->second.size();
 	      ee->second = annotate_t::flatten( ee->second );
 	      int n2 = ee->second.size();
-	      if ( n2 < n1 ) logger << "  reduced " << ee->first << " from " << n1 << " to " << n2 << " events\n";	      
+	      if ( n2 < n1 ) logger << "  reduced " << ee->first << " from " << n1 << " to " << n2 << " events\n";
 	      ++ee;
 	    }
 	  ++aa;
@@ -2491,7 +2513,7 @@ void timeline_t::annot_crosstabs( const param_t & param )
 		    }
 		  
 		  // now count back
-		  while ( 1	)
+		  while ( 1 )
 		    {
 		      if ( closest == b.begin() ) break;		  
 		      --closest;
@@ -2527,7 +2549,6 @@ void timeline_t::annot_crosstabs( const param_t & param )
 		  if ( verbose )
 		    {
 		      std::cout << " olap = " << bb->first << " " << aa->first << " = " << overlaps.size() << "\n";
-		      
 		    }
 		  
 		  ++seed;

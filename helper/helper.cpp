@@ -2359,8 +2359,8 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		  std::string lvalue = tok[0].substr( 0 , tok[0].size() - 1 ); // skip "+" of "+=" 
 		  std::string evalue = (*vars)[ lvalue ] == "" ? tok[1] : ( "," + tok[1] )  ;
 		  Helper::expand_numerics( &evalue );		  
-		  if ( ! silent )
-		    logger << "  appending variable ${" << lvalue << "} = " << (*vars)[ lvalue ] << evalue << "\n";
+		  if ( globals::verbose_var_assignment || ! silent )
+		    logger << "   appending variable ${" << lvalue << "} = " << (*vars)[ lvalue ] << evalue << "\n";
 		  (*vars)[ lvalue ] += evalue;
 		  break;
 		}
@@ -2378,8 +2378,8 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		  std::string evalue = tok[1];
 		  if ( ! boolvar ) Helper::expand_numerics( &evalue );		    
 		  if ( boolvar ) evalue = Helper::yesno( evalue ) ? "1" : "0" ;		  
-		  if ( ! silent ) 
-		    logger << "  setting variable ${" << tok[0] << "} = " << evalue << "\n";
+		  if ( globals::verbose_var_assignment || ! silent ) 
+		    logger << "   setting variable ${" << tok[0] << "} = " << evalue << "\n";
 		  (*vars)[ tok[0] ] = evalue;
 		  break;
 		}

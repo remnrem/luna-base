@@ -188,6 +188,8 @@ bool globals::cache_log;
 bool globals::write_log;
 std::string globals::log_file;
 bool globals::devel;
+bool globals::verbose_var_assignment;
+bool globals::mirror;
 
 std::string globals::epoch_strat;
 std::string globals::time_strat;
@@ -291,9 +293,13 @@ void globals::init_defs()
   verbose = false; 
 
   devel = false;
-		 
+
+  mirror = false;
+  
   time_format_dp = 3;
 
+  verbose_var_assignment = false;
+  
   //
   // Annotation folder
   //
