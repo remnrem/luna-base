@@ -74,6 +74,7 @@ int globals::time_format_dp;
 
 bool globals::read_ftr;
 std::set<std::string> globals::specified_annots;
+std::set<std::string> globals::excluded_annots;
 
 std::map<globals::atype_t,std::string> globals::type_name;
 std::map<std::string,globals::atype_t> globals::name_type;
@@ -342,6 +343,7 @@ void globals::init_defs()
   //
 
   specified_annots.clear();
+  excluded_annots.clear();
 
   //
   // try to fix EDF if 'corrupt'

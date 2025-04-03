@@ -376,6 +376,9 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
 	   globals::specified_annots.find( ann[e] ) == globals::specified_annots.end() ) 
 	continue;
 
+      if ( globals::excluded_annots.find( ann[e] ) != globals::excluded_annots.end() ) 	   
+	continue;
+
       //
       // we may have a null annot here, e.g if a whitelist was
       // specified
@@ -802,8 +805,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( globals::specified_annots.size() > 0 && 
 	       globals::specified_annots.find( name ) == globals::specified_annots.end() ) 
 	    continue;
+	  
+	  if ( globals::excluded_annots.find( name ) != globals::excluded_annots.end() ) 	   
+	    continue;
 
-	  //std::cout << " loading " << name << "\n";
 	  
 	  //
 	  // otherwise, create the annotation if it doesn't exist
@@ -1085,6 +1090,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	       globals::specified_annots.find( aname ) == globals::specified_annots.end() ) 
 	    continue;
 
+	  if ( globals::excluded_annots.find( aname ) != globals::excluded_annots.end() ) 	   
+	    continue;
+
+	  
 	  //
 	  // was this annotation specified in the header?  If not, create on-the-fly as
 	  // a vanilla annot (i.e. same as '# annot' in header row, so implies no 
@@ -2632,9 +2641,13 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       concept->value = nsrr_t::remap( concept->value );
       if ( concept->value == "" ) continue;
       
-      // are we checking whether to add this file or no? 
+      // are we checking whether to add this annot or no? 
       if ( globals::specified_annots.size() > 0 && 
 	   globals::specified_annots.find( concept->value ) == globals::specified_annots.end() ) continue;
+      
+      if ( globals::excluded_annots.find( concept->value ) != globals::excluded_annots.end() ) 	   
+	continue;
+      
       
       // already found?
       if ( added.find( concept->value ) != added.end() ) continue;
@@ -2678,10 +2691,12 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  ss = nsrr_t::remap( ss );
 	  if ( ss == "" ) continue;
 	  
-	  // are we checking whether to add this file or no? 
-	  
+	  // are we checking whether to add this annotation or no? 
 	  if ( globals::specified_annots.size() > 0 && 
 	       globals::specified_annots.find( ss ) == globals::specified_annots.end() ) continue;
+
+	  if ( globals::excluded_annots.find( ss ) != globals::excluded_annots.end() ) 	   
+	    continue;
 	  
 	  // already found?
 	  if ( added.find( ss ) != added.end() ) continue;
@@ -5160,6 +5175,10 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
 	   globals::specified_annots.find( cls_name )
 	   == globals::specified_annots.end() ) continue;
 
+      if ( globals::excluded_annots.find( cls_name ) != globals::excluded_annots.end() ) 	   
+	continue;
+
+      
       //
       // track aliasing
       //
@@ -5262,6 +5281,10 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
 	   globals::specified_annots.find( cls_name ) 
 	   == globals::specified_annots.end() ) continue;
 
+      if ( globals::excluded_annots.find( cls_name ) != globals::excluded_annots.end() ) 	   
+	continue;
+
+      
       if ( cls_name != original_label )
 	edf->timeline.annotations.aliasing[ cls_name ] = original_label ;
 
@@ -5601,7 +5624,11 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 	      if ( globals::specified_annots.size() > 0 &&
 		   globals::specified_annots.find( aname ) == globals::specified_annots.end() )
 		continue;
-	    
+
+	      if ( globals::excluded_annots.find( aname ) != globals::excluded_annots.end() ) 	   
+		continue;
+
+	      
 	      // // sanitize?
 	      // if ( globals::sanitize_everything )
 	      // 	aname = Helper::sanitize( aname );
@@ -5727,11 +5754,11 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 		      
 		      if ( globals::specified_annots.size() > 0 &&
 			   globals::specified_annots.find( aname ) == globals::specified_annots.end() )
-			{
-			  // std::cout << " first [" << *globals::specified_annots.begin() << "] of " << globals::specified_annots.size() << "\n";
-			  // std::cout << "skipping\n";
-			  continue;
-			}
+			continue;
+		      
+		      if ( globals::excluded_annots.find( aname ) != globals::excluded_annots.end() ) 	   
+			continue;
+
 		      
 		      // sanitize? (done in remap() )
 		      //	      if ( globals::sanitize_everything )
