@@ -5125,7 +5125,10 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     {
       param_t dummy;     
       dummy.add( "dummy" , globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
-      globals::specified_annots = dummy.strset( "dummy" , "," );      
+      if ( tok1 == "." )
+	globals::specified_annots.clear();
+      else
+	globals::specified_annots = Helper::combine( globals::specified_annots, dummy.strset( "dummy" , "," ) );      
       return;
     }
 
@@ -5134,10 +5137,39 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     {
       param_t dummy;     
       dummy.add( "dummy" , tok1 );
-      globals::specified_annots = dummy.strset( "dummy" , "," );      
+      if ( tok1 == "." )
+	globals::specified_annots.clear();
+      else
+	globals::specified_annots = Helper::combine( globals::specified_annots, dummy.strset( "dummy" , "," ) );
       return;
     }
 
+
+  // excluded annots (do not load these)
+  if ( Helper::iequals( tok0 , "ignore-annots" ) || Helper::iequals( tok0 , "ignore-annot" ) ) 
+    {
+      param_t dummy;     
+      dummy.add( "dummy" , globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
+      if ( tok1 == "." )
+	globals::excluded_annots.clear();
+      else
+	globals::excluded_annots = Helper::combine( globals::excluded_annots, dummy.strset( "dummy" , "," ) );      
+      return;
+    }
+  
+  // specified annots (do not load these - but do not apply sanitization)
+  if ( Helper::iequals( tok0 , "ignore-raw-annots" ) || Helper::iequals( tok0 , "ignore-raw-annot" ) ) 
+    {
+      param_t dummy;     
+      dummy.add( "dummy" , tok1 );
+      if ( tok1 == "." )
+	globals::excluded_annots.clear();
+      else
+	globals::excluded_annots = Helper::combine( globals::excluded_annots, dummy.strset( "dummy" , "," ) );
+      return;
+    }
+
+  
   // delimiter char for annot key=value pairs (default '=')
   if ( Helper::iequals( tok0 , "annot-keyval" ) )
     {

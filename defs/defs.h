@@ -430,6 +430,7 @@ struct globals
   
   // specified annots
   static std::set<std::string> specified_annots;
+  static std::set<std::string> excluded_annots;
 
   // allow spaces in .annot files, or only tab delimited?
   static bool allow_space_delim;
