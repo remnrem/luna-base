@@ -2336,8 +2336,13 @@ void timeline_t::annot_crosstabs( const param_t & param )
   
   // group annots by class only, or also by instance IDs?
   const bool by_instance = param.has( "by-instance" );
+  
+  // only consider cls-cls comparisons where the instance ID matches
+  //   e.g. cls = ISO(band)  inst = ISO(phasebin)
+  const bool match_instance = param.has( "match-instance" );
+  if ( match_instance && ! by_instance ) Helper::halt( "match-instance requires by-instance is set" );
 
-  // flatten event?
+  // flatten events?
   const bool flatten = param.has( "flatten" ) ? param.yesno( "flatten" ) : false;
 
   // event-level output?
@@ -2347,7 +2352,12 @@ void timeline_t::annot_crosstabs( const param_t & param )
   //  note: some annotations might not have a channel specified,
   //        in which case the catch all "." counts as a 'channel'
   const bool within_channel = param.has( "within-channel" );
+
+  // anchor (-1,0,+1) for start, mid, stop
+  const int anchor = param.has( "start" ) ? -1 : ( param.has( "stop" ) ? +1 : 0 ) ; 
   
+  // time limit for match  ( neg means no window) 
+  const double window = param.has( "w" ) ? param.requires_dbl( "w" ) : -1 ; 
   
   // count implied annotations 
   if ( requested.size() == 0 )
@@ -2360,6 +2370,10 @@ void timeline_t::annot_crosstabs( const param_t & param )
   // ch -> annot -> interval lists
   std::map<std::string,std::map<std::string,std::set<interval_t> > > events;
   
+  // track annot instance ID (for match-instance) 
+  std::map<std::string,std::string> label2instance;
+
+
   //
   // iterate over each annotation
   //
@@ -2378,7 +2392,7 @@ void timeline_t::annot_crosstabs( const param_t & param )
       //
       // iterator over interval/event map
       //
-
+            
       const std::string label = requested[a];
       
       annot_map_t::const_iterator ii = annot->interval_events.begin();
@@ -2391,9 +2405,9 @@ void timeline_t::annot_crosstabs( const param_t & param )
 
 	  const std::string ch_str = within_channel ? instance_idx.ch_str : "." ;
 	  const std::string label1  = label + ( by_instance ? "_" + instance_idx.id : "" ); 
+	  if ( match_instance ) label2instance[ label1 ] = instance_idx.id; 
 
 	  // record
-
 	  events[ ch_str ][ label1 ].insert( instance_idx.interval );
 	  
 	  ++ii;
@@ -2469,12 +2483,22 @@ void timeline_t::annot_crosstabs( const param_t & param )
 
 	  // we want to keep 'a' 'as is' (i.e. might be flattened, but might not be
 	  //  but for 'b', here we should flatten to make the looks easier.
-	  
 	  const std::set<interval_t> b = annotate_t::flatten( bb->second );
-	  
+
 	  std::map<std::string,std::set<interval_t> >::const_iterator aa = events1.begin();
 	  while ( aa != events1.end() )
 	    {
+	      
+	      // does instance match?
+	      if ( match_instance ) 
+		{
+		  // skip if not
+		  if ( label2instance[ aa->first ] != label2instance[ bb->first ] )
+		    {
+		      ++aa;
+		      continue;
+		    }
+		}
 	      
 	      writer.level( aa->first , "SEED" );
 	      
@@ -2482,18 +2506,26 @@ void timeline_t::annot_crosstabs( const param_t & param )
 
 	      // to track outputs
 	      std::vector<double> sav_p, sav_t, sav_n, sav_a;
-	  
+	      
+	      // nearest (within w) [ will only contain instances that were within range ] 
+	      std::vector<double> sav_d;
+
 	      // determine for lists a and b :
 	      //   total % of overlap per all 'a'
 	      //   mean % of overlap per 'a' event
 	      //   num_secs of 'b' given 'a'
-	      
+	      //   time from seed 'anchor' to nearest 'b' 'anchor'
 	      //   % of 'a' with at least some 'b' overlap
 	      
+	      int sidx = 0;
+
 	      // for each 'seed' (i.e. conditioning event)
 	      std::set<interval_t>::const_iterator seed = a.begin();
 	      while ( seed != a.end() )
 		{
+
+		  ++sidx;
+
 		  // which b events span this, if any?
 		  
 		  // match logic from annotate.cpp
@@ -2505,6 +2537,8 @@ void timeline_t::annot_crosstabs( const param_t & param )
 		  
 		  std::set<interval_t> overlaps;
 		  
+		  std::vector<double> distances; 
+
 		  while ( 1 )
 		    {
 		      if ( closest == b.end() ) break;
@@ -2515,11 +2549,23 @@ void timeline_t::annot_crosstabs( const param_t & param )
 		  // now count back
 		  while ( 1 )
 		    {
+		      
+		      if ( anchor == -1 ) 
+			distances.push_back( closest->start_sec() - seed->start_sec() );
+		      else if ( anchor == -1 ) 
+			distances.push_back( closest->stop_sec() - seed->stop_sec() );
+		      else 
+			distances.push_back( closest->mid_sec() - seed->mid_sec() );
+				      
 		      if ( closest == b.begin() ) break;		  
 		      --closest;
+
 		      if ( closest->stop <= seed->start ) break;
+
 		      interval_t o( closest->start > seed->start ? closest->start : seed->start ,
 				    closest->stop < seed->stop  ? closest->stop : seed->stop );
+		      
+
 		      overlaps.insert( o );		  
 		    }
 		  
@@ -2541,6 +2587,34 @@ void timeline_t::annot_crosstabs( const param_t & param )
 		  sav_p.push_back( p_olap );
 		  sav_a.push_back( n_olap > 0 );
 		  
+		  if ( window > 0 && distances.size() > 0 ) 
+		    {
+		      std::cout << sidx << "  DIST " << bb->first << " " << aa->first  << " "  << distances.size() << " ";
+		      
+		      double q1 = window + 10000;
+		      double q  = 0;
+		      int okay = 0;
+
+		      for (int i=0; i<distances.size(); i++)
+			{
+			  const double d1 = fabs( distances[i] );
+			  
+			  if ( d1 < window )
+			    {
+			      ++okay;
+			      //std::cout << " con " << distances[i]  << " " << d1 << "\n";
+			      if ( d1 < q1 ) 
+				{
+				  q1 = d1;
+				  q = distances[i];
+				}
+			    }
+			}
+		      std::cout << " saving " << q << "\n";
+		      // save signed closest annot		      
+		      if ( okay ) 
+			sav_d.push_back( q );
+		    }
 		  
 		  //
 		  // Verbose output?
@@ -2561,14 +2635,18 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	      
 	      // mean (or median) per seed interval
 	      writer.value( "P" , MiscMath::mean( sav_p ) );
-	      writer.value( "P_MD" , MiscMath::median( sav_p ) );
+	      //writer.value( "P_MD" , MiscMath::median( sav_p ) );
 	      
 	      writer.value( "T" , MiscMath::mean( sav_t ) );
-	      writer.value( "T_MD" , MiscMath::median( sav_t ) );
+	      //writer.value( "T_MD" , MiscMath::median( sav_t ) );
 	      
 	      writer.value( "N" , MiscMath::mean( sav_n ) );
-	      writer.value( "N_MD" , MiscMath::median( sav_n ) );
+	      //writer.value( "N_MD" , MiscMath::median( sav_n ) );
 	      
+	      if ( sav_d.size() > 0 )
+		writer.value( "D" , MiscMath::mean( sav_d ) );
+	      writer.value( "D_N", (int)sav_d.size() );
+
 	      writer.value( "A" , MiscMath::mean( sav_a ) );
 	      
 	      // grand totals

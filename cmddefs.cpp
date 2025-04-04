@@ -588,25 +588,29 @@ void cmddefs_t::init()
   
   add_table( "AXA" , "SEED,ANNOT" , "AXA pairwise metrics" );
   add_var( "AXA" , "SEED,ANNOT" , "P" , "Mean proportion of each seed spanned by annotation" );
-  add_var( "AXA" , "SEED,ANNOT" , "P_MD" , "Median proportion of each seed spanned by annotation" );
+  //add_var( "AXA" , "SEED,ANNOT" , "P_MD" , "Median proportion of each seed spanned by annotation" );
   add_var( "AXA" , "SEED,ANNOT" , "T" , "Mean time (secs) spanned by annotation per seed event" );
-  add_var( "AXA" , "SEED,ANNOT" , "T_MD" , "Median time (secs) spanned by annotation per seed event" );
+  //add_var( "AXA" , "SEED,ANNOT" , "T_MD" , "Median time (secs) spanned by annotation per seed event" );
   add_var( "AXA" , "SEED,ANNOT" , "N" , "Mean number of spanning annotations per seed event" );
-  add_var( "AXA" , "SEED,ANNOT" , "N_MD" , "Median number of spanning annotations per seed event" );
+  //add_var( "AXA" , "SEED,ANNOT" , "N_MD" , "Median number of spanning annotations per seed event" );
   add_var( "AXA" , "SEED,ANNOT" , "A" , "Proportion of seeds with any spanning annotation" );
+  add_var( "AXA" , "SEED,ANNOT" , "D" , "Time (distance) to nearest" );
+  add_var( "AXA" , "SEED,ANNOT" , "D_N" , "Number of seeds with a nearest event" );
   add_var( "AXA" , "SEED,ANNOT" , "TOT_N" , "Total number of (flattened) annotations spanning all seeds" );
-  add_var( "AXA" , "SEED,ANNOT" , "TOT_N" , "Total duration (secs) of (flattened) annotations spanning all seeds" );
+  add_var( "AXA" , "SEED,ANNOT" , "TOT_T" , "Total duration (secs) of (flattened) annotations spanning all seeds" );
 
   add_table( "AXA" , "CH,SEED,ANNOT" , "AXA pairwise metrics, within-channel" );
   add_var( "AXA" , "CH,SEED,ANNOT" , "P" , "Mean proportion of each seed spanned by annotation" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "P_MD" , "Median proportion of each seed spanned by annotation" );
+  //add_var( "AXA" , "CH,SEED,ANNOT" , "P_MD" , "Median proportion of each seed spanned by annotation" );
   add_var( "AXA" , "CH,SEED,ANNOT" , "T" , "Mean time (secs) spanned by annotation per seed event" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "T_MD" , "Median time (secs) spanned by annotation per seed event" );
+  //add_var( "AXA" , "CH,SEED,ANNOT" , "T_MD" , "Median time (secs) spanned by annotation per seed event" );
   add_var( "AXA" , "CH,SEED,ANNOT" , "N" , "Mean number of spanning annotations per seed event" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "N_MD" , "Median number of spanning annotations per seed event" );
+  //add_var( "AXA" , "CH,SEED,ANNOT" , "N_MD" , "Median number of spanning annotations per seed event" );
   add_var( "AXA" , "CH,SEED,ANNOT" , "A" , "Proportion of seeds with any spanning annotation" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "D" , "Time (distance) to nearest" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "D_N" , "Number of seeds with a nearest event" );
   add_var( "AXA" , "CH,SEED,ANNOT" , "TOT_N" , "Total number of (flattened) annotations spanning all seeds" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "TOT_N" , "Total duration (secs) of (flattened) annotations spanning all seeds" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "TOT_T" , "Total duration (secs) of (flattened) annotations spanning all seeds" );
 
   
   
@@ -1091,8 +1095,14 @@ void cmddefs_t::init()
   add_param( "PEAKS" , "min-only" , "" , "Only find minima" );
   add_param( "PEAKS" , "percentile" , "20" , "Only report top 20% of peaks" );
 
-    
+  // 
+  // OVERLAP
+  //
 
+  // add_cmd( "interval"   , "OVERLAP" , "Interval overlap" );
+  // add_param( "OVERLAP" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+
+  
   
   /////////////////////////////////////////////////////////////////////////////////
   //
