@@ -1063,6 +1063,8 @@ void cmddefs_t::init()
 
   add_table( "TLOCK" , "CH,SEC,sCH" , "Spindle peak time-locked summaries" );
   add_var( "TLOCK" , "CH,SEC,sCH" , "M" , "Signal mean" );
+  add_var( "TLOCK" , "CH,SEC,sCH" , "MD" , "Signal median" );
+  add_var( "TLOCK" , "CH,SEC,sCH" , "SD" , "Signal SD" );
 
   add_table( "TLOCK" , "N,SEC,CH,sCH" , "Spindle peak time-locked counts" );
   add_var( "TLOCK" , "N,SEC,CH,sCH" , "V" , "Signal value" );
@@ -1099,9 +1101,33 @@ void cmddefs_t::init()
   // OVERLAP
   //
 
-  // add_cmd( "interval"   , "OVERLAP" , "Interval overlap" );
-  // add_param( "OVERLAP" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  add_cmd( "interval"   , "OVERLAP" , "Interval overlap" );
+  add_param( "OVERLAP" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
 
+  add_table( "OVERLAP" , "SEED,OTHER" , "Seed-other pairwise statistics" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D1_EXP" , "Expected absolute distance to nearest" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D1_OBS" , "Observed absolute distance to nearest" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D1_P" , "Empirical p-value for absolute distance to nearest" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D1_Z" , "Z-score for absolute distance to nearest" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_EXP" , "Expected signed distance to nearest" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_OBS" , "Observed signed distance to nearest" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_P" , "Empirical p-value for signed distance to nearest" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_Z" , "Z-score for signed distance to nearest" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D_N" , "Number of seeds for nearest stats" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D_N_EXP" , "Expected number of seeds for nearest stats" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "N_OBS" , "Number of overlaps" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "N_EXP" , "Expected number of overlaps" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "N_P" , "Overlap p-value" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "OTHER_ANNOT" , "Other annotation class label" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "SEED_ANNOT" , "Seed annotation class label" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "OTHER_CH" , "Other annotation channel label" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "SEED_CH" , "Seed annotation channel label" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "N_P" , "Overlap p-value" );
+
+  add_table( "OVERLAP" , "SEED,OTHERS" , "Seed-other seedwise statistics" );
+  add_var( "OVERLAP" , "SEED,OTHERS" , "N_OBS" , "Observed seed overlap" );
+  add_var( "OVERLAP" , "SEED,OTHERS" , "N_EXP" , "Expected seed overlap" );
+  
   
   
   /////////////////////////////////////////////////////////////////////////////////

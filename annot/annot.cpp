@@ -4444,7 +4444,9 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
   // either for all annots, or just a subset
   //
 
-  std::set<std::string> annots2write = param.strset_xsigs( "annot" );
+  std::set<std::string> annots2write = annotate_t::root_match( param.strset_xsigs( "annot" ) ,
+							       edf.timeline.annotations.names() );
+
 
   //
   // potentially allow for prefix matching here too

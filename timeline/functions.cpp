@@ -2504,6 +2504,10 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	      
 	      const std::set<interval_t> & a = aa->second;
 
+
+	      std::cout << "\n\n------------------------------"
+			<< aa->first << " .... " << bb->first << "\n";
+	      
 	      // to track outputs
 	      std::vector<double> sav_p, sav_t, sav_n, sav_a;
 	      
@@ -2545,23 +2549,34 @@ void timeline_t::annot_crosstabs( const param_t & param )
 		      if ( closest->start >= seed->stop ) break;
 		      ++closest;
 		    }
+
+		  if ( anchor == -1 ) 
+		    distances.push_back( closest->start_sec() - seed->start_sec() );
+		  else if ( anchor == -1 ) 
+		    distances.push_back( closest->stop_sec() - seed->stop_sec() );
+		  else 
+		    distances.push_back( closest->mid_sec() - seed->mid_sec() );		      
 		  
+		  //std::cout << "\n\n seed = " << seed->as_string() << "\n";
+
 		  // now count back
 		  while ( 1 )
 		    {
 		      
+
+		      if ( closest == b.begin() ) break;		  
+		      --closest;
+		      
+		      //std::cout << " considering " << closest->as_string() << "\n";
 		      if ( anchor == -1 ) 
 			distances.push_back( closest->start_sec() - seed->start_sec() );
 		      else if ( anchor == -1 ) 
 			distances.push_back( closest->stop_sec() - seed->stop_sec() );
 		      else 
-			distances.push_back( closest->mid_sec() - seed->mid_sec() );
-				      
-		      if ( closest == b.begin() ) break;		  
-		      --closest;
-
+			distances.push_back( closest->mid_sec() - seed->mid_sec() );		      
+		      
 		      if ( closest->stop <= seed->start ) break;
-
+		      
 		      interval_t o( closest->start > seed->start ? closest->start : seed->start ,
 				    closest->stop < seed->stop  ? closest->stop : seed->stop );
 		      
@@ -2589,7 +2604,7 @@ void timeline_t::annot_crosstabs( const param_t & param )
 		  
 		  if ( window > 0 && distances.size() > 0 ) 
 		    {
-		      std::cout << sidx << "  DIST " << bb->first << " " << aa->first  << " "  << distances.size() << " ";
+		      // std::cout << sidx << "  DIST " << bb->first << " " << aa->first  << " "  << distances.size() << " ";
 		      
 		      double q1 = window + 10000;
 		      double q  = 0;
@@ -2610,7 +2625,8 @@ void timeline_t::annot_crosstabs( const param_t & param )
 				}
 			    }
 			}
-		      std::cout << " saving " << q << "\n";
+
+		      //std::cout << " saving " << q << "\n";
 		      // save signed closest annot		      
 		      if ( okay ) 
 			sav_d.push_back( q );
@@ -2623,6 +2639,7 @@ void timeline_t::annot_crosstabs( const param_t & param )
 		  if ( verbose )
 		    {
 		      std::cout << " olap = " << bb->first << " " << aa->first << " = " << overlaps.size() << "\n";
+		      
 		    }
 		  
 		  ++seed;
