@@ -59,13 +59,13 @@ void timeline_t::annot2signal( const param_t & param )
 
   // use instance ID as a numeric value e.g. for NREMC 1 , 2 , 3 
   const bool numeric_instance = param.has( "numeric-inst" );
-  
+
   // if not otherwise specified, use annot names as new channel labels
   std::vector<std::string> labels = param.has( "label" ) ? param.strvector( "label" ) : anames;
 
   if ( anames.size() != labels.size() )
     Helper::halt( "label size does not match annot size" );
-  
+
   // get whole signal size for this SR
 
   const int np = sr * edf->header.record_duration * edf->header.nr;  
@@ -124,7 +124,7 @@ void timeline_t::annot2signal( const param_t & param )
       //
       // track total time implicated
       //
-      
+   
       int points = 0;
       for (int i=0;i<adat.size();i++) if ( adat[i] > 0 ) ++points;
       double seconds = points / sr;
@@ -132,11 +132,11 @@ void timeline_t::annot2signal( const param_t & param )
       if ( minutes > 0 )
 	seconds -= minutes * 60.0;
 
-      
+   
       //
       // write as a new signal
       //
-      
+   
       logger << "  adding " << events.size() << " "
 	     << anames[a] << " annotations (spanning ";
       if ( minutes > 0 ) logger << minutes << " min " << seconds << " sec)";
@@ -146,11 +146,11 @@ void timeline_t::annot2signal( const param_t & param )
 	logger << " as numeric instance-ID signal " << labels[a] << "\n";
       else
 	logger << " as 0/1 signal " << labels[a] << "\n";
-      
+   
       edf->add_signal( labels[a]  , sr , adat );
 
     }
-      
+   
 }
 
 
@@ -163,25 +163,25 @@ void timeline_t::signal2annot( const param_t & param )
   //
 
   std::string signal_label = param.requires( "sig" );
-  
+
   signal_list_t signals = edf->header.signal_list( signal_label );
-  
+
   if ( signals.size() == 0 ) Helper::halt( "could not find any signals: " + signal_label );
 
   const int ns = signals.size();
-  
-  
+
+
   //
   // S2A encoding
   //
-  
+
   // encoding=LABEL,lwr,upr
   // encoding=label,val,+win
   // bins=min,max,n
   // q=N
   // pos/neg         --> only make annots for above/below X (abs)
   // pos-pct/neg-pct --> only make annots for above/below X (percentile)
-  
+
   //  VALUE :  X    // --> X+EPS
   //           X-Y
   //           X+Y  // eps
@@ -215,7 +215,7 @@ void timeline_t::signal2annot( const param_t & param )
 
   if ( e2 + e3 + eb + eq + etop + ebot + etopp + ebotp > 1 )
     Helper::halt( "can only specify one of encoding|encoding2|bins|q|pos|neg|pos-pct|neg-pct" );
-  
+
   std::string bin_label = "";
   if ( param.has( "bin-label" ) ) bin_label = param.value( "bin-label" );
   else if ( param.has( "no-bin-label" ) ) bin_label = "";
@@ -223,12 +223,12 @@ void timeline_t::signal2annot( const param_t & param )
   else if ( eq ) bin_label = "Q";
   else if ( etop || etopp ) bin_label = "POS";
   else if ( ebot || ebotp ) bin_label = "NEG";
-  
+
   std::vector<std::string> enc; 
   int nxy = -1;
-  
+
   const int nq = eq ? param.requires_int( "q" ) : 0 ; 
-  
+
   if ( eq && ( nq < 1 || nq > 200 ) )
     Helper::halt( "q value must be between 2 and 200" );
 
@@ -241,7 +241,7 @@ void timeline_t::signal2annot( const param_t & param )
   if ( etopp || ebotp )
     if ( th <= 0 || th >= 1 )
       Helper::halt( "percentile thresholds must be between 0 and 1" );
-      
+   
   //
   // get encodings (although Q-encodings and topp/botp are signal specific, so do below)
   //
@@ -289,22 +289,22 @@ void timeline_t::signal2annot( const param_t & param )
   //
 
   const bool use_class = param.has( "class" );
-  
+
   std::string class_name = use_class ? param.value( "class" ) : "" ; 
-  
+
   //
   // Append channel name to label as instance ID 
   //
 
   const bool add_ch_label = param.has( "add-channel-label" ) ? param.yesno( "add-channel-label" ) : false ; 
-  
+
   //
   // Span EDF discontinuities or no?
   //
 
   bool span_disc = param.has( "span-gaps" );
 
-  
+
   //
   // Parse encodings
   //
@@ -314,14 +314,14 @@ void timeline_t::signal2annot( const param_t & param )
   std::map<std::string,std::pair<double,double> > e;
 
   int num_digs = MiscMath::num_digits( enc.size() );
-  
+
   for (int i=0; i<enc.size(); i += nxy )
     {
 
       // make each label unique , i.e. to have a one-to-many mapping
       // of labels to ranges
       std::string label = enc[i] + "," + Helper::zero_pad(i , num_digs) ;
-          
+       
       double ex = 0 ;
       if ( ! Helper::str2dbl( enc[i+1] , &ex ) )
 	Helper::halt( "bad numeric value for encoding" + enc[i+1] );
@@ -329,7 +329,7 @@ void timeline_t::signal2annot( const param_t & param )
       // default window
       bool window = true;
       double ey = 0.05;
-      
+   
       // 'encoding2' or 'bins'
       if ( e3 || eb )
 	{
@@ -337,7 +337,7 @@ void timeline_t::signal2annot( const param_t & param )
 	    Helper::halt( "bad numeric value for encoding" + enc[i+2] );
 	  
 	  window = enc[i+2].substr(0,1) == "+" ;
-      
+   
 	  if ( ! window ) 
 	    {
 	      if ( ey < ex )
@@ -355,7 +355,7 @@ void timeline_t::signal2annot( const param_t & param )
 	  ey = ex + w;
 	  ex -= w;	  
 	}           
-      
+   
       // record
       e[ label ] = std::make_pair( ex , ey );
 
@@ -365,20 +365,20 @@ void timeline_t::signal2annot( const param_t & param )
   // but add e[] here just so output below is correct (i.e. 1 annot)
   if ( etop || ebot || etopp || ebotp )
     e[ bin_label ] = std::make_pair( th , th );
-  
+
   logger << "  encoding " << ( eq ? nq : e.size() ) << " annotation instances\n";
-  
-  
+
+
   //
   // For each signal
   //
 
   for (int s=0; s<ns; s++)
     {
-      
+   
       if ( edf->header.is_annotation_channel( signals(s) ) )
 	continue;
-      
+   
       //
       // get signal data
       //
@@ -2505,8 +2505,8 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	      const std::set<interval_t> & a = aa->second;
 
 
-	      std::cout << "\n\n------------------------------"
-			<< aa->first << " .... " << bb->first << "\n";
+	      // std::cout << "\n\n------------------------------"
+	      // 		<< aa->first << " .... " << bb->first << "\n";
 	      
 	      // to track outputs
 	      std::vector<double> sav_p, sav_t, sav_n, sav_a;

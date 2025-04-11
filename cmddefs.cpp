@@ -1101,18 +1101,18 @@ void cmddefs_t::init()
   // OVERLAP
   //
 
-  add_cmd( "interval"   , "OVERLAP" , "Interval overlap" );
+  add_cmd1( "interval"   , "OVERLAP" , "Interval overlap" );
   add_param( "OVERLAP" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
 
-  add_table( "OVERLAP" , "SEED,OTHER" , "Seed-other pairwise statistics" );
+  add_table1( "OVERLAP" , "SEED,OTHER" , "Seed-other pairwise statistics" );
   add_var( "OVERLAP" , "SEED,OTHER" , "D1_EXP" , "Expected absolute distance to nearest" );
   add_var( "OVERLAP" , "SEED,OTHER" , "D1_OBS" , "Observed absolute distance to nearest" );
   add_var( "OVERLAP" , "SEED,OTHER" , "D1_P" , "Empirical p-value for absolute distance to nearest" );
   add_var( "OVERLAP" , "SEED,OTHER" , "D1_Z" , "Z-score for absolute distance to nearest" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_EXP" , "Expected signed distance to nearest" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_OBS" , "Observed signed distance to nearest" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_P" , "Empirical p-value for signed distance to nearest" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_Z" , "Z-score for signed distance to nearest" );
+  add_var1( "OVERLAP" , "SEED,OTHER" , "D2_EXP" , "Expected signed distance to nearest" );
+  add_var1( "OVERLAP" , "SEED,OTHER" , "D2_OBS" , "Observed signed distance to nearest" );
+  add_var1( "OVERLAP" , "SEED,OTHER" , "D2_P" , "Empirical p-value for signed distance to nearest" );
+  add_var1( "OVERLAP" , "SEED,OTHER" , "D2_Z" , "Z-score for signed distance to nearest" );
   add_var( "OVERLAP" , "SEED,OTHER" , "D_N" , "Number of seeds for nearest stats" );
   add_var( "OVERLAP" , "SEED,OTHER" , "D_N_EXP" , "Expected number of seeds for nearest stats" );
   add_var( "OVERLAP" , "SEED,OTHER" , "N_OBS" , "Number of overlaps" );
