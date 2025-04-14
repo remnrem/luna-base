@@ -257,7 +257,7 @@ void proc_trans( edf_t & edf , param_t & param )
 
       const int np = b.size();
 
-      annot_t * a = edf.timeline.annotations.add( annot );
+      annot_t * a = edf.annotations->add( annot );
       
       for (int i=0; i<np; i++)
 	{

@@ -539,7 +539,7 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
   if ( ! pops_opt_t::ignore_obs_staging )
     {
       // get staging
-      edf.timeline.annotations.make_sleep_stage( edf.timeline );
+      edf.annotations->make_sleep_stage( edf.timeline );
       
       // valid?
       has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
@@ -553,7 +553,7 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
   if ( ! has_staging )
     {
       // get some dummy (all W) staging
-      edf.timeline.annotations.dummy_sleep_stage( edf.timeline );
+      edf.annotations->dummy_sleep_stage( edf.timeline );
       
       // this allow for lights off/on logic to be applied
       has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
@@ -578,7 +578,7 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
       logger << "  *** no valid staging for trainer " <<  edf.id << "  ( -- skipping -- )\n";
 
       // as we added dummy W staging above
-      edf.timeline.annotations.clear_sleep_stage();
+      edf.annotations->clear_sleep_stage();
 
       return false;
     }
@@ -665,7 +665,7 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
   //
 
   if ( ! has_staging ) 
-    edf.timeline.annotations.clear_sleep_stage();
+    edf.annotations->clear_sleep_stage();
   
   
   //
@@ -2591,19 +2591,19 @@ void pops_indiv_t::add_annots( edf_t & edf , const std::string & prefix )
 {
   
   // ensure cleared if already present
-  edf.timeline.annotations.clear( prefix + "N1" );
-  edf.timeline.annotations.clear( prefix + "N2" );
-  edf.timeline.annotations.clear( prefix + "N3" );
-  edf.timeline.annotations.clear( prefix + "R" );
-  edf.timeline.annotations.clear( prefix + "W" );
-  edf.timeline.annotations.clear( prefix + "?" );
+  edf.annotations->clear( prefix + "N1" );
+  edf.annotations->clear( prefix + "N2" );
+  edf.annotations->clear( prefix + "N3" );
+  edf.annotations->clear( prefix + "R" );
+  edf.annotations->clear( prefix + "W" );
+  edf.annotations->clear( prefix + "?" );
   
-  annot_t * aN1 = edf.timeline.annotations.add( prefix + "N1" );
-  annot_t * aN2 = edf.timeline.annotations.add( prefix + "N2" );
-  annot_t * aN3 = edf.timeline.annotations.add( prefix + "N3" );
-  annot_t * aR = edf.timeline.annotations.add( prefix + "R" );
-  annot_t * aW = edf.timeline.annotations.add( prefix + "W" );
-  annot_t * aU = edf.timeline.annotations.add( prefix + "?" );
+  annot_t * aN1 = edf.annotations->add( prefix + "N1" );
+  annot_t * aN2 = edf.annotations->add( prefix + "N2" );
+  annot_t * aN3 = edf.annotations->add( prefix + "N3" );
+  annot_t * aR = edf.annotations->add( prefix + "R" );
+  annot_t * aW = edf.annotations->add( prefix + "W" );
+  annot_t * aU = edf.annotations->add( prefix + "?" );
   
   aN1->description = "N1, POPS prediction";
   aN2->description = "N2, POPS prediction";

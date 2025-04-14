@@ -39,6 +39,21 @@ extern writer_t writer;
 
 extern logger_t logger;
 
+timeline_t::timeline_t( edf_t * p )
+{      
+  edf = p;
+  annotations = p->annotations;
+  // std::cout << " timeline_t::timeline_t() : making new " << this << "\n";
+  // std::cout << "   linked to edf_t " << p << "\n";  
+  unepoch();
+} 
+
+timeline_t::~timeline_t()
+{
+  //std::cout << " timeline_t::~timeline_t() " << this << "\n";
+}
+
+
 
 // helper function: check if there is a discontinuity in a timeline
 

@@ -49,6 +49,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   //  all other files are appended in that order
   // will give a warning if the first file is not the actual first
 
+  annotation_set_t dummy;
   
   std::vector<edf_t*> edfs;
   
@@ -92,7 +93,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	  continue;
 	}
       
-      edf_t * edf = new edf_t;
+      edf_t * edf = new edf_t( &dummy );
       
       const std::string id = "id" + Helper::int2str( (int)( edfs.size() + 1 ) ) ;
       
@@ -269,7 +270,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   // Create the new merged EDF
   //
   
-  edf_t medf;
+  edf_t medf( &dummy );
   
   int first_edf = use_fixed_order ? 0 : time2edf.begin()->second;
   
@@ -510,7 +511,9 @@ void Helper::bind_EDFs( const std::vector<std::string> & tok )
   //  - check same # records
   //  - can be different sample rates
   //  - must be standard EDF for now  
-  
+
+  annotation_set_t annotations;
+
   std::vector<edf_t*> edfs;
   
   std::string id = "merged1";
@@ -547,8 +550,8 @@ void Helper::bind_EDFs( const std::vector<std::string> & tok )
 	  logger << "  ** warning: could not attach " << fname << "\n";
 	  continue;
 	}
-      
-      edf_t * edf = new edf_t;
+          
+      edf_t * edf = new edf_t( &annotations );
       
       const std::string id = "id" + Helper::int2str( (int)( edfs.size() + 1 ) ) ;
       
@@ -625,8 +628,9 @@ void Helper::bind_EDFs( const std::vector<std::string> & tok )
   //
   // Create the new merged EDF
   //
-  
-  edf_t medf;
+
+  edf_t medf( &annotations );
+
   
   //
   // Set header

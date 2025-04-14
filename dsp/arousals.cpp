@@ -124,7 +124,7 @@ arousals_t::arousals_t( edf_t & edf , param_t & param )
   // Annots
   //
   
-  annot_t * a = edf.timeline.annotations.add( aname );
+  annot_t * a = edf.annotations->add( aname );
   a->description = "Arousals";
   
 

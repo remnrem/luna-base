@@ -2881,7 +2881,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      const std::string aname = sp_label;// + "-" + analysis_label;
 	      
-	      annot_t * a = edf.timeline.annotations.add( aname );
+	      annot_t * a = edf.annotations->add( aname );
 	      a->description = "Spindle intervals";
 	      
 	      logger << "  creating annotation class: " << aname 

@@ -157,7 +157,8 @@ int fn_luna_slbuilder( const std::string & filename )
       // get ID from EDF? 
       if ( globals::sl_visit_edf ) 
 	{
-	  edf_t edf;
+	  annotation_set_t annotations;
+	  edf_t edf( &annotations );
 	  edf.attach( filename , "." );
 	  id = edf.header.patient_id;
 	  if ( id == "" ) 

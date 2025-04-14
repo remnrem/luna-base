@@ -76,7 +76,7 @@ void timeline_t::annot2signal( const param_t & param )
   for (int a=0; a<anames.size(); a++)
     {
       // does annot exist?
-      annot_t * annot = edf->timeline.annotations( anames[a] );
+      annot_t * annot = edf->annotations->find( anames[a] );
       if ( annot == NULL ) continue;
 
       // get all events
@@ -474,7 +474,7 @@ void timeline_t::signal2annot( const param_t & param )
 	  std::string inst_label  = use_class ? display_label      : "."   ;
 	  if ( add_ch_label ) class_label += "_" + ch_label;
 	  
-	  annot_t * a = annotations.add( class_label );
+	  annot_t * a = annotations->add( class_label );
 	  
 	  if ( a == NULL ) Helper::halt( "internal error in signal2annot()" );
 	  
@@ -603,7 +603,7 @@ void timeline_t::list_spanning_annotations( const param_t & param )
   
   std::vector<std::string> requested = param.has( "annot" ) && param.value( "annot" ) != "." 
     ? param.strvector_xsigs( "annot" ) 
-    : annotations.names() ;
+    : annotations->names() ;
   
 
   //
@@ -621,7 +621,7 @@ void timeline_t::list_spanning_annotations( const param_t & param )
   for (int a = 0 ; a < requested.size() ; a++ ) 
     {
       
-      annot_t * annot = annotations.find( requested[a] );
+      annot_t * annot = annotations->find( requested[a] );
       
       if ( annot == NULL ) continue;
       
@@ -841,7 +841,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 
   // annotation names
 
-  std::vector<std::string> names = annotations.names();
+  std::vector<std::string> names = annotations->names();
 
   // restrict to a subset? (allow wildcards here as well as xsigs )
   std::set<std::string> req_annots;
@@ -877,7 +877,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 	      if ( restricted && req_annots.find( names[a] ) == req_annots.end() )
 		continue;
 	      
-	      annot_t * annot = annotations.find( names[a] );
+	      annot_t * annot = annotations->find( names[a] );
 
 	      // get overlapping annotations for this epoch
 	      annot_map_t events = annot->extract( interval );
@@ -959,7 +959,7 @@ void timeline_t::list_all_annotations( const param_t & param )
       if ( restricted && req_annots.find( names[a] ) == req_annots.end() )
 	continue;
 
-      annot_t * annot = annotations.find( names[a] );
+      annot_t * annot = annotations->find( names[a] );
       
       if ( annot == NULL ) Helper::halt( "internal problem in list_all_annotations()" );
 
@@ -1254,7 +1254,7 @@ int timeline_t::annot2sp( edf_t & edf , const std::string & astr ,
   // get the annotation
   //
   
-  annot_t * annot = annotations( astr );
+  annot_t * annot = annotations->find( astr );
   
   if ( annot == NULL )
     Helper::halt( "could not find annotation class " + astr );
@@ -1411,7 +1411,7 @@ void timeline_t::signal_means_by_annot( const param_t & param )
   //
 
   // for root-match
-  std::vector<std::string> names = annotations.names();
+  std::vector<std::string> names = annotations->names();
   
   if ( ! param.has( "annot" ) ) Helper::halt( "no annotations specified: e.g. annot=A1,A2" );
 
@@ -1482,7 +1482,7 @@ void timeline_t::signal_means_by_annot( const param_t & param )
     {
 
       // does annot exist?
-      annot_t * annot = edf->timeline.annotations( anames[a] );
+      annot_t * annot = edf->annotations->find( anames[a] );
       if ( annot == NULL ) continue;
       const std::string & class_name = anames[a];
 	  
@@ -1974,7 +1974,7 @@ void timeline_t::set_annot_metadata( const param_t & param )
     {
       for (int a=0; a<oanames.size(); a++)
 	{      
-	  annot_t * a1 = annotations.find( oanames[a] );
+	  annot_t * a1 = annotations->find( oanames[a] );
 	  if ( a1 == NULL ) continue;
 	  
 	  // get /all/ annotations
@@ -2011,7 +2011,7 @@ void timeline_t::set_annot_metadata( const param_t & param )
     {
       
       // does annot exist?
-      annot_t * annot = edf->timeline.annotations( anames[a] );
+      annot_t * annot = edf->annotations->find( anames[a] );
       if ( annot == NULL ) continue;
       const std::string & class_name = anames[a];
       
@@ -2095,7 +2095,7 @@ void timeline_t::set_annot_metadata( const param_t & param )
 		  
 		  for (int a=0; a<oanames.size(); a++)
 		    {
-		      annot_t * a1 = annotations.find( oanames[a] );
+		      annot_t * a1 = annotations->find( oanames[a] );
 		      
 		      if ( a1 == NULL ) continue;
 	      
@@ -2324,7 +2324,7 @@ void timeline_t::annot_crosstabs( const param_t & param )
 {
 
   // for root-match
-  std::vector<std::string> names = annotations.names();
+  std::vector<std::string> names = annotations->names();
   
   // get list of annotations
   std::vector<std::string> requested = param.has( "annot" ) && param.value( "annot" ) != "."
@@ -2381,7 +2381,7 @@ void timeline_t::annot_crosstabs( const param_t & param )
   for (int a = 0 ; a < requested.size() ; a++ ) 
     {
       
-      annot_t * annot = annotations.find( requested[a] );
+      annot_t * annot = annotations->find( requested[a] );
       
       if ( annot == NULL ) continue;
       

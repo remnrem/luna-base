@@ -837,7 +837,8 @@ bool cmd_t::eval( edf_t & edf )
       // special status of this factor
       
       writer.level( cmd(c) , "_" + cmd(c) );
-            
+
+      
       //
       // Now process the command
       //
@@ -2431,7 +2432,7 @@ void proc_align( edf_t & edf , param_t & param )
   proc_write( edf , param );
   
   if ( param.has( "annot-out" ) )
-    edf.timeline.annotations.write( param.requires( "annot-out" ) , param , edf );
+    edf.annotations->write( param.requires( "annot-out" ) , param , edf );
   
   // force this to be the last command executed for this EDF, i.e. no it is saved
   globals::problem = true;
@@ -3010,7 +3011,7 @@ void proc_epoch( edf_t & edf , param_t & param )
       // for EDF+D, this vector is passed to timeline
       
       // find the first of these annotations
-      offset = edf.timeline.annotations.first( align_annots );
+      offset = edf.annotations->first( align_annots );
     }
   
 
@@ -3259,13 +3260,13 @@ void proc_list_annots( edf_t & edf , param_t & param )
 // ESPAN : per epoch, give # secs/proportion spanned by annotations
 void proc_espan(  edf_t & edf , param_t & param )
 {
-  edf.timeline.annotations.espan( edf, param );
+  edf.annotations->espan( edf, param );
 }
 
 // MAKE-ANNOTS : make new annotations based on pairwse intersection,union, overlap, etc
 void proc_make_annots( edf_t & edf , param_t & param )
 {
-  edf.timeline.annotations.make( param , edf );
+  edf.annotations->make( param , edf );
 }
 
 
@@ -3281,16 +3282,16 @@ void proc_write_annots( edf_t & edf , param_t & param )
   if ( param.has( "annot-dir" ) )
     {
       if ( param.has( "file" ) ) Helper::halt( "cannot specify both annot-dir and file" );
-      edf.timeline.annotations.write( "__special_make_dir__" , param , edf );
+      edf.annotations->write( "__special_make_dir__" , param , edf );
     }
   else
-    edf.timeline.annotations.write( param.requires( "file" ) , param , edf );
+    edf.annotations->write( param.requires( "file" ) , param , edf );
 }
 
 // EXTEND : make single point annots longer
 void proc_extend_annots( edf_t & edf , param_t & param )
 {
-  edf.timeline.annotations.extend( param );
+  edf.annotations->extend( param );
 }
 
 
@@ -3448,7 +3449,7 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
     }
   else
     {      
-      bool okay = edf.timeline.annotations.make_sleep_stage( edf.timeline, force_remake,
+      bool okay = edf.annotations->make_sleep_stage( edf.timeline, force_remake,
 							     wake , nrem1 , nrem2 , nrem3 ,
 							     nrem4 , rem , lights, misc );
       if ( ! okay ) return; // e.g. overlapping stages
@@ -4239,7 +4240,7 @@ void proc_remap_annots( edf_t & edf , param_t & param )
   const bool remap_spaces = param.has( "allow-spaces" ) ? param.yesno( "allow-spaces" ) : false;
   const bool remap_verbose = param.has( "verbose" );
   
-  int mapped = edf.timeline.annotations.remap( files , remap_field , remap_spaces , remap_verbose );
+  int mapped = edf.annotations->remap( files , remap_field , remap_spaces , remap_verbose );
 
   logger << "  remapped " << mapped << " annotations\n";
   
@@ -5963,9 +5964,9 @@ void proc_has_signals( edf_t & edf , param_t & param )
       // by default, this sets sslabel to SleepStage
       //
       
-      edf.timeline.annotations.make_sleep_stage( edf.timeline );
+      edf.annotations->make_sleep_stage( edf.timeline );
       
-      annot_t * annot = edf.timeline.annotations( "SleepStage" );
+      annot_t * annot = (*edf.annotations)( "SleepStage" );
       
       bool present = true;
       
@@ -6073,7 +6074,7 @@ void proc_has_signals( edf_t & edf , param_t & param )
       for (int a=0; a<na; a++)
 	{
 	  
-	  annot_t * annot = edf.timeline.annotations( annots[a] ) ;
+	  annot_t * annot = (*edf.annotations)( annots[a] ) ;
 	  bool found = annot != NULL ; 	  
 	  writer.level( annots[a] , globals::annot_strat );	  
 	  writer.value( "PRESENT" , found );

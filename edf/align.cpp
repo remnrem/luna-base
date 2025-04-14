@@ -112,7 +112,7 @@ bool edf_t::align( const std::vector<std::string> & annots )
 
   for (int a=0; a<annots.size(); a++)
     {
-      annot_t * annot = timeline.annotations.find( annots[ a ] );
+      annot_t * annot = annotations->find( annots[ a ] );
 
       if ( annot != NULL ) 
 	{
@@ -384,7 +384,7 @@ bool edf_t::align( const std::vector<std::string> & annots )
   // adjust all loaded annotations for subseuent WRITE-ANNOTS
   // that will be called; this ensures they will start at elapsed time = 0 
   
-  timeline.annotations.set_annot_offset( edf_start_tp );
+  annotations->set_annot_offset( edf_start_tp );
 
   // change EDF header starttime also
 
@@ -404,14 +404,14 @@ bool edf_t::align( const std::vector<std::string> & annots )
 
   // and fix any special variables in the annotation_set_t
   
-  timeline.annotations.duration_sec = new_nr * header.record_duration ;
+  annotations->duration_sec = new_nr * header.record_duration ;
 
   // no fractional seconds                                                     
-  timeline.annotations.duration_hms = Helper::timestring( globals::tp_1sec * timeline.annotations.duration_sec , '.' , false ); 
+  annotations->duration_hms = Helper::timestring( globals::tp_1sec * annotations->duration_sec , '.' , false ); 
 
-  timeline.annotations.start_hms = header.starttime ;
+  annotations->start_hms = header.starttime ;
 
-  timeline.annotations.epoch_sec = timeline.epoched() ? timeline.epoch_length() : globals::default_epoch_len ;
+  annotations->epoch_sec = timeline.epoched() ? timeline.epoch_length() : globals::default_epoch_len ;
   
   
   // 

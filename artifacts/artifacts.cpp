@@ -283,7 +283,7 @@ annot_t * buckelmuller_artifact_detection( edf_t & edf ,
   // In future, we may routinely expand all functions to return annotations
   //
   
-  annot_t * a = edf.timeline.annotations.add( "Buckelmuller" );
+  annot_t * a = edf.annotations->add( "Buckelmuller" );
   
   if ( a == NULL ) std::cout << "is null;\n";
 

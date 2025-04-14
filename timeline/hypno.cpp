@@ -99,7 +99,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   flanking_3class = param.has( "flanking-collapse-nrem" ) ? Helper::yesno( param.value( "flanking-collapse-nrem") ) : true;
 
   // get handle
-  annot_t * annot = timeline->annotations( sslabel );
+  annot_t * annot = timeline->annotations->find( sslabel );
   if ( annot == NULL ) 
     {
       logger << "  did not find any existing, valid sleep stage annotations...\n";
@@ -574,8 +574,8 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   // If not already set, see if there are lights_on and/or lights_off annotations present
   //
   
-  annot_t * lights_on_annot = timeline->annotations( "lights_on" );
-  annot_t * lights_off_annot = timeline->annotations( "lights_off" );
+  annot_t * lights_on_annot = timeline->annotations->find( "lights_on" );
+  annot_t * lights_off_annot = timeline->annotations->find( "lights_off" );
 
   //
   // valid combinations:                        | Off                    | On
@@ -3313,7 +3313,7 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
       std::string cn = Helper::int2str( cc->first );
 
       // annot class
-      annot_t * a = timeline->annotations.add( prefix + "cycle" + suffix + "n" + cn );
+      annot_t * a = timeline->annotations->add( prefix + "cycle" + suffix + "n" + cn );
       
       // epoch number start (adjust for 1-base encoding)
       int start_epoch = nremc_start_epoch[ cc->first ] - 1;
@@ -3335,7 +3335,7 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
       uint64_t q5  = len / 5LLU ;
       for (int q=0; q<5; q++)
 	{
-	  annot_t * a = timeline->annotations.add( prefix + "cycle" + suffix + "q" + Helper::int2str( q+1 ) );
+	  annot_t * a = timeline->annotations->add( prefix + "cycle" + suffix + "q" + Helper::int2str( q+1 ) );
 	  interval_t qinterval( interval.start + q5 * q , interval.start + q5 * (q+1) );
 	  instance_t * instance = a->add( "." , qinterval , "." );
 	}
@@ -3347,7 +3347,7 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 	{
 	  if ( m + min10 <= len )
 	    {	      
-	      annot_t * a = timeline->annotations.add( prefix + "cycle" + suffix + "m" + Helper::int2str( mc ) + "_" + Helper::int2str( mc+10)  );
+	      annot_t * a = timeline->annotations->add( prefix + "cycle" + suffix + "m" + Helper::int2str( mc ) + "_" + Helper::int2str( mc+10)  );
 	      interval_t minterval( interval.start + m , interval.start + m + min10 );
 	      instance_t * instance = a->add( "." , minterval , "." );
 	      mc += 10;
@@ -3384,12 +3384,12 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 
       if ( len >= 10 )
 	{
-	  annot_t * a = timeline->annotations.add( prefix + "bout10" + suffix + stg ) ;	  
+	  annot_t * a = timeline->annotations->add( prefix + "bout10" + suffix + stg ) ;	  
 	  a->add( "." , interval , "." );
 	}
       else if ( len >= 5 )
 	{
-	  annot_t * a = timeline->annotations.add( prefix + "bout05" + suffix + stg ) ;	  
+	  annot_t * a = timeline->annotations->add( prefix + "bout05" + suffix + stg ) ;	  
 	  a->add( "." , interval , "." );	  
 	}
       
@@ -3416,7 +3416,7 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
       
   // first interval (start to hour), may be fractional, as always starts at zero 
   std::string hrstr = ( hr < 10 ? "0"	: "" ) + Helper::int2str( hr );
-  annot_t * ah1 = timeline->annotations.add( prefix + "clock" + suffix + hrstr );
+  annot_t * ah1 = timeline->annotations->add( prefix + "clock" + suffix + hrstr );
   ah1->add( "." , interval_t( 0 , tp ) , "." );
 
   // move to next hour
@@ -3426,7 +3426,7 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
   while ( tp < timeline->last_time_point_tp )
     {      
       std::string hrstr = ( hr < 10 ? "0" : "" ) + Helper::int2str( hr );      
-      annot_t * ah1 = timeline->annotations.add( prefix + "clock" + suffix + hrstr );
+      annot_t * ah1 = timeline->annotations->add( prefix + "clock" + suffix + hrstr );
       ah1->add( "." , interval_t( tp , tp + hour_tp ) , "." );
       
       // move to the next hour
@@ -3446,7 +3446,7 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
   while ( tp < timeline->last_time_point_tp )
     {
       std::string hrstr = "h" + Helper::int2str( hr ) ;
-      annot_t * ah1 = timeline->annotations.add( prefix + "elapsed" + suffix + "T_" + hrstr );
+      annot_t * ah1 = timeline->annotations->add( prefix + "elapsed" + suffix + "T_" + hrstr );
       ah1->add( "." , interval_t( tp , tp + hour_tp ) , "." );
       // move to the next hour                                                                                                                                    
       ++hr;
@@ -3480,7 +3480,7 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
       if ( is_lights )
 	{
 	  std::string alabel = prefix + "lights";
-          annot_t * ah1 = timeline->annotations.add( alabel );
+          annot_t * ah1 = timeline->annotations->add( alabel );
           ah1->add( "." , interval , "." );
 	}
       
@@ -3490,14 +3490,14 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 	  double a = elapsed_stg_sec[ "W" ][ e ];
 	  int h = 1 + floor( a / 60.0 ) ;
 	  std::string alabel = prefix + "elapsed" + suffix + "W_h" + Helper::int2str( h ) ;
-	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  annot_t * ah1 = timeline->annotations->add( alabel );
 	  ah1->add( "." , interval , "." );
 
 	  // rel
 	  double r = elapsed_stg_rel[ "W" ][ e ];
 	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
           alabel = prefix + "elapsed" + suffix + "W_q" + Helper::int2str( q ) ;
-          annot_t * ah2 = timeline->annotations.add( alabel );
+          annot_t * ah2 = timeline->annotations->add( alabel );
           ah2->add( "." , interval , "." );	 	  
 	}
 
@@ -3507,14 +3507,14 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 	  double a = elapsed_stg_sec[ "WASO" ][ e ];
 	  int h = 1 + floor( a / 60.0 ) ;
 	  std::string alabel = prefix + "elapsed" + suffix + "waso_h" + Helper::int2str( h ) ;
-	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  annot_t * ah1 = timeline->annotations->add( alabel );
 	  ah1->add( "." , interval , "." );
 
 	  // rel
 	  double r = elapsed_stg_rel[ "WASO" ][ e ];
 	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
           alabel = prefix + "elapsed" + suffix + "waso_q" + Helper::int2str( q ) ;
-          annot_t * ah2 = timeline->annotations.add( alabel );
+          annot_t * ah2 = timeline->annotations->add( alabel );
           ah2->add( "." , interval , "." );	 	  
 	}
 
@@ -3524,14 +3524,14 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 	  double a = elapsed_stg_sec[ "S" ][ e ];
 	  int h = 1 + floor( a / 60.0 ) ;
 	  std::string alabel = prefix + "elapsed" + suffix + "S_h" + Helper::int2str( h ) ;
-	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  annot_t * ah1 = timeline->annotations->add( alabel );
 	  ah1->add( "." , interval , "." );
 
 	  // rel
 	  double r = elapsed_stg_rel[ "S" ][ e ];
 	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
           alabel = prefix + "elapsed" + suffix + "S_q" + Helper::int2str( q ) ;
-          annot_t * ah2 = timeline->annotations.add( alabel );
+          annot_t * ah2 = timeline->annotations->add( alabel );
           ah2->add( "." , interval , "." );	 	  
 	}
 
@@ -3541,14 +3541,14 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 	  double a = elapsed_stg_sec[ "N1" ][ e ];
 	  int h = 1 + floor( a / 60.0 ) ;
 	  std::string alabel = prefix + "elapsed" + suffix + "N1_h" + Helper::int2str( h ) ;
-	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  annot_t * ah1 = timeline->annotations->add( alabel );
 	  ah1->add( "." , interval , "." );
 
 	  // rel
 	  double r = elapsed_stg_rel[ "N1" ][ e ];
 	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
           alabel = prefix + "elapsed" + suffix + "N1_q" + Helper::int2str( q ) ;
-          annot_t * ah2 = timeline->annotations.add( alabel );
+          annot_t * ah2 = timeline->annotations->add( alabel );
           ah2->add( "." , interval , "." );	 	  
 	}
 
@@ -3558,14 +3558,14 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 	  double a = elapsed_stg_sec[ "N2" ][ e ];
 	  int h = 1 + floor( a / 60.0 ) ;
 	  std::string alabel = prefix + "elapsed" + suffix + "N2_h" + Helper::int2str( h ) ;
-	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  annot_t * ah1 = timeline->annotations->add( alabel );
 	  ah1->add( "." , interval , "." );
 
 	  // rel
 	  double r = elapsed_stg_rel[ "N2" ][ e ];
 	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
           alabel = prefix + "elapsed" + suffix + "N2_q" + Helper::int2str( q ) ;
-          annot_t * ah2 = timeline->annotations.add( alabel );
+          annot_t * ah2 = timeline->annotations->add( alabel );
           ah2->add( "." , interval , "." );	 	  
 	}
 
@@ -3575,14 +3575,14 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 	  double a = elapsed_stg_sec[ "N3" ][ e ];
 	  int h = 1 + floor( a / 60.0 ) ;
 	  std::string alabel = prefix + "elapsed" + suffix + "N3_h" + Helper::int2str( h ) ;
-	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  annot_t * ah1 = timeline->annotations->add( alabel );
 	  ah1->add( "." , interval , "." );
 
 	  // rel
 	  double r = elapsed_stg_rel[ "N3" ][ e ];
 	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
           alabel = prefix + "elapsed" + suffix + "N3_q" + Helper::int2str( q ) ;
-          annot_t * ah2 = timeline->annotations.add( alabel );
+          annot_t * ah2 = timeline->annotations->add( alabel );
           ah2->add( "." , interval , "." );	 	  
 	}
       
@@ -3592,14 +3592,14 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 	  double a = elapsed_stg_sec[ "NR" ][ e ];
 	  int h = 1 + floor( a / 60.0 ) ;
 	  std::string alabel = prefix + "elapsed" + suffix + "NR_h" + Helper::int2str( h ) ;
-	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  annot_t * ah1 = timeline->annotations->add( alabel );
 	  ah1->add( "." , interval , "." );
 
 	  // rel
 	  double r = elapsed_stg_rel[ "NR" ][ e ];
 	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
           alabel = prefix + "elapsed" + suffix + "NR_q" + Helper::int2str( q ) ;
-          annot_t * ah2 = timeline->annotations.add( alabel );
+          annot_t * ah2 = timeline->annotations->add( alabel );
           ah2->add( "." , interval , "." );	 	  
 	}
 
@@ -3609,14 +3609,14 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 	  double a = elapsed_stg_sec[ "R" ][ e ];
 	  int h = 1 + floor( a / 60.0 ) ;
 	  std::string alabel = prefix + "elapsed" + suffix + "R_h" + Helper::int2str( h ) ;
-	  annot_t * ah1 = timeline->annotations.add( alabel );
+	  annot_t * ah1 = timeline->annotations->add( alabel );
 	  ah1->add( "." , interval , "." );
 
 	  // rel
 	  double r = elapsed_stg_rel[ "R" ][ e ];
 	  int q = r == 1 ? 5 : floor( r / 0.2 ) + 1 ;
           alabel = prefix + "elapsed" + suffix + "R_q" + Helper::int2str( q ) ;
-          annot_t * ah2 = timeline->annotations.add( alabel );
+          annot_t * ah2 = timeline->annotations->add( alabel );
           ah2->add( "." , interval , "." );	 	  
 	}
 
@@ -3634,7 +3634,7 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
   //   hyp_t0_start, hyp_t1_lights_off, hyp_t2_sleep_onset,
   //   hyp_t3_sleep_midpoint, hyp_t4_final_wake, hyp_t5_lights_on, hyp_t6_stop
 
-  annot_t * a0 = timeline->annotations.add( prefix + "t0_start" );
+  annot_t * a0 = timeline->annotations->add( prefix + "t0_start" );
   a0->add( "." , interval_t( tp_0_start , tp_0_start ) , "." );
 
   // std::cout << " tp_0_start = " << tp_0_start << "\n"
@@ -3645,7 +3645,7 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
   // 	    << " t5_lights_on = " << tp_5_lights_on << "\n"
   // 	    << " t6_stop = " << tp_6_stop << "\n";
   
-  annot_t * a1 = timeline->annotations.add( prefix + "t1_lights_out" );
+  annot_t * a1 = timeline->annotations->add( prefix + "t1_lights_out" );
   a1->add( "." , interval_t( tp_1_lights_out , tp_1_lights_out ) , "." );
   
   
@@ -3654,20 +3654,20 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
   if ( tp_2_sleep_onset != tp_4_final_wake ) 
     {
 
-      annot_t * a2 = timeline->annotations.add( prefix + "t2_sleep_onset" );
+      annot_t * a2 = timeline->annotations->add( prefix + "t2_sleep_onset" );
       a2->add( "." , interval_t( tp_2_sleep_onset , tp_2_sleep_onset ) , "." );
 
-      annot_t * a3 = timeline->annotations.add( prefix + "t3_sleep_midpoint" );
+      annot_t * a3 = timeline->annotations->add( prefix + "t3_sleep_midpoint" );
       a3->add( "." , interval_t( tp_3_sleep_midpoint , tp_3_sleep_midpoint ) , "." );
 
-      annot_t * a4 = timeline->annotations.add( prefix + "t4_final_wake" );
+      annot_t * a4 = timeline->annotations->add( prefix + "t4_final_wake" );
       a4->add( "." , interval_t( tp_4_final_wake , tp_4_final_wake ) , "." );
     }
   
-  annot_t * a5 = timeline->annotations.add( prefix + "t5_lights_on" );
+  annot_t * a5 = timeline->annotations->add( prefix + "t5_lights_on" );
   a5->add( "." , interval_t( tp_5_lights_on , tp_5_lights_on ) , "." );
 
-  annot_t * a6 = timeline->annotations.add( prefix + "t6_stop" );
+  annot_t * a6 = timeline->annotations->add( prefix + "t6_stop" );
   a6->add( "." , interval_t( tp_6_stop , tp_6_stop ) , "." );
   
   
@@ -3722,7 +3722,7 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 	  else
 	    tr += "_W";
 	  
-	  annot_t * a = timeline->annotations.add( prefix + "tr" + suffix + tr );
+	  annot_t * a = timeline->annotations->add( prefix + "tr" + suffix + tr );
 	  interval_t tinterval( interval.stop , interval.stop );
 	  instance_t * instance = a->add( "." , tinterval , "." );
 	  
@@ -3731,55 +3731,55 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
       // WASO?
       if ( is_waso[e] )
 	{
-	  annot_t * a = timeline->annotations.add( prefix + "waso" );
+	  annot_t * a = timeline->annotations->add( prefix + "waso" );
           instance_t * instance = a->add( "." , interval , "." );
 	}
 
       // pre-sleep wake?
       if ( is_pre_sleep_wake )
 	{
-	  annot_t * a = timeline->annotations.add( prefix + "pre_sleep_wake" );
+	  annot_t * a = timeline->annotations->add( prefix + "pre_sleep_wake" );
           instance_t * instance = a->add( "." , interval , "." );
 	}
       
       // post-sleep wake?
       if ( is_post_sleep_wake )
 	{
-	  annot_t * a = timeline->annotations.add( prefix + "post_sleep_wake" );
+	  annot_t * a = timeline->annotations->add( prefix + "post_sleep_wake" );
           instance_t * instance = a->add( "." , interval , "." );
 	}
 
       // pre-sleep?
       if ( is_pre_sleep )
 	{
-	  annot_t * a = timeline->annotations.add( prefix + "pre_sleep" );
+	  annot_t * a = timeline->annotations->add( prefix + "pre_sleep" );
           instance_t * instance = a->add( "." , interval , "." );
 	}
       
       // post-sleep?
       if ( is_post_sleep )
 	{
-	  annot_t * a = timeline->annotations.add( prefix + "post_sleep" );
+	  annot_t * a = timeline->annotations->add( prefix + "post_sleep" );
           instance_t * instance = a->add( "." , interval , "." );
 	}
 
       // Ascending/descending N2
       if ( n2_ascdesc[e] >= 0.25 )
 	{
-	  annot_t * a = timeline->annotations.add( prefix + "N2" + suffix + "asc" );
+	  annot_t * a = timeline->annotations->add( prefix + "N2" + suffix + "asc" );
 	  instance_t * instance = a->add( "." , interval , "." );
 	}
       
       if ( n2_ascdesc[e] <= -0.25 )
 	{
-	  annot_t * a = timeline->annotations.add( prefix + "N2" + suffix + "dsc" );
+	  annot_t * a = timeline->annotations->add( prefix + "N2" + suffix + "dsc" );
 	  instance_t * instance = a->add( "." , interval , "." );
 	}
 
       // persistent sleep
       if ( in_persistent_sleep[e] )
 	{
-	  annot_t * a = timeline->annotations.add( prefix + "persistent_sleep" );
+	  annot_t * a = timeline->annotations->add( prefix + "persistent_sleep" );
           instance_t * instance = a->add( "." , interval , "." );
 	}
       
@@ -4778,7 +4778,8 @@ void hypnogram_t::output( const bool verbose ,
 
 void dummy_hypno()
 {
-  edf_t edf;
+  annotation_set_t annotations;
+  edf_t edf( &annotations );
   param_t param;
 
   // dummy values

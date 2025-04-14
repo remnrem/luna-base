@@ -820,42 +820,12 @@ struct annotation_set_t
   
   int remap( const std::vector<std::string> & files , int , bool , bool );
   
-  void clear() ;
+  void clear();
   
-  void clear( const std::string & name )
-  {
-    std::map<std::string,annot_t*>::iterator ii = annots.find( name );
-    if ( ii != annots.end() )
-      {
-	// only delete if this was the parent (i.e. so a copy of annot_t will not destroy the 
-	// original
-	if ( ii->second->parent == this ) 
-	  {
-	    delete ii->second;
-	    annots.erase( ii ); 
-	  }
-      }
-  }
+  void clear( const std::string & name );
 
-  void clean()
-  {
-    // remove empty annot classes, i.e. no instances
-    // this cleans up namespace post annotation, esp if remapping, etc
-
-    std::map<std::string,annot_t*> acopy = annots;
-    annots.clear();
-
-    std::map<std::string,annot_t*>::const_iterator ii = acopy.begin();
-    while ( ii != annots.end() )
-      {
-	annot_t * a = ii->second;
-	if ( ! a->empty() ) annots[ ii->first ] = ii->second;
-	else delete ii->second;	
-	++ii;
-      }
-  }
-  
-  
+  void clean();
+    
   std::vector<std::string> names() const 
   {
     std::vector<std::string> n;

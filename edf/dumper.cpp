@@ -116,7 +116,7 @@ void edf_t::record_dumper( param_t & param )
   // Annotations present? (i.e. already loaded)
   //
   
-  std::vector<std::string> annots = timeline.annotations.names();
+  std::vector<std::string> annots = annotations->names();
   
   int r = timeline.first_record();
   
@@ -144,7 +144,7 @@ void edf_t::record_dumper( param_t & param )
 	  for (int a=0;a<annots.size();a++)
 	    {
 	      
-	      annot_t * annot = timeline.annotations( annots[a] );
+	      annot_t * annot = (*annotations)( annots[a] );
 	      
 	      annot_map_t events = annot->extract( interval );
 	      
@@ -287,7 +287,7 @@ void edf_t::data_dumper( const std::string & signal_labels , const param_t & par
   // What annotations are present? (i.e. already loaded)
   //
   
-  std::vector<std::string> annots = timeline.annotations.names();
+  std::vector<std::string> annots = annotations->names();
   
 
   //
@@ -344,7 +344,7 @@ void edf_t::data_dumper( const std::string & signal_labels , const param_t & par
 	  for (int a=0;a<annots.size();a++)
 	    {
 	      
-	      annot_t * annot = timeline.annotations( annots[a] );
+	      annot_t * annot = (*annotations)( annots[a] );
 	      
 	      annot_map_t events = annot->extract( interval );
 	      
@@ -470,7 +470,7 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
   // What annotations are present? (i.e. already loaded)
   //
   
-  std::vector<std::string> annots = timeline.annotations.names();
+  std::vector<std::string> annots = annotations->names();
   
   //
   // Point to first epoch
@@ -591,7 +591,7 @@ void edf_t::data_epoch_dumper( param_t & param , std::set<std::string> * selecte
 	  
 	  if ( selected_annots != NULL && selected_annots->find( annots[a] ) == selected_annots->end() ) continue;
 	  
-	  annot_t * annot = timeline.annotations( annots[a] );
+	  annot_t * annot = (*annotations)( annots[a] );
 	  
 	  annot_map_t events = annot->extract( interval );
 	  
@@ -750,7 +750,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
       for (int i=0;i<a.size();i++)
 	{
 	  
-	  if ( timeline.annotations( a[i] ) != NULL ) // is this an interval annotation? 
+	  if ( (*annotations)( a[i] ) != NULL ) // is this an interval annotation? 
 	    { atype[ a[i] ] = 1; ++na_int; } 
 	  else if ( timeline.epoch_annotation( a[i] ) ) // or an epoch-annotation?
 	    { atype[ a[i] ] = 2; ++na_epoch; } 
@@ -953,7 +953,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 		      
 		      interval_t interval = timeline.epoch( epoch );
 		      
-		      annot_t * annot = timeline.annotations( aa->first );
+		      annot_t * annot = (*annotations)( aa->first );
 		      
 		      annot_map_t events = annot->extract( interval );
 		      
@@ -1204,7 +1204,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
 		    {		  
 		      // get exact point
 		      interval_t interval2 = interval_t( tp[t] , tp[t] + 1LLU );
-		      annot_t * annot = timeline.annotations( aa->first );
+		      annot_t * annot = (*annotations)( aa->first );
 		      annot_map_t events = annot->extract( interval2 );
 		      bool has_annot = events.size() ;
 		      OUT << "\t" << ( has_annot ? 1 : 0 ) ;
@@ -1359,8 +1359,8 @@ void edf_t::seg_dumper( param_t & param )
   
   if ( add_annots )
     {
-      a_segs = timeline.annotations.add( globals::annot_disc_segment );
-      a_gaps = timeline.annotations.add( globals::annot_disc_gap );      
+      a_segs = annotations->add( globals::annot_disc_segment );
+      a_gaps = annotations->add( globals::annot_disc_gap );      
     }
 
   const bool flag_largest_segment = param.has( "largest" ) && ! param.empty( "largest" );
@@ -1370,7 +1370,7 @@ void edf_t::seg_dumper( param_t & param )
   std::map<uint64_t,interval_t> seg_sizes;
     
   if ( flag_largest_segment )
-    a_largest = timeline.annotations.add( param.value( "largest" ) );
+    a_largest = annotations->add( param.value( "largest" ) );
   
   // we only need to consider this for discontinuous EDF+ 
   

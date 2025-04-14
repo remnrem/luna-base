@@ -57,7 +57,7 @@ lat_t::lat_t( edf_t & edf , param_t & param )
 
   const int ne = edf.timeline.first_epoch();
   
-  edf.timeline.annotations.make_sleep_stage( edf.timeline );
+  edf.annotations->make_sleep_stage( edf.timeline );
 
   // passes any hypno-related parameters too;
   // false --> not verbose

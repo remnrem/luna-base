@@ -159,7 +159,7 @@ void proc_mask( edf_t & edf , param_t & param )
       
       // if condition is comma-delimited, expand out any root* matches;
       //  otherwise all 
-      std::set<std::string> conditions = annotate_t::root_match( condition , edf.timeline.annotations.names() );
+      std::set<std::string> conditions = annotate_t::root_match( condition , edf.annotations->names() );
 
       // build primary input for epoch mask:
       std::map<annot_t*,std::set<std::string> > amask;
@@ -200,7 +200,7 @@ void proc_mask( edf_t & edf , param_t & param )
 	      fullspan.insert( annot_label );	      
 	    }
 	       	  
-          annot_t * annot = edf.timeline.annotations( annot_label );
+          annot_t * annot = (*edf.annotations)( annot_label );
 	  
 	  std::set<std::string> values;
 	  

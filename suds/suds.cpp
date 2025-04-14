@@ -1908,14 +1908,14 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	  if ( e == -1 ) 
 	    {
 	      std::string predss = suds_t::str( SUDS_UNKNOWN );
-	      annot_t * a = edf.timeline.annotations.add( predss );
+	      annot_t * a = edf.annotations->add( predss );
 	      instance_t * instance = a->add( "." , interval , "." );
 	    }
 	  else
 	    {
 	      // most likely value
 	      std::string predss = suds_t::eannot_prepend + suds_t::max_inrow( pp.row(e) , labels );
-	      annot_t * a = edf.timeline.annotations.add( predss );
+	      annot_t * a = edf.annotations->add( predss );
 	      instance_t * instance = a->add( "." , interval , "." );
 	    }
 	}

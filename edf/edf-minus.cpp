@@ -351,12 +351,12 @@ bool edf_t::edf_minus( param_t & param )
   int req_counts = 0;
   int nonstandard_alignment_annot_counts = 0;
   
-  std::vector<std::string> anames = timeline.annotations.names();  
+  std::vector<std::string> anames = annotations->names();  
   
   for (int a = 0 ; a < anames.size() ; a++ )
     {
       
-      annot_t * annot = timeline.annotations.find( anames[a] );
+      annot_t * annot = annotations->find( anames[a] );
       
       if ( annot == NULL ) continue;
       
@@ -1228,8 +1228,8 @@ bool edf_t::edf_minus( param_t & param )
   else
     logger << "  retaining original EDF start-date of " << sdate2 << "\n";
 
-  
-  edf_t e;
+  annotation_set_t annotations;
+  edf_t e( &annotations);
   
   e.init_empty( header.patient_id ,
    		nr ,        // estimated just above
@@ -1283,7 +1283,7 @@ bool edf_t::edf_minus( param_t & param )
   std::set<std::string>::const_iterator aa = anns.begin();
   while ( aa != anns.end() )
     {
-      annot_t * annot = e.timeline.annotations.add( *aa );
+      annot_t * annot = e.annotations->add( *aa );
       std::set<instance_idx_t>::const_iterator ee = events1.begin();
       while ( ee != events1.end() )
 	{	  
@@ -1384,8 +1384,8 @@ bool edf_t::edf_minus( param_t & param )
   
   // segments + breakpoints
   
-  annot_t * annot_segs = e.timeline.annotations.add( aprefix + "segment" );
-  annot_t * annot_gaps = e.timeline.annotations.add( aprefix + "gap" );
+  annot_t * annot_segs = e.annotations->add( aprefix + "segment" );
+  annot_t * annot_gaps = e.annotations->add( aprefix + "gap" );
 
   //  interval_t seg1 = 
 
@@ -1482,7 +1482,7 @@ bool edf_t::edf_minus( param_t & param )
   else if ( param.has( "hms" ) )
     param_write_annots.add( "hms" );  
 
-  e.timeline.annotations.write( out_root + ".annot" , param_write_annots , e );
+  e.annotations->write( out_root + ".annot" , param_write_annots , e );
     
 
 

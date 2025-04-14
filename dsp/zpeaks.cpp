@@ -225,7 +225,7 @@ void dsptools::zpeaks( edf_t & edf , param_t & param )
       if ( annot != "" )
 	{
 
-	  annot_t * a = edf.timeline.annotations.add( annot );
+	  annot_t * a = edf.annotations->add( annot );
 	  
 	  const std::string ch = signals.label( s );
 	  	  

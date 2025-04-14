@@ -661,27 +661,27 @@ void suds_indiv_t::add_annots( const Eigen::MatrixXd & pp , const std::vector<st
   if ( ! prior_staging ) return;
 
   // ensure cleared, i.e. so only one copy if run >1 (as from moonlight)
-  edf.timeline.annotations.clear( "sW" );
-  edf.timeline.annotations.clear( "sR" );
-  edf.timeline.annotations.clear( "sN1" );
-  edf.timeline.annotations.clear( "sN2" );
-  edf.timeline.annotations.clear( "sN3" );
-  edf.timeline.annotations.clear( "sNR" );
-  edf.timeline.annotations.clear( "s?" );
-  edf.timeline.annotations.clear( "sDISC3" );
-  edf.timeline.annotations.clear( "sDISC5" );
+  edf.annotations->clear( "sW" );
+  edf.annotations->clear( "sR" );
+  edf.annotations->clear( "sN1" );
+  edf.annotations->clear( "sN2" );
+  edf.annotations->clear( "sN3" );
+  edf.annotations->clear( "sNR" );
+  edf.annotations->clear( "s?" );
+  edf.annotations->clear( "sDISC3" );
+  edf.annotations->clear( "sDISC5" );
   
   // annot label
-  annot_t * aW = edf.timeline.annotations.add( "sW" );
-  annot_t * aR = edf.timeline.annotations.add( "sR" );
+  annot_t * aW = edf.annotations->add( "sW" );
+  annot_t * aR = edf.annotations->add( "sR" );
 
   aW->description = "W, SOAP-prediction";
   aR->description = "R, SOAP-prediction";
   
   // Discordance annots
   
-  annot_t * aDISC5 = suds_t::n_stages == 5 ? edf.timeline.annotations.add( "sDISC5" ) : NULL ;
-  annot_t * aDISC3 = edf.timeline.annotations.add( "sDISC3" );
+  annot_t * aDISC5 = suds_t::n_stages == 5 ? edf.annotations->add( "sDISC5" ) : NULL ;
+  annot_t * aDISC3 = edf.annotations->add( "sDISC3" );
   aDISC3->description = "3-class SOAP discordance";
 
   // NR
@@ -692,9 +692,9 @@ void suds_indiv_t::add_annots( const Eigen::MatrixXd & pp , const std::vector<st
 
   if ( suds_t::n_stages == 5 )
     {
-      aN1 = edf.timeline.annotations.add( "sN1" );
-      aN2 = edf.timeline.annotations.add( "sN2" );
-      aN3 = edf.timeline.annotations.add( "sN3" );
+      aN1 = edf.annotations->add( "sN1" );
+      aN2 = edf.annotations->add( "sN2" );
+      aN3 = edf.annotations->add( "sN3" );
       aN1->description = "N1, SOAP-prediction";
       aN2->description = "N2, SOAP-prediction";
       aN3->description = "N3, SOAP-prediction";
@@ -702,11 +702,11 @@ void suds_indiv_t::add_annots( const Eigen::MatrixXd & pp , const std::vector<st
     }
   else if ( suds_t::n_stages == 3 )
     {
-      aNR = edf.timeline.annotations.add( "sNR" );
+      aNR = edf.annotations->add( "sNR" );
       aNR->description = "NR, SOAP-prediction";
     }
   
-  annot_t * aU = edf.timeline.annotations.add( "s?" );
+  annot_t * aU = edf.annotations->add( "s?" );
   aU->description = "Unscored SOAP-prediction";
 
   

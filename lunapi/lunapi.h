@@ -224,26 +224,27 @@ private:
 
 
 struct lunapi_inst_t {
+    
+  lunapi_inst_t( const lunapi_inst_t &) = delete;
 
-  //  ~lunapi_inst_t() { std::cout << "destructor lunapi_inst_t " << id << "\n"; }
   ~lunapi_inst_t() { }
 
-  lunapi_inst_t(const lunapi_inst_t&) = delete;
-
+  
   //
   // new instance (i.e. only from lunapi_t) w/ private ctor
   //
 
 private:
-
-  lunapi_inst_t( const std::string & id ) : id(id) 
+  
+lunapi_inst_t( const std::string & id ) : id(id) , edf( &annotations )
   {
     state = 0;
   }
-
+  
 public:
 
   friend lunapi_t;
+
   friend segsrv_t;
 
   //
@@ -276,9 +277,11 @@ public:
 
   std::map<std::string,std::variant<std::monostate,std::string> > ivars() const;
 
-  void clear_ivar(); // clear for this indiv
+  // clear for this indiv
+  void clear_ivar(); 
 
-  void clear_selected_ivar( const std::set<std::string> & keys ); // selected vars for this indiv
+  // selected vars for this indiv
+  void clear_selected_ivar( const std::set<std::string> & keys ); 
   
     
   //
@@ -401,7 +404,9 @@ private:
 
   std::set<std::string> annot_filenames;
   
-  // pointer to the actual data store
+  // actual data store
+  annotation_set_t annotations;
+
   edf_t edf;
   
   // helper functions

@@ -323,7 +323,7 @@ void timeline_t::cache2annot( const param_t & param )
 
   const std::string aname = param.requires( "annot" );
 
-  annot_t * a = edf->timeline.annotations.add( aname );
+  annot_t * a = edf->annotations->add( aname );
 
   //
   // select the cache
@@ -494,7 +494,7 @@ void timeline_t::annot2cache( const param_t & param )
     {
       
       // does annot exist?
-      annot_t * annot = annotations( anames[a] );
+      annot_t * annot = (*annotations)( anames[a] );
       if ( annot == NULL ) continue;
       
       int cnt = 0 ;

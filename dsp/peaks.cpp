@@ -42,7 +42,7 @@ void dsptools::peaks( edf_t & edf , param_t & param )
   // write peaks to an annot (e.g. for GED)
   const bool to_annot = param.has( "annot" );  
   const std::string annot_name = to_annot ? param.requires( "annot" ) : "";
-  annot_t * annot = to_annot ? edf.timeline.annotations.add( annot_name ) : NULL ; 
+  annot_t * annot = to_annot ? edf.annotations->add( annot_name ) : NULL ; 
   uint64_t w_tp = 0; // window around each point
   if ( param.has( "w" ) )
     w_tp = globals::tp_1sec * param.requires_dbl( "w" );

@@ -53,11 +53,15 @@ std::string helper_remap( const std::string & a , const std::map<std::string,std
 
 void annot_t::wipe()
 {
+  int cnt = 0;
   std::set<instance_t *>::iterator ii = all_instances.begin();
   while ( ii != all_instances.end() )
     {	 
       if ( *ii != NULL ) 
-	delete *ii;
+	{	  
+	  ++cnt;
+	  delete *ii;
+	}
       ++ii;
     }    
   all_instances.clear();
@@ -104,7 +108,7 @@ instance_t * annot_t::add( const std::string & id , const interval_t & interval 
 
 void annot_t::remove( const std::string & id , const interval_t & interval , const std::string & ch )
 {
-
+  
   instance_idx_t key = instance_idx_t( this , interval , id , ch );
 
   std::map<instance_idx_t,instance_t*>::iterator ii = interval_events.find( key );
@@ -397,7 +401,7 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
       // otherwise, create the new annotation class
       //
       
-      annot_t * a = parent_edf.timeline.annotations.add( ann[e] );
+      annot_t * a = parent_edf.annotations->add( ann[e] );
 
       amap[ ann[e] ] = a;
       
@@ -640,7 +644,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // empty annots (e.g. from white-list) will be skipped in map_epoch_annotations()
 	  //if ( y == "" ) continue;
 	  
-	  if ( y != x && y != "" ) parent_edf.timeline.annotations.aliasing[ y ] = x ;
+	  if ( y != x && y != "" ) parent_edf.annotations->aliasing[ y ] = x ;
 	  
 	  // store
 	  a.push_back( y );
@@ -786,7 +790,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( name != orig_name )
 	    {
 	      //std::cout << "alias mapping " << name << " --> " << orig_name << "\n";
-	      parent_edf.timeline.annotations.aliasing[ name ] = orig_name ;
+	      parent_edf.annotations->aliasing[ name ] = orig_name ;
 	    }
 
 	  //
@@ -814,7 +818,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // otherwise, create the annotation if it doesn't exist
 	  //
 
-	  annot_t * a = parent_edf.timeline.annotations.add( name );
+	  annot_t * a = parent_edf.annotations->add( name );
 
 
 	  //
@@ -976,7 +980,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( tname == "" ) continue;
 	  
 	  if ( tname != aname )
-	    parent_edf.timeline.annotations.aliasing[ tname ] = aname;
+	    parent_edf.annotations->aliasing[ tname ] = aname;
 
 	  aname = tname;
 	  
@@ -1111,7 +1115,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      const bool has_original = oo != annot_map.end();
 
 	      // make a new annot_t class
-	      annot_t * a = parent_edf.timeline.annotations.add( aname );
+	      annot_t * a = parent_edf.annotations->add( aname );
 	      
 	      // add to the current map
 	      annot_map[ aname ] = a;
@@ -1144,7 +1148,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 	  
 	  if ( cls_root  != tok[0] )
-	    parent_edf.timeline.annotations.aliasing[ cls_root ] = tok[0];
+	    parent_edf.annotations->aliasing[ cls_root ] = tok[0];
 	  
 
 	  //
@@ -2655,9 +2659,9 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       // otherwise, add
 
       if ( original_label != concept->value )
-	  edf->timeline.annotations.aliasing[ concept->value ] = original_label ;
+	  edf->annotations->aliasing[ concept->value ] = original_label ;
 
-      annot_t * a = edf->timeline.annotations.add( concept->value );
+      annot_t * a = edf->annotations->add( concept->value );
       a->description = "XML-derived";
       a->file = filename;
       a->type = globals::A_FLAG_T; // not expecting any meta-data
@@ -2702,7 +2706,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  if ( added.find( ss ) != added.end() ) continue;
 	  
 	  // otherwise, add
-	  annot_t * a = edf->timeline.annotations.add( ss );
+	  annot_t * a = edf->annotations->add( ss );
 	  a->description = "XML-derived";
 	  a->file = filename;
 	  a->type = globals::A_FLAG_T; // not expecting any meta-data from XML
@@ -2764,7 +2768,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       
       interval_t interval( start_tp , stop_tp );
       
-      annot_t * a = edf->timeline.annotations.add( concept->value );
+      annot_t * a = edf->annotations->add( concept->value );
       
       if ( a == NULL ) Helper::halt( "internal error in loadxml()");
 
@@ -2859,7 +2863,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  
 	  interval_t interval( start_tp , stop_tp );	  
 	  
-	  annot_t * a = edf->timeline.annotations.add( ss );
+	  annot_t * a = edf->annotations->add( ss );
 		  
 	  // . indicates no associated channel
 	  instance_t * instance = a->add( ss , interval , "." );      
@@ -4445,7 +4449,7 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
   //
 
   std::set<std::string> annots2write = annotate_t::root_match( param.strset_xsigs( "annot" ) ,
-							       edf.timeline.annotations.names() );
+							       edf.annotations->names() );
 
 
   //
@@ -5186,7 +5190,7 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       //
       
       if ( cls_name != original_label )
-	edf->timeline.annotations.aliasing[ cls_name ] = original_label ;
+	edf->annotations->aliasing[ cls_name ] = original_label ;
       
       std::string desc = "";
       std::map<std::string,std::string> atypes;
@@ -5222,7 +5226,7 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       // add this annotation
       //
       
-      annot_t * a = edf->timeline.annotations.add( cls_name );
+      annot_t * a = edf->annotations->add( cls_name );
       
       a->description = desc;
       a->file = filename;
@@ -5288,14 +5292,14 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
 
       
       if ( cls_name != original_label )
-	edf->timeline.annotations.aliasing[ cls_name ] = original_label ;
+	edf->annotations->aliasing[ cls_name ] = original_label ;
 
     
       //
       // get a pointer to this class
       //
 
-      annot_t * a = edf->timeline.annotations.find( cls_name );
+      annot_t * a = edf->annotations->find( cls_name );
       
       if ( a == NULL ) continue;
       
@@ -5448,18 +5452,52 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
 }
 
 
+void annotation_set_t::clear( const std::string & name )
+{
+  std::map<std::string,annot_t*>::iterator ii = annots.find( name );
+  if ( ii != annots.end() )
+    {
+      // only delete if this was the parent (i.e. so a copy of annot_t will not destroy the 
+      // original
+      if ( ii->second->parent == this ) 
+	{
+	  delete ii->second;
+	  annots.erase( ii ); 
+	}
+    }
+}
+
+void annotation_set_t::clean()
+{
+  // remove empty annot classes, i.e. no instances
+  // this cleans up namespace post annotation, esp if remapping, etc
+
+  std::map<std::string,annot_t*> acopy = annots;
+  annots.clear();
+  
+  std::map<std::string,annot_t*>::const_iterator ii = acopy.begin();
+  while ( ii != annots.end() )
+    {
+      annot_t * a = ii->second;
+      if ( ! a->empty() ) annots[ ii->first ] = ii->second;
+      else delete ii->second;	
+      ++ii;
+    }  
+}
+
 
 void annotation_set_t::clear() 
 { 
+  
   std::map<std::string,annot_t*>::iterator ii = annots.begin();
   while ( ii != annots.end() ) 
-    {
+    {      
       // i.e. leave original annots untouched if the annot was not initiated by this set
       if ( ii->second->parent == this ) 
 	delete ii->second;
+      
       ++ii;
     }
-  
   
   annots.clear(); 
   
@@ -5489,7 +5527,6 @@ void annotation_set_t::set( edf_t * edf )
   // duration_hms,
   // duration_sec
   // and epoch_sec
-
   
   if ( edf != NULL )
     {
@@ -5545,7 +5582,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
   // only need edf_annot_t if edf-annot-class-all=F
   if ( ! nsrr_t::all_edf_class )
     {
-      a = edf.timeline.annotations.add( globals::edf_annot_label );
+      a = edf.annotations->add( globals::edf_annot_label );
       a->name = globals::edf_annot_label;
       a->description = "EDF Annotations";
       a->file = edf.filename;
@@ -5640,7 +5677,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 
 	      // track aliasing?
 	      if ( tname != aname )
-		edf.timeline.annotations.aliasing[ tname ] = aname;	      
+		edf.annotations->aliasing[ tname ] = aname;	      
 
 	      aname = tname;
 	      
@@ -5678,7 +5715,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 		    {
 		      // add as a new class
 		      // (no meta-info)
-		      annot_t * a = edf.timeline.annotations.add( aname );
+		      annot_t * a = edf.annotations->add( aname );
 		      instance_t * instance = a->add( "." , interval , "." );
 		      edf.aoccur[ aname ]++;
 		    }
@@ -5774,7 +5811,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 
 		      // track aliasing?                                                                                                                          
 		      if ( tname != aname )
-			edf.timeline.annotations.aliasing[ tname ] = aname;
+			edf.annotations->aliasing[ tname ] = aname;
 		      
 		      aname = tname;
 		      
@@ -5813,7 +5850,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 			    {
 			      // add as a new class
 			      // (no meta-info)
-			      annot_t * a = edf.timeline.annotations.add( aname );
+			      annot_t * a = edf.annotations->add( aname );
 			      instance_t * instance = a->add( "." , interval , "." );
 			      edf.aoccur[ aname ]++;
 			    }

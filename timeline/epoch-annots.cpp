@@ -66,7 +66,7 @@ void timeline_t::annotate_epochs( const std::string & label ,
   // Get annotations
   //
   
-  annot_t * annot = annotations( annot_label );
+  annot_t * annot = annotations->find( annot_label );
 
   // if not found, then all eannots are effectively false
   // (i.e. missing)

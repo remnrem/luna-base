@@ -156,7 +156,7 @@ hb_t::hb_t( edf_t & edf , param_t & param )
   // Extract sleep staging
   //
 
-  edf.timeline.annotations.make_sleep_stage( edf.timeline );
+  edf.annotations->make_sleep_stage( edf.timeline );
       
   if ( ! edf.timeline.hypnogram.construct( &edf.timeline , param , false ) )
     Helper::halt( "problem extracting stage annotations" );
@@ -189,7 +189,7 @@ hb_t::hb_t( edf_t & edf , param_t & param )
   // Expand arousal annotation into a 0/1 binary sample-level vector
   //
   
-  annot_t * annot = edf.timeline.annotations.find( annot_arousal );
+  annot_t * annot = edf.annotations->find( annot_arousal );
 
   std::vector<bool> arousals( np , false );
 
@@ -234,7 +234,7 @@ hb_t::hb_t( edf_t & edf , param_t & param )
 
   for (int e = 0 ; e < event_labels.size() ; e++ )
     {      
-      annot_t * annot = edf.timeline.annotations.find( event_labels[e] );
+      annot_t * annot = edf.annotations->find( event_labels[e] );
 
       if ( annot == NULL ) continue;
 			     

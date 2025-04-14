@@ -45,9 +45,11 @@ extern writer_t writer;
 extern logger_t logger;
 
 
-edf_t::edf_t() : timeline( this )
+edf_t::edf_t( annotation_set_t * a ) : timeline( this )
 {    
-  //    std::cout << " in edf_t::edft_(), making a new one: " << this << "\n";    
+  //std::cout << " in edf_t::edft_(), making a new one: " << this << "\n";    
+  annotations = a;
+  timeline.annotations = a;
   endian = determine_endian();    
   file = NULL;
   edfz = NULL;
@@ -56,9 +58,10 @@ edf_t::edf_t() : timeline( this )
 
 edf_t::~edf_t() 
 {
-  //  std::cout <<" out ~edf_t::edft_()... " << id << "\t" << this << "\n";
-  init();    
+  //std::cout <<" out ~edf_t::edft_()... " << id << "\t" << this << "\n";
+  closeout_inputs();
 }
+
 
 void edf_t::closeout_inputs()
 {
@@ -91,8 +94,12 @@ void edf_t::init()
     }
   edfz = NULL;
   
-  header.init();
+  header.init();  
+
+  // clear timeline (but reattach annot pointer)
   timeline = timeline_t( this );
+  timeline.annotations = annotations;
+  
   records.clear();    
   inp_signals_n.clear();
   has_edf_annots = false;
@@ -452,7 +459,7 @@ void edf_t::description( const param_t & param , std::vector<std::string> * r )
   r->push_back( Helper::int2str( n_data_channels_sel ) + "/" + Helper::int2str( n_data_channels ) );
 
   // NA_SEL/NA
-  int na = timeline.annotations.names().size();
+  int na = annotations->names().size();
   r->push_back( Helper::int2str( na ) );
 
   // SIGS
@@ -477,8 +484,8 @@ void edf_t::description( const param_t & param , std::vector<std::string> * r )
 void edf_t::report_aliases() const
 {
   // annotations
-  std::map<std::string,std::string>::const_iterator aa = timeline.annotations.aliasing.begin();
-  while ( aa != timeline.annotations.aliasing.end() )
+  std::map<std::string,std::string>::const_iterator aa = annotations->aliasing.begin();
+  while ( aa != annotations->aliasing.end() )
     {
       writer.level( aa->first , globals::annot_strat );
       writer.value( "ORIG" , aa->second );
@@ -3414,7 +3421,7 @@ bool edf_t::load_annotations( const std::string & f0 )
       
       // create and load annotation
       
-      annot_t * a = timeline.annotations.add( feature_name );
+      annot_t * a = annotations->add( feature_name );
       
       a->name = feature_name;
       a->description = "feature-list";
@@ -5646,9 +5653,12 @@ bool edf_t::append( const std::string & filename ,
   // Read header of the original (base) EDF
   //
 
-  edf_t base;
+  annotation_set_t base_annotations;
+  
+  edf_t base( &base_annotations );
 
   base.attach( filename , "." , NULL , true ); // true implies silent mode (no console logs)
+
   
   //
   // Check this is not EDFZ

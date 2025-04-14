@@ -1638,8 +1638,9 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "retval" )
     {
-      
-      edf_t edf;
+
+      annotation_set_t anns;
+      edf_t edf(&anns);
       edf.attach( "/Users/shaun/my-dropbox/my-sleep/Purcell06072016.edf" , "smp" );
 
       // mimic R leval() behavior
@@ -1829,8 +1830,8 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "tps" )
     {
-
-      edf_t edf;
+      annotation_set_t anns;
+      edf_t edf(&anns);
       const int rs = 1;
       bool okay = edf.init_empty( "id1" , 10000 , 1 , "01.01.85" , "00:00:00" );
       int fs;

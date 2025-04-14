@@ -38,8 +38,10 @@ align_epochs_t::align_epochs_t( edf_t & edf , param_t & param )
   
   // reduced EDF to align
   const std::string edffile2 = param.requires( "edf" );
-  
-  edf_t edf2;
+
+  annotation_set_t annots2;
+    
+  edf_t edf2( &annots2 );
   
   bool okay = edf2.attach( edffile2 , "." );
 

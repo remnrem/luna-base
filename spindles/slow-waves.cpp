@@ -367,10 +367,10 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
 	     << " (also half-waves: " << astr << "_pos and " << astr << "_neg) ";
       logger << " for " << ch << "\n";
       
-      annot_t * a = edf->timeline.annotations.add( astr );
+      annot_t * a = edf->annotations->add( astr );
       
-      annot_t * apos = output_halfwave_annots ? edf->timeline.annotations.add( astr + "_pos" ) : NULL ; 
-      annot_t * aneg = output_halfwave_annots ? edf->timeline.annotations.add( astr + "_neg" ) : NULL ; 
+      annot_t * apos = output_halfwave_annots ? edf->annotations->add( astr + "_pos" ) : NULL ; 
+      annot_t * aneg = output_halfwave_annots ? edf->annotations->add( astr + "_neg" ) : NULL ; 
       
       for (int i=0;i<sw.size();i++)
 	{

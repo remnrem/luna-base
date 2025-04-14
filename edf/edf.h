@@ -368,7 +368,9 @@ public:
   //
 
   timeline_t timeline;
-
+  
+  annotation_set_t * annotations;
+  
   uint64_t timepoint_from_EDF( int r );
 
   std::map<int,uint64_t> cached_EDF_timepoints;
@@ -592,7 +594,8 @@ private:
 
 public:
   
-  edf_t();
+  edf_t( annotation_set_t * );
+
   ~edf_t();
 
   void closeout_inputs();

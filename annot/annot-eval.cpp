@@ -107,7 +107,7 @@ void proc_eval( edf_t & edf , param_t & param )
   // Get all existing annotations
   //
   
-  std::vector<std::string> names = edf.timeline.annotations.names();
+  std::vector<std::string> names = edf.annotations->names();
 
 
   //
@@ -115,14 +115,14 @@ void proc_eval( edf_t & edf , param_t & param )
   // epoch-level instances 
   //
   
-  annot_t * new_annot = edf.timeline.annotations.add( new_annot_class );
+  annot_t * new_annot = edf.annotations->add( new_annot_class );
   
 
   // 
   // Make global annotation an entirely separate class of annotation
   //
   
-  annot_t * global_annot = use_globals ? edf.timeline.annotations.add( new_annot_class + "_global" ) : NULL ;
+  annot_t * global_annot = use_globals ? edf.annotations->add( new_annot_class + "_global" ) : NULL ;
  
   instance_t dummy;
   
@@ -174,7 +174,7 @@ void proc_eval( edf_t & edf , param_t & param )
 	  for (int a=0;a<names.size();a++)
 	    {
 	      
-	      annot_t * annot = edf.timeline.annotations.find( names[a] );
+	      annot_t * annot = edf.annotations->find( names[a] );
 	      
 	      // get overlapping annotations for this epoch
 	      annot_map_t events = annot->extract( interval );
@@ -244,7 +244,7 @@ void proc_eval( edf_t & edf , param_t & param )
             
       for (int a = 0 ; a < names.size() ; a++ ) 
 	{	  
-	  annot_t * annot = edf.timeline.annotations.find( names[a] );	  
+	  annot_t * annot = edf.annotations->find( names[a] );	  
 	  if ( annot == NULL ) Helper::halt( "internal problem in eval, cannot map annot " + names[a] );	  
 	  annot_map_t::const_iterator ii = annot->interval_events.begin();
 	  while ( ii != annot->interval_events.end() )
@@ -303,7 +303,7 @@ void proc_eval( edf_t & edf , param_t & param )
 	  for (int a=0;a<names.size();a++)
 	    {
 	      
-	      annot_t * annot = edf.timeline.annotations.find( names[a] );
+	      annot_t * annot = edf.annotations->find( names[a] );
 	      
 	      // get overlapping annotations for this interval
 	      annot_map_t events = annot->extract( interval );
@@ -539,7 +539,7 @@ void proc_derive( edf_t & edf , param_t & param )
   // Get all existing annotations
   //
   
-  std::vector<std::string> names = edf.timeline.annotations.names();
+  std::vector<std::string> names = edf.annotations->names();
 
 
  
@@ -548,7 +548,7 @@ void proc_derive( edf_t & edf , param_t & param )
   //  --> this will be dropped after perhaps?
   //
   
-  annot_t * global_annot = edf.timeline.annotations.add( "__global" );
+  annot_t * global_annot = edf.annotations->add( "__global" );
   
   instance_t * accumulator = global_annot->add( "." , edf.timeline.wholetrace( true ) , "." ) ;
   
@@ -630,7 +630,7 @@ void proc_derive( edf_t & edf , param_t & param )
 	  for (int a=0;a<names.size();a++)
 	    {
 	      
-	      annot_t * annot = edf.timeline.annotations.find( names[a] );
+	      annot_t * annot = edf.annotations->find( names[a] );
 	      
 	      // get overlapping annotations for this epoch
 	      annot_map_t events = annot->extract( interval );
@@ -686,7 +686,7 @@ void proc_derive( edf_t & edf , param_t & param )
 	  // get each annotation
 	  for (int a=0;a<names.size();a++)
 	    {
-	      annot_t * annot = edf.timeline.annotations.find( names[a] );
+	      annot_t * annot = edf.annotations->find( names[a] );
 	      // get overlapping annotations for this epoch (should be able to drop this
 	      // and just pull all)
 	      annot_map_t events = annot->extract( interval );
@@ -707,7 +707,7 @@ void proc_derive( edf_t & edf , param_t & param )
 	  for (int a=0;a<names.size();a++)
 	    {
 	      
-	      annot_t * annot = edf.timeline.annotations.find( names[a] );
+	      annot_t * annot = edf.annotations->find( names[a] );
 	      
 	      // get overlapping annotations for this epoch
 	      annot_map_t events = annot->extract( interval );
@@ -790,7 +790,7 @@ void proc_derive( edf_t & edf , param_t & param )
   // create new annotation (although we'll ignore thia
   //
 
-  annot_t * new_annot = edf.timeline.annotations.add( "__ignore_me" );
+  annot_t * new_annot = edf.annotations->add( "__ignore_me" );
   instance_t * new_instance = new_annot->add( "." , edf.timeline.wholetrace( true ) , "." );
 	  
   //
@@ -841,8 +841,8 @@ void proc_derive( edf_t & edf , param_t & param )
   // clear up 
   //
 
-  edf.timeline.annotations.clear( "__global" );
-  edf.timeline.annotations.clear( "__ignore_me" );
+  edf.annotations->clear( "__global" );
+  edf.annotations->clear( "__ignore_me" );
   
 }
 

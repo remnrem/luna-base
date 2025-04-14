@@ -439,7 +439,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 		  const std::string alab = annot_tag + s;                  
 		  k2l[k] = alab;
 		  logger << "  adding annotation " << alab << "\n";		  
-		  annot_t * a = edf.timeline.annotations.add( alab );
+		  annot_t * a = edf.annotations->add( alab );
 		  a->description = "MS " + alab;
 		  k2a[k] = a;
 		}
@@ -2738,8 +2738,9 @@ void microstates_t::aggregate2edf( const Data::Matrix<double> & X ,
     {
       
       logger << "  writing an aggregated GPF-peak EDF to " << edfname << "\n";
-      
-      edf_t agg_edf;
+
+      annotation_set_t agg_annotations;
+      edf_t agg_edf( &agg_annotations );
       
       const int recdur = 1;
       const int nr = N;

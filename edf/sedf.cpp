@@ -157,7 +157,9 @@ sedf_t::sedf_t( edf_t & edf , param_t & param )
   // Create the new SEDF object 
   //
 
-  edf_t sedf;
+  annotation_set_t annotations;
+
+  edf_t sedf( &annotations );
   
   //
   // Set header

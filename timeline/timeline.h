@@ -75,14 +75,11 @@ struct timeline_t
 
  public:
   
-
-  timeline_t( edf_t * p ) 
-    {      
-      edf = p;            
-      unepoch();
-    } 
+  timeline_t( edf_t * p );
   
-
+  ~timeline_t();
+  
+  
   //
   // Primary creation/alteration of timeline
   //
@@ -169,10 +166,10 @@ struct timeline_t
 
   
   //
-  // Annoations
+  // Annotations
   //
   
-  annotation_set_t annotations;
+  annotation_set_t * annotations;
   
   void list_all_annotations( const param_t & param );
 

@@ -140,7 +140,7 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
 	  // get time-points
 	  //
 
-	  annot_t * annot = edf.timeline.annotations.find( *ee );
+	  annot_t * annot = edf.annotations->find( *ee );
 	  if ( annot == NULL ) { ++ee; continue; }
 	  
 	  writer.level( *ee  , globals::annot_strat );

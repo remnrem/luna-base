@@ -1682,7 +1682,8 @@ void suds_t::combine_trainers( param_t & param )
   
   int rc = 0;
 
-  edf_t dummy; // this is not used/needed in any of the proc_() calls below
+  annotation_set_t dummy_annotations;
+  edf_t dummy( &dummy_annotations ); // this is not used/needed in any of the proc_() calls below
   // i.e. as the feature matrix and stages are already built/compiled
   mega.nve = ecnt;
 

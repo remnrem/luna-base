@@ -650,11 +650,11 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
   
   const std::string prefix = param.has( "prefix" ) ? param.value( "prefix" ) : "" ;
 
-  annot_t * a_n1   = edf.timeline.annotations.add( prefix + "N1" );
-  annot_t * a_n2   = edf.timeline.annotations.add( prefix + "N2" );
-  annot_t * a_n3   = edf.timeline.annotations.add( prefix + "N3" );  
-  annot_t * a_rem  = edf.timeline.annotations.add( prefix + "R" );
-  annot_t * a_wake = edf.timeline.annotations.add( prefix + "W" );
+  annot_t * a_n1   = edf.annotations->add( prefix + "N1" );
+  annot_t * a_n2   = edf.annotations->add( prefix + "N2" );
+  annot_t * a_n3   = edf.annotations->add( prefix + "N3" );  
+  annot_t * a_rem  = edf.annotations->add( prefix + "R" );
+  annot_t * a_wake = edf.annotations->add( prefix + "W" );
   
   // build epoch map
   std::vector<interval_t> etable;

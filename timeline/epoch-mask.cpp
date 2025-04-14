@@ -529,7 +529,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode , cons
   // Get all existing annotations (overkill...)
   //
   
-  std::vector<std::string> names = annotations.names();
+  std::vector<std::string> names = annotations->names();
 
 
   //
@@ -576,7 +576,7 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode , cons
       for (int a=0;a<names.size();a++)
 	{
 	  
-	  annot_t * annot = annotations.find( names[a] );
+	  annot_t * annot = annotations->find( names[a] );
 	  
 	  // get overlapping annotations for this epoch
 	  annot_map_t events = annot->extract( interval );
@@ -782,7 +782,7 @@ void timeline_t::trim_epochs( std::string & label , int n )
   // and allow only up to 'n'
   // i.e. trimming from the start/end of the epochs
 
-  annot_t * annot = annotations( Helper::unquote( label ) );
+  annot_t * annot = annotations->find( Helper::unquote( label ) );
 
   if ( annot == NULL ) return;
 
@@ -912,7 +912,7 @@ void timeline_t::retain_epochs( const std::set<std::string> & labels )
 	}
       
       // treat as annot
-      annot_t * annot = annotations( Helper::unquote( *aa ) );
+      annot_t * annot = annotations->find( Helper::unquote( *aa ) );
   
       if ( annot == NULL ) { ++aa; continue; }
       
@@ -1430,7 +1430,7 @@ void timeline_t::select_epoch_within_run( const std::string & label , int b )
 
   if ( b < 1 ) Helper::halt( "epoch border must be 1 or greater" );
 
-  annot_t * annot = annotations( Helper::unquote( label ) );
+  annot_t * annot = annotations->find( Helper::unquote( label ) );
 
   const bool no_annots = annot == NULL ;
 
@@ -1582,7 +1582,7 @@ void timeline_t::add_mask_annot( const std::string & tag )
 
   logger << "  adding annotation " << tag << " to mark unmasked (included) epochs\n";
 
-  annot_t * a = annotations.add( tag );
+  annot_t * a = annotations->add( tag );
 
   a->description = "Included (unmasked) epoch";
 
@@ -1609,7 +1609,7 @@ void timeline_t::dumpmask( const param_t & param )
   // default is to make annot when an epoch is /masked/ (versus opposite)
   const bool annot_unmasked = param.yesno( "annot-unmasked" );
 				   
-  annot_t * ann = dump_annot ? annotations.add( annot_str ) : NULL ; 
+  annot_t * ann = dump_annot ? annotations->add( annot_str ) : NULL ; 
   
   // no output?
   const bool output = param.has( "output" ) && param.yesno( "output" ) == false ; 

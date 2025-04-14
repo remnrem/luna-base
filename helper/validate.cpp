@@ -185,7 +185,9 @@ void Helper::validate_slist( param_t & param )
       // try to load 
       //
 
-      edf_t edf;
+      annotation_set_t annotations;
+
+      edf_t edf( &annotations );
 
       bool edf_okay = edf.attach( edffile , rootname , NULL , true );
 
@@ -214,8 +216,9 @@ void Helper::validate_slist( param_t & param )
       const std::string startdate = edf_okay ? edf.header.startdate : "01.01.00" ;
       const std::string starttime = edf_okay ? edf.header.starttime : "00.00.00" ;
       const std::string id = edf_okay ? rootname : "__bad_EDF__";
-      
-      edf_t dummy;
+
+      annotation_set_t dummy_annotations;
+      edf_t dummy( &dummy_annotations );
 
       bool empty_okay = dummy.init_empty( id , nr , rs , startdate , starttime );
 
@@ -223,9 +226,9 @@ void Helper::validate_slist( param_t & param )
 	Helper::halt( "internal error constructing an empty EDF to evaluate annotations" );
       
      
-      // some basic set-up
+      // some basic set-up (post EDF init)
 
-      dummy.timeline.annotations.set( &dummy );
+      dummy.annotations->set( &dummy );
       
 
       // Add additional annotations? (outside of slist)
@@ -518,7 +521,9 @@ std::vector<std::tuple<std::string,std::string,bool> > Helper::validate_slist_lu
       // try EDF
       //
 
-      edf_t edf;
+      annotation_set_t annotations;
+      
+      edf_t edf( &annotations );
       
       bool edf_okay = edf.attach( edffile , rootname , NULL , true );
 
@@ -535,8 +540,10 @@ std::vector<std::tuple<std::string,std::string,bool> > Helper::validate_slist_lu
       const std::string startdate = edf_okay ? edf.header.startdate : "01.01.00" ;
       const std::string starttime = edf_okay ? edf.header.starttime : "00.00.00" ;
       const std::string id = edf_okay ? rootname : "__bad_EDF__";
-      
-      edf_t dummy;
+
+      annotation_set_t dummy_annotations;
+
+      edf_t dummy( &dummy_annotations );
       
       bool empty_okay = dummy.init_empty( id , nr , rs , startdate , starttime );
       
@@ -546,7 +553,7 @@ std::vector<std::tuple<std::string,std::string,bool> > Helper::validate_slist_lu
      
       // some basic set-up
 
-      dummy.timeline.annotations.set( &dummy );
+      dummy.annotations->set( &dummy );
 
      
       //

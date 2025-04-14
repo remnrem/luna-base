@@ -91,7 +91,7 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
   std::set<std::string>::const_iterator ee = excludes.begin();
   while ( ee != excludes.end() )
     {
-      annot_t * annot = edf.timeline.annotations( *ee );
+      annot_t * annot = edf.annotations->find( *ee );
       if ( annot == NULL )
 	Helper::halt( "could not find annotation " + *ee );
       ++ee;
@@ -104,7 +104,7 @@ void dsptools::ripple_wrapper( edf_t & edf , param_t & param )
 
   const std::string annot_label = param.has( "annot" ) ? param.value( "annot" ) : "" ;
   
-  annot_t * annots = annot_label != "" ? edf.timeline.annotations.add( annot_label ) :  NULL  ; 
+  annot_t * annots = annot_label != "" ? edf.annotations->add( annot_label ) :  NULL  ; 
 
   const bool verbose = param.has( "verbose" );
 
@@ -630,7 +630,7 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 		      
 		      interval.expand( 0.5 * globals::tp_1sec );
 		      
-                      annot_t * annot = edf->timeline.annotations( *ee );
+                      annot_t * annot = edf->annotations->find( *ee );
 		      if ( annot == NULL ) Helper::halt( "could not find annotation " + *ee );
                       annot_map_t events = annot->extract( interval );
                       const bool has_annot = events.size() ;

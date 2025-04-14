@@ -54,7 +54,12 @@ void freezer_t::edf2edf( const edf_t & from , edf_t & to , bool preserve_cache )
       // logger << "  wiping any cache variables\n";
       // writer.no_cache();
     }
+
+  std::cout << " edf2edf_t...\n";
+  std::cout << " from annots N = " << from.annotations->names().size() << "\n";
+  std::cout << " to annots N = " << to.annotations->names().size() << "\n\n";
   
+
   // primary shallow copy
   to = from;
   
@@ -126,10 +131,12 @@ void freezer_t::freeze( const std::string & s , edf_t & edf )
   edf.closeout_inputs();
   
   //
-  // Allocate freeze target
+  // Allocate freeze target (but point to same annotations)
+  //  (nb. the shallow copy will copy edf.annotations anyway)
   //
   
-  edf_t * edf2 = new edf_t;
+  edf_t * edf2 = new edf_t( edf.annotations );
+
   
   //
   // Make a copy of edf into edf2
@@ -170,11 +177,11 @@ bool freezer_t::thaw( const std::string & s , edf_t * edf , bool also_clean , bo
   logger << "  old dataset   : "
 	 << edf->header.nr << " records, "
 	 << edf->header.ns << " signals, "
-	 << edf->timeline.annotations.names().size() << " annotations\n";
+	 << edf->annotations->names().size() << " annotations\n";
   logger << "  thawed freeze : "
 	 << new_edf->header.nr << " records, "
 	 << new_edf->header.ns << " signals, "
-	 << new_edf->timeline.annotations.names().size() << " annotations\n";
+	 << new_edf->annotations->names().size() << " annotations\n";
   
   // do the copy back
   edf2edf( *(store[s]) , *edf , preserve_cache );

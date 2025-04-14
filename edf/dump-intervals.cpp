@@ -174,7 +174,8 @@ void dump_intervals( const std::string & ints ,
       // Load EDF
       //
 
-      edf_t edf;
+      annotation_set_t annotations;
+      edf_t edf( & annotations) ;
       
       bool okay = edf.attach( edffile , indiv , &inp_signals );
       

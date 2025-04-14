@@ -100,13 +100,13 @@ void ged_runmode2( edf_t & edf , param_t & param, Eigen::MatrixXd & Rd , const s
   const bool x2 = param.has( "x2" ) ;
   
   // get annotations
-  annot_t * annot1 = edf.timeline.annotations.find( a1 );
+  annot_t * annot1 = edf.annotations->find( a1 );
   if ( annot1 == NULL ) Helper::halt( "could not find annotation " + a1 );
   
   annot_t * annot2 = NULL;
   if ( ! refall )
     {
-      annot2 = edf.timeline.annotations.find( a2 );
+      annot2 = edf.annotations->find( a2 );
       if ( annot2 == NULL ) Helper::halt( "could not find annotation " + a2 );
     }
 

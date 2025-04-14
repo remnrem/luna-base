@@ -103,7 +103,7 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
   if ( anchor_on_sleep || anchor_on_wake )
     {
       // get staging
-      edf.timeline.annotations.make_sleep_stage( edf.timeline );      
+      edf.annotations->make_sleep_stage( edf.timeline );      
       const bool has_staging = edf.timeline.hypnogram.construct( &(edf.timeline) , param , false );
       int cnt = 0;
       if ( has_staging ) 

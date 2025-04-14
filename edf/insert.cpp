@@ -50,8 +50,8 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
   //   2) given a lag value (in seconds, or tp-units) insert the second channel, but with an offset 
   //        edf= sig (from secondary EDF)   align=<tp-units>
 
-  
-  edf_t edf2;
+  annotation_set_t annotations2;
+  edf_t edf2( &annotations2) ;
   
   if ( ! edf2.attach( param.requires( "edf" ) , "." ) )
     Helper::halt( "problem attaching second EDF, edf=" + param.value( "edf" ) );

@@ -97,7 +97,7 @@ ecycles_t::ecycles_t( edf_t & edf , param_t & param )
 
   const int ne = edf.timeline.first_epoch();
   
-  edf.timeline.annotations.make_sleep_stage( edf.timeline );
+  edf.annotations->make_sleep_stage( edf.timeline );
 
   bool has_staging = edf.timeline.hypnogram.construct( &edf.timeline , param , false ); // F - not verbose
   

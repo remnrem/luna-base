@@ -679,8 +679,10 @@ void process_edfs( cmd_t & cmd )
       // load EDF
       //
 
-      edf_t edf;      
-
+      annotation_set_t annotations;
+      
+      edf_t edf( &annotations );      
+      
       bool okay = true; 
 
       //
@@ -736,7 +738,8 @@ void process_edfs( cmd_t & cmd )
 	}
       else // attach an EDF from disk
 	okay = edf.attach( edffile , rootname , inp_signals ); 
-      
+
+
 
       //
       // Check status of attached data, whatever the source
@@ -780,7 +783,7 @@ void process_edfs( cmd_t & cmd )
       // Give annotations some basic details about the EDF
       //
 
-      edf.timeline.annotations.set( &edf );
+      edf.annotations->set( &edf );
       
       //
       // Add additional annotations? 
@@ -871,9 +874,9 @@ void process_edfs( cmd_t & cmd )
 	  // if EDF+C, then look at 'skip-edf-annots' flag
 	    
 	  if ( edf.header.continuous && ! globals::skip_edf_annots )
-	    edf.timeline.annotations.from_EDF( edf , edf.edfz_ptr() );
+	    edf.annotations->from_EDF( edf , edf.edfz_ptr() );
 	  else if ( ! edf.header.continuous )
-	    edf.timeline.annotations.from_EDF( edf , edf.edfz_ptr() );
+	    edf.annotations->from_EDF( edf , edf.edfz_ptr() );
 
 	}
       
@@ -882,14 +885,14 @@ void process_edfs( cmd_t & cmd )
       // Now, all annotations (except EPOCH-ANNOT) are attached and can be reported on
       //
       
-      std::vector<std::string> names = edf.timeline.annotations.names();
+      std::vector<std::string> names = edf.annotations->names();
       
       if ( names.size() > 0 ) logger << "\n annotations:\n";
       
       for (int a = 0 ; a < names.size() ; a++ )
 	{
 	  
-	  annot_t * annot = edf.timeline.annotations.find( names[a] );
+	  annot_t * annot = edf.annotations->find( names[a] );
 	  
 	  if ( annot == NULL ) Helper::halt( "internal problem in list_all_annotations()" );
 
@@ -1062,17 +1065,18 @@ void process_edfs( cmd_t & cmd )
       //
 
       freezer.clean( &edf );
-      
+
+
       //
       // all done / next EDF
       //
-
+      
       if ( single_edf ) break;
 
-
+      
     }
   
-
+  
   //
   // Close sample-list if open
   //

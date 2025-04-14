@@ -32,10 +32,6 @@ void Helper::channel_annot_mapper( const std::vector<std::string> & tok , bool h
   // input
   const int n = tok.size(); 
 
-  // for (int i=0; i<n; i++)
-  //   std::cout << " tok[" << i << "] = [" << tok[i] << "]<br>";
-  // std::cout << "</p>";
-  
   // remapping files
   std::string cmap = "" , amap = "";
 
@@ -308,7 +304,8 @@ void Helper::channel_annot_mapper( const std::vector<std::string> & tok , bool h
   // Construct a templete EDF header, and do any canonical mappings
   //
 
-  edf_t edf;
+  annotation_set_t annotations;
+  edf_t edf( &annotations );
   
   edf.header.nr = 0 ;
   edf.header.nr_all = 0;
@@ -363,7 +360,7 @@ void Helper::channel_annot_mapper( const std::vector<std::string> & tok , bool h
   // Make a second EDF (harmonized) --> base EDF
   //
   
-  edf_t edf1;
+  edf_t edf1( &annotations );
   edf1.header.nr = 0 ;
   edf1.header.nr_all = 0;
 

@@ -125,7 +125,9 @@ align_annots_t::align_annots_t( edf_t & edf , param_t & param )
   // nb. FOR NOW, assume SIMPLE epch codes (i.e. offset = 0 in particular...) 
   //
 
-  edf_t edf2;
+  annotation_set_t annotations2;
+  
+  edf_t edf2( &annotations2 );
 
   // not that it really matters, but make dummy EDF the "size" of 30 * number of saved epochs
   const int nr = emap.size() * globals::default_epoch_len ; 
@@ -140,7 +142,7 @@ align_annots_t::align_annots_t( edf_t & edf , param_t & param )
   // Make new annotations
   //
 
-  std::vector<std::string> names = edf.timeline.annotations.names();
+  std::vector<std::string> names = edf.annotations->names();
 
   uint64_t elen = globals::tp_1sec * globals::default_epoch_len ; 
 
@@ -152,8 +154,8 @@ align_annots_t::align_annots_t( edf_t & edf , param_t & param )
   for (int a=0;a<names.size();a++)
     {
       
-      annot_t * annot1 = edf.timeline.annotations.find( names[a] );
-      annot_t * annot2 = edf2.timeline.annotations.add( names[a] );
+      annot_t * annot1 = edf.annotations->find( names[a] );
+      annot_t * annot2 = edf2.annotations->add( names[a] );
       
       // get all events
       annot_map_t::const_iterator aa = annot1->interval_events.begin();
@@ -242,7 +244,7 @@ align_annots_t::align_annots_t( edf_t & edf , param_t & param )
   // Save new annotations
   //
 
-  edf2.timeline.annotations.write( param.requires( "out" ) , param , edf2 );
+  edf2.annotations->write( param.requires( "out" ) , param , edf2 );
 
   
 }

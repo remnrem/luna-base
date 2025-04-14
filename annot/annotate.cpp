@@ -266,7 +266,9 @@ annotate_t::annotate_t( param_t & param )
 
   logger << "\n";
 
-  edf_t edfm;
+  annotation_set_t annotationsm;
+  
+  edf_t edfm( &annotationsm );
   
   bool okay = edfm.init_empty( "_aggregate_" , nr , rs , startdate , starttime );
   
@@ -276,7 +278,7 @@ annotate_t::annotate_t( param_t & param )
   // load the aggregated file
   //
 
-  edfm.timeline.annotations.set( &edfm );
+  edfm.annotations->set( &edfm );
   
   edfm.load_annotations( aggregated );
   
@@ -286,7 +288,7 @@ annotate_t::annotate_t( param_t & param )
 
   edf = &edfm;
 
-  std::vector<std::string> names = edfm.timeline.annotations.names() ; 
+  std::vector<std::string> names = edfm.annotations->names() ; 
 
   logger << "  have " << names.size() << " annotations in " << aggregated << " :";
   for (int i=0; i<names.size(); i++) logger << " " << names[i] ;
@@ -525,7 +527,7 @@ void annotate_t::set_options( param_t & param )
 	Helper::halt( "marker requires event-perm" );
       has_markers = true;
       // root_match() allows expanding, ie.  hyp_clock_*
-      mannots = annotate_t::root_match( param.strset( "marker" ) , edf->timeline.annotations.names() );
+      mannots = annotate_t::root_match( param.strset( "marker" ) , edf->annotations->names() );
     }
   
   //
@@ -631,21 +633,21 @@ void annotate_t::set_options( param_t & param )
   // requires 1+ seed: look at enrichment of ALL combinations of seeds
   // allow wildcards:
   //sseeds = param.strset( "seed" );
-  sseeds = annotate_t::root_match( param.strset_xsigs( "seed" ) , edf->timeline.annotations.names() );
+  sseeds = annotate_t::root_match( param.strset_xsigs( "seed" ) , edf->annotations->names() );
 
   // from each seed, look at all enrichment w/ all other annots
   //  non-seed annotations are not permuted
   if ( param.has( "other" ) )
     {
       //sannots = param.strset( "other" );
-      sannots = annotate_t::root_match( param.strset_xsigs( "other" ) , edf->timeline.annotations.names() );
+      sannots = annotate_t::root_match( param.strset_xsigs( "other" ) , edf->annotations->names() );
     }
   
   // background (i.e. defines the space; only select/permute within contiguous blocks of these regions)
   if ( param.has( "bg" ) ) 
     {
       ///sbgs = param.strset( "bg" );
-      sbgs = annotate_t::root_match( param.strset_xsigs( "bg" ) , edf->timeline.annotations.names() );      
+      sbgs = annotate_t::root_match( param.strset_xsigs( "bg" ) , edf->annotations->names() );      
     }
   
   // edge for background -- i.e. if elements could not be placed within X seconds of background segment edge,
@@ -660,7 +662,7 @@ void annotate_t::set_options( param_t & param )
   if ( param.has( "xbg" ) )
     {
       //sxbgs = param.strset( "xbg" );
-      sxbgs = annotate_t::root_match( param.strset_xsigs( "xbg" ) , edf->timeline.annotations.names() );
+      sxbgs = annotate_t::root_match( param.strset_xsigs( "xbg" ) , edf->annotations->names() );
     }
   
   if ( param.has( "xbg" ) && ! param.has( "bg" ) )
@@ -717,7 +719,7 @@ void annotate_t::prep()
   std::set<std::string>::const_iterator aa = sbgs.begin();
   while ( aa != sbgs.end() )
     {
-      annot_t * a = edf->timeline.annotations.find( *aa );
+      annot_t * a = edf->annotations->find( *aa );
       if ( a == NULL ) logger << "  ** warning, could not find " << *aa << "\n";
       else bgs.insert( a );
       ++aa;
@@ -732,7 +734,7 @@ void annotate_t::prep()
   aa = sxbgs.begin();
   while ( aa != sxbgs.end() )
     {
-      annot_t * a = edf->timeline.annotations.find( *aa );
+      annot_t * a = edf->annotations->find( *aa );
       if ( a == NULL ) logger << "  ** warning, could not find " << *aa << "\n";
       else xbgs.insert( a );
       ++aa;
@@ -748,7 +750,7 @@ void annotate_t::prep()
   aa = sseeds.begin();
   while ( aa != sseeds.end() )
     {
-      annot_t * a = edf->timeline.annotations.find( *aa );
+      annot_t * a = edf->annotations->find( *aa );
       if ( a == NULL ) logger << "  ** warning, could not find " << *aa << "\n";
       else seeds.insert( a );
       ++aa;
@@ -764,7 +766,7 @@ void annotate_t::prep()
   aa = sannots.begin();
   while ( aa != sannots.end() )
     {
-      annot_t * a = edf->timeline.annotations.find( *aa );
+      annot_t * a = edf->annotations->find( *aa );
       if ( a == NULL ) logger << "  ** warning, could not find " << *aa	<< "\n";
       else annots.insert( a );
       ++aa;
@@ -785,7 +787,7 @@ void annotate_t::prep()
   aa = mannots.begin();
   while ( aa != mannots.end() )
     {
-      annot_t * a = edf->timeline.annotations.find( *aa );
+      annot_t * a = edf->annotations->find( *aa );
       if ( a == NULL ) logger << "  ** warning, could not find " << *aa << "\n";
       else
 	{
@@ -1621,7 +1623,7 @@ void annotate_t::add_permuted_annots()
 	  if ( rr->second.find( *aa ) != rr->second.end() )
 	    {
 	      
-	      annot_t * a = edf->timeline.annotations.add( shuffled_annots_tag + *aa );
+	      annot_t * a = edf->annotations->add( shuffled_annots_tag + *aa );
 	      
 	      const std::set<interval_t> & ints = rr->second.find( *aa )->second;
 	      
@@ -1903,7 +1905,7 @@ void annotate_t::init_event_permutation()
   // i.e. indiv_int_mrkr annotation will be present in merged.annot
   //
   
-  annot_t * aindivs = edf->timeline.annotations.find( "indiv_int_mrkr" );
+  annot_t * aindivs = edf->annotations->find( "indiv_int_mrkr" );
 
   multi_indiv = aindivs != NULL; 
 
@@ -4313,7 +4315,7 @@ void annotate_t::new_seeds()
       
       logger << "  creating new annotation " << aname << out_tag << " ( channel = " << chname << " )\n";
       
-      annot_t * a = edf->timeline.annotations.add( aname + out_tag );
+      annot_t * a = edf->annotations->add( aname + out_tag );
       int acnt = 0 , tcnt =0 ;
       
       // iterate over all iids/regions/etc

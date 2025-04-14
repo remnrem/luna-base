@@ -1091,7 +1091,7 @@ Eigen::VectorXf segsrv_t::get_summary_timetrack( const std::string & ch ) const
 bool segsrv_t::add_annot( const std::string & ch )
 {
 
-  annot_t * annot = p->edf.timeline.annotations.find( ch );
+  annot_t * annot = p->edf.annotations->find( ch );
   if ( annot == NULL ) return false;
   if ( annot->interval_events.size() == 0 ) return false;
   

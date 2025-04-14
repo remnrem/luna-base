@@ -824,7 +824,7 @@ void lunapi_inst_t::refresh()
       Helper::halt( "lunapi_inst_t::refresh(): no attached EDF" );
       return;      
     }
-  
+
   // drop edf_t  
   edf.init();
   
@@ -851,10 +851,12 @@ void lunapi_inst_t::drop()
 {
   // clear out
   edf.init();
+  annotations.clean();
+  
   // set to empty
-  edf_t empty;
+  edf_t empty( &annotations );
   edf = empty;
-
+  
   // track meta-data
   state = 0;
   id = "";
@@ -896,7 +898,7 @@ std::map<std::string,datum_t> lunapi_inst_t::status() const
   r[ "id" ] = edf.id;
   r[ "ns" ] = n_data_channels;
   r[ "nt" ] = edf.header.ns_all;
-  r[ "na" ] = (int)edf.timeline.annotations.names().size();
+  r[ "na" ] = (int)edf.annotations->names().size();
   
   // Record duration, as hh:mm:ss string
 
@@ -966,9 +968,9 @@ bool lunapi_inst_t::attach_edf( const std::string & _filename )
       // must read if EDF+D (but only the time-track will be taken in)                                          
       // if EDF+C, then look at 'skip-edf-annots' flag                                                          
       if ( edf.header.continuous && ! globals::skip_edf_annots )
-        edf.timeline.annotations.from_EDF( edf , edf.edfz_ptr() );
+        edf.annotations->from_EDF( edf , edf.edfz_ptr() );
       else if ( ! edf.header.continuous )
-        edf.timeline.annotations.from_EDF( edf , edf.edfz_ptr() );
+        edf.annotations->from_EDF( edf , edf.edfz_ptr() );
     }
 
   cmd_t::define_channel_type_variables( edf );
@@ -1217,7 +1219,7 @@ bool lunapi_inst_t::proc_channots( const std::string & chstr ,
      
   for (int i=0;i<ans.size();i++)
     {
-      if ( edf.timeline.annotations( ans[i] ) != NULL ) // is this an interval annotation? 
+      if ( edf.annotations->find( ans[i] ) != NULL ) // is this an interval annotation? 
 	(*atype)[ ans[i] ] = 1;
       else
 	(*atype)[ ans[i] ] = 0;	  
@@ -1412,7 +1414,7 @@ Eigen::MatrixXd lunapi_inst_t::matrix_internal( const lint_t & intervals ,
 			{
 			  // get exact point      
 			  interval_t interval2 = interval_t( (*tp)[r] , (*tp)[r] + 1LLU );
-			  annot_t * annot = edf.timeline.annotations( aa->first );
+			  annot_t * annot = edf.annotations->find( aa->first );
 			  annot_map_t events = annot->extract( interval2 );
 			  bool has_annot = events.size() ;
 			  X(row,a_col) = (int)(has_annot ? 1 : 0 );
@@ -1485,14 +1487,14 @@ std::vector<bool> lunapi_inst_t::has_annots( const std::vector<std::string> & an
   res.resize( anns.size() );
   const int ns = anns.size();
   for (int s=0;s<ns;s++)
-    res[s] = edf.timeline.annotations.find( anns[s] ) != NULL;
+    res[s] = edf.annotations->find( anns[s] ) != NULL;
   return res;  
 }
 
 bool lunapi_inst_t::has_staging() 
 {
   // get staging                                                                                                             
-  edf.timeline.annotations.make_sleep_stage( edf.timeline );
+  edf.annotations->make_sleep_stage( edf.timeline );
 
   // valid?                                                                                                                  
   param_t empty_param;
@@ -1508,7 +1510,7 @@ bool lunapi_inst_t::has_staging()
 std::vector<std::string> lunapi_inst_t::annots() const
 {
   if ( state != 1 ) return std::vector<std::string>(0);
-  return edf.timeline.annotations.names();
+  return edf.annotations->names();
 }
 
 
@@ -1565,7 +1567,7 @@ lannot_t lunapi_inst_t::fetch_annots( const std::vector<std::string> & anns , co
   for (int a=0; a<na; a++)
     {
       
-      annot_t * annot = edf.timeline.annotations.find( anns[a] );
+      annot_t * annot = edf.annotations->find( anns[a] );
       if ( annot == NULL ) continue;      
       if ( annot->interval_events.size() == 0 ) continue;
 
@@ -1617,7 +1619,7 @@ lannot_full_t lunapi_inst_t::fetch_full_annots( const std::vector<std::string> &
   for (int a=0; a<na; a++)
     {
       
-      annot_t * annot = edf.timeline.annotations.find( anns[a] );    
+      annot_t * annot = edf.annotations->find( anns[a] );    
       if ( annot == NULL ) continue;      
       if ( annot->interval_events.size() == 0 ) continue;
 
@@ -1670,7 +1672,7 @@ bool lunapi_inst_t::insert_annotation( const std::string & class_label ,
   const int n = x.size();
 
   // okay if class_label already exists, this will append new intervals
-  annot_t * annot = edf.timeline.annotations.add( class_label );
+  annot_t * annot = edf.annotations->add( class_label );
   
   for (int i=0; i<n; i++ )
     {

@@ -232,7 +232,7 @@ int timeline_t::calc_epochs()
       if ( annot_alignment )
 	{
 	  
-	  astarts = annotations.starts( epoch_align_annots , epoch_length_tp );
+	  astarts = annotations->starts( epoch_align_annots , epoch_length_tp );
 	  
 	  // this function allows for case where annotations are longer than the epoch size... cut into epoch duration
 	  // starts
@@ -1026,7 +1026,7 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   
   
   // main annotations to use, allowing wildcards
-  epoch_generic_param_annots = annotate_t::root_match( param.strset( "annot" ) , annotations.names() );
+  epoch_generic_param_annots = annotate_t::root_match( param.strset( "annot" ) , annotations->names() );
   
   if ( (!param.has( "annot" )) || epoch_generic_param_annots.size() == 0 )
     Helper::halt( "no 'annot' specified to define epochs" );
@@ -1041,14 +1041,14 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   // can't already exist
   if ( else_epochs )
     {
-      annot_t * annot = annotations.find( else_epoch_label );      
+      annot_t * annot = annotations->find( else_epoch_label );      
       if ( annot != NULL )
 	Helper::halt( "'else' cannot specify an existing annotation label" );
     }
 
   // add this as a new annotation - i.e. so it can be used in masks, etc
   // downstream
-  annot_t * else_annots = else_epochs ? annotations.add( else_epoch_label ) : NULL ; 
+  annot_t * else_annots = else_epochs ? annotations->add( else_epoch_label ) : NULL ; 
   
   // add flanking / set mid-points or start/end points?
   epoch_generic_param_set_point = 0;
@@ -1149,7 +1149,7 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   while ( aa != epoch_generic_param_annots.end() )
     {
       
-      annot_t * annot = annotations.find( *aa );
+      annot_t * annot = annotations->find( *aa );
       
       if ( annot == NULL )
 	{
