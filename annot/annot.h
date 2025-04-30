@@ -744,7 +744,7 @@ struct annotation_set_t
     clear();
   }
   
-
+  
   // data
 
   std::map<std::string,annot_t*> annots;
@@ -825,7 +825,10 @@ struct annotation_set_t
   void clear( const std::string & name );
 
   void clean();
-    
+
+  void drop( const std::vector<std::string> * anns = NULL );
+
+  
   std::vector<std::string> names() const 
   {
     std::vector<std::string> n;

@@ -793,7 +793,6 @@ void tlock_t::cache_builder( cache_t<int> * cache ,
   //  nw - number of windows
     
   // this sets both np = 1 + 2 * half_points
-
   np = set_window( half_window * sr  );
 
   int half_points = ( np - 1 ) / 2 ;
@@ -1047,12 +1046,12 @@ void tlock_t::set_window_epoch( int np1 )
 int tlock_t::set_window( int half_points )
 {
   // need option for angle_bins
-  
+
   // ensure an nice multiple of sample rate
   int half_window = half_points / sr ;
   half_points = half_window * sr ;
   int points = 1 + 2 * half_points;
-  
+    
   t.clear();
   // nb. fudge for floating point issues (allowing tenth of inc for stop 'w')
   const double inc = 1.0/sr;

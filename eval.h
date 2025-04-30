@@ -289,6 +289,7 @@ void proc_anon( edf_t & , param_t & );
 void proc_write( edf_t & , param_t & );
 void proc_restructure( edf_t & , param_t & );
 void proc_drop_signals( edf_t & , param_t & );
+void proc_drop_annots( edf_t & , param_t & );
 void proc_rename( edf_t & , param_t & );
 void proc_enforce_signals( edf_t & , param_t & );
 void proc_copy_signal( edf_t & , param_t & );

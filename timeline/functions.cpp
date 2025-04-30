@@ -27,6 +27,7 @@
 #include "db/db.h"
 #include "helper/logger.h"
 #include "annot/annotate.h"  // for root_match()
+#include "dsp/spline.h"
 
 extern writer_t writer;
 extern logger_t logger;
@@ -159,6 +160,13 @@ void timeline_t::signal2annot( const param_t & param )
 {
 
   //
+  // handled separately
+  //
+
+  if ( param.has( "waves" ) )
+    return signal2annot_cuts( param );
+  
+  //
   // signal to use
   //
 
@@ -181,7 +189,9 @@ void timeline_t::signal2annot( const param_t & param )
   // q=N
   // pos/neg         --> only make annots for above/below X (abs)
   // pos-pct/neg-pct --> only make annots for above/below X (percentile)
-
+  // encoding=0,360  --> but need to make separate values, i.e. otherwise will be
+  //                     one big annot; so cut at zero-crossnnigs (phase 0)
+  
   //  VALUE :  X    // --> X+EPS
   //           X-Y
   //           X+Y  // eps
@@ -199,6 +209,7 @@ void timeline_t::signal2annot( const param_t & param )
 		  "    encoding=label,value,...\n"
 		  " or encoding2=label,value1,value2,...\n"
 		  " or bins=min,max,n\n"
+		  " or waves/half-waves\n"
 		  " or q=n\n"
 		  " or pos/neg=value\n"
 		  " or pos-pct/neg-pct=pct" );
@@ -207,14 +218,13 @@ void timeline_t::signal2annot( const param_t & param )
   bool e3 = param.has( "encoding2" );
   bool eb = param.has( "bins" );
   bool eq = param.has( "q" );
-
   bool etop = param.has( "pos" );
   bool ebot = param.has( "neg" );
   bool etopp = param.has( "pos-pct" );  
   bool ebotp = param.has( "neg-pct" );
 
   if ( e2 + e3 + eb + eq + etop + ebot + etopp + ebotp > 1 )
-    Helper::halt( "can only specify one of encoding|encoding2|bins|q|pos|neg|pos-pct|neg-pct" );
+    Helper::halt( "can only specify one of encoding|encoding2|bins|q|waves|half-waves|pos|neg|pos-pct|neg-pct" );
 
   std::string bin_label = "";
   if ( param.has( "bin-label" ) ) bin_label = param.value( "bin-label" );
@@ -577,6 +587,583 @@ void timeline_t::signal2annot( const param_t & param )
 }
 
 
+void timeline_t::signal2annot_cuts( const param_t & param )
+{
+  
+  // as signal2annot_cuts() is getting messy, split off cuts
+  // functionality here; i.e. expecting angular values, e.g. 0 .. 360
+  // , and so a 'cut' of 0 means whenever we 'cross' 0 to start/stop
+  // an annotation
+  
+  const double anchor = 180; // i.e. below test for cross from >180 to <180 defines a cross of 0-degrees
+  
+  //
+  // labels (always adds signal label X)
+  //
+  
+  if ( param.empty( "waves" ) )
+    Helper::halt( "no label specified waves={label}" );
+  
+  const std::string wave_label = param.value( "waves" ) ;
+  
+  const bool add_ch_inst_label = param.has( "add-channel-inst-label" ) ? param.yesno( "add-channel-inst-label" ) : false ;
+
+  const bool add_ch_class_label = param.has( "add-channel-class-label" ) ? param.yesno( "add-channel-class-label" ) : false ;
+    
+    
+  //
+  // Selection criteria
+  //
+
+  const bool sel_tmin   = param.has( "t-min" );
+  const bool sel_tmax   = param.has( "t-max" );
+
+  const double th_tmin = sel_tmin ? param.requires_dbl( "t-min" ) : 0 ;
+  const double th_tmax = sel_tmax ? param.requires_dbl( "t-max" ) : 0 ; 
+
+  // percentile-based amg , e.g. mag=20 means in top 20% of average MAG value
+  // compared to all other waves
+  const bool sel_mag = param.has( "mag-percentile" );
+  const double th_mag = sel_mag ? param.requires_dbl( "mag-percentile" ) : 0 ;
+  if ( sel_mag && ( th_mag <= 0 || th_mag > 1 ) ) Helper::halt( "mag-percentile must be between 0 and 1" );
+
+  // norm values and only take is above th_magz
+  const bool sel_magz = param.has( "mag-z" );
+  const double th_magz = sel_magz ? param.requires_dbl( "mag-z" ) : 0 ;
+
+  const bool use_mag = sel_mag || sel_magz ;
+
+  const bool use_mono = param.has( "monotonic" );
+
+  const bool add_slope = param.has( "slope" ); // SLOPE
+  const bool add_state = param.has( "state" ); // STATE
+  const bool add_bins  = param.has( "bins" );  // BIN (x12 fixed)
+
+  if ( ( add_slope || add_state || add_bins ) && ! use_mono )
+    Helper::halt( "requires 'monotonic' flag if using slope, state or bins" );
+  
+  //
+  // signal(s) to use: assume phase-angles in main signal
+  //
+  
+  //   X --> X_ht_ph    (for defining waves)
+  //     --> X_ht_mag   (for any amplitude stuff)
+  
+  std::string signal_label = param.requires( "sig" );
+    
+  signal_list_t signals = edf->header.signal_list( signal_label );
+  
+  if ( signals.size() == 0 )
+    Helper::halt( "could not find any signals: " + signal_label );
+
+  const int ns = signals.size();
+
+  
+  // allow alternative signal names (if not using HILBERT) 
+  
+  const std::string ph_ext = param.has( "phase-ext" ) ? param.value( "phase-ext" ) : "_ht_ph";
+
+  const std::string mag_ext = param.has( "mag-ext" ) ? param.value( "mag-ext" ) : "_ht_mag";
+  
+  //
+  // For each signal
+  //
+
+  for (int s=0; s<ns; s++)
+    {
+
+      int okay_cnt =0;
+	  
+
+      const std::string sig_label = signals.label(s);
+
+      const std::string phase_label = sig_label + ph_ext; 
+      
+      const std::string mag_label   = sig_label + mag_ext; 
+      
+      const int phase_slot = edf->header.signal( phase_label );
+
+      const int mag_slot = edf->header.signal( mag_label );
+
+      if ( phase_slot == -1 )
+	{
+	  logger << "  ** could not find " << phase_label << ", skipping...\n";
+	  continue;
+	}
+      
+      if ( edf->header.is_annotation_channel( phase_slot ) )
+	continue;
+      
+      if ( use_mag )
+	{
+	  if ( mag_slot == -1 ) continue;
+
+	  if ( edf->header.is_annotation_channel( mag_slot ) )
+	    continue;
+	}
+
+      //
+      // Annotations
+      //
+      
+      annot_t * a_full = add_ch_class_label ?
+	edf->annotations->add( wave_label + "_FULL_" + sig_label ) :
+	edf->annotations->add( wave_label + "_FULL" ) ;
+
+      //
+      // candidate waves (neg hw, then pos hw)
+      //
+
+      std::set<interval_t> fwaves;
+
+      //
+      // track QC
+      //
+
+      int mono_cnt = 0;
+      int mag_cnt = 0;
+      int dur_cnt = 0;
+      int all_cnt = 0;
+      
+      writer.level( sig_label , globals::signal_strat );
+
+      
+      //
+      // get signal data: phase
+      //
+
+      slice_t slice( *edf , phase_slot , wholetrace() );  
+      
+      std::vector<double> * d = slice.nonconst_pdata();  
+      
+      const std::vector<uint64_t> * tp = slice.ptimepoints();
+      
+      const int sr = edf->header.sampling_freq( phase_slot );
+
+      const uint64_t dt = globals::tp_1sec / sr ;
+      
+      const int n = d->size();
+
+      if ( n == 0 ) continue;
+
+      // always start not in wave (i.e. have to cross the 0/180/360 points
+      // first
+
+      int start = -1 , stop = -1;
+      
+      //
+      // iterate over signal
+      //
+
+      // nb. starting at point i=1
+      for (int i=1; i<n; i++)
+	{
+	  
+	  // did we just cross a gap? if so, cancel any putative wave
+	  bool gap = i != 0 ? discontinuity( *tp , sr , i-1 , i ) : false ; 
+	  
+	  if ( gap )
+	    {	      
+	      start = -1;
+	      stop = -1;
+	      continue;
+	    }
+
+	  
+	  // did we just cross the anchor point (e.g. by default 0, from pos peak to neg peak) 
+	  
+	  if ( (*d)[i-1] >= anchor && (*d)[i] < anchor )
+	    {
+	      
+	      // close an existing wave:
+	      if ( start != -1 )
+		{
+		  
+		  stop = i; // +1 ending
+		  
+		  //
+		  // duration criterion?
+		  //
+		  
+		  bool okay = true;		  
+		  
+		  if ( sel_tmin || sel_tmax )
+		    {
+		      const uint64_t start_tp = (*tp)[start];
+		      const uint64_t stop_tp  = (*tp)[stop];
+		      const double dur = ( stop_tp - start_tp ) * globals::tp_duration;
+		      if ( sel_tmin && dur < th_tmin ) okay = false;
+		      if ( sel_tmax && dur > th_tmax ) okay = false;
+		    }
+
+		  if ( okay ) 
+		    fwaves.insert( interval_t( (uint64_t)start , (uint64_t)stop ) );
+		  else
+		    ++dur_cnt; // QC checks
+
+		  
+		  ++all_cnt; // all putative waves
+
+		}
+
+	      // and start a new one at same place
+	      start = i;
+	      stop = -1;
+	    }
+	  
+	} // go to next sample
+
+
+      //
+      // Require monotonic? Also that starts/stops in <90 and >270
+      //
+
+      if ( use_mono )
+	{
+	  
+	  // select waves
+	  std::set<interval_t> fwaves2 = fwaves;
+	  fwaves.clear();
+	  
+	  std::set<interval_t>::const_iterator aa = fwaves2.begin();
+          while ( aa != fwaves2.end() )
+	    {
+	      int start = aa->start;
+	      int stop  = aa->stop;
+
+	      bool okay = true;
+	      
+	      for (int p=start+1;p<stop; p++)
+		if ( (*d)[p] <= (*d)[p-1] )
+		  okay = false;
+
+	      // also flag if not fully spanning the wave-form
+	      if ( (*d)[start] >= 90 || (*d)[stop-1] <= 270 )
+		okay = false;
+	      
+	      if ( okay )
+		fwaves.insert( *aa );
+	      else
+		++mono_cnt;
+	      
+	      ++aa;
+	    }
+
+	}
+
+      
+      //
+      // Require magnitude?
+      //
+      
+      if ( use_mag )
+	{
+	  slice_t mag_slice( *edf , mag_slot , wholetrace() );
+	  
+	  std::vector<double> * dm = slice.nonconst_pdata();
+
+	  if ( dm->size() != d->size() )
+	    Helper::halt( "phase and magnitude signals must have the same sample rates" );
+
+	  std::vector<double> v;
+
+	  // get average
+	  std::set<interval_t>::const_iterator aa = fwaves.begin();
+	  while ( aa != fwaves.end() )
+	    {
+	      int start = aa->start;
+	      int stop  = aa->stop;
+
+	      if ( stop - start == 0 )
+		v.push_back( 0 );
+	      else
+		{
+		  double x = 0;
+		  for (int p=start; p<stop; p++)
+		    x += (*dm)[p] ;
+		  v.push_back( x / double( stop - start ) );		  
+		}	     
+	      ++aa;
+	    }
+
+	  // normalize, if needed
+	  if ( sel_magz )
+	    v = MiscMath::Z( v );
+	  
+	  // get percentile threshold, if needed
+	  double percentile = sel_mag && v.size() > 1 ? MiscMath::percentile( v , th_mag ) : 0 ;
+	  
+	  // select waves
+	  std::set<interval_t> fwaves2 = fwaves;
+	  fwaves.clear();
+	  
+	  int i = 0;
+	  aa = fwaves2.begin();
+          while ( aa != fwaves2.end() )
+	    {
+	      bool okay = true;
+	      
+	      if ( sel_mag && v[i] < percentile ) okay = false;
+	      if ( sel_magz && v[i] < th_magz ) okay = false;
+	      
+	      if ( okay )
+		fwaves.insert( *aa );
+	      
+	      ++i;
+	      ++aa;
+	    }
+
+	  mag_cnt = fwaves2.size() - fwaves.size();
+	  
+	}
+      
+	
+      //
+      // now add
+      //
+      
+      logger << "  adding " << fwaves.size()
+	     << " waves for " << sig_label << "\n";
+      
+      std::set<interval_t>::const_iterator aa = fwaves.begin();
+      while ( aa != fwaves.end() )
+	{
+
+	  a_full->add( add_ch_inst_label ? sig_label : "." , 
+		       interval_t( (*tp)[aa->start] , (*tp)[aa->stop] ) ,
+		       sig_label );
+	  
+	  ++aa;
+	}
+
+      //
+      // QC outputs
+      //
+
+      writer.value( "EXC1_DUR"  , dur_cnt );
+      writer.value( "EXC2_MONO" , mono_cnt );
+      writer.value( "EXC3_MAG"  , mag_cnt );
+      writer.value( "N" , (int)fwaves.size() );
+      writer.value( "N0" , all_cnt );
+
+      
+      
+      //
+      // break down completed cycles into BIN, STATE and SLOPE sub-variables?
+      //
+      
+      
+      // between start and stop(-1) we should have a smoothish increasing line of
+      // 0 to 360 (assuming reasonable # of samples etc given SR)
+      
+      // STATE : start .. first past 180
+      //         first past 180 .. stop
+      
+      // SLOPE : 0 to 90 (FALL)
+      //         90 to 270 (RISE)
+      //         270 to 360 (FALL)
+      
+
+      if ( add_state )
+	{
+
+	  annot_t * a_pos = add_ch_class_label ?
+	    edf->annotations->add( wave_label + "_POS_" + sig_label ) :
+	    edf->annotations->add( wave_label + "_POS" ) ;
+
+	  annot_t * a_neg = add_ch_class_label ?
+	    edf->annotations->add( wave_label + "_NEG_" + sig_label ) :
+	    edf->annotations->add( wave_label + "_NEG" ) ;
+	  
+	  aa = fwaves.begin();
+	  
+	  while ( aa != fwaves.end() )
+	    {
+	      
+	      int start = aa->start;
+	      int stop  = aa->stop;
+	      
+	      int p180 = 0;
+	      for (int p=start;p<stop; p++)
+		{
+		  if ( (*d)[p] >= 180 )
+		    {
+		      // get closest
+		      const double d1 = (*d)[p] - 180.0 ;
+		      const double d0 = p > 0 ? 180 - (*d)[p-1] : 999 ;
+		      p180 = d1 < d0 ? p : p-1 ;
+		      break;
+		    }
+		}
+
+	      // add
+	      a_pos->add( add_ch_inst_label ? sig_label : "POS" ,
+			  interval_t( (*tp)[ start ] , (*tp)[p180] ) , 
+			  sig_label );
+
+	      a_neg->add( add_ch_inst_label ? sig_label : "NEG" ,
+			  interval_t( (*tp)[ p180 ] , (*tp)[stop] ) , 
+			  sig_label );
+
+	      // next wave
+	      ++aa;
+	    }
+	  
+	}
+
+
+      //
+      // add 'slope' indicator
+      //
+
+      if ( add_slope )
+	{
+	  
+	  annot_t * a_rise = add_ch_class_label ?
+	    edf->annotations->add( wave_label + "_RISE_" + sig_label ) :
+	    edf->annotations->add( wave_label + "_RISE" ) ;
+	  
+	  annot_t * a_fall = add_ch_class_label ?
+	    edf->annotations->add( wave_label + "_FALL_" + sig_label ) :
+	    edf->annotations->add( wave_label + "_FALL" ) ;
+	  
+	  aa = fwaves.begin();
+	  
+	  while ( aa != fwaves.end() )
+	    {
+	      
+	      int start = aa->start;
+	      int stop  = aa->stop;
+	  
+	      int p90 = 0;
+	      for (int p=start;p<stop; p++)
+		{
+		  if ( (*d)[p] >= 90 )
+		    {
+		      const double d1 = (*d)[p] - 90.0 ;
+		      const double d0 = p > 0 ? 90 - (*d)[p-1] : 999 ;
+		      p90 = d1 < d0 ? p : p-1 ;
+		      break;
+		    }
+		}
+	  
+	      int p270 = 0;
+	      for (int p=start;p<stop; p++)
+		{
+		  if ( (*d)[p] >= 270 )
+		    {
+		      const double d1 = (*d)[p] - 270.0 ;
+		      const double d0 = p > 0 ? 270 - (*d)[p-1] : 999 ;
+		      p270 = d1 < d0 ? p : p-1 ;
+		      break;
+		    }
+		}
+
+	      	     	    	      
+	      // add
+	      a_rise->add( add_ch_inst_label ? sig_label : "RISE" ,
+			  interval_t( (*tp)[ p90 ] , (*tp)[p270] ) , 
+			  sig_label );
+
+	      a_fall->add( add_ch_inst_label ? sig_label : "FALL" ,
+			   interval_t( (*tp)[ start ] , (*tp)[ p90 ] ) , 
+			   sig_label );
+
+	      a_fall->add( add_ch_inst_label ? sig_label : "FALL" ,
+			   interval_t( (*tp)[ p270 ] , (*tp)[stop] ) , 
+			   sig_label );
+
+	      ++aa;
+	      
+	    }	  
+	  
+	}
+
+
+      //
+      // add (fixed) x12 bins (30deg each)
+      //   --> but do not add empty intervals
+      //
+      
+      if ( add_bins )
+	{
+	  
+	  annot_t * a_bins = add_ch_class_label ?
+	    edf->annotations->add( wave_label + "_BIN_" + sig_label ) :
+	    edf->annotations->add( wave_label + "_BIN" ) ;
+	  
+	  
+	  aa = fwaves.begin();
+	  
+	  while ( aa != fwaves.end() )
+	    {
+	      
+	      int start = aa->start;
+	      int stop  = aa->stop;
+	      
+	      // use spline model to interpolate
+	      
+	      std::vector<double> y ,t;
+	      for (int p=start;p<stop; p++)
+		{
+		  t.push_back( p - start );
+		  y.push_back( (*d)[p] );
+		}
+	  
+	      const int np = t.size();
+	  
+	      // set_points( x, y )
+	      //   x = phase
+	      //   y = sample (i.e. 'time')	  
+	      tk::spline spline; 
+	      spline.set_points( y, t );
+
+	      std::vector<int> bs;
+	      
+	      for (int b=0; b<12; b++)
+		{
+		  // i.e. implied phase ('x') -->
+		  const double ph = (b+1) * 30.0;		  
+		  const double r = spline( ph );		  
+		  const int p1 = std::round( r );
+		  int px = start + p1;
+		  if ( px < start ) px = start;
+		  if ( px > stop ) px = stop;
+		  bs.push_back( px );
+		}
+
+	      for (int b=0; b<12; b++)
+		{
+		  int p1 = b == 0 ? start : bs[ b-1 ] ;
+		  int p2 = b == 11 ? stop : bs[ b   ] ;
+		  
+		  // add (with bins as INST ID)
+
+		  if ( p2 > p1 )
+		    {
+		      const std::string ph_label = ( b>8 ? "B" : "B0" ) + Helper::int2str( b + 1 );
+		  
+		      a_bins->add( ph_label , 
+				   interval_t( (*tp)[p1] , (*tp)[p2] ) ,
+				   sig_label );
+		    }
+		}
+	      
+	      // next wave
+	      ++aa;
+	    }
+	}
+      
+      
+      // next signal
+    }
+  
+  writer.unlevel( globals::signal_strat );
+  
+}
+
+
+
 void timeline_t::list_spanning_annotations( const param_t & param )
 {
     
@@ -838,15 +1425,19 @@ void timeline_t::list_all_annotations( const param_t & param )
   logger << " an unmasked region\n";
   
   bool show_masked = param.has("show-masked");
-
+  if ( show_masked )
+    logger << "  and also showing masked annotations\n";
+  
   // annotation names
 
   std::vector<std::string> names = annotations->names();
 
   // restrict to a subset? (allow wildcards here as well as xsigs )
   std::set<std::string> req_annots;
+
   if ( param.has( "annot" ) )
     req_annots = annotate_t::root_match( param.strset_xsigs( "annot" ) , names );
+
   const bool restricted = req_annots.size();
   
   //
@@ -886,7 +1477,6 @@ void timeline_t::list_all_annotations( const param_t & param )
 	      annot_map_t::const_iterator ii = events.begin();
 	      while ( ii != events.end() )
 		{	  
-		  
 		  const instance_idx_t & instance_idx = ii->first;
 
 		  const instance_t * instance = ii->second;
@@ -903,7 +1493,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 		  
 		  // ...or, if start of A is in an unmasked region
 		  else if ( keep_mode == 2 ) is_masked = interval_start_is_masked( interval ) ;
-		  
+
 		  // skip?
 		  if ( is_masked && ! show_masked ) { ++ii; continue; } 
 		  
@@ -995,7 +1585,7 @@ void timeline_t::list_all_annotations( const param_t & param )
 
 	  const instance_idx_t & instance_idx = ii->first;
 	  const instance_t * instance = ii->second;
-	  
+
 	  bool keep_this = false;
 
 	  // allow for 0-duration annots: in EDF+D mode, these
@@ -1009,14 +1599,18 @@ void timeline_t::list_all_annotations( const param_t & param )
 	  // 0-duration time-stamps changed to have an arbitrary 1LLU duration:
 	  interval_t search = instance_idx.interval;
 	  if ( search.duration() == 0LLU ) search.stop += 1LLU;
-	  
-	  if      ( keep_mode == 0 ) keep_this = interval_overlaps_unmasked_region( search );
-	  else if ( keep_mode == 1 ) keep_this = interval_is_completely_unmasked( search );
-	  else if ( keep_mode == 2 ) keep_this = ! interval_start_is_masked( search );
+
+	  if ( show_masked )
+	    keep_this = true;
+	  else
+	    {
+	      if      ( keep_mode == 0 ) keep_this = interval_overlaps_unmasked_region( search );
+	      else if ( keep_mode == 1 ) keep_this = interval_is_completely_unmasked( search );
+	      else if ( keep_mode == 2 ) keep_this = ! interval_start_is_masked( search );
+	    }
 
 	  if ( keep_this )
-	    {      
-	     
+	    {      	      
 	      events[ instance_idx ] = instance ; 
 	      
 	      counts[ annot->name ]++;
@@ -2220,12 +2814,12 @@ void timeline_t::set_annot_metadata( const param_t & param )
 			  // past end?
 			  if ( bb == allevs.end() )
 			    {
-			      std::cout << " hit the end...\n";
+			      //std::cout << " hit the end...\n";
 			      --bb;
 			      continue;
 			    }
 			  
-			  std::cout << " considering " << bb->first.as_string() << " " << bb->second << "\n";
+			  // std::cout << " considering " << bb->first.as_string() << " " << bb->second << "\n";
 			  
 			  // found at least one contender?
 			  any = true ;
@@ -2482,9 +3076,24 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	  writer.level( bb->first , globals::annot_strat );
 
 	  // we want to keep 'a' 'as is' (i.e. might be flattened, but might not be
-	  //  but for 'b', here we should flatten to make the looks easier.
-	  const std::set<interval_t> b = annotate_t::flatten( bb->second );
+	  //  but for 'b', here we should flatten to make the looks easier., for the
+	  //  overlap analyses;  for the nearest analysis, keep the original set,
+	  //  and extract the anchor point here:
 
+	  // for 'nearest' distance
+	  std::set<double> b1;
+	  std::set<interval_t>::const_iterator bb1 = bb->second.begin();
+	  while ( bb1 != bb->second.end() )
+	    {
+	      if      ( anchor == -1 ) b1.insert( bb1->start_sec() );	      
+	      else if ( anchor == +1 ) b1.insert( bb1->stop_sec() );
+	      else                     b1.insert( bb1->mid_sec() );
+	      ++bb1;
+	    }
+
+	  // flatten remaining values
+	  const std::set<interval_t> b = annotate_t::flatten( bb->second );
+	  
 	  std::map<std::string,std::set<interval_t> >::const_iterator aa = events1.begin();
 	  while ( aa != events1.end() )
 	    {
@@ -2504,9 +3113,8 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	      
 	      const std::set<interval_t> & a = aa->second;
 
-
 	      // std::cout << "\n\n------------------------------"
-	      // 		<< aa->first << " .... " << bb->first << "\n";
+	      //  		<< aa->first << " .... " << bb->first << "\n";
 	      
 	      // to track outputs
 	      std::vector<double> sav_p, sav_t, sav_n, sav_a;
@@ -2527,60 +3135,141 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	      std::set<interval_t>::const_iterator seed = a.begin();
 	      while ( seed != a.end() )
 		{
-
+		  
 		  ++sidx;
 
-		  // which b events span this, if any?
+		  // skip zero-duration seeds here
+		  if ( fabs( seed->duration_sec() ) < 1e-8 )
+		    {
+		      ++seed;
+		      continue;
+		    }
 		  
-		  // match logic from annotate.cpp
-		  
+		  // which b events span this, if any?		  
 		  // find the first annot not before (at or after) the seed
-		  std::set<interval_t>::const_iterator cc = b.upper_bound( *seed );
+
+		  //
+		  // Find nearest distance (using the unflattened b1 list of anchor positions)
+		  //
+
+		  const double seed_sec = anchor == -1 ? seed->start_sec()
+		    : ( anchor == 1 ? seed->stop_sec() : seed->mid_sec() );
 		  
-		  std::set<interval_t>::const_iterator closest = cc;
+		  std::set<double>::const_iterator cc = b1.upper_bound( seed_sec );
 		  
-		  std::set<interval_t> overlaps;
+		  std::set<double>::const_iterator closest = cc;
 		  
 		  std::vector<double> distances; 
-
+		  
 		  while ( 1 )
 		    {
-		      if ( closest == b.end() ) break;
-		      if ( closest->start >= seed->stop ) break;
+		      if ( closest == b1.end() ) break;
+		      if ( *closest > seed_sec ) break;
 		      ++closest;
 		    }
 
-		  if ( anchor == -1 ) 
-		    distances.push_back( closest->start_sec() - seed->start_sec() );
-		  else if ( anchor == -1 ) 
-		    distances.push_back( closest->stop_sec() - seed->stop_sec() );
-		  else 
-		    distances.push_back( closest->mid_sec() - seed->mid_sec() );		      
+		  // one past
+		  if ( closest != b1.end() )
+		    {
+		      //std::cout << " dst: back-track , considering " << *closest << "\n";  
+		      distances.push_back( *closest - seed_sec );
+		    }
 		  
-		  //std::cout << "\n\n seed = " << seed->as_string() << "\n";
-
 		  // now count back
 		  while ( 1 )
-		    {
+		    {		      
 		      
-
-		      if ( closest == b.begin() ) break;		  
+		      if ( closest == b1.begin() ) break;		  
 		      --closest;
 		      
-		      //std::cout << " considering " << closest->as_string() << "\n";
-		      if ( anchor == -1 ) 
-			distances.push_back( closest->start_sec() - seed->start_sec() );
-		      else if ( anchor == -1 ) 
-			distances.push_back( closest->stop_sec() - seed->stop_sec() );
-		      else 
-			distances.push_back( closest->mid_sec() - seed->mid_sec() );		      
+		      //std::cout << " dst: back-track , considering " << *closest << "\n";
 		      
-		      if ( closest->stop <= seed->start ) break;
+		      distances.push_back( *closest - seed_sec );
 		      
-		      interval_t o( closest->start > seed->start ? closest->start : seed->start ,
-				    closest->stop < seed->stop  ? closest->stop : seed->stop );
+		      if ( *closest < seed_sec )
+			{
+			  //std::cout << " dst: gone past , breakingh\n";
+			  break;
+			}
 		      
+		    }
 
+		  // get min distance (Could have done above, but whatev)
+
+		  if ( window > 0 && distances.size() > 0 ) 
+		    {
+		      
+		      //std::cout << sidx << "  DIST " << bb->first << " " << aa->first  << " "  << distances.size() << "\n ";
+		      
+		      double q1 = window + 10000;
+		      double q  = 0;
+		      int okay = 0;
+		      
+		      for (int i=0; i<distances.size(); i++)
+			{
+
+			  const double d1 = fabs( distances[i] );
+
+			  //std::cout << " candidate = " << d1 << " " << distances[i] << "\n";
+
+			  if ( d1 < window )
+			    {
+			      ++okay;
+
+			      //std::cout << " con " << distances[i]  << " " << d1 << "\n";
+			      
+			      if ( d1 < q1 ) 
+				{
+				  q1 = d1;
+				  q = distances[i];
+				}
+			    }
+			}
+
+		      // if ( okay ) 
+		      // 	std::cout << " dst: *** saving " << q << "\n";
+		      // else
+		      // 	std::cout << " dst:  no within-window match found...\n";
+		      
+		      // save signed closest annot		      
+		      if ( okay ) 
+			sav_d.push_back( q );
+		    }
+		  
+		  
+		  //
+		  // Find overlaps (using the flattened b)
+		  //
+		  
+		  std::set<interval_t>::const_iterator oclosest = b.upper_bound( *seed );
+
+		  std::set<interval_t> overlaps;
+		  
+		  while ( 1 )
+		    {
+		      if ( oclosest == b.end() ) break;
+		      if ( oclosest->start >= seed->stop ) break;
+		      ++oclosest;
+		    }
+		  
+		  // now count back
+		  while ( 1 )
+		    {		      
+		      
+		      if ( oclosest == b.begin() ) break;		  
+		      --oclosest;
+		      
+		      //std::cout << " olap: back-track , considering " << oclosest->as_string() << "\n";
+		      
+		      if ( oclosest->stop <= seed->start )
+			{
+			  //std::cout << " olpa: gone past , breakingh\n";
+			  break;
+			}
+		      
+		      interval_t o( oclosest->start > seed->start ? oclosest->start : seed->start ,
+				    oclosest->stop < seed->stop  ? oclosest->stop : seed->stop );
+		      
 		      overlaps.insert( o );		  
 		    }
 		  
@@ -2602,35 +3291,6 @@ void timeline_t::annot_crosstabs( const param_t & param )
 		  sav_p.push_back( p_olap );
 		  sav_a.push_back( n_olap > 0 );
 		  
-		  if ( window > 0 && distances.size() > 0 ) 
-		    {
-		      // std::cout << sidx << "  DIST " << bb->first << " " << aa->first  << " "  << distances.size() << " ";
-		      
-		      double q1 = window + 10000;
-		      double q  = 0;
-		      int okay = 0;
-
-		      for (int i=0; i<distances.size(); i++)
-			{
-			  const double d1 = fabs( distances[i] );
-			  
-			  if ( d1 < window )
-			    {
-			      ++okay;
-			      //std::cout << " con " << distances[i]  << " " << d1 << "\n";
-			      if ( d1 < q1 ) 
-				{
-				  q1 = d1;
-				  q = distances[i];
-				}
-			    }
-			}
-
-		      //std::cout << " saving " << q << "\n";
-		      // save signed closest annot		      
-		      if ( okay ) 
-			sav_d.push_back( q );
-		    }
 		  
 		  //
 		  // Verbose output?
@@ -2644,7 +3304,6 @@ void timeline_t::annot_crosstabs( const param_t & param )
 		  
 		  ++seed;
 		}
-	      
 	      
 	      //
 	      // Now summarize outputs

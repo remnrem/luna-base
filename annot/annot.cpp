@@ -5452,6 +5452,21 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
 }
 
 
+void annotation_set_t::drop( const std::vector<std::string> * anns )
+{
+  if ( anns == NULL )
+    {
+      logger << "  dropping all annotations\n";
+      clear();
+      return;
+    }
+
+  logger << "  dropping up to " << anns->size() << " annotations\n";
+  for (int i=0; i<anns->size(); i++)
+    clear( (*anns)[i] );      
+  
+}
+
 void annotation_set_t::clear( const std::string & name )
 {
   std::map<std::string,annot_t*>::iterator ii = annots.find( name );

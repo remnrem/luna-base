@@ -1182,9 +1182,12 @@ void segsrv_t::compile_evts( const std::vector<std::string> & anns )
 
   // get all events that overlap this window
   std::map<std::string,std::vector<std::pair<double,double> > > wevts = fetch_evts();
-
+  
   // make uniform time-line: extracted from in-window events
   std::set<fevt_t> xevts;
+
+  // count # of unique annot types in this windo
+  std::map<std::string,int> amap;
   
   for (int a=0;a<anns.size();a++)
     {
@@ -1192,7 +1195,10 @@ void segsrv_t::compile_evts( const std::vector<std::string> & anns )
       if ( wevts.find( anns[a] ) == wevts.end() ) continue;
 
       const std::string & aname = anns[a];
-      
+
+      // track position for y
+      amap[ aname ] = amap.size() ; 
+	    
       // events
       const std::vector<std::pair<double,double> > & e = wevts.find( aname )->second;
 
@@ -1204,74 +1210,129 @@ void segsrv_t::compile_evts( const std::vector<std::string> & anns )
   // empty? all done
   if ( xevts.size() == 0 ) return;
 
-  // determine stacking
-  std::set<fevt_t> pool;
-  int maxd = 0;
+
+  //
+  // determine stacking (OLD)
+  //
+
+  // if ( 0 )
+  //   {
+
+  //     std::set<fevt_t> pool;
+  //     int maxd = 0;
+      
+  //     std::set<fevt_t>::const_iterator xx = xevts.begin();
+  //     while ( xx != xevts.end() )
+  // 	{
+	  
+  // 	  // remove any events (that end before start of this one)
+  // 	  const double c = xx->start;
+	  
+  // 	  std::set<fevt_t> pool1;
+  // 	  std::set<fevt_t>::const_iterator pp = pool.begin();
+  // 	  while ( pp != pool.end() )
+  // 	    {
+  // 	      if ( pp->stop > c ) pool1.insert( *pp );
+  // 	      ++pp;
+  // 	    }
+	  
+  // 	  // copy over
+  // 	  pool = pool1;
+	  
+  // 	  // add next event to pool
+  // 	  pool.insert( *xx );
+	  
+  // 	  // add times (w/ clipping at window- boundaries) 
+  // 	  const std::pair<double,double> p2( xx->start < awin ? awin : xx->start ,
+  // 					     xx->stop  > bwin ? bwin : xx->stop );
+	  
+  // 	  annots_times[ xx->name ].push_back( p2 );
+	  
+	  
+  // 	  // determine depth (N-1) [ scale after when we know max depth ]  
+  // 	  const int d = pool.size();
+  // 	  annots_stacks[ xx->name ].push_back( std::pair<double,double>( d , 0 ) );
+	  
+  // 	  // track max depth
+  // 	  if ( d > maxd ) maxd = d;
+	  
+  // 	  // next annot
+  // 	  ++xx;
+  // 	}
+      
+  //     // scale depth into plotting values:
+  //     //  annots go from ( 1 - scaling_fixed_annot - scaling_yheader ) to ( 1 - scaling_yheader )
+  //     const double abase = 1.0 - scaling_fixed_annot - scaling_yheader;
+      
+  //     // maxd +1 i.e to allow for height of top annot
+  //     const double a1height = scaling_fixed_annot / (double)(maxd);
+      
+  //     std::map<std::string,std::vector<std::pair<double,double> > >::iterator cc = annots_stacks.begin();
+  //     while ( cc != annots_stacks.end() )
+  // 	{
+	  
+  // 	  std::vector<std::pair<double,double> > & ds = cc->second;
+	  
+  // 	  for (int i=0; i<ds.size(); i++)
+  // 	    {
+  // 	      double y = ds[i].first; // scale from 1... maxd
+  // 	      y = abase + (y-1) * a1height; // lower y;
+  // 	      ds[i].first = y;
+  // 	      ds[i].second = y + a1height;
+  // 	    }      
+  // 	  ++cc;
+  // 	}
+  //   }
+
+
+  //
+  // Simple y-axis positons (NEW), i.e. no stacking
+  //  -- replaces the code above
+  //
+
+  int maxd = amap.size();
   
   std::set<fevt_t>::const_iterator xx = xevts.begin();
   while ( xx != xevts.end() )
     {
-      
-      // remove any events (that end before start of this one)
-      const double c = xx->start;
-
-      std::set<fevt_t> pool1;
-      std::set<fevt_t>::const_iterator pp = pool.begin();
-      while ( pp != pool.end() )
-	{
-	  if ( pp->stop > c ) pool1.insert( *pp );
-	  ++pp;
-	}
-
-      // copy over
-      pool = pool1;
-      
-      // add next event to pool
-      pool.insert( *xx );
-      
+      	  
       // add times (w/ clipping at window- boundaries) 
       const std::pair<double,double> p2( xx->start < awin ? awin : xx->start ,
 					 xx->stop  > bwin ? bwin : xx->stop );
       
       annots_times[ xx->name ].push_back( p2 );
-						    
-      
+      	  
       // determine depth (N-1) [ scale after when we know max depth ]  
-      const int d = pool.size();
-      annots_stacks[ xx->name ].push_back( std::pair<double,double>( d , 0 ) );
-
-      // track max depth
-      if ( d > maxd ) maxd = d;
-
+      annots_stacks[ xx->name ].push_back( std::pair<double,double>( amap[ xx->name ] , 0 ) );
+      
       // next annot
       ++xx;
     }
   
   // scale depth into plotting values:
-  //  annots go from ( 1 - scaling_fixed_annot - scaling_yheader ) to ( 1 - scaling_yheader )
-  const double abase = 1.0 - scaling_fixed_annot - scaling_yheader;
-
+  //  annots go from ( 1 - scaling_yheader ) to ( 1 - scaling_fixed_annot - scaling_yheader )
+  //   (top to bottom, going down)
+  const double abase = 1.0 - scaling_yheader;
+  //const double abase = 1.0 - scaling_fixed_annot - scaling_yheader;
+  
   // maxd +1 i.e to allow for height of top annot
   const double a1height = scaling_fixed_annot / (double)(maxd);
   
   std::map<std::string,std::vector<std::pair<double,double> > >::iterator cc = annots_stacks.begin();
   while ( cc != annots_stacks.end() )
     {
-
+      
       std::vector<std::pair<double,double> > & ds = cc->second;
-
+      
       for (int i=0; i<ds.size(); i++)
 	{
 	  double y = ds[i].first; // scale from 1... maxd
-	  y = abase + (y-1) * a1height; // lower y;
+	  y = abase - y * a1height; // lower y;
 	  ds[i].first = y;
-	  ds[i].second = y + a1height;
-	}
-
-      
+	  ds[i].second = y - a1height;
+	}      
       ++cc;
     }
-
 
   //
   // for annot 'i' we now have (x1,x2) and (y1,y2) 

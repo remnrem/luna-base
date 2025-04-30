@@ -1302,9 +1302,8 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
   // if all_masked,   returns T if /all/ of interval falls within masked regions
   // if not,          returns T if interval falls in at least one masked region
   // allow 0-duration intervals
-  
+    
   if ( start_masked != NULL ) *start_masked = false;  
-
   
   if ( edf->header.continuous )
     {
@@ -1325,7 +1324,8 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
 	{
 	  if ( eleft == -1 || mask[eleft] ) *start_masked = true;
 	}
-      
+
+      // i.e. no spanning epochs defined -- same as being 'masked'
       if ( eleft == -1 || eright == -1 ) return true;
       
       // above functions return -1 if the tp is off the map
@@ -1333,7 +1333,7 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
       // effectively 'masked'
       
       for (int e=eleft;e<=eright;e++) 
-	{
+	{	  
 	  if ( all_masked && ! mask[e] ) return false;
 	  if ( mask[e] && ! all_masked ) return true;
 	}
@@ -1342,7 +1342,7 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
 
   else // for EDF+D
     {
-
+      
       // if ( ! mask_set )
       // 	{
       //     return false;
@@ -1350,7 +1350,7 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
 
           
       std::set<int> records = records_in_interval( interval );
-            
+
       // falls off edge of the map
       if ( records.size() == 0 ) return true;
       
@@ -1359,8 +1359,11 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
 	{
 
 	  const std::set<int> & epochs = rec2epoch.find( *rr )->second;
-
+	  
 	  std::set<int>::const_iterator ee = epochs.begin();
+
+	  // no epochs defined over these records - i.e. same as 'masked'
+	  if ( epochs.size() == 0 ) return true;
 	  
 	  if ( start_masked != NULL )
 	    {
@@ -1368,7 +1371,7 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
 	    }
 	  
 	  while ( ee != epochs.end() )
-	    {
+	    {	      	      
 	      if ( all_masked && ! mask[ *ee ] ) return false;
 	      if ( mask[ *ee ] && ! all_masked ) return true;
 	      ++ee;
@@ -1377,9 +1380,12 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
 	}      
     }
   
-  if ( all_masked ) return true;
-  else return false;
   
+  if ( all_masked )
+    return true;
+  else
+    return false;
+
 }
 
 
