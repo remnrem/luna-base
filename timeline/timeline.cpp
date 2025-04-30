@@ -61,7 +61,7 @@ bool timeline_t::discontinuity( const std::vector<uint64_t> & t , int sr , int s
 {
   if ( sp2 < sp1 ) return true;
   if ( sp1 < 0 || sp2 >= t.size() ) return true;
-
+  
   // observed difference between sample points (in tp-units)
   const uint64_t observed = t[sp2] - t[sp1];
   

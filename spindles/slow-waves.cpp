@@ -1055,15 +1055,16 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
     acc_trans , acc_trans_freq ;
   
   sw.clear();
-  
+
+  //  std::cout << " waves.size() = " << waves.size() << "\n";
   for (int i = 0; i < waves.size(); i++)
     {
       slow_wave_t & w = waves[i];
       
       bool accepted = true;
 
-      //logger << "thr " << w.down_amplitude  << " " << th_x << " " << uV_neg << " "
-      // << w.down_amplitude  << " " << uV_p2p << " " <<w.up_amplitude - w.down_amplitude << "\n";
+      // std::cout << "thr " << w.down_amplitude  << " " << th_x << " " << par.uV_neg << " "
+      // 		<< w.down_amplitude  << " " << par.uV_p2p << " " << w.up_amplitude - w.down_amplitude << "\n";
 
       // relative negative peak amplitude (nb. scaled negative, so needs to be lower (more negative)
       if ( ( !par.ignore_neg_peak ) && using_rel && w.down_amplitude > th_x ) accepted = false;
@@ -1144,7 +1145,8 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 	    }
 	  
 	}
-      
+
+
       // save this wave?
       if ( accepted ) 
 	{

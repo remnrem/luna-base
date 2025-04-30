@@ -531,9 +531,28 @@ void cmddefs_t::init()
   // A2S            Add a 0/1 signal based on an annotation
   // S2A            Add an annotation based on ranged values of a signal
   // AXA
+  // DROP-ANNOTS
   
-  
+  add_cmd( "annot" , "S2A" , "Signal-to-annotation converstion" );
+  add_url( "S2A" , "annotations/#s2a" );
 
+  add_table( "S2A" , "CH" , "Channel-level metrics (for waves option)" );
+  add_var( "S2A" , "CH" , "N"  , "Final number of included waves" );
+  add_var( "S2A" , "CH" , "N0" , "Original (pre-QC) number of included waves" );
+  add_var( "S2A" , "CH" , "EXC1_DUR"  , "Number of exclusions due to duration criteria" );
+  add_var( "S2A" , "CH" , "EXC2_MONO" , "Number of exclusions due to monotonic phase constraint" );
+  add_var( "S2A" , "CH" , "EXC3_MAG" , "Number of exclusions due to magnitude criteria" );
+
+
+  //
+  // DROP-ANNOTS
+  //
+
+  add_cmd1( "annot" , "DROP-ANNOTS" , "Drop one or more annotations" );
+  add_url( "DROP-ANNOTS" , "annotations/#drop-annots" );
+  add_param1( "DROP-ANNOTS" , "annot" , "N4,M" , "Drop annotations 'N4' and 'M'" );
+  
+  
   //
   // ANNOTS
   //
@@ -1313,6 +1332,7 @@ void cmddefs_t::init()
  
   add_table( "MEANS" , "CH,ANNOT" , "Annotation class means, by channel" );
   add_var( "MEANS" , "CH,ANNOT" , "M" , "Mean" );
+  add_var( "MEANS" , "CH,ANNOT" , "S" , "Number of samples" );
   add_var( "MEANS" , "CH,ANNOT" , "L" , "Left-flanking mean (if 'w' set)" );
   add_var( "MEANS" , "CH,ANNOT" , "R" , "Right-flanking mean (if 'w' set)" );
 

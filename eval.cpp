@@ -906,6 +906,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "HEAD" ) )         { fnd = true; proc_head_matrix( edf , param(c) ); }
       if ( (!fnd) && ( is( c, "RESTRUCTURE" ) || is( c, "RE" ) ) )  { fnd = true; proc_restructure( edf , param(c) ); }
       if ( (!fnd) && is( c, "SIGNALS" ) )      { fnd = true; proc_drop_signals( edf , param(c) ); }
+      if ( (!fnd) && is( c, "DROP-ANNOTS" ) )  { fnd = true; proc_drop_annots( edf , param(c) ); }
       if ( (!fnd) && is( c, "RENAME" ) )       { fnd = true; proc_rename( edf, param(c) ); }
       if ( (!fnd) && is( c, "ENFORCE-SR" ) )   { fnd = true; proc_enforce_signals( edf , param(c) ); }
       if ( (!fnd) && is( c, "COPY" ) )         { fnd = true; proc_copy_signal( edf , param(c) ); }
@@ -4044,6 +4045,21 @@ void proc_rename( edf_t & edf , param_t & param )
 
 }
 
+// DROP-ANNOTS : drop one or more annotations
+void proc_drop_annots( edf_t & edf , param_t & param )
+{
+  
+  std::vector<std::string> drops;
+
+  if      ( param.has( "annot" ) ) drops = param.strvector( "annot" ) ;
+  else if ( param.has( "annots" ) ) drops = param.strvector( "annots" ) ;
+  else edf.annotations->drop();
+      
+  if ( drops.size() > 0 ) 
+    edf.annotations->drop( &drops );
+  
+}
+  
 
 // SIGNALS : drop one or more signal
 void proc_drop_signals( edf_t & edf , param_t & param )
