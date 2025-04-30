@@ -2846,7 +2846,21 @@ void proc_epoch( edf_t & edf , param_t & param )
       logger << "\n";
 
       edf.timeline.output_epoch_info( param.has( "verbose" ) );
-
+      
+      const bool opt_req   = param.has( "require" );
+      if ( opt_req ) 
+	{
+	  int r = param.requires_int( "require" );
+	  if ( edf.timeline.num_epochs() < r )
+	    {
+	      logger << " ** warning for "
+		     << edf.id << " when setting EPOCH: "
+		     << "required=" << r << "\t"
+		     << "but observed=" << edf.timeline.num_epochs()  << "\n";
+	      globals::problem = true;
+	    }	  
+	}
+      // all done for generic epoch detection
       return;
     }
 
@@ -3131,24 +3145,27 @@ void proc_clean_freezer( edf_t & edf , param_t & param )
 // THAW : bring back and replace current EDF
 void proc_thaw( edf_t & edf , param_t & param )
 {
-
-  // by default, cache is preserved
-
-  const bool preserve_cache = param.has( "preserve-cache" ) ;
+  
+  const bool preserve_cache = param.has( "preserve-cache" ) ? param.yesno( "preserve-cache" ) : false ;
   
   const bool remove = param.has( "remove" ) ? param.yesno( "remove" ) : false ;
   
+  const bool strictmode = param.has( "strict" ) ? param.yesno( "strict" ) : false ;
+  
+  bool retval;
+  
   if ( remove )
-    {
-      freezer.thaw( param.requires( "tag" ) , &edf , remove , preserve_cache );  
-    }
+    retval = freezer.thaw( param.requires( "tag" ) , &edf , remove , preserve_cache );  
   else
     {
       // can allow single arg context here (if not also using 'remove' or 'replace-cache' )
       const std::string freeze_name = param.has( "tag" ) ? param.value( "tag" ) : param.single_value() ;
-      freezer.thaw( freeze_name , &edf , false , preserve_cache );
+      retval = freezer.thaw( freeze_name , &edf , false , preserve_cache );
     }
   
+  if ( strictmode && ! retval ) 
+    Helper::halt( "could not thaw requsted data freeze; under strict-mode, halting ");
+
 }
 
 // EPOCH-ANNOT : directly apply epoch-level annotations from the command line
