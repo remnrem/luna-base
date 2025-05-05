@@ -542,7 +542,7 @@ void cmddefs_t::init()
   add_var( "S2A" , "CH" , "EXC1_DUR"  , "Number of exclusions due to duration criteria" );
   add_var( "S2A" , "CH" , "EXC2_MONO" , "Number of exclusions due to monotonic phase constraint" );
   add_var( "S2A" , "CH" , "EXC3_MAG" , "Number of exclusions due to magnitude criteria" );
-
+  add_var( "S2A" , "CH" , "EXC4_PDUR"  , "Number of exclusions due to phase-bin duration criteria" );
 
   //
   // DROP-ANNOTS
@@ -614,6 +614,7 @@ void cmddefs_t::init()
   //add_var( "AXA" , "SEED,ANNOT" , "N_MD" , "Median number of spanning annotations per seed event" );
   add_var( "AXA" , "SEED,ANNOT" , "A" , "Proportion of seeds with any spanning annotation" );
   add_var( "AXA" , "SEED,ANNOT" , "D" , "Time (distance) to nearest" );
+  add_var( "AXA" , "SEED,ANNOT" , "DABS" , "|Time| (distance) to nearest" );
   add_var( "AXA" , "SEED,ANNOT" , "D_N" , "Number of seeds with a nearest event" );
   add_var( "AXA" , "SEED,ANNOT" , "TOT_N" , "Total number of (flattened) annotations spanning all seeds" );
   add_var( "AXA" , "SEED,ANNOT" , "TOT_T" , "Total duration (secs) of (flattened) annotations spanning all seeds" );
