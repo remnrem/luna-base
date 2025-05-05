@@ -131,7 +131,7 @@ mslice_t::mslice_t( edf_t & edf ,
   labels.clear();
   const int ns = signals.size();
   for (int s=0;s<ns;s++)
-    {
+    {      
       slice_t * slice = new slice_t(edf , signals(s) , interval , downsample );
       channel.push_back( slice ); 
       labels.push_back( signals.label( s ) );
@@ -192,13 +192,12 @@ matslice_t::matslice_t( edf_t & edf ,
   const int Fs = edf.header.n_samples[ signals(0) ];
 
   labels.push_back( signals.label(0) );
-  
+
   for (int s=1;s<ns;s++)
     {
       if ( edf.header.n_samples[ signals(s) ] != Fs ) Helper::halt( "unequal sample rates in matslice_t: use RESAMPLE" );
       labels.push_back( signals.label(s) );
     }
-
 
   
   //
@@ -254,7 +253,6 @@ eigen_matslice_t::eigen_matslice_t( edf_t & edf ,
   
   if ( interval.empty() ) return;
   
-  
   //
   // Get labels and check SR
   //
@@ -270,8 +268,6 @@ eigen_matslice_t::eigen_matslice_t( edf_t & edf ,
       labels.push_back( signals.label(s) );
     }
 
-
-  
   //
   // use fixed channel/signal sampling rate (i.e. array can be ragged), and populate time-points
   //
@@ -290,7 +286,6 @@ eigen_matslice_t::eigen_matslice_t( edf_t & edf ,
 
   data.col(0) = Eigen::VectorXd::Map( &ch1[0] , nr );
   
-    
   
   //
   // get all other channels (w/out time-points)

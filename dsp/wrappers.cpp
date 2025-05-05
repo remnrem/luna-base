@@ -217,9 +217,9 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
 
       logger << " Hilbert transform for " << signals.label(s) << " --> " << new_mag_label ;      
 
-      if ( return_phase ) 
+      if ( return_phase && ! return_angle ) 
 	logger << ", " << new_phase_label ;
-
+      
       if ( return_angle )
 	logger << ", " << new_angle_label ;
 
@@ -230,7 +230,7 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
 
       edf.add_signal( new_mag_label , Fs , mag );
       
-      if ( return_phase ) 
+      if ( return_phase && ! return_angle ) 
 	edf.add_signal( new_phase_label , Fs , phase );
       
       if ( return_angle )

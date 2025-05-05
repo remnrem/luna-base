@@ -37,7 +37,7 @@ extern logger_t logger;
 // and so do not obviously fit somewhere else
 //
 
-//  S2A
+//  S2A (two versions; orig, + waveform version)
 //  A2S
 //  SPANNING
 //  ANNOTS
@@ -47,6 +47,12 @@ extern logger_t logger;
 
 // also:
 //  internal annot2sp() function (used by spindles analysis)
+//  helper function for S2A(waveform)  s2a_helper() 
+
+uint64_t s2a_interp( const std::vector<double> * d ,
+                     const std::vector<uint64_t> * tp ,
+                     const int i ,
+                     const double t );
 
 void timeline_t::annot2signal( const param_t & param )
 {
@@ -595,7 +601,6 @@ void timeline_t::signal2annot_cuts( const param_t & param )
   // , and so a 'cut' of 0 means whenever we 'cross' 0 to start/stop
   // an annotation
   
-  const double anchor = 180; // i.e. below test for cross from >180 to <180 defines a cross of 0-degrees
   
   //
   // labels (always adds signal label X)
@@ -609,7 +614,11 @@ void timeline_t::signal2annot_cuts( const param_t & param )
   const bool add_ch_inst_label = param.has( "add-channel-inst-label" ) ? param.yesno( "add-channel-inst-label" ) : false ;
 
   const bool add_ch_class_label = param.has( "add-channel-class-label" ) ? param.yesno( "add-channel-class-label" ) : false ;
-    
+
+  // pos2neg?
+  const bool pos2neg = param.has( "pos2neg" ) ? param.yesno( "pos2neg" ) : false; 
+
+
     
   //
   // Selection criteria
@@ -621,6 +630,14 @@ void timeline_t::signal2annot_cuts( const param_t & param )
   const double th_tmin = sel_tmin ? param.requires_dbl( "t-min" ) : 0 ;
   const double th_tmax = sel_tmax ? param.requires_dbl( "t-max" ) : 0 ; 
 
+  // also, allow for per phase-bin min/max outlier-detection 
+  const bool sel_phbin_tmin   = param.has( "t-min-phbin" );
+  const bool sel_phbin_tmax   = param.has( "t-max-phbin" );
+
+  const double th_phbin_tmin = sel_phbin_tmin ? param.requires_dbl( "t-min-phbin" ) : 0 ;
+  const double th_phbin_tmax = sel_phbin_tmax ? param.requires_dbl( "t-max-phbin" ) : 0 ;
+
+  
   // percentile-based amg , e.g. mag=20 means in top 20% of average MAG value
   // compared to all other waves
   const bool sel_mag = param.has( "mag-percentile" );
@@ -641,12 +658,16 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 
   if ( ( add_slope || add_state || add_bins ) && ! use_mono )
     Helper::halt( "requires 'monotonic' flag if using slope, state or bins" );
+
+  if ( ( th_phbin_tmin || th_phbin_tmax ) && !  add_bins )
+    Helper::halt( "cannot use t-min-phbin or t-max-phbin without bins" );
+
   
   //
   // signal(s) to use: assume phase-angles in main signal
   //
   
-  //   X --> X_ht_ph    (for defining waves)
+  //   X --> X_ht_ang   (for defining waves)
   //     --> X_ht_mag   (for any amplitude stuff)
   
   std::string signal_label = param.requires( "sig" );
@@ -661,7 +682,7 @@ void timeline_t::signal2annot_cuts( const param_t & param )
   
   // allow alternative signal names (if not using HILBERT) 
   
-  const std::string ph_ext = param.has( "phase-ext" ) ? param.value( "phase-ext" ) : "_ht_ph";
+  const std::string ph_ext = param.has( "phase-ext" ) ? param.value( "phase-ext" ) : "_ht_ang";
 
   const std::string mag_ext = param.has( "mag-ext" ) ? param.value( "mag-ext" ) : "_ht_mag";
   
@@ -723,6 +744,7 @@ void timeline_t::signal2annot_cuts( const param_t & param )
       int mono_cnt = 0;
       int mag_cnt = 0;
       int dur_cnt = 0;
+      int dur_phbin_cnt = 0;
       int all_cnt = 0;
       
       writer.level( sig_label , globals::signal_strat );
@@ -734,15 +756,30 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 
       slice_t slice( *edf , phase_slot , wholetrace() );  
       
-      std::vector<double> * d = slice.nonconst_pdata();  
+      std::vector<double> ph ;
       
+      if ( pos2neg )
+	{
+	  logger << "  shifting phase by 180-degrees to detect positive-to-negative waves\n";
+	  // shift phase angles by 180 for pos2neg 
+	  std::vector<double> xx = *slice.nonconst_pdata();	  
+	  ph.resize( xx.size() );  
+	  for (int i=0; i<xx.size(); i++)
+	    {
+	      if ( xx[i] >= 180 ) ph[i] = xx[i] - 180.0 ;
+	      else ph[i] = xx[i] + 180.0 ;
+	    }	    
+	}
+      else
+	ph = *slice.nonconst_pdata();  
+
       const std::vector<uint64_t> * tp = slice.ptimepoints();
       
       const int sr = edf->header.sampling_freq( phase_slot );
 
       const uint64_t dt = globals::tp_1sec / sr ;
       
-      const int n = d->size();
+      const int n = ph.size();
 
       if ( n == 0 ) continue;
 
@@ -770,12 +807,16 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	    }
 
 	  
-	  // did we just cross the anchor point (e.g. by default 0, from pos peak to neg peak) 
-	  
-	  if ( (*d)[i-1] >= anchor && (*d)[i] < anchor )
+	  // did we just cross the key point: because of wrapping
+	  //   cross '0-deg'      -->   goes from > 180 to < 180 
+
+	  const bool crosses = ph[i-1] >  180 && ph[i] <  180 ;
+	    	  
+	  if ( crosses ) 
 	    {
 	      
 	      // close an existing wave:
+
 	      if ( start != -1 )
 		{
 		  
@@ -790,7 +831,7 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 		  if ( sel_tmin || sel_tmax )
 		    {
 		      const uint64_t start_tp = (*tp)[start];
-		      const uint64_t stop_tp  = (*tp)[stop];
+		      const uint64_t stop_tp  = (*tp)[stop];		      
 		      const double dur = ( stop_tp - start_tp ) * globals::tp_duration;
 		      if ( sel_tmin && dur < th_tmin ) okay = false;
 		      if ( sel_tmax && dur > th_tmax ) okay = false;
@@ -813,9 +854,9 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	  
 	} // go to next sample
 
-
+      
       //
-      // Require monotonic? Also that starts/stops in <90 and >270
+      // Require monotonic? Also that starts/stops in <30 and >330
       //
 
       if ( use_mono )
@@ -834,11 +875,12 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	      bool okay = true;
 	      
 	      for (int p=start+1;p<stop; p++)
-		if ( (*d)[p] <= (*d)[p-1] )
+		if ( ph[p] <= ph[p-1] )
 		  okay = false;
-
+	      
 	      // also flag if not fully spanning the wave-form
-	      if ( (*d)[start] >= 90 || (*d)[stop-1] <= 270 )
+	      // i.e. so we can be sure to find all 12 phase bins 
+	      if ( ph[start] >= 30 || ph[stop-1] <= 330 )
 		okay = false;
 	      
 	      if ( okay )
@@ -862,7 +904,7 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	  
 	  std::vector<double> * dm = slice.nonconst_pdata();
 
-	  if ( dm->size() != d->size() )
+	  if ( dm->size() != ph.size() )
 	    Helper::halt( "phase and magnitude signals must have the same sample rates" );
 
 	  std::vector<double> v;
@@ -917,37 +959,7 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	  
 	}
       
-	
-      //
-      // now add
-      //
-      
-      logger << "  adding " << fwaves.size()
-	     << " waves for " << sig_label << "\n";
-      
-      std::set<interval_t>::const_iterator aa = fwaves.begin();
-      while ( aa != fwaves.end() )
-	{
-
-	  a_full->add( add_ch_inst_label ? sig_label : "." , 
-		       interval_t( (*tp)[aa->start] , (*tp)[aa->stop] ) ,
-		       sig_label );
-	  
-	  ++aa;
-	}
-
-      //
-      // QC outputs
-      //
-
-      writer.value( "EXC1_DUR"  , dur_cnt );
-      writer.value( "EXC2_MONO" , mono_cnt );
-      writer.value( "EXC3_MAG"  , mag_cnt );
-      writer.value( "N" , (int)fwaves.size() );
-      writer.value( "N0" , all_cnt );
-
-      
-      
+            
       //
       // break down completed cycles into BIN, STATE and SLOPE sub-variables?
       //
@@ -962,198 +974,244 @@ void timeline_t::signal2annot_cuts( const param_t & param )
       // SLOPE : 0 to 90 (FALL)
       //         90 to 270 (RISE)
       //         270 to 360 (FALL)
-      
 
-      if ( add_state )
+      // track potential exclusions of full waveas based on phbin dur criteria
+      std::set<interval_t> fwaves_exclusions;
+
+      if ( add_state || add_slope || add_bins )
 	{
-
-	  annot_t * a_pos = add_ch_class_label ?
-	    edf->annotations->add( wave_label + "_POS_" + sig_label ) :
-	    edf->annotations->add( wave_label + "_POS" ) ;
-
-	  annot_t * a_neg = add_ch_class_label ?
-	    edf->annotations->add( wave_label + "_NEG_" + sig_label ) :
-	    edf->annotations->add( wave_label + "_NEG" ) ;
 	  
-	  aa = fwaves.begin();
+	  annot_t * a_pos = NULL;
+	  annot_t * a_neg = NULL;
+	  annot_t * a_rise = NULL;
+	  annot_t * a_fall = NULL;
+	  annot_t * a_bins = NULL;
 	  
-	  while ( aa != fwaves.end() )
-	    {
+	  if ( add_state )
+	    {	      
+	      a_pos = add_ch_class_label ?
+		edf->annotations->add( wave_label + ( pos2neg ? "_NEG_" : "_POS_" ) + sig_label ) :
+		edf->annotations->add( wave_label + ( pos2neg ? "_NEG" : "_POS" ) ) ;
 	      
-	      int start = aa->start;
-	      int stop  = aa->stop;
+	      a_neg = add_ch_class_label ?
+		edf->annotations->add( wave_label + ( pos2neg ? "_POS_" : "_NEG_" ) + sig_label ) :
+		edf->annotations->add( wave_label + ( pos2neg ? "_POS" : "_NEG" ) ) ;
+	    }
+
+	  if ( add_slope )
+	    {	      
+	      a_rise = add_ch_class_label ?
+		edf->annotations->add( wave_label + ( pos2neg ? "_FALL_" : "_RISE_" ) + sig_label ) :
+		edf->annotations->add( wave_label + ( pos2neg ? "_FALL" : "_RISE" ) ) ;
 	      
-	      int p180 = 0;
-	      for (int p=start;p<stop; p++)
-		{
-		  if ( (*d)[p] >= 180 )
-		    {
-		      // get closest
-		      const double d1 = (*d)[p] - 180.0 ;
-		      const double d0 = p > 0 ? 180 - (*d)[p-1] : 999 ;
-		      p180 = d1 < d0 ? p : p-1 ;
-		      break;
-		    }
-		}
-
-	      // add
-	      a_pos->add( add_ch_inst_label ? sig_label : "POS" ,
-			  interval_t( (*tp)[ start ] , (*tp)[p180] ) , 
-			  sig_label );
-
-	      a_neg->add( add_ch_inst_label ? sig_label : "NEG" ,
-			  interval_t( (*tp)[ p180 ] , (*tp)[stop] ) , 
-			  sig_label );
-
-	      // next wave
-	      ++aa;
+	      a_fall = add_ch_class_label ?
+		edf->annotations->add( wave_label + ( pos2neg ? "_RISE_" : "_FALL_" ) + sig_label ) :
+		edf->annotations->add( wave_label + ( pos2neg ? "_RISE" : "_FALL" ) ) ;
 	    }
 	  
-	}
-
-
-      //
-      // add 'slope' indicator
-      //
-
-      if ( add_slope )
-	{
-	  
-	  annot_t * a_rise = add_ch_class_label ?
-	    edf->annotations->add( wave_label + "_RISE_" + sig_label ) :
-	    edf->annotations->add( wave_label + "_RISE" ) ;
-	  
-	  annot_t * a_fall = add_ch_class_label ?
-	    edf->annotations->add( wave_label + "_FALL_" + sig_label ) :
-	    edf->annotations->add( wave_label + "_FALL" ) ;
-	  
-	  aa = fwaves.begin();
-	  
-	  while ( aa != fwaves.end() )
-	    {
-	      
-	      int start = aa->start;
-	      int stop  = aa->stop;
-	  
-	      int p90 = 0;
-	      for (int p=start;p<stop; p++)
-		{
-		  if ( (*d)[p] >= 90 )
-		    {
-		      const double d1 = (*d)[p] - 90.0 ;
-		      const double d0 = p > 0 ? 90 - (*d)[p-1] : 999 ;
-		      p90 = d1 < d0 ? p : p-1 ;
-		      break;
-		    }
-		}
-	  
-	      int p270 = 0;
-	      for (int p=start;p<stop; p++)
-		{
-		  if ( (*d)[p] >= 270 )
-		    {
-		      const double d1 = (*d)[p] - 270.0 ;
-		      const double d0 = p > 0 ? 270 - (*d)[p-1] : 999 ;
-		      p270 = d1 < d0 ? p : p-1 ;
-		      break;
-		    }
-		}
-
-	      	     	    	      
-	      // add
-	      a_rise->add( add_ch_inst_label ? sig_label : "RISE" ,
-			  interval_t( (*tp)[ p90 ] , (*tp)[p270] ) , 
-			  sig_label );
-
-	      a_fall->add( add_ch_inst_label ? sig_label : "FALL" ,
-			   interval_t( (*tp)[ start ] , (*tp)[ p90 ] ) , 
-			   sig_label );
-
-	      a_fall->add( add_ch_inst_label ? sig_label : "FALL" ,
-			   interval_t( (*tp)[ p270 ] , (*tp)[stop] ) , 
-			   sig_label );
-
-	      ++aa;
-	      
-	    }	  
-	  
-	}
-
-
-      //
-      // add (fixed) x12 bins (30deg each)
-      //   --> but do not add empty intervals
-      //
-      
-      if ( add_bins )
-	{
-	  
-	  annot_t * a_bins = add_ch_class_label ?
-	    edf->annotations->add( wave_label + "_BIN_" + sig_label ) :
-	    edf->annotations->add( wave_label + "_BIN" ) ;
-	  
-	  
-	  aa = fwaves.begin();
-	  
-	  while ( aa != fwaves.end() )
-	    {
-	      
-	      int start = aa->start;
-	      int stop  = aa->stop;
-	      
-	      // use spline model to interpolate
-	      
-	      std::vector<double> y ,t;
-	      for (int p=start;p<stop; p++)
-		{
-		  t.push_back( p - start );
-		  y.push_back( (*d)[p] );
-		}
-	  
-	      const int np = t.size();
-	  
-	      // set_points( x, y )
-	      //   x = phase
-	      //   y = sample (i.e. 'time')	  
-	      tk::spline spline; 
-	      spline.set_points( y, t );
-
-	      std::vector<int> bs;
-	      
-	      for (int b=0; b<12; b++)
-		{
-		  // i.e. implied phase ('x') -->
-		  const double ph = (b+1) * 30.0;		  
-		  const double r = spline( ph );		  
-		  const int p1 = std::round( r );
-		  int px = start + p1;
-		  if ( px < start ) px = start;
-		  if ( px > stop ) px = stop;
-		  bs.push_back( px );
-		}
-
-	      for (int b=0; b<12; b++)
-		{
-		  int p1 = b == 0 ? start : bs[ b-1 ] ;
-		  int p2 = b == 11 ? stop : bs[ b   ] ;
-		  
-		  // add (with bins as INST ID)
-
-		  if ( p2 > p1 )
-		    {
-		      const std::string ph_label = ( b>8 ? "B" : "B0" ) + Helper::int2str( b + 1 );
-		  
-		      a_bins->add( ph_label , 
-				   interval_t( (*tp)[p1] , (*tp)[p2] ) ,
-				   sig_label );
-		    }
-		}
-	      
-	      // next wave
-	      ++aa;
+	  if ( add_bins )
+	    {	      
+	      a_bins = add_ch_class_label ?
+		edf->annotations->add( wave_label + "_BIN_" + sig_label ) :
+		edf->annotations->add( wave_label + "_BIN" ) ;
 	    }
-	}
-      
+	  
+	  
+	  //
+	  // iterate over events, adding if meets criteria
+	  //
+	  
+	  std::set<interval_t>::const_iterator aa = fwaves.begin();
+	  
+	  while ( aa != fwaves.end() )
+	    {
+	      
+	      int start = aa->start;
+	      int stop  = aa->stop;
+	      
+	      // get adjusted points (interpolate between samples for more
+	      // accurate annotation durations)
+	      const uint64_t start_tp = s2a_interp( &ph, tp, start, 0 ); 
+	      const uint64_t stop_tp  = s2a_interp( &ph, tp, stop, 0 ); 
+	      
+	      interval_t tinterval = interval_t( start_tp , stop_tp );
+	      
+	      // find all phase landmarks (30-deg bins)
+	      
+	      std::vector<uint64_t> bs( 13 , 0LLU );
+	      bs[0] = tinterval.start;
+	      bs[12] = tinterval.stop;
+	      
+	      // *because we enfore monotonic* we know that the
+	      // wave at least starts/end below 30-deg / after 330-deg,
+	      // so we are guaranteed to see all 12 phase bins; but check anyway
+	      
+	      int bcnt = 0; // should be populating 
+	      
+	      for (int b=1; b<12; b++)
+		{
+		  
+		  const double phase_angle = b * 30.0;		  
+		  
+		  for (int p=start;p<stop; p++)
+		    {
+		      
+		      if ( ph[p] >= phase_angle )
+			{
+			  
+			  // get closest to 'phage_angle' (between p and p-1)
+
+			  bs[ b ] = s2a_interp( &ph, tp, p, phase_angle );   
+			  
+			  // update start to avoid minor retracing of steps
+			  // but allow for case where we have a zero-gap (i.e.
+			  // make sure each element of bs is filled
+			  
+			  start = p == start ? start : p - 1;
+
+			  // track that we found this point
+
+			  ++bcnt;
+
+			  // and skip to the next 
+
+			  break;
+			}
+		    }
+		  
+		  // next bin
+		}
+
+
+	      //
+	      // is this waveform okay?
+	      //
+	      
+	      bool okay = bcnt == 11 ;
+	      
+	      // additional phase-bin duration criteria?
+	      if ( okay && ( sel_phbin_tmin || sel_phbin_tmax ) )
+		{
+		  
+		  for (int b=1; b<13; b++)
+		    {
+                      const uint64_t tp1 = bs[ b-1 ] ;
+                      const uint64_t tp2 = bs[ b ] ;
+		      
+		      const uint64_t tp = tp2 > tp1 ? tp2 - tp1 : 0LLU ; 
+		      const double t = tp * globals::tp_duration ;
+
+		      if ( sel_phbin_tmin && t < th_phbin_tmin ) okay = false;
+		      if ( sel_phbin_tmax && t > th_phbin_tmax ) okay = false;
+		    }
+		}
+
+	      
+	      //
+	      // skip this interval due to phbin criteria
+	      //
+	      
+	      if ( ! okay )
+		{
+		  ++dur_phbin_cnt;
+		  ++aa;
+		  continue;
+		}
+	      
+	      
+	      //
+	      // add annotations 
+	      //
+	      
+	      a_full->add( add_ch_inst_label ? sig_label : "FULL" , 
+			   tinterval , 
+			   sig_label );
+	      
+	      
+	      //
+	      // add in intervals
+	      //
+
+	      if ( add_bins )
+		{
+		  
+		  for (int b=1; b<13; b++)
+		    {
+		      uint64_t tp1 = bs[ b-1 ] ;
+		      uint64_t tp2 = bs[ b ] ;
+		      
+		      if ( tp2 > tp1 )
+			{
+			  const std::string ph_label = ( b>9 ? "B" : "B0" ) + Helper::int2str( b );
+			  a_bins->add( ph_label , interval_t( tp1 , tp2 ) , sig_label );
+			}
+		    }
+		}
+	      
+	      
+	      if ( add_state )
+		{
+		  const uint64_t tp180 = bs[ 6 ];
+
+		  // add
+		  a_neg->add( add_ch_inst_label ? sig_label : ( pos2neg ? "POS" : "NEG" ) ,
+			      interval_t( tinterval.start , tp180 ) , 
+			      sig_label );
+		  
+		  a_pos->add( add_ch_inst_label ? sig_label : ( pos2neg ? "NEG" : "POS" ) ,
+			      interval_t( tp180 , tinterval.stop ) , 
+			      sig_label );
+		  
+		}
+
+
+	      if ( add_slope )
+		{
+		  const uint64_t tp90  = bs[ 3 ];
+		  const uint64_t tp270 = bs[ 9 ];
+
+		  // add
+		  a_rise->add( add_ch_inst_label ? sig_label : ( pos2neg ? "FALL" : "RISE" ),
+			       interval_t( tp90  , tp270 ) , 
+			       sig_label );
+		  
+		  a_fall->add( add_ch_inst_label ? sig_label : ( pos2neg ? "RISE" : "FALL" ),
+			       interval_t( tinterval.start , tp90 ) , 
+			       sig_label );
+		  
+		  a_fall->add( add_ch_inst_label ? sig_label : ( pos2neg ? "RISE" : "FALL" ),
+			       interval_t( tp270  , tinterval.stop ) , 
+			       sig_label );
+		  
+		}
+	      
+	      	     
+
+		  //
+		  // next wave
+		  //
+		  
+		  ++aa;
+		}
+	      
+	      
+
+	      logger << "  added " << fwaves.size()
+		     << " waves for " << sig_label << "\n";
+	      
+	      //
+	      // QC outputs
+	      //
+	      
+	      writer.value( "EXC1_DUR"  , dur_cnt );
+	      writer.value( "EXC2_MONO" , mono_cnt );
+	      writer.value( "EXC3_MAG"  , mag_cnt );
+	      writer.value( "EXC4_PDUR"  , dur_phbin_cnt );
+	      writer.value( "N" , (int)fwaves.size() );
+	      writer.value( "N0" , all_cnt );
+	      
+	      
+	}      
       
       // next signal
     }
@@ -1288,7 +1346,7 @@ void timeline_t::list_spanning_annotations( const param_t & param )
 	  
 	  // report
 	  writer.level( over_extended , globals::count_strat );
-	
+	  
 	  writer.value( "ANNOT" , aa->parent->name );
 	  writer.value( "INST" , aa->id );
 	  writer.value( "START" , interval.start_sec() );
@@ -2074,41 +2132,37 @@ void timeline_t::signal_means_by_annot( const param_t & param )
 
   for (int a=0; a<anames.size(); a++)
     {
-
+      
       // does annot exist?
       annot_t * annot = edf->annotations->find( anames[a] );
       if ( annot == NULL ) continue;
       const std::string & class_name = anames[a];
-	  
+      
       // get all events
       const annot_map_t & events = annot->interval_events;
 
-      // std::cout << " considering " << events.size() << "\n";
-      // int idx = 0;
+      //std::cout << " considering " << events.size() << "\n";
+      //int idx = 0;
       
       annot_map_t::const_iterator aa = events.begin();
       while ( aa != events.end() )
 	{
 	  // instance ID (or not)
 	  const std::string inst_id = ignore_instance_ids ? "." : aa->first.id ;
-
+	  
 	  // ++idx;
 	  // std::cout << " idx " << idx << " class_name = " << class_name <<  " " << inst_id << "\n";
 
-
+	  
 	  // get main interval
 	  const interval_t & interval = aa->first.interval;
-
-	  //	  std::cout << " pulling " << interval.as_string() << "\n";
-	  
+      
 	  eigen_matslice_t mslice( *edf , signals , interval );	  
-          const Eigen::MatrixXd & X = mslice.data_ref();
+	  
+	  const Eigen::MatrixXd & X = mslice.data_ref();
           const int rows = X.rows();
           const int cols = X.cols();
 
-	  //	  std::cout << "  --> got " << rows << " " << cols << " "  << "\n";
-
-	  
 	  // add to count, accumulate mean
 	  an[ class_name ][ inst_id ] += rows;	  
 	  Eigen::ArrayXd sum = X.array().colwise().sum();	  
@@ -2146,8 +2200,6 @@ void timeline_t::signal_means_by_annot( const param_t & param )
     } // next annotation
   
   
-
-
   //
   // Report means, along w/ normalized values (optionally) 
   //
@@ -2178,7 +2230,7 @@ void timeline_t::signal_means_by_annot( const param_t & param )
       std::map<std::string,std::map<std::string,int> >::const_iterator ii = an.begin();
       while ( ii != an.end() )
 	{
-
+ 
 	  double minval = 0 , maxval = 0;
 	  
 	  // by instance ID
@@ -2206,7 +2258,7 @@ void timeline_t::signal_means_by_annot( const param_t & param )
 	  ++ii;
 	}
 
-
+      
       //
       // Report outputs
       //
@@ -2936,6 +2988,7 @@ void timeline_t::annot_crosstabs( const param_t & param )
   const bool match_instance = param.has( "match-instance" );
   if ( match_instance && ! by_instance ) Helper::halt( "match-instance requires by-instance is set" );
 
+  
   // flatten events?
   const bool flatten = param.has( "flatten" ) ? param.yesno( "flatten" ) : false;
 
@@ -3120,13 +3173,13 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	      std::vector<double> sav_p, sav_t, sav_n, sav_a;
 	      
 	      // nearest (within w) [ will only contain instances that were within range ] 
-	      std::vector<double> sav_d;
-
+	      std::vector<double> sav_d, sav_dabs;
+	      
 	      // determine for lists a and b :
 	      //   total % of overlap per all 'a'
 	      //   mean % of overlap per 'a' event
 	      //   num_secs of 'b' given 'a'
-	      //   time from seed 'anchor' to nearest 'b' 'anchor'
+	      //   time from seed 'anchor' to nearest 'b' 'anchor' (signed + abs) 
 	      //   % of 'a' with at least some 'b' overlap
 	      
 	      int sidx = 0;
@@ -3232,8 +3285,11 @@ void timeline_t::annot_crosstabs( const param_t & param )
 		      // 	std::cout << " dst:  no within-window match found...\n";
 		      
 		      // save signed closest annot		      
-		      if ( okay ) 
-			sav_d.push_back( q );
+		      if ( okay )
+			{
+			  sav_d.push_back( q );
+			  sav_dabs.push_back( fabs( q ) );
+			}
 		    }
 		  
 		  
@@ -3320,7 +3376,10 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	      //writer.value( "N_MD" , MiscMath::median( sav_n ) );
 	      
 	      if ( sav_d.size() > 0 )
-		writer.value( "D" , MiscMath::mean( sav_d ) );
+		{
+		  writer.value( "D" , MiscMath::mean( sav_d ) );
+		  writer.value( "DABS" , MiscMath::mean( sav_dabs ) );
+		}
 	      writer.value( "D_N", (int)sav_d.size() );
 
 	      writer.value( "A" , MiscMath::mean( sav_a ) );
@@ -3342,4 +3401,55 @@ void timeline_t::annot_crosstabs( const param_t & param )
 
   if ( within_channel )
     writer.unlevel( globals::signal_strat );
+}
+
+
+
+uint64_t s2a_interp( const std::vector<double> * d ,     // angles (0-360)
+		     const std::vector<uint64_t> * tp ,  // time-points
+		     const int i ,  // first point *after* target T
+		     const double t ) // target
+{
+
+  // typically: e.g. if t = 90
+  //     i-1   89.7
+  //     T     90.0
+  //     i     90.2
+  // i.e. this spans the range
+  
+  // however,
+
+  // scenario1: possible at 0 we wrapped around phase: (e.g. T = 0)
+  //   i-1    359.8
+  //   T        0.0
+  //   i        0.2
+  
+  // scenario2: unlikely, but possible target is high
+  //   i-1    349.8
+  //   T      350.0
+  //   i      2.1
+
+  // so, test whether 
+  const bool scenario1 = (*d)[i-1] > t ;
+  const bool scenario2 = (*d)[i] < t ; 
+  
+  // scenario1 : reduce first by 360
+  // scenario2 : increase second by 360
+
+  if ( scenario1 && scenario2 ) // should not happen
+    Helper::halt( "internal logic error in s2a_interp()" );
+  
+  const double first  = scenario1 ? (*d)[i-1] - 360.0 : (*d)[i-1] ;
+  const double second = scenario2 ? (*d)[i] + 360.0 : (*d)[i] ;
+
+  if ( first > t || first > second || t > second )
+    Helper::halt( "internal logic error in s2a_interp()" );
+
+  // get proportional scaling
+  const double p = ( t - first ) / ( second - first );
+
+  // return an adjusted tp (i.e. no longer aligned with a sample point per se)
+  const uint64_t d1 = (*tp)[i] - (*tp)[i-1];
+  const uint64_t retval = (*tp)[i-1] + p * d1;
+  return retval;
 }

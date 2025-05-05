@@ -205,7 +205,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 				   int * stop_smp ) const
 
 {
-
+  
   // if n_samples_per_record == 0 implies the SR is actually time-point resoluation
   //  i.e. SR = 1e9
   // almost certainly not necessary, but below we avoid some divisions etc in this special case
@@ -248,10 +248,10 @@ bool timeline_t::interval2records( const interval_t & interval ,
   // where we'd get one additional sample at the end depending on alignment as above; although not really a substantive
   // problem, this led to data-handling issues.
   
-   // std::cout << " search: " << interval.as_string() << "\n";
-   // std::cout << " search (tp): " << interval.start << " " << interval.stop << "\n";
-   // std::cout << " n-samples per rec: " << n_samples_per_record << "\n";
-   // std::cout << " EDF contin: " <<  edf->header.continuous << "\n";
+    // std::cout << " search: " << interval.as_string() << "\n";
+    // std::cout << " search (tp): " << interval.start << " " << interval.stop << "\n";
+    // std::cout << " n-samples per rec: " << n_samples_per_record << "\n";
+    // std::cout << " EDF contin: " <<  edf->header.continuous << "\n";
 
   //
   // badly-defined interval?
@@ -290,7 +290,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
   // ensure not past end  (last_time_point is the last accessible time-point, so go +1 on this)
   if ( stop_tp > edf->timeline.last_time_point_tp )
     stop_tp = edf->timeline.last_time_point_tp + 1LLU ;
-    
+
   //
   // For a continuous timeline, given time-points can
   // straightforwardly calculate record/sample
@@ -382,7 +382,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
       //
       
       // track whether the start search point falls between sample-points
-      
+
       bool in_gap = false;
       
       if ( lwr != tp2rec.begin() ) 
@@ -522,7 +522,6 @@ bool timeline_t::interval2records( const interval_t & interval ,
       
       // assuming stop_tp is end+1
       //in_gap = ! ( stop_tp > previous_rec_start && stop_tp < previous_rec_end );
-      
 
       if ( in_gap )
 	{
@@ -533,7 +532,6 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	}
       else
 	{
-	  
 	  // else, determine the offset into the prior record for stop_tp
 	  
 	  // how far into this record (TP)? nb. here using end+1 time-point as above for continuous case
@@ -544,6 +542,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	    floor( ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
 	  
 	  *stop_smp = (int)stop_sample;
+	  
 	}
 
       //
@@ -553,6 +552,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
       if ( *stop_smp == 0 )
         {
+	  
 	  if ( *stop_rec == 0 )
 	    {
 	      *start_rec = *start_smp = *stop_rec = *stop_smp = 0;
@@ -561,12 +561,13 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	  
           *stop_rec = *stop_rec - 1;  
 
-          *stop_smp = n_samples_per_record ? globals::tp_1sec - 1LLU :
+          *stop_smp = n_samples_per_record == 0 ? globals::tp_1sec - 1LLU :
 	    n_samples_per_record - 1LLU;
         }
       else
-	*stop_smp = *stop_smp - 1 ; 
-      
+	{	  
+	  *stop_smp = *stop_smp - 1 ;	  
+	}
     }
 
   

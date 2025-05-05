@@ -1983,13 +1983,14 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   int start_record, stop_record;
   int start_sample, stop_sample;
 
-  
   bool okay = timeline.interval2records( interval_t( start , stop ) , 
 					 n_samples_per_record , 
 					 &start_record, &start_sample , 
 					 &stop_record, &stop_sample );
   
-    
+  // std::cout << " okay = start " << okay << " " << start_record << " " << start_sample << "\n";
+  // std::cout << " okay = stop  " << okay << " " << stop_record << " " << stop_sample << "\n";
+  
   //
   // If the interval is too small (or is applied to a signal with a low sampling rate)
   // we might not find any sample-points in this region.   Not an error per se, but flag
@@ -2029,10 +2030,17 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   while ( r <= stop_record )
     {
 
+      //std::cout << " r = " << r << " " << stop_record << " " << n_samples_per_record << "\n";
+      
       const edf_record_t * record = &(records.find( r )->second);
       
       const int start = r == start_record ? start_sample : 0 ;
+      // std::cout << " n_samples_per_record = " << n_samples_per_record << "\n";
+      // std::cout << " n_samples_per_record = " << n_samples_per_record -1 << "\n";
+      // std::cout << " stop_sample = " << stop_sample << "\n";
       const int stop  = r == stop_record  ? stop_sample  : n_samples_per_record - 1;
+
+      //      std::cout << " st/st " << start << " " << stop << "\n";
       
       for (int s=start;s<=stop;s+=downsample)
 	{
@@ -2043,7 +2051,7 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 	    rec->push_back( r );
 	  if ( smp != NULL )
 	    smp->push_back( r * n_samples_per_record + s );
-	
+	  
 	  // just return digital values separately...
 	  if ( ddata != NULL )
 	    ddata->push_back( record->data[ signal ][ s ] );
