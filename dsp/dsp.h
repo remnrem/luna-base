@@ -24,6 +24,7 @@
 #define __DSP_H__
 
 #include "arousals.h"
+#include "rai.h"
 #include "gft.h"
 #include "peri.h"
 #include "xcorr.h"

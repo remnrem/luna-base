@@ -863,6 +863,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "REFERENCE" ) )    { fnd = true; proc_reference( edf , param(c) ); }
       if ( (!fnd) && is( c, "DEREFERENCE" ) )  { fnd = true; proc_dereference( edf , param(c) ); }      
       if ( (!fnd) && is( c, "FLIP" ) )         { fnd = true; proc_flip( edf , param(c) ); }
+      if ( (!fnd) && is( c, "RAI" ) )          { fnd = true; proc_rai( edf, param(c) ); }
       if ( (!fnd) && is( c, "RECTIFY" ) )      { fnd = true; proc_rectify( edf , param(c) ); }
       if ( (!fnd) && is( c, "REVERSE" ) )      { fnd = true; proc_reverse( edf , param(c) ); }
       if ( (!fnd) && is( c, "CANONICAL" ) )    { fnd = true; proc_canonical( edf , param(c) ); }
@@ -4503,6 +4504,12 @@ void proc_rolling_norm( edf_t & edf , param_t & param )
 void proc_standardize( edf_t & edf , param_t & param )
 {
   dsptools::standardize( edf , param );
+}
+
+// RAI : REM atonia index
+void proc_rai( edf_t & edf , param_t & param  )
+{
+  dsptools::rai( edf, param );
 }
 
 // RECTIFY 

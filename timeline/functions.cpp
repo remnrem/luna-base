@@ -978,240 +978,237 @@ void timeline_t::signal2annot_cuts( const param_t & param )
       // track potential exclusions of full waveas based on phbin dur criteria
       std::set<interval_t> fwaves_exclusions;
 
-      if ( add_state || add_slope || add_bins )
+      annot_t * a_pos = NULL;
+      annot_t * a_neg = NULL;
+      annot_t * a_rise = NULL;
+      annot_t * a_fall = NULL;
+      annot_t * a_bins = NULL;
+      
+      if ( add_state )
+	{	      
+	  a_pos = add_ch_class_label ?
+	    edf->annotations->add( wave_label + ( pos2neg ? "_NEG_" : "_POS_" ) + sig_label ) :
+	    edf->annotations->add( wave_label + ( pos2neg ? "_NEG" : "_POS" ) ) ;
+	  
+	  a_neg = add_ch_class_label ?
+	    edf->annotations->add( wave_label + ( pos2neg ? "_POS_" : "_NEG_" ) + sig_label ) :
+	    edf->annotations->add( wave_label + ( pos2neg ? "_POS" : "_NEG" ) ) ;
+	}
+      
+      if ( add_slope )
+	{	      
+	  a_rise = add_ch_class_label ?
+	    edf->annotations->add( wave_label + ( pos2neg ? "_FALL_" : "_RISE_" ) + sig_label ) :
+	    edf->annotations->add( wave_label + ( pos2neg ? "_FALL" : "_RISE" ) ) ;
+	  
+	  a_fall = add_ch_class_label ?
+	    edf->annotations->add( wave_label + ( pos2neg ? "_RISE_" : "_FALL_" ) + sig_label ) :
+	    edf->annotations->add( wave_label + ( pos2neg ? "_RISE" : "_FALL" ) ) ;
+	}
+      
+      if ( add_bins )
+	{	      
+	  a_bins = add_ch_class_label ?
+	    edf->annotations->add( wave_label + "_BIN_" + sig_label ) :
+	    edf->annotations->add( wave_label + "_BIN" ) ;
+	}
+      
+      
+      //
+      // iterate over events, adding if meets criteria
+      //
+      
+      std::set<interval_t>::const_iterator aa = fwaves.begin();
+      
+      while ( aa != fwaves.end() )
 	{
 	  
-	  annot_t * a_pos = NULL;
-	  annot_t * a_neg = NULL;
-	  annot_t * a_rise = NULL;
-	  annot_t * a_fall = NULL;
-	  annot_t * a_bins = NULL;
+	  int start = aa->start;
+	  int stop  = aa->stop;
 	  
-	  if ( add_state )
-	    {	      
-	      a_pos = add_ch_class_label ?
-		edf->annotations->add( wave_label + ( pos2neg ? "_NEG_" : "_POS_" ) + sig_label ) :
-		edf->annotations->add( wave_label + ( pos2neg ? "_NEG" : "_POS" ) ) ;
-	      
-	      a_neg = add_ch_class_label ?
-		edf->annotations->add( wave_label + ( pos2neg ? "_POS_" : "_NEG_" ) + sig_label ) :
-		edf->annotations->add( wave_label + ( pos2neg ? "_POS" : "_NEG" ) ) ;
-	    }
-
-	  if ( add_slope )
-	    {	      
-	      a_rise = add_ch_class_label ?
-		edf->annotations->add( wave_label + ( pos2neg ? "_FALL_" : "_RISE_" ) + sig_label ) :
-		edf->annotations->add( wave_label + ( pos2neg ? "_FALL" : "_RISE" ) ) ;
-	      
-	      a_fall = add_ch_class_label ?
-		edf->annotations->add( wave_label + ( pos2neg ? "_RISE_" : "_FALL_" ) + sig_label ) :
-		edf->annotations->add( wave_label + ( pos2neg ? "_RISE" : "_FALL" ) ) ;
-	    }
+	  // get adjusted points (interpolate between samples for more
+	  // accurate annotation durations)
+	  const uint64_t start_tp = s2a_interp( &ph, tp, start, 0 ); 
+	  const uint64_t stop_tp  = s2a_interp( &ph, tp, stop, 0 ); 
 	  
-	  if ( add_bins )
-	    {	      
-	      a_bins = add_ch_class_label ?
-		edf->annotations->add( wave_label + "_BIN_" + sig_label ) :
-		edf->annotations->add( wave_label + "_BIN" ) ;
-	    }
+	  interval_t tinterval = interval_t( start_tp , stop_tp );
 	  
+	  // find all phase landmarks (30-deg bins)
 	  
-	  //
-	  // iterate over events, adding if meets criteria
-	  //
+	  std::vector<uint64_t> bs( 13 , 0LLU );
+	  bs[0] = tinterval.start;
+	  bs[12] = tinterval.stop;
 	  
-	  std::set<interval_t>::const_iterator aa = fwaves.begin();
+	  // *because we enfore monotonic* we know that the
+	  // wave at least starts/end below 30-deg / after 330-deg,
+	  // so we are guaranteed to see all 12 phase bins; but check anyway
 	  
-	  while ( aa != fwaves.end() )
+	  int bcnt = 0; // should be populating 
+	  
+	  for (int b=1; b<12; b++)
 	    {
 	      
-	      int start = aa->start;
-	      int stop  = aa->stop;
+	      const double phase_angle = b * 30.0;		  
 	      
-	      // get adjusted points (interpolate between samples for more
-	      // accurate annotation durations)
-	      const uint64_t start_tp = s2a_interp( &ph, tp, start, 0 ); 
-	      const uint64_t stop_tp  = s2a_interp( &ph, tp, stop, 0 ); 
-	      
-	      interval_t tinterval = interval_t( start_tp , stop_tp );
-	      
-	      // find all phase landmarks (30-deg bins)
-	      
-	      std::vector<uint64_t> bs( 13 , 0LLU );
-	      bs[0] = tinterval.start;
-	      bs[12] = tinterval.stop;
-	      
-	      // *because we enfore monotonic* we know that the
-	      // wave at least starts/end below 30-deg / after 330-deg,
-	      // so we are guaranteed to see all 12 phase bins; but check anyway
-	      
-	      int bcnt = 0; // should be populating 
-	      
-	      for (int b=1; b<12; b++)
+	      for (int p=start;p<stop; p++)
 		{
 		  
-		  const double phase_angle = b * 30.0;		  
-		  
-		  for (int p=start;p<stop; p++)
+		  if ( ph[p] >= phase_angle )
 		    {
 		      
-		      if ( ph[p] >= phase_angle )
-			{
-			  
-			  // get closest to 'phage_angle' (between p and p-1)
-
-			  bs[ b ] = s2a_interp( &ph, tp, p, phase_angle );   
-			  
-			  // update start to avoid minor retracing of steps
-			  // but allow for case where we have a zero-gap (i.e.
-			  // make sure each element of bs is filled
-			  
-			  start = p == start ? start : p - 1;
-
-			  // track that we found this point
-
-			  ++bcnt;
-
-			  // and skip to the next 
-
-			  break;
-			}
-		    }
-		  
-		  // next bin
-		}
-
-
-	      //
-	      // is this waveform okay?
-	      //
-	      
-	      bool okay = bcnt == 11 ;
-	      
-	      // additional phase-bin duration criteria?
-	      if ( okay && ( sel_phbin_tmin || sel_phbin_tmax ) )
-		{
-		  
-		  for (int b=1; b<13; b++)
-		    {
-                      const uint64_t tp1 = bs[ b-1 ] ;
-                      const uint64_t tp2 = bs[ b ] ;
+		      // get closest to 'phage_angle' (between p and p-1)
 		      
-		      const uint64_t tp = tp2 > tp1 ? tp2 - tp1 : 0LLU ; 
-		      const double t = tp * globals::tp_duration ;
-
-		      if ( sel_phbin_tmin && t < th_phbin_tmin ) okay = false;
-		      if ( sel_phbin_tmax && t > th_phbin_tmax ) okay = false;
+		      bs[ b ] = s2a_interp( &ph, tp, p, phase_angle );   
+		      
+		      // update start to avoid minor retracing of steps
+		      // but allow for case where we have a zero-gap (i.e.
+		      // make sure each element of bs is filled
+		      
+		      start = p == start ? start : p - 1;
+		      
+		      // track that we found this point
+		      
+		      ++bcnt;
+		      
+		      // and skip to the next 
+		      
+		      break;
 		    }
 		}
-
 	      
-	      //
-	      // skip this interval due to phbin criteria
-	      //
+	      // next bin
+	    }
+	  
+	  
+	  //
+	  // is this waveform okay?
+	  //
+	  
+	  bool okay = bcnt == 11 ;
+	  
+	  // additional phase-bin duration criteria?
+	  if ( okay && ( sel_phbin_tmin || sel_phbin_tmax ) )
+	    {
 	      
-	      if ( ! okay )
+	      for (int b=1; b<13; b++)
 		{
-		  ++dur_phbin_cnt;
-		  ++aa;
-		  continue;
+		  const uint64_t tp1 = bs[ b-1 ] ;
+		  const uint64_t tp2 = bs[ b ] ;
+		  
+		  const uint64_t tp = tp2 > tp1 ? tp2 - tp1 : 0LLU ; 
+		  const double t = tp * globals::tp_duration ;
+		  
+		  if ( sel_phbin_tmin && t < th_phbin_tmin ) okay = false;
+		  if ( sel_phbin_tmax && t > th_phbin_tmax ) okay = false;
 		}
+	    }
+	  
+	  
+	  //
+	  // skip this interval due to phbin criteria
+	  //
+	  
+	  if ( ! okay )
+	    {
+	      ++dur_phbin_cnt;
+	      ++aa;
+	      continue;
+	    }
+	  
+	  
+	  
+	  //
+	  // add annotations 
+	  //
 	      
+	  a_full->add( add_ch_inst_label ? sig_label : "FULL" , 
+		       tinterval , 
+		       sig_label );
+	  
 	      
-	      //
-	      // add annotations 
-	      //
+	  //
+	  // add in intervals
+	  //
+	  
+	  if ( add_bins )
+	    {
 	      
-	      a_full->add( add_ch_inst_label ? sig_label : "FULL" , 
-			   tinterval , 
+	      for (int b=1; b<13; b++)
+		{
+		  uint64_t tp1 = bs[ b-1 ] ;
+		  uint64_t tp2 = bs[ b ] ;
+		  
+		  if ( tp2 > tp1 )
+		    {
+		      const std::string ph_label = ( b>9 ? "B" : "B0" ) + Helper::int2str( b );
+		      a_bins->add( ph_label , interval_t( tp1 , tp2 ) , sig_label );
+		    }
+		}
+	    }
+	  
+	      
+	  if ( add_state )
+	    {
+	      const uint64_t tp180 = bs[ 6 ];
+	      
+	      // add
+	      a_neg->add( add_ch_inst_label ? sig_label : ( pos2neg ? "POS" : "NEG" ) ,
+			  interval_t( tinterval.start , tp180 ) , 
+			  sig_label );
+	      
+	      a_pos->add( add_ch_inst_label ? sig_label : ( pos2neg ? "NEG" : "POS" ) ,
+			  interval_t( tp180 , tinterval.stop ) , 
+			  sig_label );
+	      
+	    }
+	  
+	  
+	  if ( add_slope )
+	    {
+	      const uint64_t tp90  = bs[ 3 ];
+	      const uint64_t tp270 = bs[ 9 ];
+	      
+	      // add
+	      a_rise->add( add_ch_inst_label ? sig_label : ( pos2neg ? "FALL" : "RISE" ),
+			   interval_t( tp90  , tp270 ) , 
 			   sig_label );
 	      
+	      a_fall->add( add_ch_inst_label ? sig_label : ( pos2neg ? "RISE" : "FALL" ),
+			   interval_t( tinterval.start , tp90 ) , 
+			   sig_label );
 	      
-	      //
-	      // add in intervals
-	      //
-
-	      if ( add_bins )
-		{
-		  
-		  for (int b=1; b<13; b++)
-		    {
-		      uint64_t tp1 = bs[ b-1 ] ;
-		      uint64_t tp2 = bs[ b ] ;
-		      
-		      if ( tp2 > tp1 )
-			{
-			  const std::string ph_label = ( b>9 ? "B" : "B0" ) + Helper::int2str( b );
-			  a_bins->add( ph_label , interval_t( tp1 , tp2 ) , sig_label );
-			}
-		    }
-		}
+	      a_fall->add( add_ch_inst_label ? sig_label : ( pos2neg ? "RISE" : "FALL" ),
+			   interval_t( tp270  , tinterval.stop ) , 
+			   sig_label );
 	      
-	      
-	      if ( add_state )
-		{
-		  const uint64_t tp180 = bs[ 6 ];
-
-		  // add
-		  a_neg->add( add_ch_inst_label ? sig_label : ( pos2neg ? "POS" : "NEG" ) ,
-			      interval_t( tinterval.start , tp180 ) , 
-			      sig_label );
-		  
-		  a_pos->add( add_ch_inst_label ? sig_label : ( pos2neg ? "NEG" : "POS" ) ,
-			      interval_t( tp180 , tinterval.stop ) , 
-			      sig_label );
-		  
-		}
-
-
-	      if ( add_slope )
-		{
-		  const uint64_t tp90  = bs[ 3 ];
-		  const uint64_t tp270 = bs[ 9 ];
-
-		  // add
-		  a_rise->add( add_ch_inst_label ? sig_label : ( pos2neg ? "FALL" : "RISE" ),
-			       interval_t( tp90  , tp270 ) , 
-			       sig_label );
-		  
-		  a_fall->add( add_ch_inst_label ? sig_label : ( pos2neg ? "RISE" : "FALL" ),
-			       interval_t( tinterval.start , tp90 ) , 
-			       sig_label );
-		  
-		  a_fall->add( add_ch_inst_label ? sig_label : ( pos2neg ? "RISE" : "FALL" ),
-			       interval_t( tp270  , tinterval.stop ) , 
-			       sig_label );
-		  
-		}
-	      
+	    }
+	  
 	      	     
-
-		  //
-		  // next wave
-		  //
-		  
-		  ++aa;
-		}
-	      
-	      
-
-	      logger << "  added " << fwaves.size()
-		     << " waves for " << sig_label << "\n";
-	      
-	      //
-	      // QC outputs
-	      //
-	      
-	      writer.value( "EXC1_DUR"  , dur_cnt );
-	      writer.value( "EXC2_MONO" , mono_cnt );
-	      writer.value( "EXC3_MAG"  , mag_cnt );
-	      writer.value( "EXC4_PDUR"  , dur_phbin_cnt );
-	      writer.value( "N" , (int)fwaves.size() );
-	      writer.value( "N0" , all_cnt );
-	      
-	      
-	}      
+	  
+	  //
+	  // next wave
+	  //
+	  
+	  ++aa;
+	}
+      
+      
+      
+      logger << "  added " << fwaves.size()
+	     << " waves for " << sig_label << "\n";
+      
+      //
+      // QC outputs
+      //
+      
+      writer.value( "EXC1_DUR"  , dur_cnt );
+      writer.value( "EXC2_MONO" , mono_cnt );
+      writer.value( "EXC3_MAG"  , mag_cnt );
+      writer.value( "EXC4_PDUR"  , dur_phbin_cnt );
+      writer.value( "N" , (int)fwaves.size() );
+      writer.value( "N0" , all_cnt );
+      
+                
       
       // next signal
     }

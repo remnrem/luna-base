@@ -196,7 +196,8 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
 	  // copy part (can check later, but this should always fit in data[])
 	  if ( idx + total_points > data->size() )
 	    {
-	      std::cout << " data->size()  = " << data->size()  << "\n"
+	      std::cerr << " sr = " << sr << " for " << ch << "\n";
+	      std::cerr << " data->size()  = " << data->size()  << "\n"
 			<< " idx " << idx << " " << total_points << " " << idx + total_points << "\n";
 	      Helper::halt( "internal error in do_summaries()");
 	    }

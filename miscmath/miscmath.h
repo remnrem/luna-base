@@ -306,6 +306,9 @@ namespace MiscMath
   std::vector<double> moving_average( const std::vector<double> & x , int n );
   std::vector<double> moving_average_filter( const std::vector<double> & x , int n );
 
+  std::vector<double> moving_min( const std::vector<double> & x , int n );
+  
+  
   // Moving SD
   struct circ_buffer_t {
     circ_buffer_t(int s );
