@@ -875,6 +875,60 @@ std::vector<double> MiscMath::moving_average( const std::vector<double> & x , in
 }
 
 
+std::vector<double> MiscMath::moving_min( const std::vector<double> & x , int s )
+{
+  
+  if ( s == 1 ) return x;
+  const int n = x.size();
+  if ( n == 0 ) return x;
+  if ( s >= n ) 
+    {
+      std::cerr << "warning: in moving_average(), vector size is less than window size\n";
+      s = n-1; 
+      if ( s % 2 == 0 ) --s; // check that it remains odd
+      if ( s < 2 ) return x; // bail out
+    }
+
+  if ( s % 2 == 0 ) Helper::halt( "require an odd-number for moving average" );
+
+  double z = 0;  
+  const int edge = (s-1)/2;  
+  const int start = edge;
+  const int stop  = n - edge - 1;
+  
+  std::deque<int> dq;
+  std::vector<double> a(n);
+
+  int idx = start;
+
+  for (int i = 0; i < n; ++i) {
+    
+    // Remove indices that are out of the current window
+    while (!dq.empty() && dq.front() <= i - s)
+      dq.pop_front();
+    
+    // Remove indices of elements larger than current element
+    while (!dq.empty() && x[dq.back()] > x[i])      
+      dq.pop_back();
+    
+    dq.push_back(i);
+    
+    // Add minimum to result starting from the first full window
+    if (i >= s - 1)
+      {
+	a[ idx ] = x[dq.front()];
+	++idx;
+      }
+
+  }
+  
+  // fill in at ends  
+  for (int i=0;i<start;i++) a[i] = a[start];
+  for (int i=stop+1;i<n;i++) a[i] = a[stop];
+  return a;
+  
+}
+
 
 std::vector<double> MiscMath::moving_average_filter( const std::vector<double> & x , int s )
 {
