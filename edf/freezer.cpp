@@ -58,8 +58,7 @@ void freezer_t::edf2edf( const edf_t & from , edf_t & to , bool preserve_cache )
   // std::cout << " edf2edf_t...\n";
   // std::cout << " from annots N = " << from.annotations->names().size() << "\n";
   // std::cout << " to annots N = " << to.annotations->names().size() << "\n\n";
-  
-
+ 
   // primary shallow copy
   to = from;
   
@@ -168,7 +167,11 @@ bool freezer_t::thaw( const std::string & s , edf_t * edf , bool also_clean , bo
 {
   
   if ( store.find( s ) == store.end() )
-    Helper::halt( "could not find frozen EDF " + s );
+    {
+      logger << "  ** could not find frozen EDF " << s << "\n";
+      return false;
+      // Helper::halt( "could not find frozen EDF " + s );
+    }
   
   logger << "  thawing previous freeze " << s << "\n";
   

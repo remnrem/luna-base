@@ -1158,29 +1158,30 @@ void cmddefs_t::init()
   
   // EPOCH 
 
-  add_cmd( "epoch" , "EPOCH" , "Set epochs" );
+  add_cmd1( "epoch" , "EPOCH" , "Set epochs" );
   add_url ( "EPOCH" , "epochs/#epoch" );
 
   add_param( "EPOCH" , "len" , "30" , "Epoch length (seconds), defaults to 30" );
-  add_param( "EPOCH" , "dur" , "30" , "Same as len" );
-  add_param( "EPOCH" , "inc" , "30" , "Epoch increment (seconds), defaults to len (i.e. no overlap)" );
+  add_param1( "EPOCH" , "dur" , "30" , "Same as len" );
+  add_param1( "EPOCH" , "inc" , "30" , "Epoch increment (seconds), defaults to len (i.e. no overlap)" );
   add_param( "EPOCH" , "epoch" , "30,15" , "Same as len=30 inc=15" );
-  add_param( "EPOCH" , "require" , "10" , "Stop processing that EDF if there are not at least N epochs" );
+  add_param1( "EPOCH" , "require" , "10" , "Stop processing that EDF if there are not at least N epochs" );
   add_param( "EPOCH" , "verbose" , "" , "Output epoch-level information" );
   add_param( "EPOCH" , "clear" , "" , "Unepoch all signals" );
+  add_param1( "EPOCH" , "annot" , "" , "Generic (annotation-based) epochs" );
 
-  add_table( "EPOCH" , "" , "Epoch-level summaries" );
-  add_var( "EPOCH" , "" , "DUR" , "Epoch duration (seconds)" );
-  add_var( "EPOCH" , "" , "INC" , "Epoch increment (seconds)" );
-  add_var( "EPOCH" , "" , "NE" , "Number of epochs" );
-  add_var( "EPOCH" , "" , "FIXED_DUR" , "0/1 fixed duration epochs" );
-  add_var( "EPOCH" , "" , "GENERIC" , "0/1 generic epochs" );
-  add_var( "EPOCH" , "" , "OFFSET" , "Offset" );
-  add_var( "EPOCH" , "" , "TOT_DUR" , "Total epoch duration" );
-  add_var( "EPOCH" , "" , "TOT_PCT" , "Percent of record epoched" );
-  add_var( "EPOCH" , "" , "TOT_REC" , "Total recrd duration" );
-  add_var( "EPOCH" , "" , "TOT_SPANNED" , "Total duration spanned by epoch" );
-  add_var( "EPOCH" , "" , "TOT_UNSPANNED" , "Total duration spanned by epoch" );
+  add_table1( "EPOCH" , "" , "Epoch-level summaries" );
+  add_var1( "EPOCH" , "" , "DUR" , "Epoch duration (seconds)" );
+  add_var1( "EPOCH" , "" , "INC" , "Epoch increment (seconds)" );
+  add_var1( "EPOCH" , "" , "NE" , "Number of epochs" );
+  add_var1( "EPOCH" , "" , "FIXED_DUR" , "0/1 fixed duration epochs" );
+  add_var1( "EPOCH" , "" , "GENERIC" , "0/1 generic epochs" );
+  add_var1( "EPOCH" , "" , "OFFSET" , "Offset" );
+  add_var1( "EPOCH" , "" , "TOT_DUR" , "Total epoch duration" );
+  add_var1( "EPOCH" , "" , "TOT_PCT" , "Percent of record epoched" );
+  add_var1( "EPOCH" , "" , "TOT_REC" , "Total recrd duration" );
+  add_var1( "EPOCH" , "" , "TOT_SPANNED" , "Total duration spanned by epoch" );
+  add_var1( "EPOCH" , "" , "TOT_UNSPANNED" , "Total duration spanned by epoch" );
 
   add_table( "EPOCH" , "E" , "Per-epoch interval information [verbose]" );
   add_var( "EPOCH" , "E" , "E1" , "Current epoch number (which may differ from E if the EDF has been restructured)" );
@@ -2203,6 +2204,35 @@ void cmddefs_t::init()
   add_var( "PSD" , "CH,E" , "SPK" , "Sum PSD peakedness" );
   add_var( "PSD" , "CH,E" , "SPEC_SLOPE" , "Spectral slope" );
   add_var( "PSD" , "CH,E" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
+  
+  // dynamics
+  add_table( "PSD", "CH,F,VAR,QD" , "PSD spectra dynamics" );
+  add_var( "PSD" , "CH,F,VAR,QD" , "A_P2P" , "" );
+  add_var( "PSD" , "CH,F,VAR,QD" , "T_P2P" , "" );
+  add_var( "PSD" , "CH,F,VAR,QD" , "U" , "" );
+  add_var( "PSD" , "CH,F,VAR,QD" , "U2" , "" );
+  add_var( "PSD" , "CH,F,VAR,QD" , "MEAN" , "" );
+  add_var( "PSD" , "CH,F,VAR,QD" , "OMEAN" , "" );
+  add_var( "PSD" , "CH,F,VAR,QD" , "SD" , "" );
+  add_var( "PSD" , "CH,F,VAR,QD" , "N" , "" );
+
+  add_table( "PSD", "CH,B,VAR,QD" , "PSD band dynamics" );
+  add_var( "PSD" , "CH,B,VAR,QD" , "A_P2P" , "" );
+  add_var( "PSD" , "CH,B,VAR,QD" , "T_P2P" , "" );
+  add_var( "PSD" , "CH,B,VAR,QD" , "U" , "" );
+  add_var( "PSD" , "CH,B,VAR,QD" , "U2" , "" );
+  add_var( "PSD" , "CH,B,VAR,QD" , "MEAN" , "" );
+  add_var( "PSD" , "CH,B,VAR,QD" , "OMEAN" , "" );
+  add_var( "PSD" , "CH,B,VAR,QD" , "SD" , "" );
+  add_var( "PSD" , "CH,B,VAR,QD" , "N" , "" );
+
+  add_table( "PSD", "CH,F,VAR,QD,Q" , "PSD spectra dynamics quantiles" );
+  add_var( "PSD" , "CH,F,VAR,QD,Q" , "OS" , "" );
+  add_var( "PSD" , "CH,F,VAR,QD,Q" , "SS" , "" );
+
+  add_table( "PSD", "CH,B,VAR,QD,Q" , "PSD band dynamics quantiles" );
+  add_var( "PSD" , "CH,B,VAR,QD,Q" , "OS" , "" );
+  add_var( "PSD" , "CH,B,VAR,QD,Q" , "SS" , "" );
 
 
   //

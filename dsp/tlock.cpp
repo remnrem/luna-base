@@ -200,9 +200,10 @@ void dsptools::tlock( edf_t & edf , param_t & param )
       //
       // initiate tlock_t object
       //
-    
+            
       tlock_t tlock( edf, Fs[s] );
       
+
       //
       // set options
       //
@@ -221,13 +222,14 @@ void dsptools::tlock( edf_t & edf , param_t & param )
       //   - caches containing multiple strata will iterate (and give multiple, stratified outputs w/in this function below)
       //
       
-      
+
+
       if ( by_epoch )
 	tlock.epoch_builder( signals(s) );
       else
 	tlock.cache_builder( cache , half_window ,
 			     signals(s) , signals.label(s) , same_channel, channel_postfix , seed_postfix );
-      
+
       // next signal
     }
   writer.unlevel( globals::signal_strat );
@@ -735,7 +737,7 @@ void tlock_t::epoch_builder( const int slot )
     {
 
       int epoch = edf.timeline.next_epoch();      
-          
+
       if ( epoch == -1 ) break;
       
       interval_t interval = edf.timeline.epoch( epoch );
@@ -770,6 +772,7 @@ void tlock_t::epoch_builder( const int slot )
       // next epoch
     }
 
+
   // run all outputs
   outputs();
 }
@@ -783,6 +786,7 @@ void tlock_t::cache_builder( cache_t<int> * cache ,
 			     const std::string channel_postfix ,
 			     const std::string seed_postfix )
 {
+
 
   // build np x nw matrix  [ samples x windows ] 
   //  np - number of samples in each interval/window
@@ -872,11 +876,12 @@ void tlock_t::cache_builder( cache_t<int> * cache ,
       
       for ( int i=0; i<cx.size(); i++)
 	{
+	  
 	  int lower = cx[i] - half_points;
 	  int upper = cx[i] + half_points;
-	  
+	  	  
 	  // interval out-of-range
-	  if ( lower < 0 || upper > d->size() ) 
+	  if ( lower < 0 || upper >= d->size() ) 
 	    continue;
 	  
 	  // discontinuity?
@@ -894,10 +899,10 @@ void tlock_t::cache_builder( cache_t<int> * cache ,
       //
       // run all outputs
       //
-      
+
       outputs();
 
-      //                                                                                                                                                                                               
+      //                                                                                                                                                                                              
       // clear key output stratifiers                                                                                                                                                                  
       // (clear now versus after last loop, as the strata may differ between keys)                                                                                                                     
       //                                                                                                                                                                                               
@@ -935,6 +940,7 @@ void tlock_t::add( const std::vector<double> * x ,
   
   // if ( higher - lower + 1 != t.size() )
   //   Helper::halt( "internal error");
+
   
   Data::Vector<double> d( expected );
   const int nmin = expected < implied ? expected : implied ;
@@ -1061,8 +1067,12 @@ int tlock_t::set_window( int half_points )
 void tlock_t::outputs()
 {
 
-  //  logger << " outputs\n";
-
+  // no segments read?
+  if ( X.dim1() == 0 ) 
+    {
+      logger << "  *** no valid segments for time-locking, bailing...\n";
+      return;
+    }  
   
   // std::cout << "X = " << X.dim1() << " " << X.dim2() << "\n";
   // for (int i=0;i<X.dim1();i++)
