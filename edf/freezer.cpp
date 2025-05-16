@@ -55,9 +55,9 @@ void freezer_t::edf2edf( const edf_t & from , edf_t & to , bool preserve_cache )
       // writer.no_cache();
     }
 
-  std::cout << " edf2edf_t...\n";
-  std::cout << " from annots N = " << from.annotations->names().size() << "\n";
-  std::cout << " to annots N = " << to.annotations->names().size() << "\n\n";
+  // std::cout << " edf2edf_t...\n";
+  // std::cout << " from annots N = " << from.annotations->names().size() << "\n";
+  // std::cout << " to annots N = " << to.annotations->names().size() << "\n\n";
   
 
   // primary shallow copy

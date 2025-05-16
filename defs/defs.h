@@ -168,6 +168,9 @@ struct globals
 {
   
   static std::string version;
+  static int major_version_number;
+  static int minor_version_number;
+  static int patch_version_number;
   static std::string date;
 
   // command definitions

@@ -271,6 +271,7 @@ void proc_show_channel_map();
 void proc_has_signals( edf_t & , param_t & );
 void proc_stats( edf_t & , param_t & );
 void proc_dupes( edf_t & , param_t & );
+void proc_requires( edf_t & , param_t & );
 
 void proc_list_annots( edf_t & , param_t & );
 void proc_espan( edf_t & , param_t & );

@@ -42,7 +42,7 @@ extern writer_t writer;
 
 bool qdynam_t::dynam_compile_cycles( edf_t & edf )
 {
-
+  
   // data must have already been epoched (by HYPNO, so that
   // we expected NREM cycle epoch-annotations)
   if ( ! edf.timeline.epoched() )
@@ -58,13 +58,14 @@ bool qdynam_t::dynam_compile_cycles( edf_t & edf )
     || edf.timeline.epoch_annotation( "_NREMC_7" )
     || edf.timeline.epoch_annotation( "_NREMC_8" );
   
-  if ( ! has_cycles ) return false; 
+
   
   // generate current epoch code
   epochs.clear();
   uepochs.clear();
   
   int ne = edf.timeline.first_epoch();
+
   while ( 1 )
     {
       int epoch = edf.timeline.next_epoch();
@@ -74,9 +75,11 @@ bool qdynam_t::dynam_compile_cycles( edf_t & edf )
       const int disp_epoch = edf.timeline.display_epoch( epoch ) - 1;
       epochs.push_back( disp_epoch );
       uepochs.insert( disp_epoch );
-      
     }  
-  
+
+  // if no cycles, all done
+  if ( ! has_cycles ) return false; 
+
   // construct by iterating over current epoch set
   cycles.clear();
   
@@ -116,10 +119,11 @@ void qdynam_t::add( const std::map<std::string,std::string> & faclvl,
   if ( sequences.find( faclvl ) == sequences.end() )
     osequences.push_back( faclvl );
 
+  
   // test valid epoch
   if ( uepochs.find( epoch ) == uepochs.end() )
     Helper::halt( "undefined epoch, internal error in qdynam_t::add()" );
-  
+
   // save value
   sequences[ faclvl ][ metric ][ epoch ] = value; 
 

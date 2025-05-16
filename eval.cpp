@@ -913,6 +913,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "COPY" ) )         { fnd = true; proc_copy_signal( edf , param(c) ); }
       if ( (!fnd) && is( c, "READ" ) )         { fnd = true; proc_read_signal( edf , param(c) ); }
       if ( (!fnd) && is( c, "ORDER" ) )        { fnd = true; proc_order_signals( edf , param(c) ); }
+      if ( (!fnd) && is( c, "REQUIRES" ) )     { fnd = true; proc_requires( edf , param(c) ); } 
       if ( (!fnd) && is( c, "CONTAINS" ) )     { fnd = true; proc_has_signals( edf , param(c) ); }
       if ( (!fnd) && ( is( c, "RMS" ) || is( c, "SIGSTATS" ) ) ) { fnd = true; proc_rms( edf, param(c) ); }
       if ( (!fnd) && is( c, "MSE" ) )          { fnd = true; proc_mse( edf, param(c) ); }
@@ -5932,6 +5933,50 @@ bool cmd_t::pull_ivar_bool( const std::string & id , const std::string & phe )
 
 }
 
+// REQUIRES
+
+void proc_requires( edf_t & edf , param_t & param )
+{
+  // luna version?
+  if ( param.has( "version" ) )
+    {
+      //  version = "v1.2.2 ";
+
+      std::string v = param.value( "version" );
+      
+      if ( param.empty( "version" ) || v.size() == 0 ) Helper::halt( "no valid version label specified" );
+
+      if ( v[0] == 'v' || v[0] == 'V' ) v = v.substr(1);
+
+      std::vector<std::string> tok = Helper::parse( v, "." );
+      if ( tok.size() < 1 || tok.size() > 3 ) Helper::halt( "invalid version code" );
+
+      const bool has2 = tok.size() >= 2;
+      const bool has3 = tok.size() >= 3;
+      
+      int n1 = -1 , n2 = -1 , n3 = -1;
+      
+      if ( ! Helper::str2int( tok[0] , &n1 ) )
+	Helper::halt( "invalid version code" );
+
+      if ( has2 && ! Helper::str2int( tok[1] , &n2 ) )
+	Helper::halt( "invalid version code" );
+      
+      if ( has3 && ! Helper::str2int( tok[2] , &n3 ) )
+	Helper::halt( "invalid version code" );
+
+      if ( n1 > globals::major_version_number ||
+	   ( has2 && n2 > globals::minor_version_number ) ||
+	   ( has3 && n3 > globals::patch_version_number ) )
+	Helper::halt( "required version " + v + " but current Luna is " + globals::version );
+
+      logger << "  current Luna version " << globals::version << " satisfies required version " << v << "\n";
+      
+    }
+    
+}
+
+// CONTAINS
 
 void proc_has_signals( edf_t & edf , param_t & param )
 {

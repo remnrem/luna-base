@@ -36,6 +36,10 @@ extern writer_t writer;
 extern logger_t logger;
 
 std::string globals::version;
+int globals::major_version_number;
+int globals::minor_version_number;
+int globals::patch_version_number;
+
 std::string globals::date;
 
 int globals::retcode;
@@ -240,10 +244,16 @@ void globals::init_defs()
   //
   // Version
   //
-  
-  version = "v1.2.2 ";
-  
-  date    = "7-Mar-2025";
+
+  // should always be 7 characters
+  version = "v1.2.3 ";
+
+  major_version_number = 1;
+  minor_version_number = 2;
+  patch_version_number = 3;
+
+  // should always be 11 chars
+  date    = "16-May-2025";
 
   //
   // Return code
