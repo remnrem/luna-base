@@ -1015,6 +1015,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "PCOUPL" ) )       { fnd = true; proc_generic_coupling( edf , param(c) ); }
       if ( (!fnd) && is( c, "POL" ) )          { fnd = true; proc_polarity( edf, param(c) ); }	  
       if ( (!fnd) && is( c, "REMS" ) )         { fnd = true; proc_rems( edf, param(c) ); }
+      if ( (!fnd) && is( c, "QC" ) )           { fnd = true; proc_qc( edf, param(c) ); }
       if ( (!fnd) && is( c, "ARTIFACTS" ) )    { fnd = true; proc_artifacts( edf, param(c) ); }
       if ( (!fnd) && is( c, "EDGER" ) )        { fnd = true; proc_trim( edf, param(c) ) ; }
       if ( (!fnd) && is( c, "CACHE" ) )        { fnd = true; proc_dump_cache( edf , param(c) ); }
@@ -2541,6 +2542,12 @@ void proc_ripples( edf_t & edf , param_t & param )
 void proc_polarity( edf_t & edf , param_t & param )
 {	
   dsptools::polarity( edf , param );
+}
+
+// QC : generic PSG QC scan
+void proc_qc( edf_t & edf , param_t & param )
+{
+  dsptools::qc_t qc( edf , param );
 }
 
 // REMS : detect REMS via simple heuristic

@@ -378,7 +378,7 @@ void proc_continuous( edf_t & , param_t & );
 
 void proc_covar( edf_t & , param_t & );
 
-
+void proc_qc( edf_t & , param_t & );
 void proc_artifacts( edf_t & , param_t & );
 void proc_trim( edf_t & , param_t & );
 void proc_rms( edf_t & , param_t & );

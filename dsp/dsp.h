@@ -23,6 +23,7 @@
 #ifndef __DSP_H__
 #define __DSP_H__
 
+#include "qc.h"
 #include "arousals.h"
 #include "rai.h"
 #include "gft.h"
