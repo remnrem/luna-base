@@ -1148,7 +1148,12 @@ void cmddefs_t::init()
   add_var( "OVERLAP" , "SEED,OTHERS" , "N_OBS" , "Observed seed overlap" );
   add_var( "OVERLAP" , "SEED,OTHERS" , "N_EXP" , "Expected seed overlap" );
   
-  
+  add_table( "OVERLAP" , "SEED,OTHER,OFFSET" , "Offset-based overlaps" );
+  add_var(   "OVERLAP" , "SEED,OTHER,OFFSET" , "INT" , "Interval" );
+  add_var(   "OVERLAP" , "SEED,OTHER,OFFSET" , "N_EXP" , "Expected overlap" );
+  add_var(   "OVERLAP" , "SEED,OTHER,OFFSET" , "N_OBS" , "Observed overlap" );
+  add_var(   "OVERLAP" , "SEED,OTHER,OFFSET" , "N_P" , "Empirical p-value" );
+  add_var(   "OVERLAP" , "SEED,OTHER,OFFSET" , "N_Z" , "Z-score for excess overlap" );
   
   /////////////////////////////////////////////////////////////////////////////////
   //
