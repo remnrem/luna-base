@@ -1309,19 +1309,20 @@ void gpa_t::prep()
   //
 
   ids.clear();
+  ids.resize( id2slot.size() );
   
   std::map<std::string,int>::const_iterator ii = id2slot.begin();
   while ( ii != id2slot.end() )
     {
       // IDs
-      ids.push_back( ii->first );
-
+      ids[ ii->second ] = ii->first ;
+      
       // data
       for (int j=0; j< vars.size(); j++)
 	{
 	  int final_slot = final_var2slot[ vars[j] ];
 	  int slot = var2slot[ vars[j] ];
-
+	  
 	  if ( D[ slot  ].find( ii->second ) != D[ slot ].end() )
 	    X( ii->second , final_slot ) = D[ slot ][ ii->second ];	    
 	}
@@ -1343,7 +1344,6 @@ void gpa_t::prep()
   logger << "\n";
   bfile_t bf( bfile );
   bf.write( ids, vars , var2group, basevar, faclvl , X );
-  
   logger << "  ...done\n";
 
   //
