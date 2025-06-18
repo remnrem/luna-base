@@ -38,28 +38,51 @@ namespace dsptools
   private:
     
     edf_t & edf;
-    
+
+    //
     // general
+    //
+    
     bool by_epoch;
     
+    //
     // resp
+    //
+
+    void do_resp( signal_list_t & signals );
     int resp_min_sr;
     double resp_th;
+    double resp_prop_th;
     double resp_window_dur;
     double resp_window_inc;
     double resp_p1_lwr;
     double resp_p1_upr;
     double resp_p2_lwr;
     double resp_p2_upr;
-    double resp_epsilon;
-    
+    double resp_epsilon;   
     bool resp_add_annot;
     std::string resp_annot_label;
-
     bool resp_add_channel;    
     std::string resp_channel_label;
 
-    void do_resp( signal_list_t & signals ); 
+    //
+    // eeg
+    //
+    
+    void do_eeg( signal_list_t & signals );
+    int eeg_min_sr;
+    double eeg_window_dur;
+    double eeg_window_inc;
+    double eeg_min_amp_th;
+    double eeg_max_amp_th;
+    double eeg_spectral_peakedness_th;
+    double eeg_spectral_skewness_th;
+    double eeg_h1_min, eeg_h1_max;
+    double eeg_h2_min, eeg_h2_max;
+    double eeg_h3_min, eeg_h3_max;    
+    double eeg_eps;
+    double eeg_skew_th, eeg_kurt_th;
+    double eeg_fft_seg_sec, eeg_fft_inc_sec;
     
   };
    

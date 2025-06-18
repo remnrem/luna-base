@@ -33,6 +33,7 @@
 #include <map>
 #include <unordered_map>
 
+
 namespace MiscMath
 {
   
@@ -207,10 +208,12 @@ namespace MiscMath
 
   double flat( const std::vector<double> & x , double EPS = 1e-6 );
   double max( const std::vector<double> & x , double th );
+  double min( const std::vector<double> & x , double th );
   
-  // Hjorth parameters
-  void hjorth( const std::vector<double> * , double * , double * , double * );
+  // Hjorth parameters (m : method, ) 
+  void hjorth( const std::vector<double> * , double * , double * , double * , const bool m = false );
 
+  
   // second-order Hjorth parameters (window, inc)
   void hjorth2( const std::vector<double> * , double * , int w , int inc = 0 );
 

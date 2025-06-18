@@ -30,7 +30,7 @@
 #include <cmath>
 #include <vector>
 #include <deque>
-
+#include <numeric>
 #include <iostream>
 
 
@@ -173,6 +173,13 @@ double MiscMath::max( const std::vector<double> & x , double th )
   return c/(double)(n);  
 }
 
+double MiscMath::min( const std::vector<double> & x , double th )
+{
+  const int n = x.size();
+  int c = 0;
+  for (int i=0;i<n;i++) if ( fabs( x[i] ) < th ) ++c;
+  return c/(double)(n);  
+}
 
 
 double MiscMath::sqr( const double a )
@@ -450,14 +457,31 @@ double MiscMath::sdev( const std::vector<double> & x , double m )
 // Hjorth parameters
 //
 
-void MiscMath::hjorth( const std::vector<double> * data , double * activity , double * mobility , double * complexity )
+double hjorth_variance(const std::vector<double>& x) {
+  double mean = std::accumulate(x.begin(), x.end(), 0.0) / x.size();
+  double sum = 0.0;
+  for (double v : x) sum += (v - mean) * (v - mean);
+  return sum / x.size();
+}
+
+void MiscMath::hjorth( const std::vector<double> * data ,
+		       double * activity , double * mobility , double * complexity ,
+		       const bool use_variance_method )
 {
+
+  // original implementation:
+  //   based on mean-sqs not variance
+  //   uses 'nonstandard' calculation of complexity (subtracts mobility rather than ratio)
+
+  // if use_variance_method == T then gives the original Hjorth formulation
+  //    uses variances, not mean-sqs
+  //    complexity based on ratio of variances
   
   if ( activity == NULL || data == NULL || mobility == NULL || complexity == NULL ) 
     Helper::halt( "NULL given to hjorth()" );
   
   const int n = data->size();
-  if ( n == 0 ) 
+  if ( n < 2 ) 
     {
       *activity   = 0;
       *complexity = 0;
@@ -467,23 +491,43 @@ void MiscMath::hjorth( const std::vector<double> * data , double * activity , do
   
   std::vector<double> dxV = diff( *data );
   std::vector<double> ddxV = diff( dxV );  
-  
-  double mx2 = meansq( *data );
-  double mdx2 = meansq( dxV );
-  double mddx2 = meansq( ddxV );
-  
-  *activity   = mx2;
-  *mobility   = mdx2 / mx2;
-  *complexity = sqrt( mddx2 / mdx2 - *mobility );
-  *mobility   = sqrt( *mobility );
-  
-  if ( ! Helper::realnum( *activity ) ) *activity = 0;
-  if ( ! Helper::realnum( *mobility ) ) *mobility = 0;
-  if ( ! Helper::realnum( *complexity ) ) *complexity = 0;
 
-  //  *activity = log( *activity + 0.00001 );
+  if ( use_variance_method )
+    {
+      double var_x = hjorth_variance(*data);
+      double var_dx = hjorth_variance(dxV);
+      double var_d2x = hjorth_variance(ddxV);
+
+      *activity = var_x;
+      *mobility = (var_x > 0) ? std::sqrt(var_dx / var_x) : 0.0;
+      double mobility_dx = (var_dx > 0) ? std::sqrt(var_d2x / var_dx) : 0.0;
+      *complexity = (*mobility > 0) ? mobility_dx / *mobility : 0.0;
+
+    }
+  else
+    {
+      // original method: e.g. as used in POPS model
+      // the s2/tri POPS models, so might want to keep
+      // this around...
+
+      double mx2 = meansq( *data );
+      double mdx2 = meansq( dxV );
+      double mddx2 = meansq( ddxV );
+  
+      *activity   = mx2;
+      *mobility   = mdx2 / mx2;
+      *complexity = sqrt( mddx2 / mdx2 - *mobility );
+      *mobility   = sqrt( *mobility );
+      
+      if ( ! Helper::realnum( *activity ) ) *activity = 0;
+      if ( ! Helper::realnum( *mobility ) ) *mobility = 0;
+      if ( ! Helper::realnum( *complexity ) ) *complexity = 0;
+    }
+
+  return;
   
 }
+
 
 //
 // Turning rate
