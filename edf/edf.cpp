@@ -1987,7 +1987,8 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
 					 n_samples_per_record , 
 					 &start_record, &start_sample , 
 					 &stop_record, &stop_sample );
-  
+
+  // std::cout << " PULL " << start << " " << stop << "\n"; 
   // std::cout << " okay = start " << okay << " " << start_record << " " << start_sample << "\n";
   // std::cout << " okay = stop  " << okay << " " << stop_record << " " << stop_sample << "\n";
   
@@ -5313,6 +5314,8 @@ bool edf_t::basic_stats( param_t & param )
 	      //
 	      
 	      writer.epoch( timeline.display_epoch( epoch ) );
+
+	      writer.value( "N" , n );
 	      
 	      writer.value( "MEAN" , mean );
 
