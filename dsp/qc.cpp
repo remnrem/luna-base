@@ -462,7 +462,7 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
     } // next signal
   
   writer.unlevel( globals::signal_strat );
-  
+
 }
 
 
