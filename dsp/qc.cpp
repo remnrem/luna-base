@@ -333,11 +333,20 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
       // each sample spanned by multiple windows: assign the worst (3 worse than 2 worse than 1)
 
       
-      // pull original signal for entire trace jsut to get N and time-points
+      // pull original signal for entire trace just to get N and time-points
+      // but also need to pull the samples here (as above the sample-points saved
+      // were w.r.t to original EDF, not any masked version)
+      
       slice_t slice( edf , signals(s) , edf.timeline.wholetrace());
       const std::vector<uint64_t> * tp = slice.ptimepoints();
       const int n = tp->size();
 
+      // make mapping of sample-points to slots
+      const std::vector<int> * sp = slice.psmps();
+      std::map<int,int> sp2slot;
+      for (int i=0; i<n; i++)
+	sp2slot[ (*sp)[i] ] = i;
+      
       // new noise waveform (initialize at 0) 
       std::vector<double> noisewav( n , 0 );
 
@@ -354,7 +363,13 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 		  const int start = smps[e].first;
 		  const int stop  = smps[e].second;
 		  for (int p=start; p<=stop; p++)
-		    noisewav[p] = f+1;
+		    {
+		      std::map<int,int>::const_iterator ii = sp2slot.find( p );
+                      if ( ii == sp2slot.end() )
+                        Helper::halt("internal error in mapping sample->slots -- this should not happen..." );
+                      const int slot = ii->second;		      
+		      noisewav[ slot ] = f+1;
+		    }
 		}
 	    }
 	}
@@ -439,7 +454,7 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 	    {
 	      
 	      // end of a segment
-	      if ( in && ( noisewav[p] >= fmin || p == n-1 ) )
+	      if ( in && ( noisewav[p] < fmin || p == n-1 ) )
 		  {
 		    a->add( "." ,
 			    interval_t( start , (*tp)[p] ) ,
@@ -447,7 +462,7 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 		    ++ac;
 		    in = false;
 		  }
-	      else if ( (!in) && noisewav[p] < fmin )
+	      else if ( (!in) && noisewav[p] >= fmin )
 		{
 		  start = (*tp)[p];
 		  in = true;
