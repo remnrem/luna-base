@@ -568,6 +568,8 @@ struct timeline_t
 
   std::set<interval_t> gaps( const std::set<interval_t> & segs );
 
+  void set_epochs_to_span_gaps(const bool b ) { gap_spanning_epochs = b; } 
+  
  private:
 
   
@@ -611,6 +613,9 @@ struct timeline_t
 
   // generic (nonstandard) but still fixed-size epochs?
   bool fixed_size_epochs;
+
+  // T if gap-spanning / cumulative epochs
+  bool gap_spanning_epochs;
   
   int current_epoch;
 

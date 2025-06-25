@@ -163,6 +163,7 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 	 << "     minimum SR (Hz)   = " << resp_min_sr << "\n";
   
   // force 120 epochs, sliding in 10 seconds
+  edf.timeline.set_epochs_to_span_gaps( true );
   edf.timeline.set_epoch( resp_window_dur , resp_window_inc );
   
 

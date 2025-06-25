@@ -176,8 +176,10 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 	  double activity = 0 , mobility = 0 , complexity = 0;
 
 	  MiscMath::centre( &v );
-	  
-          MiscMath::hjorth( &v , &activity , &mobility , &complexity );
+
+	  const bool USE_VARIANCE_METHOD = true;
+
+	  MiscMath::hjorth( &v , &activity , &mobility , &complexity , USE_VARIANCE_METHOD );
 	  
 	  activity = activity > 0 ? log( activity ) : log( activity + 1e-12 );
 	  
@@ -459,8 +461,13 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 
   if ( set_mask )
     {
+
+      // std::cout << " set_off " << lights_off << "\n"
+      // 		<< " set_on  " << lights_on << "\n"
+      // 		<< " ne      " << ne << "\n";      
       
-      int cnt = lights_off ;
+      int cnt = 0 ;
+      if ( set_off ) cnt = lights_off ;
       if ( set_on ) cnt += ne - lights_on;
       
       if ( cnt )
@@ -473,7 +480,7 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 	  // expects 1-based terms in 'epochs'
 	  std::set<int> epochs;
 	  
-	  for (int e=0; e<lights_off; e++)
+	  for (int e=0; e<lights_off-1; e++)
 	    epochs.insert( e+1 );
 	  
 	  for (int e=lights_on; e<ne; e++)

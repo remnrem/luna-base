@@ -103,7 +103,6 @@ int timeline_t::calc_epochs()
   epoch_generic_param_set_point = 0;
   epoch_generic_param_min_epoch_size = 0.1;
   
-  
   // Calculates EPOCH timings in the original EDF timescale
   // for both continuous and discontinuous EDFs
 
@@ -133,7 +132,7 @@ int timeline_t::calc_epochs()
   epoch2rec.clear();
 
   //
-  // Easy case for continuous EDFs
+  // Easy case for continuous EDFs ( == cumul_ungapped)
   //
   
   if ( edf->header.continuous )
@@ -179,6 +178,143 @@ int timeline_t::calc_epochs()
 	  s += epoch_inc_tp;
 	}
     }
+  else if ( gap_spanning_epochs )
+    {
+      //
+      // Epochs for the discontinuous case: but ignoring gaps
+      //  i.e. 30sec means 30 seconds of cumulative signal only
+      //       as if the study was being read as a standard EDF
+      //       but this preserves time-stamps / we don't have to
+      //       change the signals
+      //
+
+      //  Segments    111111111111111      2222222222222    3333333
+      //  Epochs
+      //   Gapped     111112222233333      4444455555       66666   
+      //   Ungapped   111112222233333      4444455555666    6677777
+
+
+      // initial record
+      int r = first_record();
+
+      // track epoch number
+      int e = 0;
+      
+      // initial epoch
+      uint64_t estart = rec2tp[r];
+
+      // cumulative epoch (whole length; also inc step)
+      uint64_t ecumm = 0LLU;
+
+     
+      // increment / restarts
+      uint64_t estart2 = 0LLU; 
+      uint64_t ecumm2 = 0LLU;
+      int rstart2 = 0;
+      
+      // under this mode, epoch length/inc must be >= record length
+      if ( epoch_length_tp < edf->header.record_duration_tp )
+	Helper::halt( "epoch length cannot be less than record length" );
+      if ( epoch_inc_tp < edf->header.record_duration_tp )
+	Helper::halt( "epoch inc cannot be less than record length" );
+      
+      while ( 1 )
+	{
+
+	  // std::cout << " +++++ epoch " << e << " consider rec " << r << " at " << rec2tp[r] << "\n";
+	  // std::cout << "   cumul = " << ecumm 
+	  // 	    << " " << ecumm2 << "\n";
+	  
+	  // tag this record for this epoch if it spans it
+	  if ( ecumm + edf->header.record_duration_tp <= epoch_length_tp )
+	    {
+	      epoch2rec[ e ].insert( r );
+	      rec2epoch[ r ].insert( e );
+	    }
+	  
+	  // is the increment (start of next epoch) in this record?
+	  if ( estart2 == 0LLU && ecumm2 + edf->header.record_duration_tp > epoch_inc_tp )
+	    {
+	      uint64_t diff = epoch_inc_tp - ecumm2 ;
+	      estart2 = rec2tp[r] + diff;
+	      rstart2 = r;
+	    }
+	  else
+	    {
+	      // move this along
+	      ecumm2 += edf->header.record_duration_tp;
+	    }
+
+	  
+	  //
+	  // can we add this record and continue building the epoch? 
+	  //
+
+	  if ( ecumm + edf->header.record_duration_tp <= epoch_length_tp )
+	    {
+	      // accumulate and skip to the next record
+	      ecumm += edf->header.record_duration_tp;
+	      r = next_record(r);
+	      if ( r == -1 ) break;
+	      continue;
+	    }
+
+
+	  // otherwise, implies the epoch ends in this record
+	  
+	  // start if this record
+	  const uint64_t tp_start = rec2tp[r];
+	  
+	  // amount to add
+	  const uint64_t diff = epoch_length_tp - ecumm ;
+
+	  // ?? don't need +1 end-point here
+	  interval_t saved_interval( estart , tp_start + diff );
+	  epochs.push_back( saved_interval );
+	  //	  std::cout << " adding " << e << " " << estart << " " << tp_start + diff << "\n";
+	  
+	  // label is E1, E2, ... 1-based encoding
+	  epoch_labels.push_back( "E" + Helper::int2str( (int)epochs.size() ) );
+
+	  // track epoch count
+	  ++e;
+
+	  //
+	  // restart start
+	  //
+
+	  // tp of this next epoch
+	  estart = estart2;
+
+	  // reset this
+	  estart2 = 0LLU;
+	  
+	  // record that this next epoch is starting in
+	  r = rstart2;
+	  
+	  // offset into this record
+	  uint64_t offset = estart - rec2tp[r];
+	  
+	  // add rest of this record (both inc. and 
+	  ecumm = ecumm2 = edf->header.record_duration_tp - offset ; 
+
+	  if ( ecumm != 0LLU ) {
+              epoch2rec[ e ].insert( r );
+              rec2epoch[ r ].insert( e );	    
+	      // std::cout << " restarting:: " << estart << " " << r << "\n";
+	      // std::cout << " restarting w/ " << ecumm << " on the clock\n";
+	  }
+	  
+	  // advance to next record
+	  r = next_record(r);
+	  
+	  // all done...
+	  if ( r == -1 ) break;
+	  
+	}
+
+      
+    }  
   else
     {
 
@@ -581,7 +717,8 @@ void timeline_t::unepoch()
   // assume will be standard epochs next set
   standard_epochs = true;
   fixed_size_epochs = true;
-  
+  gap_spanning_epochs = false;
+
   // Masks
   clear_epoch_mask();
   mask_mode = 0; // default (0=mask; 1=unmask; 2=force)
@@ -1001,7 +1138,8 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
 
   // first time this is called, from EPOCH command
   standard_epochs = false;
-
+  gap_spanning_epochs = false;
+  
   // option must specify the fixed duration of these (from annot start)
   fixed_size_epochs = param.has( "fixed" );
   if ( fixed_size_epochs ) 

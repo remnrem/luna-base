@@ -844,11 +844,11 @@ bool cmd_t::eval( edf_t & edf )
       //
       bool fnd = false;
       
-      if ( (!fnd) && is( c, "WRITE" ) )          { fnd = true; proc_write( edf, param(c) ); }
-      if ( (!fnd) && is( c, "EDF" ) )          { fnd = true; proc_force_edf( edf , param(c) ); }
+      if ( (!fnd) && is( c, "WRITE" ) )        { fnd = true; proc_write( edf, param(c) ); }
       if ( (!fnd) && is( c, "EDF-" ) )         { fnd = true; proc_edf_minus( edf , param(c) ); }
       if ( (!fnd) && is( c, "EDF-MINUS" ) )    { fnd = true; proc_edf_minus( edf , param(c) ); }
-      if ( (!fnd) && is( c, "SET-TIMESTAMPS" ) ) { fnd = true; proc_set_timestamps( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SET-TIMESTAMPS")) { fnd = true; proc_set_timestamps( edf , param(c) ); }
+      if ( (!fnd) && is( c, "DROP-TIMESTAMPS")){ fnd = true; proc_force_edf( edf , param(c) ); }      
       if ( (!fnd) && is( c, "SUMMARY" ) )      { fnd = true; proc_summaries( edf , param(c) ); }
       if ( (!fnd) && is( c, "HEADERS" ) )      { fnd = true; proc_headers( edf , param(c) ); }
       if ( (!fnd) && is( c, "ALIASES" ) )      { fnd = true; proc_aliases( edf , param(c) ); }
@@ -2582,10 +2582,9 @@ void proc_set_timestamps( edf_t & edf , param_t & param )
 //               or EDF+C to EDF
 void proc_force_edf( edf_t & edf , param_t & param )
 {
-  Helper::halt( "EDF command is on pause" );
-  
-  bool force = param.has( "force" );
 
+  Helper::halt( "DROP-TIMESTAMPS is not available" );
+  
   if ( ! edf.header.edfplus ) 
     {
       logger << "  already a standard EDF, nothing to do\n";
@@ -2605,6 +2604,7 @@ void proc_force_edf( edf_t & edf , param_t & param )
   
   // if here, it is nominally EDF+D
   // working point here.
+
   if ( ! edf.is_actually_discontinuous() )
     {
       logger << "  converting from EDF+D that is actually continuous, to standard EDF\n";
@@ -2615,25 +2615,22 @@ void proc_force_edf( edf_t & edf , param_t & param )
       return;
     }
   
-  if ( force )
-    {
-      logger << "  forcing EDF+D to standard EDF: will lose discontinuity/time information\n";
-      edf.set_edf();
-      
-      // set start time to NULL
-      logger << "  setting EDF starttime to null (00.00.00)\n";
-      edf.header.starttime = "00.00.00";
+  //
+  // actual EDF+D -> EDF conversion (drop time-line)
+  //
 
-      edf.timeline.set_epoch( globals::default_epoch_len , globals::default_epoch_len );
-      edf.timeline.re_init_timeline();
-      edf.restructure( true );
-      return;
-    }
+  logger << "  forcing EDF+D to standard EDF: will lose discontinuity/time information\n";  
+  edf.set_edf();
   
-  // otherwise, note that no changes made
-  logger << "  could not downcast the EDF+D [ add 'force' option to force ]\n";  
+  // set start time to NULL
+  logger << "  setting EDF starttime to null (00.00.00)\n";
+  edf.header.starttime = "00.00.00";
+  
+  edf.timeline.set_epoch( globals::default_epoch_len , globals::default_epoch_len );
+  edf.timeline.re_init_timeline();
+  edf.restructure( true );
   return;
-
+  
 }
 
 
@@ -2882,7 +2879,8 @@ void proc_epoch( edf_t & edf , param_t & param )
   const bool opt_req   = param.has( "require" );
   const bool opt_len   = param.has( "len" ) || param.has( "dur" ) || param.has( "epoch" ) || param.has( "inc" );
   const bool opt_align = param.has( "offset" ) || param.has( "align" );
-  
+  const bool span_gaps = param.has( "splice" ) || param.has( "splice-gaps" );
+    
   //
   // just check we have the required number of epochs, but otherwise do not touch/re-epoch?
   // i.e. this keeps the epoch annotations intact
@@ -3052,6 +3050,12 @@ void proc_epoch( edf_t & edf , param_t & param )
       logger << " epoch definitions have changed: original epoch mappings will be lost\n";
       edf.timeline.unepoch();
     }
+
+  //
+  // gap spanning?
+  //
+
+  edf.timeline.set_epochs_to_span_gaps ( span_gaps );
   
   //
   // basic log info
@@ -3077,7 +3081,7 @@ void proc_epoch( edf_t & edf , param_t & param )
 	 << " (step " << inc 
 	 << ", offset " << offset * globals::tp_duration  
 	 <<  "), " << ne << " epochs\n";
-    
+  if ( span_gaps ) logger << "  epochs defined to splice out any gaps\n";
   
   //
   // write more verbose information to db

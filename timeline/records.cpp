@@ -239,14 +239,17 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
   // for EDF+D cases (i.e. w/ gaps which might be of any length) it is not guaranteed that a similarly-sized
   // pair of intervals will return the same number of samples, if the intervals span gaps, and so we don't
-  // case.    But at least for epochs, every epoch is defined to be a contiguous set of samples, and so even
+  // care.    But at least for epochs, every epoch is defined to be a contiguous set of samples, and so even
   // for EDF+D this ensures that we won't get slices returned w/ +1 extra sample point ever in epoch-based
-  // analyses
+  // analyses. 
 
   // for most cases (i.e. where intervals are aligned with records/samples, as is typical case, this was never
   // and issue;  but this provides a nicer handling of fractional epochs, etc.   The primary impact was for TLOCK
   // where we'd get one additional sample at the end depending on alignment as above; although not really a substantive
   // problem, this led to data-handling issues.
+
+  // however, note we now have gap-spanning epochs allowed: although these are meant to be designed
+  // so that the same number of samples are generated in any case.
   
     // std::cout << " search: " << interval.as_string() << "\n";
     // std::cout << " search (tp): " << interval.start << " " << interval.stop << "\n";
@@ -332,6 +335,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
 
       //      std::cout <<" provisional = " << stop_record << "\t" << stop_sample << " offset = " << stop_offset << "\n";
+
       //
       // Shift one sample backwards, i.e.
       //   i.e.  1) only include "whole" sample-sample intervals spanned by the search interval
@@ -464,7 +468,6 @@ bool timeline_t::interval2records( const interval_t & interval ,
       
       stop_tp -= shift;
 
-
       //
       // Now find stop record/sample
       // For upper bound, find the record whose end is *greater* than the interval stop
@@ -489,7 +492,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
       bool ends_before = upr == tp2rec.begin() ;
 
       if ( ! ends_before ) 
-	{
+	{	  
 	  --upr;  
 	  *stop_rec  = upr->second;
 	}
@@ -511,6 +514,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
       uint64_t previous_rec_start = upr->first;
       uint64_t previous_rec_end   = previous_rec_start + edf->header.record_duration_tp - 1; // inclusive defn.
 
+      // std::cout << " previous_rec_start = " << previous_rec_start << "   " << previous_rec_end << "\n";
+      // std::cout << " stop_tp_m1 = " << stop_tp_m1 << "\n";
 
       //
       // Does this end point fall in a gap? i.e. after the previous record ends
@@ -522,13 +527,23 @@ bool timeline_t::interval2records( const interval_t & interval ,
       
       // assuming stop_tp is end+1
       //in_gap = ! ( stop_tp > previous_rec_start && stop_tp < previous_rec_end );
-
+      
       if ( in_gap )
 	{
 	  // stop falls in gap, so set to last sample of the previous record
 	  // handling the special SR=0 case
-	  *stop_smp = n_samples_per_record == 0 ? globals::tp_1sec - 1LLU :
-	    n_samples_per_record - 1LLU ;	  
+
+	  // EDIT: Jun 2025; to handle gap-spanning epochs,
+	  //       this appears to be incorrectly set
+	  //       i.e.. as needs to roll back one sample below, set to
+	  //       n_samples_per_record rather than n_samples_per_record - 1
+	  
+	  // *stop_smp = n_samples_per_record == 0 ? globals::tp_1sec - 1LLU :
+	  //   n_samples_per_record - 1LLU ;
+
+	  *stop_smp = n_samples_per_record == 0 ? globals::tp_1sec :
+	    n_samples_per_record ;
+	  
 	}
       else
 	{
@@ -540,8 +555,15 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	  // convert to sample points
 	  uint64_t stop_sample = n_samples_per_record == 0 ? stop_offset : 
 	    floor( ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
-	  
+
 	  *stop_smp = (int)stop_sample;
+
+	  // std::cout << " stop_tp = " << stop_tp << "\n"
+	  // 	    << " upr->first = " << upr->first << "\n"
+	  // 	    << " stop_offset = " << stop_offset << "\n"
+	  // 	    << " header.record_duration_tp = " << edf->header.record_duration_tp << "\n"
+	  // 	    << " n_samples_per_record = " << n_samples_per_record << "\n"
+	  // 	    << " stop_sample = " << (int)stop_sample << "\n";
 	  
 	}
 
@@ -560,12 +582,13 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	    }
 	  
           *stop_rec = *stop_rec - 1;  
-
+	  
           *stop_smp = n_samples_per_record == 0 ? globals::tp_1sec - 1LLU :
 	    n_samples_per_record - 1LLU;
         }
       else
-	{	  
+	{
+	  //	  std::cout << " shifting back now! from " << *stop_smp << "\n";
 	  *stop_smp = *stop_smp - 1 ;	  
 	}
     }
