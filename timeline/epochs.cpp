@@ -220,10 +220,10 @@ int timeline_t::calc_epochs()
       
       while ( 1 )
 	{
-
+	  
 	  // std::cout << " +++++ epoch " << e << " consider rec " << r << " at " << rec2tp[r] << "\n";
 	  // std::cout << "   cumul = " << ecumm 
-	  // 	    << " " << ecumm2 << "\n";
+	  //  	    << " " << ecumm2 << "\n";
 	  
 	  // tag this record for this epoch if it spans it
 	  if ( ecumm + edf->header.record_duration_tp <= epoch_length_tp )
@@ -233,7 +233,7 @@ int timeline_t::calc_epochs()
 	    }
 	  
 	  // is the increment (start of next epoch) in this record?
-	  if ( estart2 == 0LLU && ecumm2 + edf->header.record_duration_tp > epoch_inc_tp )
+	  if ( estart2 == 0LLU && ecumm2 + edf->header.record_duration_tp >= epoch_inc_tp )
 	    {
 	      uint64_t diff = epoch_inc_tp - ecumm2 ;
 	      estart2 = rec2tp[r] + diff;
@@ -245,29 +245,33 @@ int timeline_t::calc_epochs()
 	      ecumm2 += edf->header.record_duration_tp;
 	    }
 
+	  	  
+	  //
+	  // skip to next record? 
+	  //   n.b. < as only want to skip to next record if not done
+	  //
 	  
-	  //
-	  // can we add this record and continue building the epoch? 
-	  //
-
-	  if ( ecumm + edf->header.record_duration_tp <= epoch_length_tp )
+	  if ( ecumm + edf->header.record_duration_tp < epoch_length_tp )
 	    {
-	      // accumulate and skip to the next record
 	      ecumm += edf->header.record_duration_tp;
-	      r = next_record(r);
-	      if ( r == -1 ) break;
-	      continue;
+	      r = next_record(r);              
+              if ( r == -1 ) break;
+              continue;
 	    }
 
 
+	  //
 	  // otherwise, implies the epoch ends in this record
+	  //
 	  
 	  // start if this record
 	  const uint64_t tp_start = rec2tp[r];
+	  // std::cout << " tp_start = " << tp_start << "\n";
 	  
 	  // amount to add
 	  const uint64_t diff = epoch_length_tp - ecumm ;
-
+	  // std::cout << " diff = " << diff << "\n";
+	    
 	  // ?? don't need +1 end-point here
 	  interval_t saved_interval( estart , tp_start + diff );
 	  epochs.push_back( saved_interval );
@@ -312,7 +316,8 @@ int timeline_t::calc_epochs()
 	  if ( r == -1 ) break;
 	  
 	}
-
+      
+      //std::cout << ecumm << " is end-ecumm \n";
       
     }  
   else
@@ -442,16 +447,12 @@ int timeline_t::calc_epochs()
 	  uint64_t rec_start = rec2tp[r];
 	  uint64_t rec_end   = rec2tp_end[r];
 
-	  // std::cout << "dets " << rec_start << " " << rec_end << "\t"
- 	  //  	    << estart << " " << erestart << " " << estop << "\n";
-
 	  //
 	  // Will the next epoch potentially come from this record?
 	  //
-	  //std::cout << " erestart " << erestart << "\n";
+
 	  if ( erestart >= rec_start && erestart <= rec_end )
-	    {
-	      //std::cout << "  track this is the restarting record\n";
+	    {	      
 	      // track this is the restarting record
 	      restart_rec = r;
 	    }
@@ -618,9 +619,7 @@ int timeline_t::calc_epochs()
 	      // they are contiguous 
 	      
 	      uint64_t rec2_start = rec2tp[r];
-	      
-	      //std::cout << "recs " << rec2_start << "\t" << rec_end << "\n";
-
+	      	      
 	      // 
 	      // If we've come to a break, we need to give up on the previous
 	      // epoch, and start adding one now for this next record

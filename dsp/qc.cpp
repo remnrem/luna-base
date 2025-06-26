@@ -153,7 +153,7 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 
   if ( ns == 0 ) return;
 
-  logger << "  checking " << ns << " respiratory channels:\n"
+  logger << "  checking " << ns << " respiratory channel(s):\n"
 	 << "     window size (sec) = " << resp_window_dur << "\n"
 	 << "     window step (sec) = " << resp_window_inc << "\n"
 	 << "     signal range (Hz) = " << resp_p1_lwr << " - " << resp_p1_upr << "\n"
@@ -163,6 +163,9 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 	 << "     minimum SR (Hz)   = " << resp_min_sr << "\n";
   
   // force 120 epochs, sliding in 10 seconds
+
+  logger << "\n"
+	 << "  changing EPOCH settings (including 'splice-gaps' mode)...\n";
   edf.timeline.set_epochs_to_span_gaps( true );
   edf.timeline.set_epoch( resp_window_dur , resp_window_inc );
   
@@ -199,9 +202,9 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
       std::vector<double> P1;
       std::vector<bool> valid;
       std::vector<std::pair<int,int> > smps;
-      
-      const int ne = edf.timeline.first_epoch();
 
+      const int ne = edf.timeline.first_epoch();
+      
       logger << "  considering " << ne << " windows\n"; 
            
       while ( 1 ) 
@@ -244,8 +247,12 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 	  const double snr1 = p1 / p2 ; 
 	  
 	  // sample span of this window (for reconstructing an original signal)
-	  std::pair<int,int> smps1( (*sp)[0] , (*sp)[n-1] );
+	  //  although note that epochs are not contiguous in sample-space, and
+	  //  so below, we only extract non-missing points from the start/stop
+	  //  ranges stored in smps[]
 
+	  std::pair<int,int> smps1( (*sp)[0] , (*sp)[n-1] );
+	  
 	  // track for this epoch
 	  snr.push_back( snr1 );
 	  P1.push_back( p1 );
@@ -336,11 +343,20 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
       // pull original signal for entire trace just to get N and time-points
       // but also need to pull the samples here (as above the sample-points saved
       // were w.r.t to original EDF, not any masked version)
+
+      // as we're using gap-spliced epoching, some points in the start/stop interval
+      // saved (in 'smps[]') may be gaps;  we can just ignore them here, as they
+      // won't be in sp2slot
+
+      // --> any un-epoched portions (e.g. <10 second parts at the end of the record)
+      //     won't be assigned any noise values (defaults to 0) but that's probably
+      //     fine - i.e. should be a smaller value
       
-      slice_t slice( edf , signals(s) , edf.timeline.wholetrace());
+      // n.b. extra terms to pull psmps() [ last true ] 
+      slice_t slice( edf , signals(s) , edf.timeline.wholetrace(),1,false,true);
       const std::vector<uint64_t> * tp = slice.ptimepoints();
       const int n = tp->size();
-
+      
       // make mapping of sample-points to slots
       const std::vector<int> * sp = slice.psmps();
       std::map<int,int> sp2slot;
@@ -349,32 +365,35 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
       
       // new noise waveform (initialize at 0) 
       std::vector<double> noisewav( n , 0 );
-
+      
       // iterate over each window:
       std::vector<double> fac = { 1 / 4.0 , 0.5 / 4.0 , 0.25 / 4.0 };
-
+      
       for (int f=0; f<3; f++) // <1, <2, <3	
 	{
 	  // set for this window
 	  for (int e=0; e<total_epochs; e++)
-	    {
+	    {	      
 	      if ( criteria[e] < fac[f] )
-		{
+		{		  
 		  const int start = smps[e].first;
 		  const int stop  = smps[e].second;
-		  for (int p=start; p<=stop; p++)
+		  
+		  for (int p=start; p<=stop; p++)		    
 		    {
 		      std::map<int,int>::const_iterator ii = sp2slot.find( p );
-                      if ( ii == sp2slot.end() )
-                        Helper::halt("internal error in mapping sample->slots -- this should not happen..." );
-                      const int slot = ii->second;		      
-		      noisewav[ slot ] = f+1;
+		      
+                      if ( ii != sp2slot.end() )
+                        {
+			  const int slot = ii->second;		      
+			  noisewav[ slot ] = f+1;		
+			}
 		    }
 		}
 	    }
 	}
-      
 
+      
       //
       // Estimate fraction of recording that is noise (nb: allow for floating point
       // issues, though this should be fine) 
@@ -396,7 +415,7 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 		}
 	    }
 	}
-
+      
       // as a proportion of all samples
       f1 /= (double)n;
       f2 /= (double)n;

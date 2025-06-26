@@ -351,11 +351,17 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 	  trk_on[e] = stat;
         }
 
-
+      //
+      // at this point, lights_off1 & lights_on1 are 0-based epoch numbers,
+      // that are the last epoch *before* we want to set lights off, i.e.
+      // we should trim inclusive of these points
+      //
+      
       //
       // magnitude check: stats ~equals number of epochs (weighted) 
       //  requires this to be at least e.g. 20 (10 mins) or else what's the point of changing
-
+      //
+      
       if ( max_off < req_epoch )
 	lights_off1 = -1;
 	
@@ -381,10 +387,11 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 	      writer.epoch( edf.timeline.display_epoch( ep[e] ) );
 	      if ( trim_start ) writer.value( "XOFF" , trk_off[e] );
 	      if ( trim_stop ) writer.value( "XON" , trk_on[e] );
-	      
-	      if ( lights_off1 >= 0 && e < lights_off1 ) 
+
+	      // nb. inclusive <= comparison here
+	      if ( lights_off1 >= 0 && e <= lights_off1 ) 
 		writer.value( "TRIM" , 1 );
-	      else if ( lights_on1 >= 0 && e > lights_on1 ) 
+	      else if ( lights_on1 >= 0 && e >= lights_on1 ) 
 		writer.value( "TRIM" , 1 );
 	      else
 		writer.value( "TRIM" , 0 );
@@ -401,18 +408,21 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 	  
 	}
 
-
       //
-      // trake earliest lights off and latest lights on
+      // take earliest lights on and latest lights off
       //
 
-      if ( lights_off1 > 0 )
+      // e.g. lights_off1 is the single-channel empirical value (based on EDGER stats)
+      //      lights_off is the 'max' cut based on all channels
+      //      --> do we want to update that?
+      
+      if ( lights_off1 >= 0 )
 	{
 	  if ( lights_off < 0 ) lights_off = lights_off1;
 	  else if ( lights_off1 < lights_off ) lights_off = lights_off1;
 	}
-
-      if ( lights_on1 > 0 )
+      
+      if ( lights_on1 >= 0 )
 	{
 	  if ( lights_on < 0 )	lights_on = lights_on1;
 	  else if ( lights_on1 > lights_on ) lights_on = lights_on1;
@@ -420,9 +430,9 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
       
       // next signal
     }
-
+  
   writer.unlevel( globals::signal_strat );
-
+  
 
   //
   // final determination
@@ -430,27 +440,35 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 
   const bool set_off = trim_start && lights_off >= 0 ;
   const bool set_on  = trim_stop && lights_on >= 0 ;
-
-  // if ( set_off && set_on && lights_off > lights_on )
-  //   Helper::halt( "problem - empirical lights on set before lights off" );
   
   clocktime_t starttime( edf.header.starttime );
-  double epoch_hrs = 30.0 / 3600.0;
+  double epoch_seconds = edf.timeline.epoch_length() ; 
   clocktime_t clock_lights_out = starttime;
   clocktime_t clock_lights_on = starttime;
   
   if ( set_off ) 
-    {      
-      writer.value( "EOFF" , lights_off );
-      clock_lights_out.advance_hrs( epoch_hrs * lights_off ) ;
+    {            
+      // adjust lights_off : 
+      // +1 --> lights_off is inclusive off the
+      // +1 --> for output, use 1-based output      
+      
+      lights_off = lights_off < ne ? lights_off + 1 : lights_off ; 
+      writer.value( "EOFF" , lights_off + 1 ); // for 1-based output
+      clock_lights_out.advance_seconds( epoch_seconds * lights_off ) ;
       writer.value( "LOFF" , clock_lights_out.as_string() );
 
     }
 
   if ( set_on )
     {
-      writer.value( "EON" , lights_on );
-      clock_lights_on.advance_hrs( epoch_hrs * lights_on ) ;
+      // adjust lights_on :
+      // -1 --> lights_off is inclusive of this
+      // +1 --> for output, use 1-based output
+
+      lights_on = lights_on > 0 ? lights_on - 1 : lights_on ;
+
+      writer.value( "EON" , lights_on + 1 ); // for output
+      clock_lights_on.advance_seconds( epoch_seconds * lights_on ) ;
       writer.value( "LON" , clock_lights_on.as_string() );
     }
   
@@ -462,13 +480,26 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
   if ( set_mask )
     {
 
-      // std::cout << " set_off " << lights_off << "\n"
-      // 		<< " set_on  " << lights_on << "\n"
+      // std::cout << " set_off " << lights_off << "\n" 
+      //  		<< " set_on  " << lights_on << "\n" 
       // 		<< " ne      " << ne << "\n";      
-      
+
+      // 
       int cnt = 0 ;
-      if ( set_off ) cnt = lights_off ;
-      if ( set_on ) cnt += ne - lights_on;
+
+      // lights_off == 0 means lights out starts at start of first epoch
+      //  i.e. so number to be masked here is only if lights_off is 1 or more 
+
+      if ( set_off ) cnt = lights_off > 0 ? lights_off - 1 : 0 ; 
+      
+      // likewise, if lights_on is ne-1, then there is no masked
+      //  otherwise, is ne - 1 ) - lights_on 
+      //  0 1 2 3 4 5 6 7 8 9
+      //                       lights_off = 9
+      //                    X               8
+      //                  X X               7
+
+      if ( set_on ) cnt += lights_on < ne - 1 ? ne - 1 - lights_on : 0 ; 
       
       if ( cnt )
 	{
@@ -477,20 +508,23 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 	  // set to EXCLUDE
 	  bool include_mode = false;
 	  
-	  // expects 1-based terms in 'epochs'
+	  // n.b. expects 1-based terms in 'epochs'
 	  std::set<int> epochs;
+
+	  if ( set_off ) 
+	    for (int e=0; e<lights_off-1; e++)
+	      epochs.insert( e+1 );
 	  
-	  for (int e=0; e<lights_off-1; e++)
-	    epochs.insert( e+1 );
-	  
-	  for (int e=lights_on; e<ne; e++)
-	    epochs.insert( e+1 );
+	  if ( set_on ) 
+	    for (int e=lights_on+1; e<ne; e++)
+	      epochs.insert( e+1 );
 	  
 	  // expects 1-based terms in 'epochs'
 	  edf.timeline.select_epoch_range( epochs , include_mode );	      
 	
 	}
     }
+
   
   //
   // use cache to remember LON and LOFF values? [ will enable hypno to understand these ]
@@ -505,25 +539,25 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 	logger << "  setting cache " << param.value( "cache" ) << " to store times\n";
       
       clocktime_t starttime( edf.header.starttime );
-      double epoch_hrs = 30.0 / 3600.0; 
+      double epoch_seconds = edf.timeline.epoch_length();
       
       clocktime_t clock_lights_out = starttime;
       if ( set_off ) 
-	clock_lights_out.advance_hrs( epoch_hrs * lights_off ) ;
+	clock_lights_out.advance_seconds( epoch_seconds * lights_off ) ;
       
       clocktime_t clock_lights_on = starttime;
       if ( set_on ) 
-	clock_lights_on.advance_hrs( epoch_hrs * lights_on ) ;
+	clock_lights_on.advance_seconds( epoch_seconds * lights_on ) ;
       
       if ( set_off )
 	{
-	  logger << "  lights-off=" << clock_lights_out.as_string() << " (skipping " << lights_off << " epochs from start)\n";	  
+	  logger << "  lights-off=" << clock_lights_out.as_string() << " (skipping " << lights_off - 1 << " epochs from start)\n";	  
 	  if ( cache ) cache->add( ckey_t( "LOFF" , writer.faclvl() ) , edf.timeline.epoch_length() * lights_off );
 	}
       
       if ( set_on )
 	{
-	  logger << "  lights-on=" << clock_lights_on.as_string() << " (skipping " << ne - lights_on << " epochs from end)\n";
+	  logger << "  lights-on=" << clock_lights_on.as_string() << " (skipping " << ne - 1 - lights_on << " epochs from end)\n";
 	  if ( cache ) cache->add( ckey_t( "LON" , writer.faclvl() ) , edf.timeline.epoch_length() * lights_on );
 	}
       
