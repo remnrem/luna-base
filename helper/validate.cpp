@@ -211,8 +211,11 @@ void Helper::validate_slist( param_t & param )
       // if bad EDF< default = 24 hr empty EDF, although this should not matter
       // (other than for .eannots)
       
+      // edge case: if RS is < 1 sec, this will set it to zero, so just set to 1
+      const bool short_records = edf_okay && edf.header.record_duration < 1 ;
+      
       const int nr = edf_okay ? edf.header.nr : 24 * 60 ; 
-      const int rs = edf_okay ? edf.header.record_duration : 60 ;
+      const int rs = edf_okay ? ( short_records ? 1 : edf.header.record_duration ) : 60 ;
       const std::string startdate = edf_okay ? edf.header.startdate : "01.01.00" ;
       const std::string starttime = edf_okay ? edf.header.starttime : "00.00.00" ;
       const std::string id = edf_okay ? rootname : "__bad_EDF__";
@@ -223,8 +226,15 @@ void Helper::validate_slist( param_t & param )
       bool empty_okay = dummy.init_empty( id , nr , rs , startdate , starttime );
 
       if ( ! empty_okay )
-	Helper::halt( "internal error constructing an empty EDF to evaluate annotations" );
-      
+	{
+	  logger << "  issue with " << edf.id << "\n"
+		 << "    nr = " << nr << "\n"
+		 << "    rs = " << rs << "\n"
+		 << "    startdate = " << startdate << "\n"
+		 << "    starttime = " << starttime << "\n";
+
+	  Helper::halt( "internal error constructing an empty EDF to evaluate annotations" );
+	}
      
       // some basic set-up (post EDF init)
 
