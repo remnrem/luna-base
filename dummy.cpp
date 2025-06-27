@@ -634,8 +634,16 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "lunapi" )
     {
+      std::cout << "lunapi test\n";
+
+      std::cout << " firing up ... \n";
       lunapi_t * lp = lunapi_t::inaugurate();
+      std::cout << " done\n";
+
       lunapi_inst_ptr p = lp->inst( "id1" );
+
+      std::cout << " attaching EDFs (local)\n";
+      
       p->attach_edf( "~/tutorial/edfs/learn-nsrr01.edf" );
       p->attach_annot( "~/tutorial/edfs/learn-nsrr01-profusion.xml" );
 
@@ -643,7 +651,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       
       std::vector<std::string> d = p->desc();
       for (int i=0; i<d.size(); i++) std::cout << " d["<<i<<"] = " << d[i] << "\n";
-
+      
       // introduce some gaps
       //p->eval( "EPOCH & MASK epoch=5-50,500-600,800-850 & MASK flip & RE" );
       //p->eval( "MASK ifnot=N2 & RE" );
@@ -658,6 +666,33 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::vector<std::string> chs_b = { "EEG" };
       std::vector<std::string> chs_h = { "EEG" , "AIRFLOW" };
 
+      std::cout << " about to pull\n";
+      
+      float a = 0 ;
+      float b = 61440 ;
+
+      segsrv.populate( chs , anns ) ;
+
+      a = 0 ;
+      b = 40918;
+      b = 1;
+
+      segsrv.set_window( a, b );
+      segsrv.compile_evts( anns );
+
+      std::cout << " done populating...\n";
+
+      for (int s=2;s<3;s++)
+        {
+          std::cout << " --> " << chs[s] << "\n";
+          Eigen::VectorXf XX = segsrv.get_scaled_signal( chs[s] , s );	  
+	  //Eigen::VectorXf TT = segsrv.get_timetrack( chs[s]);
+          std::cout << XX << "\n";
+        }
+
+      std::exit(0);
+
+
       // bands, hjorth
       //      segsrv.calc_bands( chs_b );
       //      segsrv.calc_hjorths( chs_h );
@@ -665,7 +700,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       segsrv.calc_bands( chs_b );
       segsrv.calc_hjorths( chs_h );
 
-      segsrv.populate( chs , anns ) ;
+      //      segsrv.populate( chs , anns ) ;
 
       //std::exit(1);
       
@@ -687,7 +722,8 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       // segsrv.compile_evts( anns );
       //     std::exit(0);
 
-      float a = 0 , b = 61440;
+      a = 0;
+      b = 61440;
 
       segsrv.set_window( a, b );
       segsrv.compile_evts( anns );

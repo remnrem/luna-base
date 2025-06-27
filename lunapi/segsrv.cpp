@@ -543,10 +543,10 @@ Eigen::VectorXf segsrv_t::decimate( const Eigen::VectorXf & x0 , const int sr, c
 {
   if ( x0.size() == 0 ) return x0;
   
-  // new sample rate
-  const int sr2 = sr / q ;
+  // new sample rate (min 1 Hz) 
+  const double sr2 = sr / (double)q ;
   const double fc = sr2 * 0.5 ;
-  
+
   // forward-backward low-pass filtering
   iir_t iir1;
   iir1.init( BUTTERWORTH_LOWPASS , 2 , sr, fc ); 
@@ -967,7 +967,7 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
       const int n = s.size();      
       const bool fix_lwr = omin < smin ;
       const bool fix_upr = omax > smax ;
-      
+            
       if ( fix_lwr || fix_upr )
 	{
 	  for (int i=0;i<n;i++)
@@ -1031,11 +1031,10 @@ Eigen::VectorXf segsrv_t::get_signal( const std::string & ch ) const
       // is cast to an int here, but for this single purpose (of
       // designing a low-pass anti-aliasing filter) this should not
       // matter.
-      
       return decimate( data.segment( aa , bb - aa ) , decimated_srmap.find( sr )->second , reduction_factor );
       
     }
-  
+
   // else return full
   return data.segment( aa , bb - aa );
     

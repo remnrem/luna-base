@@ -119,9 +119,16 @@ dsptools::qc_t::qc_t( edf_t & edf1 , param_t & param ) : edf(edf1)
   // Annotations & channels
   //
 
-  resp_add_annot = param.has( "resp-add-annot" );
-  if ( resp_add_annot ) resp_annot_label = param.value( "resp-add-annot" );
-
+  resp_add_annot = param.has( "resp-add-annot" ) || param.has( "resp-add-annot-ch" ); 
+  if ( resp_add_annot )
+    {
+      resp_add_channel_to_annot = param.has( "resp-add-annot-ch" );
+      if ( resp_add_channel_to_annot )
+	resp_annot_label = param.value( "resp-add-annot-ch" );
+      else
+	resp_annot_label = param.value( "resp-add-annot" );
+    }
+  
   resp_add_channel = param.has( "resp-add-channel" );
   if ( resp_add_channel ) resp_channel_label = param.value( "resp-add-channel" );
 
@@ -445,7 +452,7 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
       
       if ( resp_add_channel )
 	{
-	  const std::string lab = signals.label(s) + "_" + resp_channel_label ;
+	  const std::string lab = resp_channel_label + "_" + signals.label(s) ;
 	  edf.add_signal( lab , Fs , noisewav );
 	  logger << "  adding new QC signal " << lab << ", " << Fs << " Hz\n"; 
 	}
@@ -456,8 +463,11 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
       
       if ( resp_add_annot )
 	{
+	  
+	  const std::string lab = resp_add_channel_to_annot ? resp_annot_label + "_" + signals.label(s) : resp_annot_label ;
+
 	  // new annotation
-	  annot_t * a = edf.annotations->add( resp_annot_label );
+	  annot_t * a = edf.annotations->add( lab );
 	  
 	  // get collapsed regions
 	  std::set<interval_t> ints;
@@ -488,8 +498,8 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 		}
 	    }
 	      
-	  logger << "  added " << ac << " " << resp_annot_label
-		 << " annotations, marking likely artifact for "
+	  logger << "  added " << ac << " " << lab
+		 << " annotations, marking putative artifact for "
 		 << signals.label(s) << "\n";
 	      
 	}

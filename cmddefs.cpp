@@ -2636,7 +2636,7 @@ void cmddefs_t::init()
   // GPA-PREP
   //
 
-  add_cmd( "assoc" , "GPA-PREP" , "Generic permutation-based association prep (--gpa-prep)" );
+  add_cmd( "assoc" , "--gpa-prep" , "Generic permutation-based association prep (--gpa-prep)" );
   add_url( "--gpa-prep" , "assoc/#gpa" );
 
   add_param( "--gpa-prep" , "dat" , "b.1" , "Write to this binary data file" );

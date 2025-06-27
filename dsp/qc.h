@@ -61,6 +61,7 @@ namespace dsptools
     double resp_p2_upr;
     double resp_epsilon;   
     bool resp_add_annot;
+    bool resp_add_channel_to_annot;
     std::string resp_annot_label;
     bool resp_add_channel;    
     std::string resp_channel_label;
