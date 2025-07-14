@@ -135,6 +135,8 @@ namespace Helper
 
   void build_sample_list( const std::vector<std::string> & , slist_t * sl = NULL );
 
+  bool sl_slicer( const std::string & f , int n , int m , int * s1 , int * s2 );
+  
   void merge_EDFs( const std::vector<std::string> & );
 
   void bind_EDFs( const std::vector<std::string> & );

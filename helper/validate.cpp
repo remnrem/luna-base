@@ -64,12 +64,55 @@ void Helper::validate_slist( param_t & param )
   std::set<std::string> exclude;  
   
   //
+  // optional slist slicing
+  //
+
+  const bool slicing = param.has( "slice" );
+
+  if ( slicing )
+    {
+
+      // expecting n/m format
+      const std::string term = param.value( "slice" );
+      
+      // an n/m 'slice' of the sample list? 
+      const bool nm_slice = term.find( "/" ) != std::string::npos; 
+
+      if ( ! nm_slice ) Helper::halt( "expecting slice=n/m format" );
+      
+      // set slice mode to fix globals::sample_list_min
+      // and globals::sample_list_max		  
+      
+      std::vector<std::string> tok = Helper::parse( term , "/" );
+      if ( tok.size() != 2 )
+	Helper::halt( "expecting n/m format ID specification: use id= if the ID contains '/'" );
+      
+      int n = 0 , m = 0;
+      if ( ! Helper::str2int( tok[0] , &n ) )
+	Helper::halt( "expecting integer n/m format for sample specification" );
+      if ( ! Helper::str2int( tok[1] , &m ) )
+	Helper::halt( "expecting integer n/m format for sample specification" );
+      if ( n < 1 || m < 1 || n > m )
+	Helper::halt( "expecting integer n/m format for sample specification, n & m >= 1 and n <= m" );
+      
+      int s1 = 0, s2 = 0;
+      bool okay = Helper::sl_slicer( slist , n , m , &s1, &s2 );
+      if ( ! okay ) Helper::halt( "problem setting n/m sample slice" );
+      globals::sample_list_min = s1;
+      globals::sample_list_max = s2;
+
+    }
+    
+  
+  //
   // set up 
   //
   
   const bool has_project_path = globals::param.has( "path" );
   
   int goodn = 0 , badn = 0;
+
+  int processed = 0, actual = 0;
   
   while ( 1 )
     {
@@ -147,7 +190,26 @@ void Helper::validate_slist( param_t & param )
       //
 
       rootname = cmd_t::remap_id( rootname );
+
+      //
+      // track # of studies done
+      //
+
+      ++processed;
       
+      //
+      // SL slicing?
+      //
+      
+      if ( globals::sample_list_min != -1 || globals::sample_list_max != -1 )
+	{
+	  const int line_n = processed; // already includes the +1 as we just incremented
+	  if ( line_n < globals::sample_list_min ||
+	       line_n > globals::sample_list_max )
+	    {	      
+	      continue;
+	    }
+	}
       
       //
       // File in exclude list? (or not in an include list?)
@@ -161,6 +223,7 @@ void Helper::validate_slist( param_t & param )
       if ( globals::id_includes.size() != 0
 	   && globals::id_includes.find( rootname ) == globals::id_includes.end() )
 	include = false;
+
       
       if ( ! include )	
 	{
@@ -175,6 +238,12 @@ void Helper::validate_slist( param_t & param )
 	}
 
 
+      //
+      // track 
+      //
+
+      ++actual;
+      
       //
       // set up writer      
       //
@@ -392,14 +461,20 @@ void Helper::validate_slist( param_t & param )
       
     }
 
+
+  //
+  // Outputs
+  //
+
+  if ( slicing )
+    logger << "  extracted " << actual << " of " << processed << " observations given slicing\n";
+  
   if ( badn ) 
     logger << "\n  " << badn << " of " <<  goodn + badn << " observations scanned had corrupt/missing EDF/annotation files\n";
   else
     logger << "  all good, no problems detected in " << goodn << " observations scanned\n";
     
   IN1.close();
-  
-
   
   
   //
@@ -455,6 +530,9 @@ void Helper::validate_slist( param_t & param )
   
   globals::validation_mode = false;
 
+  
+  
+  
 }
 
 

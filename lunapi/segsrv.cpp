@@ -916,6 +916,15 @@ void segsrv_t::free_physical_scale( const std::string & ch )
   phys_ranges.erase( pp );
 }
 
+// calc. robust reasonable ranges
+void segsrv_t::set_empirical_phys_ranges()
+{
+  // clip or show extreme values (beyong 0..1)
+  // bool clip_extremes;  in .h
+  clip_extremes = true;
+}
+
+
 
 bool segsrv_t::get_yscale_signal( const int n1 , double * lwr, double * upr ) const
 {
@@ -937,6 +946,7 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
   // allow to specify n1 separate from actual channel list (i.e. may be
   // showing a subset of all channes, and so we would have recalled 
   // set_scaling() multiple times after populate() [ which is only called once ]
+
   Eigen::VectorXf s = get_signal( ch );
 
   // fixed physical scaling, or auto-scaling?
@@ -992,6 +1002,9 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
   double lwr = 0,  upr = 1;
   const bool okay = get_yscale_signal( n1 , &lwr, &upr );
 
+  // to clip between 0 and 1:
+  //     vec = vec.cwiseMax(0.0).cwiseMin(1.0);
+  
   if ( okay )
     s = s.array() * ( upr - lwr ) + lwr;
   

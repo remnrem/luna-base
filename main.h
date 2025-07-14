@@ -46,9 +46,6 @@ class cmd_t;
 // misc helper: command logger 
 std::string log_commands( int argc , char ** argv );
 
-// misc helper: sample-list slicer
-bool luna_helper_sl_slicer( const std::string & f , int n , int m , int * s1 , int * s2 );
-
 // misc helper: evaluate comannd-line methods
 cmdline_proc_t parse_cmdline( int argc , char ** argv , int * );
 

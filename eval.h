@@ -301,6 +301,7 @@ void proc_setscale( edf_t & , param_t & );
 void proc_minmax( edf_t & , param_t & );
 void proc_standardize( edf_t & , param_t & );
 void proc_flip( edf_t & , param_t & );
+void proc_clip( edf_t & , param_t & );
 void proc_rectify( edf_t & , param_t & );
 void proc_rai( edf_t & , param_t & );
 void proc_reverse( edf_t & , param_t & );

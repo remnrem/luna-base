@@ -242,7 +242,13 @@ private:
 
   // store the min/max per signal after a get_scaled_signal()
   std::map<std::string,std::pair<double,double> > window_phys_range;
- 
+
+  // calc. robust reasonable ranges
+  void set_empirical_phys_ranges();
+
+  // clip or show extreme values (beyong 0..1)
+  bool clip_extremes;
+  
   // cumulative seconds (length of data, w/out gaps)
   //  double cumul_sec;
   

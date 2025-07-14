@@ -1265,69 +1265,6 @@ std::string log_commands( int argc , char ** argv )
 
 
 // 
-// sample-list slicer: helper to set start/stop based on n/m specification
-//
-
-bool luna_helper_sl_slicer( const std::string & f , int n , int m , int * s1 , int * s2 )
-{
-
-  // assumes 'f' is the sample-list
-  //  --> check if not an .edf
-  if ( Helper::file_extension( f , "edf" )
-       || Helper::file_extension( f , "edfz" )
-       || Helper::file_extension( f , "edf.gz" ) )
-    Helper::halt( "cannot use n/m slicing with EDF inputs" );
-  
-  std::ifstream IN1( f.c_str() , std::ios::in );
-  int cnt = 0;
-  *s1 = *s2 = 0;
-  
-  if ( IN1.bad() )
-    {
-      IN1.close();
-      return false;
-    }
-
-  int nlines = 0;
-  while ( ! IN1.eof() )
-    {      
-      std::string line;
-      Helper::safe_getline( IN1 , line );
-      if ( IN1.eof() || line == "" ) continue;
-      ++nlines;
-    }
-  IN1.close();
-
-  // nothing to do?
-  if ( nlines == 0 ) return false;
-  
-  if ( nlines < m )
-    Helper::halt( "requesting more slices ( m = "
-		  + Helper::int2str(m)+ " ) than individual entries in "
-		  + f + " ( n = " + Helper::int2str(nlines) + " )" );
-
-  // get bin size
-  int n_per_batch = nlines / m;
-  int n_extra = nlines - n_per_batch * m ;
-
-  // make bins (w/ extras) 
-  std::vector<int> nb( m , n_per_batch );
-  for (int i=0; i<n_extra; i++) nb[i]++;
-    
-  // count to get rows for this slice
-  *s1 = 1;
-  *s2 = *s1 + nb[0] - 1;
-  for (int i=1; i<n; i++)
-    {
-      *s1 += nb[i-1];
-      *s2 += nb[i] ;
-    }
-    
-  return true;
-}
-
-
-// 
 // parse the command line
 //
 
@@ -1615,7 +1552,7 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
 	    Helper::halt( "expecting integer n/m format for sample specification, n & m >= 1 and n <= m" );
 	  
 	  int s1 = 0, s2 = 0;
-	  bool okay = luna_helper_sl_slicer( cmd_t::input , n , m , &s1, &s2 );
+	  bool okay = Helper::sl_slicer( cmd_t::input , n , m , &s1, &s2 );
 	  if ( ! okay ) Helper::halt( "problem setting n/m sample slice" );
 	  globals::sample_list_min = s1;
 	  globals::sample_list_max = s2;

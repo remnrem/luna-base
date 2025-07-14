@@ -865,6 +865,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "FLIP" ) )         { fnd = true; proc_flip( edf , param(c) ); }
       if ( (!fnd) && is( c, "RAI" ) )          { fnd = true; proc_rai( edf, param(c) ); }
       if ( (!fnd) && is( c, "RECTIFY" ) )      { fnd = true; proc_rectify( edf , param(c) ); }
+      if ( (!fnd) && is( c, "CLIP" ) )         { fnd = true; proc_clip( edf, param(c) ); } 
       if ( (!fnd) && is( c, "REVERSE" ) )      { fnd = true; proc_reverse( edf , param(c) ); }
       if ( (!fnd) && is( c, "CANONICAL" ) )    { fnd = true; proc_canonical( edf , param(c) ); }
       if ( (!fnd) && is( c, "REMAP" ) )        { fnd = true; proc_remap_annots( edf , param(c) ); }
@@ -4539,6 +4540,12 @@ void proc_standardize( edf_t & edf , param_t & param )
 void proc_rai( edf_t & edf , param_t & param  )
 {
   dsptools::rai( edf, param );
+}
+
+// CLIP
+void proc_clip( edf_t & edf, param_t & param )
+{
+  dsptools::clip( edf, param );
 }
 
 // RECTIFY 
