@@ -574,7 +574,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
 	  double activity = 0 , mobility = 0 , complexity = 0;
 	  
-	  MiscMath::hjorth( d , &activity , &mobility , &complexity , true );
+	  MiscMath::hjorth( d , &activity , &mobility , &complexity , ! globals::legacy_hjorth );
 
 
 	  //
@@ -1201,7 +1201,7 @@ void  chep_mask( edf_t & edf , param_t & param )
 
 	  double activity = 0 , mobility = 0 , complexity = 0;
 		  
-	  MiscMath::hjorth( d , &activity , &mobility , &complexity , true );
+	  MiscMath::hjorth( d , &activity , &mobility , &complexity , ! globals::legacy_hjorth );
 
 	  //
 	  // Track all epoch/channel level Hjorth values for outlier detection

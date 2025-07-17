@@ -50,25 +50,44 @@ void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
   const int wn = param.has( "n" ) ? param.requires_int( "n" ) : 100;
   const double wmin = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.1;
   const int    scale = param.has( "m" ) ? param.requires_int( "m" ) : 2;
-  //  const double wmax = param.has( "max" ) ? param.requires_dbl( "max" ) : 10;
-
-  const double fmin = param.requires_dbl( "f-lwr" );
-  const double fmax = param.requires_dbl( "f-upr" );
-  const double ripple = param.has( "ripple" ) ? param.requires_dbl( "ripple" ) : 0.02;
-  const double tw = param.has( "tw" ) ? param.requires_dbl( "tw" ) : 0.5;
-
+ 
+  const bool narrowband = param.has( "f-lwr" );   
+  const double fmin = narrowband ? param.requires_dbl( "f-lwr" ) : -1 ; 
+  const double fmax = narrowband ? param.requires_dbl( "f-upr" ) : -1 ;
+  const double ripple = param.has( "ripple" ) ? param.requires_dbl( "ripple" ) : 0.01;
+  const double tw = param.has( "tw" ) ? param.requires_dbl( "tw" ) : 1;
+  const bool envelope = param.has( "envelope" ) ? param.yesno( "envelope" ) : true;
   const bool by_epoch = param.yesno( "epoch" );
+  
+  logger << "  DFA parameters\n"
+	 << "     n (points) = " << wn << "\n"
+	 << "     m (scale)  = " << scale << "\n"
+	 << "     min        = " << wmin << " Hz\n"
+	 << "     epoch      = " << ( by_epoch ? "T" : "F" ) << "\n";
+  
+  if ( narrowband )
+    logger << "  applying narrowband filter:\n"
+	   << "    f-lwr    = " << fmin << "\n"
+	   << "    f-upr    = " << fmax << "\n"
+	   << "    ripple   = " << ripple << "\n"
+	   << "    tw       = " << tw << "\n"
+	   << "    envelope = " << ( envelope ? "T" : "F" ) << "\n";
+  
   
   //
   // iterate over each signal
   //
+
+  logger << "  processing:";
   
   for (int s=0; s<ns; s++)
     {
-      logger << "  processing " << signals.label(s)
-	     << " for "
-	     << fmin << " - " << fmax << " Hz\n";
 
+      logger << " " << signals.label(s);
+
+      writer.level( signals.label(s) , globals::signal_strat );
+
+      
       //
       // start iterating over epochs
       //
@@ -83,8 +102,8 @@ void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
       const double Fs = edf.header.sampling_freq( signals(s) );       
       dfa_t dfa;
       dfa.set_windows( Fs , wmin , scale, wn );
-      dfa.filter_hilbert( fmin, fmax, ripple, tw );
-
+      dfa.filter_hilbert( fmin, fmax, ripple, tw , envelope );
+      
       //
       // track epoch level stats
       //
@@ -132,7 +151,10 @@ void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
 	  
       // next signal
     }
-  
+
+  writer.unlevel( globals::signal_strat );
+
+  logger << "\n";
 }
 
 dfa_t::dfa_t()
@@ -165,6 +187,10 @@ void dfa_t::set_windows( double sr1 , double l, int mexp , int c )
 
 void dfa_t::proc( const std::vector<double> * d )
 {
+
+  //
+  // step 0 : initialize
+  //
   
   // d - original data vector  
   
@@ -176,21 +202,26 @@ void dfa_t::proc( const std::vector<double> * d )
   
   const bool boxcar = true;
 
+  
   //
   // step 1 : absolute amplitude from Hilbert transform
   //
 
   std::vector<double> d0 = *d;
-  
+    
   if ( flwr > 0 && fupr > flwr )
     {
       // filter-Hilbert
       hilbert_t hilbert( d0 , sr , flwr , fupr , ripple , tw );      
-      d0 = *(hilbert.magnitude());
-      for (int i=0; i<d0.size(); i++) d0[i] = abs( d0[i] );
+
+      // use either the envelope 
+      if ( envelope ) 
+	d0 = *(hilbert.magnitude());
+      else // or the filtered signal
+	d0 = *(hilbert.signal());      
     }
   
-
+  
   //
   // step 2 : Fourier-based DFA on this signal
   //
@@ -201,8 +232,9 @@ void dfa_t::proc( const std::vector<double> * d )
   
   MiscMath::centre( &d0 );
 
-  // nx - size of FFT , depends on odd/even
 
+  // nx - size of FFT , depends on odd/even
+  
   //
   // FFT
   //

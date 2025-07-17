@@ -4699,6 +4699,12 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::devel = Helper::yesno( tok1 );
       return;
     }
+
+  if ( Helper::iequals( tok0 , "legacy-hjorth" ) )
+    {
+      globals::legacy_hjorth = Helper::yesno( tok1 );
+      return;
+    }
   
   if ( Helper::iequals( tok0 , "show-assignments" ) )
     {

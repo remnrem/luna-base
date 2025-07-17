@@ -141,6 +141,9 @@ void dsptools::connectivity_coupling( edf_t & edf , param_t & param )
 	}
 
 
+      // require at least 4 Hz separation between 
+      //      double a2c_frq_gap = param.has( "pac-gap" ) ? param.require_dbl( "pac-gap" ) : 0 ; 
+
       // filter parameters
             
       double ripple = param.has( "ripple" ) ? param.requires_dbl( "ripple" ) : 0.05;
@@ -318,6 +321,9 @@ void conncoupl_t::setup()
 	  }
     }
 
+  // not used for now... e.g. could set to 4Hz or so to
+  // nesure 'gaps' between P and A bands
+  const double pac_gap = 0;
   
   // within-channel, across frequency
   if ( do_pac )
@@ -339,7 +345,7 @@ void conncoupl_t::setup()
 	    for (int fi1=0;fi1<fc1.size();fi1++)
 	      for (int fi2=0;fi2<fc2.size();fi2++)
 		{
-		  if ( fc1[fi1] < fc2[fi2] )
+		  if ( fc2[fi2] - fc1[fi1] > pac_gap )
 		    {
 		      s1.push_back( si1 ); s2.push_back( si1 );
 		      f1.push_back( str( freq_range_t( fc1[fi1] , fwhm1[fi1] ) ) ); f2.push_back( str( freq_range_t( fc2[fi2] , fwhm2[fi2] ) ) ); 
@@ -361,7 +367,7 @@ void conncoupl_t::setup()
 	      for (int fi1=0;fi1<fint1.size();fi1++)
 		for (int fi2=0;fi2<fint2.size();fi2++)
 		  {
-		    if ( fint1[fi2] < fint2[fi2] )
+		    if ( fint1[fi1] < fint2[fi2] )
 		      {
 			s1.push_back( si1 ); s2.push_back( si2 );
 			f1.push_back( str( fint1[fi1] ) ); f2.push_back( str( fint2[fi2] ) ); 
@@ -372,7 +378,7 @@ void conncoupl_t::setup()
 	      for (int fi1=0;fi1<fc1.size();fi1++)
 		for (int fi2=0;fi2<fc2.size();fi2++)
 		  {
-		    if ( fc1[fi1] <  fc2[fi2] )
+		    if ( fc2[fi2] - fc1[fi1] > pac_gap )
 		      {
 			s1.push_back( si1 ); s2.push_back( si2 );
 			f1.push_back( str( freq_range_t( fc1[fi1] , fwhm1[fi1] ) ) ); f2.push_back( str( freq_range_t( fc2[fi2] , fwhm2[fi2] ) ) ); 

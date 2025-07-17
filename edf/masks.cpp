@@ -495,7 +495,7 @@ void proc_mask( edf_t & edf , param_t & param )
     {
       // convert to nearest epochs
       std::vector<std::string> tok = param.strvector( "hms" , "-" );
-      if ( tok.size() != 2 ) Helper::halt( "expecting sec=<time1>-<time2> where <time> is in hh:mm:ss format" );
+      if ( tok.size() != 2 ) Helper::halt( "expecting hms=<time1>-<time2> where <time> is in hh:mm:ss format" );
       
       clocktime_t starttime( edf.header.starttime );
       bool invalid_hms = ! starttime.valid;
@@ -505,14 +505,51 @@ void proc_mask( edf_t & edf , param_t & param )
       
       double s1 = clocktime_t::ordered_difference_seconds( starttime , t1 ) ; 
       double s2 = clocktime_t::ordered_difference_seconds( starttime , t2 ) ;
-
+      
       int epoch1, epoch2;
       if ( edf.timeline.elapsed_seconds_to_spanning_epochs( s1, s2, &epoch1, &epoch2 ) )
         edf.timeline.select_epoch_range( epoch1 , epoch2 , true );
       else
-        logger << "  bad time ranges given from MASK hms\n";
+        logger << "  bad time-range given from MASK hms\n";
       
     }
+
+
+  // day-time selectors  
+  if ( param.has( "dhms" ) ) 
+    {
+      
+      // convert to nearest epochs
+      std::vector<std::string> tok = param.strvector( "dhms" , "-" );
+      if ( tok.size() != 2 ) Helper::halt( "expecting dhms=<dtime1>-<dtime2> where <dtime> is in date-hh:mm:ss format" );
+      
+      // convert from d1, d2, etc to actual dates, of present
+      const std::string dt1 = date_t::replace_day_offset( tok[0], edf );
+      const std::string dt2 = date_t::replace_day_offset( tok[1], edf );
+      
+      // std::cout << "dt1 [" << dt1 << "]\n";
+      // std::cout << "dt2 [" << dt2 << "]\n";
+
+      clocktime_t starttime( edf.header.startdate, edf.header.starttime );
+      bool invalid_hms = ! starttime.valid;
+      if ( invalid_hms ) Helper::halt( "EDF does not have valid start-time in header" );
+      clocktime_t t1( dt1 );
+      clocktime_t t2( dt2 );
+
+      double s1 = clocktime_t::ordered_difference_seconds( starttime , t1 ) ; 
+      double s2 = clocktime_t::ordered_difference_seconds( starttime , t2 ) ;
+
+      // std::cout << "s1 = " << s1 << "\n";
+      // std::cout << "s2 = " << s2 << "\n";
+      
+      int epoch1, epoch2;
+      if ( edf.timeline.elapsed_seconds_to_spanning_epochs( s1, s2, &epoch1, &epoch2 ) )
+	edf.timeline.select_epoch_range( epoch1 , epoch2 , true );
+      else
+	logger << "  bad date/time-range given from MASK dhms\n";
+      
+    }
+
   
   
 }

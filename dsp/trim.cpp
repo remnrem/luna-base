@@ -177,9 +177,7 @@ void dsptools::trim_lights( edf_t & edf , param_t & param )
 
 	  MiscMath::centre( &v );
 
-	  const bool USE_VARIANCE_METHOD = true;
-
-	  MiscMath::hjorth( &v , &activity , &mobility , &complexity , USE_VARIANCE_METHOD );
+	  MiscMath::hjorth( &v , &activity , &mobility , &complexity , ! globals::legacy_hjorth );
 	  
 	  activity = activity > 0 ? log( activity ) : log( activity + 1e-12 );
 	  

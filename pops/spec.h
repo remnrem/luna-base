@@ -43,7 +43,8 @@ enum pops_feature_t
     POPS_SLOPE ,    // Fixed 30-45 Hz ; fixed other param
     POPS_SKEW , 
     POPS_KURTOSIS ,
-    POPS_HJORTH ,
+    POPS_HJORTH_LEGACY , // old version, used in s2 --> 'HJORTH'
+    POPS_HJORTH ,        // moving forward, 'typical' Hjorth complexity --> 'HP' 
     POPS_FD ,
     POPS_PE ,
     POPS_MEAN ,

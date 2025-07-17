@@ -145,7 +145,7 @@ bool dynam_t::linear_trend( double * beta , double * rsq , double * intercept )
     
 void dynam_t::hjorth( double * h1 , double *h2 , double *h3 )
 {  
-  MiscMath::hjorth( &y , h1 , h2 , h3 );
+  MiscMath::hjorth( &y , h1 , h2 , h3 , ! globals::legacy_hjorth );
 }
 
 

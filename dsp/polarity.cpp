@@ -540,10 +540,10 @@ void dsptools::polarity_check( const std::vector<double> & x0 , const std::vecto
       //
 
       double up_activity = 0 , up_mobility = 0 , up_complexity = 0;
-      MiscMath::hjorth( &up , &up_activity , &up_mobility , &up_complexity );
+      MiscMath::hjorth( &up , &up_activity , &up_mobility , &up_complexity , ! globals::legacy_hjorth );
       
       double down_activity = 0 , down_mobility = 0 , down_complexity = 0;
-      MiscMath::hjorth( &down , &down_activity , &down_mobility , &down_complexity );
+      MiscMath::hjorth( &down , &down_activity , &down_mobility , &down_complexity , ! globals::legacy_hjorth );
             
       
       //

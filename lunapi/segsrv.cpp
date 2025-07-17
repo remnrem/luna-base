@@ -230,7 +230,7 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
 	    {
 	      
 	      double activity = 0 , mobility = 0 , complexity = 0;
-	      MiscMath::hjorth( &edata , &activity , &mobility , &complexity );
+	      MiscMath::hjorth( &edata , &activity , &mobility , &complexity , ! globals::legacy_hjorth );
 	      H(e2,0) = log1p( activity );
 	      H(e2,1) = mobility;
 	      H(e2,2) = complexity;

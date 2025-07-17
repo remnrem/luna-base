@@ -286,7 +286,7 @@ arousals_t::arousals_t( edf_t & edf , param_t & param )
       const Eigen::MatrixXd & X = eeg.data_ref();
       for (int s=0; s<ns_eeg; s++)
 	{
-	  const bool okay = hjorth( X.col(s) , &H1(row,s), &H2(row,s), &H3(row,s) );	  
+	  const bool okay = hjorth( X.col(s) , &H1(row,s), &H2(row,s), &H3(row,s) );
 	  if ( ! okay ) bad[ row ].insert( s );
 	}      
       
@@ -640,24 +640,29 @@ arousals_t::arousals_t( edf_t & edf , param_t & param )
 bool arousals_t::hjorth( const Eigen::VectorXd & x , double * activity , double * mobility , double * complexity , const bool mean_center ) const
 {
 
-  const int n = x.size();  
-  if ( n == 0 ) return false;
+  const int n = x.size();
+  if (n < 3) return false;  // Need at least 3 points for second derivative
 
-  const Eigen::VectorXd dxV = x.tail(n-1) - x.head(n-1);
-  const Eigen::VectorXd ddxV = dxV.tail(n-2) - dxV.head(n-2);
-  
-  const double mx2 = ( mean_center ? (x.array()-x.mean()).matrix().squaredNorm() : x.squaredNorm() ) / double(n);
-  const double mdx2 = dxV.squaredNorm() / double(n-1);
-  const double mddx2 = ddxV.squaredNorm() / double(n-2);
-  
-  *activity   = mx2;
-  *mobility   = mdx2 / mx2;
-  *complexity = sqrt( mddx2 / mdx2 - *mobility );
-  *mobility   = sqrt( *mobility );
+  const Eigen::VectorXd dxV = x.tail(n - 1) - x.head(n - 1);
+  const Eigen::VectorXd ddxV = dxV.tail(n - 2) - dxV.head(n - 2);
 
-  if ( ! Helper::realnum( *activity ) ) return false;
-  if ( ! Helper::realnum( *mobility ) ) return false;
-  if ( ! Helper::realnum( *complexity ) ) return false;
+  const double eps = 1e-12;  // Small epsilon to avoid division by zero
+
+  const double mx2 = (mean_center ? (x.array() - x.mean()).matrix().squaredNorm()
+                                  : x.squaredNorm()) / double(n);
+  const double mdx2 = dxV.squaredNorm() / double(n - 1);
+  const double mddx2 = ddxV.squaredNorm() / double(n - 2);
+
+  if (mx2 < eps || mdx2 < eps) return false;  // Avoid division by zero
+
+  *activity = mx2;
+  *mobility = sqrt(mdx2 / mx2);
+  *complexity = sqrt((mddx2 * mx2) / (mdx2 * mdx2));
+
+  if (!Helper::realnum(*activity)) return false;
+  if (!Helper::realnum(*mobility)) return false;
+  if (!Helper::realnum(*complexity)) return false;
+  
   return true;
 }
 

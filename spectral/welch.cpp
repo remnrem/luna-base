@@ -92,6 +92,15 @@ annot_t * spectral_power( edf_t & edf ,
   // ratio=ALPHA/BETA,THETA/DELTA,...
   const std::string ratios = calc_ratio ? param.value( "ratio" ) : "" ;
   const int ratio_plus1 = param.has( "ratio1" );
+
+  // special EEG-slowing metric
+  //    slow / ( slow + delta )  SOF : slow oscillation fraction
+  //    delta / alpha            DAR : https://pubmed.ncbi.nlm.nih.gov/26251106/
+  //    theta / alpha            TAR : https://www.nature.com/articles/s41598-022-21951-5
+  //    theta / beta             TBR : 
+  //    (delta + theta) / (alpha + beta)    GSI (global slowing index) , e.g. https://link.springer.com/article/10.1007/s11517-020-02280-z 
+
+  const bool calc_slowing = param.has( "slowing" );
   
   // Characterize dynamics: of all epoch-level stats created, get the H1, H2, H3, linear and exponential trend
   // Hjorth stats just consider all points concatenated
@@ -685,7 +694,24 @@ annot_t * spectral_power( edf_t & edf ,
 		 }
 	     }
       
-    
+
+	   //
+	   // EEG slowing ratios per epoch
+	   //
+
+	   if ( show_epoch && calc_slowing )
+	     {
+       	       if ( bands && bandaid.total > 0 )
+		 {
+		   writer.value( "SOF" , bandaid.slow / ( ratio_plus1 + bandaid.slow + bandaid.delta ) );
+		   writer.value( "DAR" , bandaid.delta / ( ratio_plus1 + bandaid.alpha ) );
+		   writer.value( "TAR" , bandaid.theta / ( ratio_plus1 + bandaid.alpha ) );
+		   writer.value( "TBR" , bandaid.theta / ( ratio_plus1 + bandaid.beta ) );
+		   writer.value( "GSI" , ( bandaid.delta + bandaid.theta ) / ( ratio_plus1 + bandaid.alpha + bandaid.beta ) );		   
+		 }
+	     }
+	   
+	   
 	   //
 	   // track over entire spectrum (track on first encounter)
 	   //
@@ -1510,6 +1536,83 @@ annot_t * spectral_power( edf_t & edf ,
 	  
 	}
 
+
+      //
+      // EEG slowing metrics (band ratios) 
+      //
+
+      if ( bands & calc_slowing )
+	{
+
+	  // calculate both mean of epoch-ratios,
+	  // as well as ratio of means of epoch-power
+	  
+	  const std::vector<double> & p_slow  = bandaid.track_band[ SLOW ];
+	  const std::vector<double> & p_delta = bandaid.track_band[ DELTA ];
+	  const std::vector<double> & p_theta = bandaid.track_band[ THETA ];
+	  const std::vector<double> & p_alpha = bandaid.track_band[ ALPHA ];
+	  const std::vector<double> & p_beta  = bandaid.track_band[ BETA ];
+	  
+	  std::vector<double> rat1, rat2, rat3, rat4, rat5;
+
+	  double s_slow = 0 , s_delta = 0 , s_theta = 0 , s_alpha = 0 , s_beta = 0 ;
+	  double s_slowdelta = 0 , s_deltatheta = 0 , s_alphabeta = 0 ; 
+	  
+	  const int nn = p_slow.size();
+	  
+	  for (int i=0; i<nn; i++)
+	    {
+	      
+	      rat1.push_back( p_slow[i] / ( ratio_plus1 + p_slow[i] + p_delta[i] ) );
+	      rat2.push_back( p_delta[i] / ( ratio_plus1 + p_alpha[i] ) ) ;
+	      rat3.push_back( p_theta[i] / ( ratio_plus1 + p_alpha[i] ) ) ;
+	      rat4.push_back( p_theta[i] / ( ratio_plus1 + p_beta[i] ) ) ;
+	      rat5.push_back( ( p_delta[i] + p_theta[i] ) / ( ratio_plus1 + p_alpha[i] + p_beta[i] ) ) ; 
+
+	      s_slow += p_slow[i];
+	      s_delta += p_delta[i];
+	      s_theta += p_theta[i];
+	      s_alpha += p_alpha[i];
+	      s_beta += p_beta[i];
+
+	      s_slowdelta += p_slow[i] + p_delta[i];
+	      s_deltatheta += p_delta[i] + p_theta[i];
+	      s_alphabeta += p_alpha[i] + p_beta[i];
+
+	    }
+
+	  
+	  if ( nn > 0 )
+	    {
+	      const double m_rat1 = MiscMath::mean( rat1 );
+	      const double m_rat2 = MiscMath::mean( rat2 );
+	      const double m_rat3 = MiscMath::mean( rat3 );
+	      const double m_rat4 = MiscMath::mean( rat4 );
+	      const double m_rat5 = MiscMath::mean( rat5 );
+
+	      // mean of ratios
+	      writer.value( "SOF" , MiscMath::mean( rat1 ) );
+	      writer.value( "DAR" , MiscMath::mean( rat2 ) );
+	      writer.value( "TAR" , MiscMath::mean( rat3 ) );
+	      writer.value( "TBR" , MiscMath::mean( rat4 ) );
+	      writer.value( "GSI" , MiscMath::mean( rat5 ) );
+
+	      // ratio of means (except no +1 in denom option)
+	      writer.value( "SOF_T" , s_slow / ( s_slow + s_delta ) );
+	      writer.value( "DAR_T" , s_delta / s_alpha ) ;
+	      writer.value( "TAR_T" , s_theta / s_alpha ) ;
+	      writer.value( "TBR_T" , s_theta / s_beta );
+	      writer.value( "GSI_T" , ( s_slow + s_delta ) / ( s_alpha + s_beta ) ) ;
+
+	      // median of ratios
+	      writer.value( "SOF_MD" , MiscMath::median( rat1 ) );
+	      writer.value( "DAR_MD" , MiscMath::median( rat2 ) );
+	      writer.value( "TAR_MD" , MiscMath::median( rat3 ) );
+	      writer.value( "TBR_MD" , MiscMath::median( rat4 ) );
+	      writer.value( "GSI_MD" , MiscMath::median( rat5 ) );
+	      
+	    }
+	}
       
       //
       // Band-power kurtosis  (redundant now...) 

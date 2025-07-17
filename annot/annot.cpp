@@ -1689,7 +1689,7 @@ interval_t annot_t::get_interval( const std::string & line ,
   for ( int dd=3; dd<=4; dd++)
     if ( tok[dd].size() > 1 && tok[dd][0] == 'd' )
       {
-	// expect d1-hh:mm:ss etc or d1 hh:mm:ss etc
+	// expect d1-hh:mm:ss etc or d1 hh:mm:ss etc or d1/hh:mm:ss
 	// expect d2-hh:mm:ss etc
 	std::vector<std::string> dtok = Helper::parse( tok[dd] , "- " );
 	if ( dtok.size() != 2 ) Helper::halt( "bad format: " + tok[dd] );

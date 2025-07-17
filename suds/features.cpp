@@ -905,7 +905,7 @@ int suds_indiv_t::proc_build_feature_matrix( suds_helper_t * helper )
 	   if ( ! bad_epoch )
 	     {
 	       double activity = 0 , mobility = 0 , complexity = 0;
-	       MiscMath::hjorth( d , &activity , &mobility , &complexity );
+	       MiscMath::hjorth( d , &activity , &mobility , &complexity , ! globals::legacy_hjorth );
 
 	       h1( en_good , s ) = activity ;
 	       h2( en_good , s ) = mobility ;
@@ -918,7 +918,7 @@ int suds_indiv_t::proc_build_feature_matrix( suds_helper_t * helper )
 		   X( en_good , cols[1] ) = complexity;
 		 }
 	     }
-
+	   
 	   //
 	   // Next signal
 	   //

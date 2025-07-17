@@ -96,6 +96,8 @@ int globals::default_epoch_len;
 
 std::map<frequency_band_t,freq_range_t> globals::freq_band;
 
+bool globals::legacy_hjorth;
+
 std::string globals::sleep_stage_prefix;
 sleep_stage_label_t globals::sleep_stage;
 sleep_stage_label_lookup_t globals::sleep_stage_labels;
@@ -397,6 +399,12 @@ void globals::init_defs()
 
   sl_visit_edf = true;
   
+
+  //
+  // use legacy Hjorth calculation
+  //
+
+  legacy_hjorth = false;
   
   //
   // By default, read and extract all FTR; if this is a pain, can be turned off (ftr=0)

@@ -1103,6 +1103,8 @@ void pops_indiv_t::level1( edf_t & edf )
 	  
 	  const bool do_kurt = pops_t::specs.has( pops_feature_t::POPS_KURTOSIS , siglab );
 	  
+	  const bool do_hjorth_legacy = pops_t::specs.has( pops_feature_t::POPS_HJORTH_LEGACY , siglab );
+
 	  const bool do_hjorth = pops_t::specs.has( pops_feature_t::POPS_HJORTH , siglab );
 	  
 	  const bool do_pe = pops_t::specs.has( pops_feature_t::POPS_PE , siglab );
@@ -1440,6 +1442,41 @@ void pops_indiv_t::level1( edf_t & edf )
 	     }
 
 	   //
+	   // Hjorth parameters (legacy calculation of complexity):
+	   // these are always calculated for (trainer) QC, but 
+	   // they may also be added as explicit features
+	   //
+	   
+	   if ( do_hjorth_legacy && ! bad_epoch )
+	     {
+
+	       pops_spec_t spec = pops_t::specs.fcmap[ pops_feature_t::POPS_HJORTH_LEGACY ][ siglab ];
+
+	       const bool include_h1 = spec.narg( "h1" ) > 0.5 ;
+	       
+	       double activity = 0 , mobility = 0 , complexity = 0;
+
+	       // n.b. false implies legacy calculation 
+	       MiscMath::hjorth( d , &activity , &mobility , &complexity , false );
+	       
+	       // use either 2 or 3 parameters (log-scaling H1)
+	       std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_HJORTH_LEGACY , siglab ) ;
+	       
+	       if ( include_h1 ) 
+		 {
+		   X1( en , cols[0] ) = activity > 0 ? log( activity ) : log( 0.0001 ) ;
+		   X1( en , cols[1] ) = mobility;
+		   X1( en , cols[2] ) = complexity;
+		 }
+	       else
+		 {
+		   X1( en , cols[0] ) = mobility;
+                   X1( en , cols[1] ) = complexity;
+		 }	       
+	     }
+
+
+	   //
 	   // Hjorth parameters: these are always calculated for (trainer) QC, but 
 	   // they may also be added as explicit features
 	   //
@@ -1453,7 +1490,8 @@ void pops_indiv_t::level1( edf_t & edf )
 	       
 	       double activity = 0 , mobility = 0 , complexity = 0;
 
-	       MiscMath::hjorth( d , &activity , &mobility , &complexity );
+	       // n.b. true implies non-legacy calculation 
+	       MiscMath::hjorth( d , &activity , &mobility , &complexity , true );
 	       
 	       // use either 2 or 3 parameters (log-scaling H1)
 	       std::vector<int> cols = pops_t::specs.cols( pops_feature_t::POPS_HJORTH , siglab ) ;
@@ -1471,6 +1509,7 @@ void pops_indiv_t::level1( edf_t & edf )
 		 }	       
 	     }
 
+	   
 	   //
 	   // Next signal
 	   //

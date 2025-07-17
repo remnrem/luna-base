@@ -431,7 +431,8 @@ void pops_specs_t::init()
   lab2ftr[ "SLOPE" ] = POPS_SLOPE;
   lab2ftr[ "SKEW" ] = POPS_SKEW;
   lab2ftr[ "KURTOSIS" ] = POPS_KURTOSIS;
-  lab2ftr[ "HJORTH" ] = POPS_HJORTH;
+  lab2ftr[ "HJORTH" ] = POPS_HJORTH_LEGACY;
+  lab2ftr[ "HP" ] = POPS_HJORTH;
   lab2ftr[ "FD" ] = POPS_FD;
   lab2ftr[ "PE" ] = POPS_PE;
   lab2ftr[ "MEAN" ] = POPS_MEAN;
@@ -460,7 +461,8 @@ void pops_specs_t::init()
   ftr2lab[ POPS_SLOPE ] = "SLOPE";   
   ftr2lab[ POPS_SKEW ] = "SKEW";
   ftr2lab[ POPS_KURTOSIS ] = "KURTOSIS";
-  ftr2lab[ POPS_HJORTH ] = "HJORTH";
+  ftr2lab[ POPS_HJORTH_LEGACY ] = "HJORTH";
+  ftr2lab[ POPS_HJORTH ] = "HP";
   ftr2lab[ POPS_FD ] = "FD";      
   ftr2lab[ POPS_PE ] = "PE";  
   ftr2lab[ POPS_MEAN ] = "MEAN";
@@ -888,7 +890,7 @@ int pops_spec_t::cols( int * t )
   
   // 2 or 3 values per channel
   // (only include H1 is 'h1=1' option set
-  if ( ftr == POPS_HJORTH )
+  if ( ftr == POPS_HJORTH || ftr == POPS_HJORTH_LEGACY )
     {
       int n = narg( "h1" );
       size = n > 0.5 ? 3 : 2 ;
@@ -1001,7 +1003,7 @@ void pops_specs_t::init_default()
   defaults.push_back( "misc: KURTOSIS C4_M1" );
   defaults.push_back( "misc: FD C4_M1" );
   defaults.push_back( "misc: PE C4_M1" );
-  defaults.push_back( "hjorth: HJORTH C4_M1" );
+  defaults.push_back( "hjorth: HP C4_M1" );
   
   // lvl1 outlier removal
   defaults.push_back( "hjorth: OUTLIERS th=8" );

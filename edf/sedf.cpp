@@ -119,7 +119,7 @@ sedf_t::sedf_t( edf_t & edf , param_t & param )
 	  if ( hjorth ) 
 	    {
 	      double activity = 0 , mobility = 0 , complexity = 0;
-	      MiscMath::hjorth( d , &activity , &mobility , &complexity );
+	      MiscMath::hjorth( d , &activity , &mobility , &complexity , ! globals::legacy_hjorth );
 	      stats[ ch1 ].push_back( activity );
 	      stats[ ch2 ].push_back( mobility );
 	      stats[ ch3 ].push_back( complexity );

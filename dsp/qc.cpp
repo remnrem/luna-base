@@ -658,14 +658,11 @@ void dsptools::qc_t::do_eeg( signal_list_t & signals )
 	  double activity = 0 , mobility = 0 , complexity = 0;
 	  double zactivity = 0 , zmobility = 0 , zcomplexity = 0;
 
-	  // use variance-based method
-
-	  const bool USE_VARIANCE_METHOD = true;
+	  MiscMath::hjorth( &d , &activity , &mobility , &complexity , ! globals::legacy_hjorth );
 	  
-	  MiscMath::hjorth( &d , &activity , &mobility , &complexity , USE_VARIANCE_METHOD);
-	  
-          MiscMath::hjorth( &zd , &zactivity , &zmobility , &zcomplexity , USE_VARIANCE_METHOD );
+          MiscMath::hjorth( &zd , &zactivity , &zmobility , &zcomplexity , ! globals::legacy_hjorth );
 
+	  
 	  //
 	  // Time-domain skew and kurtosis 
 	  //

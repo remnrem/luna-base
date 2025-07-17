@@ -210,6 +210,7 @@ struct globals
   static int  force_digital_min;
   static int  force_digital_max;
 
+  static bool legacy_hjorth;
   
   static bool validation_mode;
 

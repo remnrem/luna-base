@@ -2099,7 +2099,7 @@ void MiscMath::hjorth2( const std::vector<double> * x , double * r , int w , int
       t = MiscMath::Z( t );
       
       double hp1, hp2, hp3;
-      hjorth( &t , &hp1, &hp2, &hp3 );
+      hjorth( &t , &hp1, &hp2, &hp3 , ! globals::legacy_hjorth );
       h1.push_back( hp1 );
       h2.push_back( hp2 );
       h3.push_back( hp3 );      
@@ -2108,9 +2108,9 @@ void MiscMath::hjorth2( const std::vector<double> * x , double * r , int w , int
 
   if ( h1.size() != nw ) Helper::halt( "internal error in hjorth2()" );
   
-  hjorth( &h1 , r   , r+1 , r+2 );
-  hjorth( &h2 , r+3 , r+4 , r+5 );
-  hjorth( &h3 , r+6 , r+7 , r+8 );
+  hjorth( &h1 , r   , r+1 , r+2 , ! globals::legacy_hjorth );
+  hjorth( &h2 , r+3 , r+4 , r+5 , ! globals::legacy_hjorth );
+  hjorth( &h3 , r+6 , r+7 , r+8 , ! globals::legacy_hjorth );
   
 }
 

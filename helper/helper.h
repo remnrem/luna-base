@@ -361,11 +361,14 @@ namespace Helper
 }
 
 
+struct edf_t;
 
 struct date_t {
   
   static bool is_valid( const std::string & dt , const date_format_t format = DMY );
 
+  static std::string replace_day_offset( const std::string & dt , const edf_t & );
+  
   date_t( const std::string & dt , const date_format_t format = DMY )
   {
 

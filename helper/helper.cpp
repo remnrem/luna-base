@@ -1122,6 +1122,38 @@ bool Helper::yesno( const std::string & s )
 }
 
 
+std::string date_t::replace_day_offset( const std::string & dt , const edf_t & edf )
+{
+  // invalid dt
+  if ( dt.size() == 0 ) return dt;
+  
+  // does not contain a start-date offset
+  if ( dt[0] != 'd' ) return dt;
+
+  // requires valid EDF start date
+  if ( ! is_valid( edf.header.startdate ) ) return dt;
+  date_t d1( edf.header.startdate );
+  
+  // otherwise: assuming dN/hh:mm:ss format only here
+  std::vector<std::string> tok = Helper::parse( dt , "/" );
+  if ( tok.size() != 2 ) return dt;
+
+  // requires a valid date
+  int dn = 0;
+  if ( ! Helper::str2int( tok[0].substr(1) , & dn ) )
+    return dt;
+
+  // swap in 
+  if ( dn < 1 || dn > 100 )
+    Helper::halt( "expecting d1, d2, ... (up to d100): " + dt );      
+
+  clocktime_t startdatetime( edf.header.startdate, edf.header.starttime );  
+  clocktime_t edate = startdatetime;
+  edate.advance_days( dn - 1 );
+  return edate.as_date_string( '/' ) + "-" + tok[1];
+
+}
+
 
 bool date_t::is_valid( const std::string & dt , const date_format_t format )
 {

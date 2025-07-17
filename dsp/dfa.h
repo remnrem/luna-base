@@ -41,17 +41,20 @@ struct dfa_t {
   void set_windows( double sr, double l = 0.1 , int m = 2 , int c = 100 ) ;
 
   void filter_hilbert( const double flwr1 , const double fupr1 ,
-		       const double ripple1 , const double tw1 )    
+		       const double ripple1 , const double tw1 ,
+		       const bool envelope1 )    
   {
     flwr = flwr1;
     fupr = fupr1;
     ripple = ripple1;
     tw = tw1;
+    envelope = envelope1;
   }
 
   void proc( const std::vector<double> * d );
 
   double sr, flwr, fupr, ripple, tw;
+  bool envelope;
   
   std::vector<double> w;
   std::vector<double> t;
