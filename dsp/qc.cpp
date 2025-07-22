@@ -836,3 +836,42 @@ void dsptools::qc_t::do_eeg( signal_list_t & signals )
   writer.unlevel( globals::signal_strat );
   
 }
+
+
+
+//
+// ECG QC
+//
+
+/*
+  a. Signal-to-Noise Ratio (SNR)
+    Estimate using power ratio:
+    SNR=10⋅log⁡10(PsignalPnoise)
+    SNR=10⋅log10​(Pnoise​Psignal​​)
+
+    Often approximated by comparing total power to high-frequency noise (>40–50 Hz) or baseline wander power (<0.5 Hz)
+
+
+  b. Flatline detection
+    Long segments of zero or nearly constant values
+    Threshold: e.g., std(signal[t:t+2s]) < 0.01 mV
+
+  c. Amplitude clipping
+    Clipped values (at ADC limit): e.g., repeated max/min values
+    May indicate hardware or digitization problems
+
+
+  a. RR interval plausibility
+    Valid range: 300–2000 ms (30–200 bpm)
+    Flag RR intervals outside this range
+  
+
+   🧪 In Practice (Example Thresholds)
+QC Metric	Good Range	Flags
+RR interval range	300–2000 ms	<300 or >2000 ms
+Flatline duration	<1 sec	>1 sec constant
+QRS width	70–120 ms	<60 or >150 ms
+Line noise power	Low (<5% total)	High (>10%)
+Power <0.5 Hz	Low	>20% total power
+
+*/

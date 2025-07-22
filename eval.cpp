@@ -998,6 +998,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "DFA" ) )          { fnd = true; proc_dfa( edf , param(c) ); }
       if ( (!fnd) && is( c, "MI" ) )           { fnd = true; proc_mi( edf, param(c) ); }
       if ( (!fnd) && is( c, "HR" ) )           { fnd = true; proc_bpm( edf , param(c) ); }
+      if ( (!fnd) && is( c, "HRV" ) )          { fnd = true; proc_hrv( edf , param(c) ); }
       if ( (!fnd) && is( c, "SUPPRESS-ECG" ) ) { fnd = true; proc_ecgsuppression( edf , param(c) ); }
       if ( (!fnd) && is( c, "PAC" ) )          { fnd = true; proc_pac( edf , param(c) ); }
       if ( (!fnd) && is( c, "CFC" ) )          { fnd = true; proc_cfc( edf , param(c) ); }
@@ -1005,6 +1006,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "PREDICT" ) )      { fnd = true; proc_predict( edf , param(c) ); }
       if ( (!fnd) && is( c, "TAG" ) )          { fnd = true; proc_tag( param(c) ); }
       if ( (!fnd) && is( c, "RESAMPLE" ) )     { fnd = true; proc_resample( edf, param(c) ); }
+      if ( (!fnd) && is( c, "FIX-SAMPLING" ) ) { fnd = true; proc_fix_sampling( edf , param(c) ); }
       if ( (!fnd) && is( c, "ZOH" ) )          { fnd = true; proc_zoh( edf, param(c) ); }
       if ( (!fnd) && is( c, "LINE-DENOISE" ) ) { fnd = true; dsptools::line_denoiser( edf, param(c) ); }
       if ( (!fnd) && is( c, "ZC" ) )           { fnd = true; dsptools::detrend( edf, param(c) ); }
@@ -2126,6 +2128,12 @@ void proc_zoh( edf_t & edf , param_t & param )
 void proc_resample( edf_t & edf , param_t & param ) 
 {
   dsptools::resample_channel( edf, param );
+}
+
+// FIX-SAMPLING : cublic spline to fix bad EDF record/SR combos
+void proc_fix_sampling( edf_t & edf , param_t & param )
+{
+  dsptools::fix_sampling( edf , param );
 }
 
 // MS: microstate analysis
@@ -3851,6 +3859,12 @@ void proc_hypoxic_burden( edf_t & edf , param_t & param )
 void proc_ecgsuppression( edf_t & edf , param_t & param )
 {
   dsptools::ecgsuppression( edf , param );
+}
+
+// HRV : heart rate variability metrics
+void proc_hrv( edf_t & edf , param_t & param )
+{
+  dsptools::hrv( edf , param );
 }
 
 // BPM : get beats per min from ECG

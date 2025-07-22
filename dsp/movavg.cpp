@@ -60,7 +60,7 @@ void dsptools::movavg( edf_t & edf , param_t & param )
       
       int hwin = hwin_sec * sr;
 
-      //      logger <<" hwin = " << hwin << " " << hwin_sec << " " << sr << "\n";
+      //      logger << " hwin = " << hwin << " " << hwin_sec << " " << sr << "\n";
 
       if ( hwin == 0 )
 	{

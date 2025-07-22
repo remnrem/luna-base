@@ -134,6 +134,7 @@ namespace MiscMath
  double variance( const std::vector<int> & x );  
  double variance( const std::vector<double> & x , double m );
  double variance( const std::vector<int> & x , double m );
+ double sdev_robust( const std::vector<double> & x );
  double sdev( const std::vector<double> & x );
  double sdev( const std::vector<double> & x , double m );
  double sum( const std::vector<double> & x );

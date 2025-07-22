@@ -365,6 +365,9 @@ struct timeline_t
   // regional mask
   void regional_mask( int x , int y );
 
+  // stable mask
+  void stable_mask( const int x , const std::vector<std::string> & labels , const bool unique ) ;
+  
   // unmask interior
   void unmask_interior();
 

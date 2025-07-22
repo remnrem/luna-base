@@ -2916,9 +2916,15 @@ void edf_t::reset_record_size( const double new_record_duration )
   int new_record_size = 0;
 
   // check that all signals can fit evenly into the new record size
+
+  // if not: we require a new SR to be specified, and we'll use cubic-spline
+  //  interpolation to make everything fit...
+
+  std::vector<bool> interpolate( header.ns , false );
+  
   for (int s=0;s<header.ns;s++)
     {
-
+      
       if ( header.is_annotation_channel(s) )
 	Helper::halt( "cannot change record size for EDF annotations: drop this signal first" );
 
@@ -2931,10 +2937,17 @@ void edf_t::reset_record_size( const double new_record_duration )
       
       int   new_nsamples1 = implied;
 
-      if ( fabs( (double)new_nsamples1 - implied ) > 0 ) 
-	Helper::halt( "signal " + header.label[s] + " has sample rate " + Helper::int2str( nsamples ) + " per record, "
-		      + "\n which cannot be represented in a record of " + Helper::dbl2str( new_record_duration ) );
-      
+      if ( fabs( (double)new_nsamples1 - implied ) > 0 )
+	{
+
+	  logger << "  implied # samples = " << implied << "\n"
+		 << "  fs = " << fs << "\n"
+		 << "  new_record_duration = " << new_record_duration << "\n"
+		 << "  nsamples (original) = " << nsamples << "\n";
+	  
+	  Helper::halt( "signal " + header.label[s] + " has sample rate " + Helper::int2str( nsamples ) + " per record, "
+			+ "\n which cannot be represented in a record of " + Helper::dbl2str( new_record_duration ) );
+	}
       new_nsamples.push_back( new_nsamples1 );
 
       // track for record size of the new EDF 
@@ -3618,7 +3631,7 @@ signal_list_t edf_header_t::signal_list( const std::string & s ,
       const int lt = tok0[t].size();
       if ( lt == 0 ) continue; // should not happen, but in case
 
-      if ( lt > 1 && tok0[t][lt-1] != '*' )
+      if ( lt > 0 && tok0[t][lt-1] != '*' )
 	tok.push_back(tok0[t]);
       else // find all matches (based on raw, unaliased) 
 	{

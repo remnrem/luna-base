@@ -1514,6 +1514,162 @@ void timeline_t::select_epoch_within_run( const std::string & label , int b )
 }
 
 
+void timeline_t::stable_mask( const int x , const std::vector<std::string> & anns , const bool unique )
+{
+
+  // if unique: can only have 1 of anns
+  //   only select epochs contain a member of 'anns' that don't have an epoch within
+  //   x epochs containing some other member of anns
+
+  // if not unique:
+  //   looking for runs of /any/ of that type
+  
+  // e.g. 2,B,C  - 
+  // AAAAABBBBBBBCCCCCCBBBBABBB
+  //      XX|||XXXX||XX
+  // i.e. requires a buffer of 2 epochs
+  //      before hitting another epoch
+  
+  std::map<std::string,annot_t*> annots;
+  for (int a=0; a<anns.size(); a++)
+    {
+      annot_t * annot = annotations->find( Helper::unquote( anns[a] ) );
+      if ( annot != NULL ) annots[ anns[a] ] = annot;
+    }
+  
+  mask_set = true;
+
+  // get epoch annots for this label:
+
+  // collapse to 'any annot' if not-unique mode
+  const int na = unique ? anns.size() : 1 ; 
+  int na_obs = 0;
+  const int ne = epochs.size();
+  
+  std::vector<bool> xany( ne , false ); // for non-unique mode
+  std::vector<std::vector<bool> > XA( na );
+  for (int a=0; a<anns.size(); a++)
+    {
+      std::vector<bool> x1( ne , false ); // none found
+      if ( annots.find( anns[a] ) != annots.end() )
+	{
+	  ++na_obs;
+	  annot_t * annot = annots[ anns[a] ] ;
+	  for (int e=0;e<ne;e++)
+	    {
+	      interval_t interval = epoch( e );
+	      annot_map_t events = annot->extract( interval );
+	      x1[e] = events.size() > 0 ;
+
+	      // track 'at least one' for non-unique mode
+	      if ( ! unique )
+		if ( x1[e] )
+		  xany[e] = true;
+	    }
+	}
+
+      // collapse if not unique mode
+      if ( unique ) 
+	XA[ a ] = x1 ;
+      
+    }
+  
+  // if not-unique mode, update XA w/ xany
+  if ( ! unique ) 
+    XA[ 0 ] = xany;
+  
+  // we should now have a ne x na matrix, where T means we see an annot
+  // now determine (given x) which 
+  std::vector<bool> X( ne , false );
+
+  for (int e=0; e<ne; e++)
+    {
+      // a) we require one and only one annot
+      int okay = 0;
+      int a1 = 0;
+
+      for (int a=0; a<na; a++)
+	{
+	  if ( XA[a][e] ) {
+	    ++okay;
+	    a1 = a;
+	  }
+	}
+
+      if ( okay == 1 ) 
+	{
+	  // now check flanking regions - require x up, x back
+	  // for which we see only a1 and no others
+	  
+	  // 0 1 2 3 4 5 6 7   ne = 8
+	  //     .     .
+	  // e.g. if x = 2
+	  // require at least x epochs before after
+	  if ( e < x  || e > ne - 1 - x ) 
+	    {
+	      okay = 0;
+	    }
+	  
+	  if ( okay != 0 )
+	    {
+	      // now check annots
+	      for (int f=1; f<=x; f++)
+		{
+		  // must still be 'A1'
+		  if ( ! ( XA[a1][e-f] && XA[a1][e+f] ) ) { okay = 0; break; }
+		  // and not anything else
+		  for (int a=0; a<na; a++)
+		    {
+		      if ( a != a1 )
+			{
+			  if ( XA[a][e-f] || XA[a][e+f] )
+			    {
+			      okay = 0;
+			      break;
+			    }
+			}
+		    }
+		}	  
+	    }
+	}
+      
+      // still okay?
+      if ( okay == 1 ) 
+	X[e] = true;
+      
+    }
+    
+  //
+  // now update masks given X[]
+  //
+  
+  int cnt_mask_set = 0;
+  int cnt_mask_unset = 0;
+  int cnt_unchanged = 0;
+  int cnt_now_unmasked = 0;
+  int cnt_any_match = 0;
+  for (int e=0;e<ne;e++)
+    {        
+      const bool set_mask = ! X[e] ;
+      if ( ! set_mask ) ++cnt_any_match;
+      int mc = set_epoch_mask( e , set_mask );
+      if ( mc == +1 ) ++cnt_mask_set;
+      else if ( mc == -1 ) ++cnt_mask_unset;
+      else ++cnt_unchanged;      
+      if ( ! mask[e] ) ++cnt_now_unmasked;      
+    }
+  
+  logger << "  " << cnt_any_match << " epochs match, based on stable/"
+	 << ( unique ? "unique" : "any" ) << " annotations (" << x
+	 << " flanking), seen " << na_obs << " of " << anns.size() << "\n";
+  logger << "  " << cnt_mask_set << " newly masked, " 
+	 << cnt_mask_unset << " unmasked, " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  
+}
+
+
 void timeline_t::clear_epoch_mask( bool b )
 {
   mask.clear();

@@ -442,6 +442,11 @@ double MiscMath::variance( const std::vector<int> & x , double m )
   return ss/(double)(n-1);
 }
 
+double MiscMath::sdev_robust( const std::vector<double> & x )
+{
+  return 0.7413 * MiscMath::iqr( x );
+}
+
 double MiscMath::sdev( const std::vector<double> & x )
 {
   return sqrt( variance(x) );
@@ -2247,7 +2252,7 @@ std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x ,
   
   // get global robust SD (to fill in , in case the window has no / little variation ) 
 
-  double global_median = MiscMath::median( x );
+  //  double global_median = MiscMath::median( x );
   double global_iqr = MiscMath::iqr( x );
   double global_robust_sd = 0.7413 * global_iqr;
   const double sd_eps = global_robust_sd * 1e-3;

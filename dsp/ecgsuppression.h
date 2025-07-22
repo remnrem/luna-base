@@ -30,34 +30,80 @@ struct interval_t;
 #include <vector>
 #include <stdint.h>
 #include <cstddef>
+#include <map>
+#include <set>
 
 struct rpeaks_t
 {
   
-  rpeaks_t( const int n )
-  {
-    R_t.resize( n );
-    R_i.resize( n );
-    R_amp.resize( n );
-    S_amp.resize( n );
-  }
-  
-  std::vector<uint64_t> R_t;
-  std::vector<uint64_t> R_i;
-  std::vector<double> R_amp;
-  std::vector<double> S_amp;
+  std::vector<uint64_t> R_t; // tp
+  std::vector<uint64_t> R_i; // matching sp-index on ECG
+
+  double npks;
+  double p_inverted;
+  bool inverted;
   
   double bpm( interval_t & , double lwr = 0 , double upr = 0 ) ;
   
   int clean( double , double );
   
   std::vector<uint64_t> beats( interval_t & ) const;
+
+  // helper for annot-stratified HRV analyses
+  static rpeaks_t intersect( const std::set<uint64_t> & pks ,
+			     const std::set<interval_t> & ints );
   
-  int strip( const std::vector<interval_t> & bad_epochs );
-
-
 };
 
+
+struct hrv_opt_t;
+
+struct hrv_res_t {
+	     	    
+  double IMPUTED; // propirtion of intervals imputed (out-of-range)
+  double P_INV;   // proportion of intervals inverted
+  double INV;     // is it inverted? Y/N
+  double NP;      // # of RR intervals
+  double NP_TOT;  // keep as total number of peaks (i.e. sum over epochs) 
+  double RR;      // mean RR interval (msec)
+  double HR;      // heart rate (BPM)
+
+  double SDNN;    // SD of normal-to-normal RR intervals
+  double SDNN_R;    // SD of normal-to-normal RR intervals
+  double RMSSD;   // RMS of successive diffs
+  double RMSSD_R;   // RMS of successive diffs
+  double pNN50;   // prop. of successive N-N intervals differing by more than 50 msec 
+
+  double LF;
+  double LF_N;
+  double LF_PK;
+  double HF;
+  double HF_N;
+  double HF_PK;
+  double LF2HF;
+  
+  static hrv_res_t summarize( const std::vector<hrv_res_t> & x );
+  
+  void write( const hrv_opt_t & , const bool reduced = false ) const;
+   
+};
+
+
+struct rr_intervals_t {
+  
+  rr_intervals_t( const rpeaks_t & ,
+		  const hrv_opt_t & );
+  
+  hrv_res_t res;
+  
+  std::vector<double> rr;
+  std::vector<double> t;
+  std::vector<uint64_t> tp;
+  std::vector<bool> imputed;
+  
+};
+
+struct rpeak_opt_t;
 
 namespace dsptools 
 {  
@@ -68,6 +114,9 @@ namespace dsptools
   // just print BPM per epoch
   void bpm( edf_t & , param_t & );
 
+  // Welch-based HRV implementation
+  void hrv( edf_t & , param_t & );
+  
   // find ECG peaks, based on:
   // http://www.robots.ox.ac.uk/~gari/CODE/ECGtools/ecgBag/rpeakdetect.m
   
@@ -77,12 +126,12 @@ namespace dsptools
 			int Fs , 
 			const std::vector<double> * eeg = NULL , 
 			bool * force = NULL );
+
+  rpeaks_t mpeakdetect2( const std::vector<double> * ecg , 
+			 const std::vector<uint64_t> * tp , 
+			 int Fs ,
+			 const rpeak_opt_t & opt );
   
-  /* int mask_ecg( edf_t & edf ,  */
-  /* 		const rpeaks_t & rpeaks ); */
-  
-  //  void suppress_ecg( edf_t & edf , 
-		     
 		  
 }
 

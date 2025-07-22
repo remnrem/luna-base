@@ -389,6 +389,7 @@ void proc_zratio( edf_t & , param_t & );
 void proc_correct( edf_t & , param_t & );
 
 void proc_resample( edf_t & , param_t & );
+void proc_fix_sampling( edf_t & , param_t & );
 void proc_zoh( edf_t & , param_t & );
 void proc_moving_average( edf_t & , param_t & );
 void proc_rolling_norm( edf_t & , param_t & );
@@ -449,6 +450,7 @@ void proc_ged( edf_t & , param_t & );
 
 void proc_ecgsuppression( edf_t & , param_t & );
 void proc_bpm( edf_t & , param_t & );
+void proc_hrv( edf_t & , param_t & );
 
 void proc_arousals( edf_t & , param_t & );
 void proc_spindles( edf_t & , param_t & );

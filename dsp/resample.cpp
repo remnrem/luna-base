@@ -56,17 +56,17 @@ std::string dsptools::converter( int m )
 
 
 std::vector<double> dsptools::resample( const std::vector<double> * d , 
-					int sr1 , int sr2 ,
+					double sr1 , double sr2 ,
 					int converter )
 {
-
+  
   int n = d->size();
   std::vector<float> f( n );
   for (int i=0;i<n;i++) f[i] = (*d)[i];
   
-  double ratio = sr2 / (double)sr1;
+  double ratio = sr2 / sr1;
   const int n2 = n * ratio;
-
+  
   std::vector<float> f2( n2 , 0 );
 
   // pad a little at end (probably not necessary)
@@ -100,7 +100,7 @@ std::vector<double> dsptools::resample( const std::vector<double> * d ,
 }
 
 
-void dsptools::resample_channel( edf_t & edf , const int s , const int nsr , const int converter )
+void dsptools::resample_channel( edf_t & edf , const int s , const double nsr , const int converter )
 {
   
   // s is in 0..ns space  (not 0..ns_all)  
@@ -111,7 +111,7 @@ void dsptools::resample_channel( edf_t & edf , const int s , const int nsr , con
   // Original sample rate 
   //
   
-  const int Fs = edf.header.sampling_freq(  s ) ;
+  const double Fs = edf.header.sampling_freq(  s ) ;
   
   // already done?
   if ( Fs == nsr ) return; 
@@ -174,7 +174,7 @@ void dsptools::resample_channel( edf_t & edf , param_t & param )
   std::vector<double> Fs = edf.header.sampling_freq( signals );
 
   // new sampling rate for all channels
-  int sr = param.requires_int( "sr" );
+  double sr = param.requires_dbl( "sr" );
 
   // only downsample?
   const bool downsample_only = param.has( "downsample" );
@@ -309,4 +309,22 @@ void dsptools::resample_channel_zoh( edf_t & edf , param_t & param )
       // next signal
     }
 }
+
+
+void dsptools::fix_sampling( edf_t & edf , param_t & param )
+{
+  // this is for cases where there is an incorrect sample rate per EDF
+  // record, e.g. as may happen with strange EDF record sizes
+
+  // e.g. one case recently encountered:
+  //   record duration = 13.79
+  //   sample per rec  = 41
+  //   implies 2.97317 Hz sample rate
+
+  // --> we want to have integer number of samples per record and
+  //     integer sampling rate
+  
+  
+}
+
 

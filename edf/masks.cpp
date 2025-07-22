@@ -460,7 +460,36 @@ void proc_mask( edf_t & edf , param_t & param )
 
       
     }
-  
+
+  if ( param.has( "stable-unique" ) )
+    {
+      std::vector<std::string> val = param.strvector( "stable-unique" );
+      if ( val.size() < 2 ) Helper::halt( "require at least stable-unique=X,A1{,A2,...}" );
+      int x = 0;
+      if ( ! Helper::str2int( val[0] , &x ) )
+	Helper::halt( "first argument of stable-unique must be a nonnegative integer" );
+      if ( x < 0 )
+	Helper::halt( "first argument of stable-unique must be a nonnegative integer" );
+
+      std::vector<std::string> anns;
+      for (int a=1; a<val.size(); a++) anns.push_back( val[a] );
+      edf.timeline.stable_mask( x , anns , true );
+    }
+
+    if ( param.has( "stable-any" ) )
+    {
+      std::vector<std::string> val = param.strvector( "stable-any" );
+      if ( val.size() < 2 ) Helper::halt( "require at least stable-any=X,A1{,A2,...}" );
+      int x = 0;
+      if ( ! Helper::str2int( val[0] , &x ) )
+	Helper::halt( "first argument of stable-any must be a nonnegative integer" );
+      if ( x < 0 )
+	Helper::halt( "first argument of stable-any must be a nonnegative integer" );
+
+      std::vector<std::string> anns;
+      for (int a=1; a<val.size(); a++) anns.push_back( val[a] );
+      edf.timeline.stable_mask( x , anns , false );
+    }
 
   if ( param.has( "flanked" ) )
     {
