@@ -22,6 +22,8 @@
    THE SOFTWARE.
 */
 
+#include <iostream>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -362,18 +364,40 @@ int bgzf_read_block(BGZF *fp)
 
 ssize_t bgzf_read(BGZF *fp, void *data, ssize_t length)
 {
+
+  // attempting a bug fix here... adding extra safety guard
+  // for edge cases
+  if (fp->block_length < fp->block_offset) {
+    fp->block_offset = fp->block_length = 0;
+  }
+  // -----
+  
   ssize_t bytes_read = 0;
+
   uint8_t *output = (uint8_t*)data;
+
   if (length <= 0) return 0;
+
   assert(fp->open_mode == 'r');
+  
   while (bytes_read < length) {
+
     int copy_length, available = fp->block_length - fp->block_offset;
+    
+    // added code
+    if (available < 0) {
+      fp->errcode |= BGZF_ERR_IO;
+      return -1;
+    }
+    // -----
+    
     uint8_t *buffer;
     if (available <= 0) {
       if (bgzf_read_block(fp) != 0) return -1;
       available = fp->block_length - fp->block_offset;
       if (available <= 0) break;
     }
+
     copy_length = length - bytes_read < available? length - bytes_read : available;
     buffer = (uint8_t*)fp->uncompressed_block;
     memcpy(output, buffer + fp->block_offset, copy_length);
@@ -381,10 +405,12 @@ ssize_t bgzf_read(BGZF *fp, void *data, ssize_t length)
     output += copy_length;
     bytes_read += copy_length;
   }
-  if (fp->block_offset == fp->block_length) {
+
+  if (fp->block_offset == fp->block_length) {  
     fp->block_address = _bgzf_tell((_bgzf_file_t)fp->fp);
     fp->block_offset = fp->block_length = 0;
   }
+  
   return bytes_read;
 }
 

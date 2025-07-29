@@ -93,7 +93,9 @@ bool edfz_t::read_record( int r, byte_t * p , const int n )
   std::map<int,int64_t>::const_iterator ii = index.find( r );
   if ( ii == index.end() ) return false;
   if ( ! seek( ii->second ) ) return false;
-  return bgzf_read( file , p , n ) == n ;
+  ssize_t ss = bgzf_read( file , p , n );
+  return ss == n ; 
+  //  return bgzf_read( file , p , n ) == n ;
 }
 
 // for header
@@ -200,7 +202,7 @@ bool edfz_t::read_index()
       
       if ( ! Helper::str2int64( tok[1] , &tp ) )
 	Helper::halt( "bad .idx:\n" + line );
-      
+
       index[ r ] = offset ;
       tindex[ r ] = tp;
       annots[ r ] = tok[2];

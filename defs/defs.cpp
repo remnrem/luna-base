@@ -50,6 +50,8 @@ cmddefs_t & globals::cmddefs()
   return *ans;
 }
 
+std::set<frequency_band_t> globals::bands;
+
 //std::string globals::annot_folder;
 std::vector<std::string> globals::annot_files;
 bool globals::allow_space_delim = false;
@@ -415,24 +417,23 @@ void globals::init_defs()
   //
   // Frequency bands req. bins as defined Manoach et al. (2014) (Table 4)
   //
+
+  // freq_band[ SLOW  ] = freq_range_t( 0.5 , 1    );
   
-  freq_band[ SLOW  ] = freq_range_t( 0.5 , 1    );
-
-  freq_band[ DELTA ] = freq_range_t( 1   , 4    );
-  freq_band[ THETA ] = freq_range_t( 4   , 8    );
-  freq_band[ ALPHA ] = freq_range_t( 8   , 12   );
-
-  freq_band[ SIGMA      ] = freq_range_t( 12  , 15   );
-
+  set_band( SLOW , 0.5 , 1 );
+  set_band( DELTA , 1 , 4 );
+  set_band( THETA , 4 , 8 );
+  set_band( ALPHA , 8 , 12 );
+  set_band( SIGMA , 12 , 15 );
+  
   // note, defs of slow/sigma do not overlapp 100% with SIGMA (on purpose)
-  freq_band[ LOW_SIGMA  ] = freq_range_t( 10 , 13 );
-  freq_band[ HIGH_SIGMA ] = freq_range_t( 13 , 15 );
+  set_band( LOW_SIGMA , 10 , 13 );
+  set_band( HIGH_SIGMA , 13 , 15 );
 
-  freq_band[ BETA  ] = freq_range_t( 15  , 30   );
-  freq_band[ GAMMA ] = freq_range_t( 30  , 50 );
-
-  freq_band[ TOTAL ] = freq_range_t( 0.5  , 50 );
-  
+  set_band( BETA , 15 , 30 );
+  set_band( GAMMA , 30 , 50 );
+  set_band( TOTAL , 0.5 , 50 );
+ 
 
   //
   // Primary sleep stage encoding 
@@ -798,6 +799,17 @@ std::string globals::band( frequency_band_t b )
     case LOW_SIGMA  : return "SLOW_SIGMA";    
     case TOTAL : return "TOTAL";
     case DENOM : return "TOTAL";      
+    case BAND1 : return "BAND1";
+    case BAND2 : return "BAND2";
+    case BAND3 : return "BAND3";
+    case BAND4 : return "BAND4";
+    case BAND5 : return "BAND5";
+    case BAND6 : return "BAND6";
+    case BAND7 : return "BAND7";
+    case BAND8 : return "BAND8";
+    case BAND9 : return "BAND9";
+    case BAND10 : return "BAND10";
+      
     default : return "UNKNOWN";
     } 
 }
@@ -814,6 +826,16 @@ frequency_band_t globals::band( const std::string & b )
   if ( b == "HIGH_SIGMA" || b == "FAST_SIGMA" ) return HIGH_SIGMA;
   if ( b == "LOW_SIGMA" || b == "SLOW_SIGMA" ) return LOW_SIGMA;
   if ( b == "TOTAL" || b == "DENOM" ) return TOTAL;
+  if ( b == "BAND1" ) return BAND1;
+  if ( b == "BAND2" ) return BAND2;
+  if ( b == "BAND3" ) return BAND3;
+  if ( b == "BAND4" ) return BAND4;
+  if ( b == "BAND5" ) return BAND5;
+  if ( b == "BAND6" ) return BAND6;
+  if ( b == "BAND7" ) return BAND7;
+  if ( b == "BAND8" ) return BAND8;
+  if ( b == "BAND9" ) return BAND9;
+  if ( b == "BAND10" ) return BAND10;  
   return UNKNOWN_BAND;
 }
 
@@ -1248,4 +1270,18 @@ std::string globals::dump_channel_map()
     }
     
     return ss.str();
+}
+
+
+void globals::set_band( frequency_band_t b , double lwr, double upr )
+{
+  freq_band[ b ] = freq_range_t( lwr , upr  );
+  bands.insert( b ) ;
+}
+
+void globals::drop_band( frequency_band_t b )
+{
+  std::set<frequency_band_t>::const_iterator bb = bands.find( b );
+  if ( bb == bands.end() ) return;
+  bands.erase( bb );
 }

@@ -65,6 +65,16 @@ enum frequency_band_t
     GAMMA,
     TOTAL, 
     DENOM,
+    BAND1, // user-defined
+    BAND2, 
+    BAND3, 
+    BAND4, 
+    BAND5, 
+    BAND6, 
+    BAND7, 
+    BAND8, 
+    BAND9,
+    BAND10,
     UNKNOWN_BAND
   };
 
@@ -471,7 +481,13 @@ struct globals
   // time-units
   static uint64_t tp_1sec;
   static uint64_t tp_1000thsec;
-  static double tp_duration;   
+  static double tp_duration;
+
+  // track frequency band use
+  static std::set<frequency_band_t> bands;
+  static void set_band( frequency_band_t , double , double );
+  static void drop_band( frequency_band_t );
+  
 };
 
 #endif

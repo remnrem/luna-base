@@ -1188,7 +1188,7 @@ bool edf_record_t::read( int r )
     {
       
       if ( ! edf->edfz->read_record( r , p , edf->record_size ) ) 
-	return Helper::vmode_halt( "corrupt .edfz or .idx" );
+	return Helper::vmode_halt( "corrupt .edfz or .idx, on record " + Helper::int2str( r ) );
     }
 
   // which signals/channels do we actually want to read?

@@ -1020,7 +1020,12 @@ struct hrv_opt_t {
   edf_t * edf;
   bool annot_stratify;
   bool inst_stratify;
-  std::vector<annot_t*> annots;  
+  std::vector<annot_t*> annots;
+
+  // for (cleaned) RR interval annots if non-NULL
+  annot_t * annot;
+  std::string chlabel;
+  
 };
 
 
@@ -1032,17 +1037,22 @@ void dsptools::hrv( edf_t & edf , param_t & param )
   //
 
   
-  const bool annotate = param.has( "add-annot" ) || param.has( "add-annot-ch" );
-  const bool annotate_ch = param.has( "add-annot-ch" );
-
+  const bool annotate_ch = param.has( "add-annot-ch" ) | param.has( "add-annot-rr-ch" ) ;
+  const bool annotate = annotate_ch || param.has( "add-annot" ) || param.has( "add-annot-ch" );
   
   std::string alabel = "Rpk";
+  std::string alabel_rr = "RRint";
+  
   if ( annotate )
     {
-      if ( annotate_ch )
+      if ( annotate_ch ) {
 	alabel = param.empty( "add-annot-ch" ) ? "Rpk" :param.value( "add-annot-ch" ) ;
-      else
+	alabel_rr = param.empty( "add-annot-rr-ch" ) ? "RRint" :param.value( "add-annot-rr-ch" ) ;
+      }
+      else { 
 	alabel = param.empty( "add-annot" ) ? "Rpk" :param.value( "add-annot" ) ;
+	alabel_rr = param.empty( "add-annot-rr" ) ? "RRint" :param.value( "add-annot-rr" ) ;
+      }
     }
 
   
@@ -1068,20 +1078,20 @@ void dsptools::hrv( edf_t & edf , param_t & param )
         
   
   //
-  // HRV analysis options
+  // HRV/RR analysis options
   //
 
   hrv_opt_t opt;
 
   opt.edf = &edf;
-
+  opt.annot = NULL;
+  
   opt.freq_domain = param.has( "freq-domain" ) ? param.yesno( "freq-domain" ) : true ;
   opt.time_domain = param.has( "time-domain" ) ? param.yesno( "time-domain" ) : true ; 
   opt.rr_lwr = param.has( "lwr" ) ? param.requires_dbl( "lwr" ) : 0.3;
   opt.rr_upr = param.has( "upr" ) ? param.requires_dbl( "upr" ) : 2;
   opt.median_filter_width = param.has( "w" ) ? param.requires_int( "w" ) : 5 ;
   opt.welch_nsamples = param.has( "ns" ) ? param.requires_int( "ns" ) : 512 ; 
-
   
   //
   // Get time-domain HRV values stratified by annot
@@ -1180,12 +1190,18 @@ void dsptools::hrv( edf_t & edf , param_t & param )
       //
 
       annot_t * r_annot = NULL;
-
-      if ( annotate_ch )
+      annot_t * rr_annot = NULL;
+      
+      if ( annotate_ch ) {
 	r_annot = edf.annotations->add( alabel + "_"  + signals.label(s) );
+	rr_annot = edf.annotations->add( alabel_rr + "_"  + signals.label(s) );
+      }
       else if ( annotate ) 
-	r_annot = edf.annotations->add( alabel );
-
+	{
+	  r_annot = edf.annotations->add( alabel );
+	  rr_annot = edf.annotations->add( alabel_rr );
+	}
+      
       //
       // Optionally, track all all rpeaks for second-round annot-stratified
       // analyses
@@ -1247,8 +1263,17 @@ void dsptools::hrv( edf_t & edf , param_t & param )
 	      
 	      for (int i=0; i<npeaks; i++)
 		r_annot->add( "." , interval_t( peaks.R_t[i] , peaks.R_t[i] ) , signals.label(s) );
+
+	      //
+	      // For RR annotations
+	      //
+	      
+	      opt.annot = rr_annot;
+	      opt.chlabel = signals.label(s) ;
+	      
 	    }
-      
+	  
+	  
 	  //
 	  // Derive and resample RR intervals
 	  //
@@ -1443,11 +1468,25 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
   //
   // Median filter 
   //
-
+  
   if ( opt.median_filter_width != 0 ) 
     rr = MiscMath::median_filter( rr , opt.median_filter_width );
   
-    
+  //
+  // Add R-R intervals as annotation?  : nb. anchored on 
+  //
+
+  if ( opt.annot != NULL )
+    {
+      for (int i=0; i<np; i++)
+	{
+	  uint64_t rr1 = ( rr[i] / 1000.0 ) * globals::tp_1sec;
+	  uint64_t tp2 = tp[i];
+	  uint64_t tp1 = tp2 > rr1 ? tp2 - rr1 : 0LLU;	  
+	  opt.annot->add( "." , interval_t( tp1, tp2 ) , opt.chlabel );
+	}	  
+    }
+  
   //
   // Time-domain stats
   //

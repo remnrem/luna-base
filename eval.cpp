@@ -5455,6 +5455,27 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       
     }
 
+
+  // midflight ... allow 10 user-defined bands, but these are not
+  // yet plugged into bandaid_t... TODO
+  if ( Helper::iequals( tok0 , "band" ) )
+    {
+      // expect band=BAND1,lwr,upr
+      std::vector<std::string> tok = Helper::parse( tok1 , ",-" );
+      if ( tok.size() != 3 ) Helper::halt( "expecting band=label,lwr,upr" );
+      std::string bstr = Helper::toupper( tok[0] );
+      double lwr, upr;
+      if ( ! Helper::str2dbl( tok[1] , &lwr ) ) Helper::halt( "lwr is not numeric" );
+      if ( ! Helper::str2dbl( tok[2] , &upr ) ) Helper::halt( "upr is not numeric" );
+      if ( lwr >= upr ) Helper::halt( "lwr >= upr" );
+      if ( lwr < 0 ) Helper::halt( "frequencies must be positive" );
+      frequency_band_t b = globals::band( bstr );
+      if ( b == UNKNOWN_BAND ) Helper::halt( "band label not recognized" );
+      globals::set_band( b , lwr , upr );
+      return;
+    }
+
+  
   // exclude individuals?
   if ( Helper::iequals( tok0 , "exclude" ) )
     {
