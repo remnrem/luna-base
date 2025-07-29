@@ -2298,7 +2298,7 @@ std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x ,
       const double signed_value = ( x[i] - avg ) / sd; 
       const double value = std::abs( signed_value );
       
-      if ( sd == 0 || value > 10000 )
+      if ( sd == 0 || value > 1e12 )
 	std::cerr << "  warning: large " << i << "  " << x[i] << " " << avg << " " << sd << " " << sd_eps << " " << global_robust_sd << "\n";
 
       // save scaled value? (for any second round of max/expanded thresholding)

@@ -870,6 +870,43 @@ void cmddefs_t::init()
   // ALTER           Reference-channel regression-based artifact correction
   // EDGER           Utility to flag likely artifactual leading/trailing intervals
   
+
+  add_cmd( "artifacts" , "EDGER" , "Trim leading/trailing artifact" );
+  add_url( "EDGER" , "artifacts/#edger" );
+
+  add_param( "EDGER" , "sig" , "C3,C4" , "Signals to use" );
+  add_param( "EDGER" , "cache" , "c1" , "Cache lights-off/on for subsequent hypnograms" );
+  add_param( "EDGER" , "only-start" , "" , "Only trim the start" );
+  add_param( "EDGER" , "only-end" , "" , "Only trim the end" );
+  add_param( "EDGER" , "allow" , "20" , "Do not allow more than 20 epochs (10 mins) 'good' data at either end (default)" );
+  add_param( "EDGER" , "req" , "10" , "By default, require equivalent of 10 epochs of bad data to be flagged" );
+  add_param( "EDGER" , "w" , "9" , "By default, smoothing window (total window, in epochs) - otherwise, 4 epochs either side (w=9)" );
+  add_param( "EDGER" , "all" , "" , "Use all epochs to norm metrics (default: sleep only)" );
+  add_param( "EDGER" , "wake" , "" , "Use only wake epochs to norm metrics (default: sleep only)" );
+  add_param( "EDGER" , "h2" , "" , "Include second Hjorth parameter (default is not to)" );
+  add_param( "EDGER" , "epoch" , "" , "Given output level information (same as verbose)" );
+  add_param( "EDGER" , "mask" , "" , "Set epoch mask based, for subsequent RE" );
+
+  add_table( "EDGER" , "" , "Individual-level summaries" );
+  add_var( "EDGER" , "" , "EOFF", "Eppch for lights off, if set (i.e. leading period trimming)" );
+  add_var( "EDGER" , "" , "LOFF", "Clock-time for lights off, if set (i.e. leading period trimming)" );
+  add_var( "EDGER" , "" , "EON" , "Epoch for lights on, if set (i.e. leading period trimming)" );
+  add_var( "EDGER" , "" , "LON" , "Clock-time for lights on, if set (i.e. leading period trimming)" );
+
+  add_table( "EDGER" , "CH" , "Individual-level summaries" );
+  add_var( "EDGER" , "CH" , "EOFF", "Eppch for lights off, if set based on this channel" );
+  add_var( "EDGER" , "CH" , "EON" , "Epoch for lights on, if set, based on this channel" );
+
+  add_table( "EDGER" , "CH,E" , "Individual-level summaries" );
+  add_var( "EDGER" , "CH,E" , "H1", "First Hjorth statisic" );
+  add_var( "EDGER" , "CH,E" , "H2", "Second Hjorth statisic (if h2 set)" );
+  add_var( "EDGER" , "CH,E" , "H3", "Third Hjorth statisic" );
+  add_var( "EDGER" , "CH,E" , "FLAG", "Indicator of whether epoch is bad (0=good/1=bad)" );
+  add_var( "EDGER" , "CH,E" , "STAT", "Smoothed flag (0/1) indicator" );
+  add_var( "EDGER" , "CH,E" , "XON", "Primary statistic to determine lights on (trailing artifact)" );
+  add_var( "EDGER" , "CH,E" , "XOFF", "Primary statistic to determine lights off ( trailing artifact)" );
+  add_var( "EDGER" , "CH,E" , "TRIM", "Indicator (0/1) for whether this epoch should be trimmed" );
+
   
   /////////////////////////////////////////////////////////////////////////////////
   //

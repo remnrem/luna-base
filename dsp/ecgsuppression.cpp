@@ -1409,8 +1409,11 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
   const int len_imputed = rr.size();
   const double prop_imputed = len_imputed / (double)(np-1);
 
-  if ( len_imputed - 1 == np )
-    Helper::halt( "no valid RR intervals found, bailing" );
+  if ( len_imputed < 10 ) 
+    {
+      logger << "  warning: epoch with <10 NN-intervals detected, skipping\n";
+      return;
+    }
   
   const double mean_rr = MiscMath::mean( rr );
   
@@ -1440,6 +1443,8 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
 	}      
     }
 
+  
+
   //
   // Median filter 
   //
@@ -1453,6 +1458,10 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
   //
 
   res.NP = res.NP_TOT = pks.npks;
+  
+  // if not enough points in this epoch
+  if ( pks.npks < 10 ) return;   
+  
   res.P_INV = pks.p_inverted;
   res.INV = pks.inverted;
   
