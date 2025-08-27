@@ -90,10 +90,19 @@ void edfz_t::writestring( const double & s , int n )
 // primary read, given an index (for record)
 bool edfz_t::read_record( int r, byte_t * p , const int n )
 {
+  std::cout << "\n\n --> entering read_record \n";
   std::map<int,int64_t>::const_iterator ii = index.find( r );
   if ( ii == index.end() ) return false;
+  
   if ( ! seek( ii->second ) ) return false;
+  
+  // tmp
+  int64_t offset = tell();
+  std::cout << " offset = " << offset << " for rec " << r << " " << ii->second << "\n";
+  // --tmp
+  
   ssize_t ss = bgzf_read( file , p , n );
+  std::cout << "done read\n";
   return ss == n ; 
   //  return bgzf_read( file , p , n ) == n ;
 }

@@ -31,7 +31,6 @@
 #include "helper/helper.h"
 #include <fstream>
 
-
 struct edfz_t { 
 
   edfz_t() 

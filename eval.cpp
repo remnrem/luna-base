@@ -2652,8 +2652,8 @@ void proc_write( edf_t & edf , param_t & param )
 {
   
   // write a .edfz and .edfz.idx
-  bool edfz = param.yesno( "edfz" );
-    
+  const bool edfz = param.yesno( "edfz" );
+  
   // add 'tag' to new EDF
   std::string filename = edf.filename;
 
@@ -4439,11 +4439,11 @@ void proc_rerecord( edf_t & edf , param_t & param )
 {
   double rs = param.requires_dbl( "dur" ); 
   
-  logger << " altering record size from " << edf.header.record_duration << " to " <<  rs << " seconds\n";
+  logger << "  altering record size from " << edf.header.record_duration << " to " <<  rs << " seconds\n";
   
   edf.reset_record_size( rs );
   
-  logger << " now WRITE'ing EDF to disk, and will set 'problem' flag to skip to next EDF\n";
+  logger << "  *** now WRITE'ing EDF to disk, and will set 'problem' flag to skip to next EDF *** \n";
   
   proc_write( edf , param );
   globals::problem = true;
