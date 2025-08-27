@@ -67,6 +67,7 @@
 #include "annot/align-annots.h"
 
 #include "edf/edf.h"
+#include "edfz/edfz2.h"
 #include "edf/canonical.h"
 #include "edf/slice.h"
 #include "edf/sedf.h"

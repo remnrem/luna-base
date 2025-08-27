@@ -51,8 +51,9 @@ edf_t::edf_t( annotation_set_t * a ) : timeline( this )
   annotations = a;
   timeline.annotations = a;
   endian = determine_endian();    
-  file = NULL;
-  edfz = NULL;
+  file = NULL;  // uncompressed
+  edfz = NULL;  // legacy indexed BGZF
+  edfz2 = NULL; // unindexed gzstream
   init();
 } 
 
@@ -77,6 +78,14 @@ void edf_t::closeout_inputs()
     }
   edfz = NULL;   
 
+  if ( edfz2 != NULL )
+    {
+      edfz2->close();
+      delete edfz2;
+    }
+  edfz2 = NULL;
+
+  
   cached_EDF_timepoints.clear();
  
 }
@@ -93,6 +102,13 @@ void edf_t::init()
       delete edfz;
     }
   edfz = NULL;
+  
+  if ( edfz2 != NULL ) 
+    {
+      edfz2->close();
+      delete edfz2;
+    }
+  edfz2 = NULL;
   
   header.init();  
 
@@ -612,13 +628,18 @@ void edf_t::terse_summary( param_t & param )
 
 
 
-std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<std::string> * inp_signals )
+std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , edfz2_t * edfz2,
+				  const std::set<std::string> * inp_signals )
 {
 
-  // must be *either* EDF or EDFZ
+  // file  --> implies uncompressed EDF
+  // edfz2 --> implies gzipped EDF (gzstream interface / always preloaded)
+  // edfz  --> implies BGZF EDF (legacy, phase out)
   
-  if ( file != NULL && edfz != NULL ) 
-    Helper::halt( "internal error in edf_header_t::read(), unclear whether EDF or EDFZ" );
+  // only one of these must be set
+  
+  if ( (int)(file != NULL) + (int)(edfz != NULL) + (int)(edfz2 != NULL ) != 1 )
+    Helper::halt( "internal error in edf_header_t::read(), unclear whether EDF or which EDFZ type" );
   
   // Fixed buffer size for header
   // Total header = 256 + ns * 256
@@ -632,12 +653,13 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   //
   // Read start of header into the buffer
   //
-
   
   size_t rdsz;
 
   if ( file ) {
     rdsz = fread( q , 1, hdrSz , file);
+  } else if ( edfz2 ) {
+    rdsz = edfz2->read( q , hdrSz );        
   } else {
     rdsz = edfz->read( q , hdrSz );
   }
@@ -775,7 +797,6 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
       reserved[2] = ' ';
       reserved[3] = ' ';
       reserved[4] = ' ';
-
     }
 
 
@@ -783,10 +804,10 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
   if ( edfplus && inp_signals != NULL )
     Helper::halt( "currently, cannot specify a subset of channels ('sig') with EDF+ (or using force-edf=T)" );
   
-  // Number and direction of records/signals
-  
-  nr                   = edf_t::get_int( &q , 8 );
+  // Number and direction of records/signals  
 
+  nr                   = edf_t::get_int( &q , 8 );
+  
   // store copy as 'original file' (i.e. if the edf_t is restructured, then
   // nr will be smaller, but we need the same nr_all for remaining file access
 
@@ -810,7 +831,7 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 
   uint64_t expected_header_size = 256 + ns_all * 256;
 
-  // notimplemented for EDFZ
+  // not implemented for EDFZ
   if ( file && expected_header_size > edf_t::get_filesize( file ) )
     {
       Helper::vmode_halt( "corrupt EDF header" );
@@ -828,6 +849,8 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 
   if ( file ) 
     rdsz = fread( p , 1, hdrSz * ns_all , file);      
+  else if ( edfz2 )
+    rdsz = edfz2->read( p , hdrSz * ns_all );
   else
     rdsz = edfz->read( p , hdrSz * ns_all );
 
@@ -1058,8 +1081,9 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , const std::set<s
 	  double sr = x / record_duration;
 	  if ( fabs( trunc(sr) - sr ) > 1e-8 )
 	    {
-	      logger << "  *** warning, signal " << s << " ( " << tlabels[s]
-		     << " ) has a non-integer SR - advise to RESAMPLE\n"
+	      logger << "  *** warning, signal " << s << " ( " << tlabels[s] << " ) has a non-integer SR\n"
+		     << "  *** may wish to use RECORD-SIZE if this is due to a fractional EDF record size\n"
+		     << "  *** (it will resample signals to fit in a new regular, e.g. dur=1, record size)\n"
 		     << "    - record size        = " << record_duration << " seconds\n"
 		     << "    - samples per record = " << x << "\n"
 		     << "    - implied SR         = " << x << " / " << record_duration << " = " << sr << "\n";
@@ -1164,6 +1188,10 @@ bool edf_record_t::read( int r )
   
   // skip if already loaded?
   if ( edf->loaded( r ) ) return false;
+
+  // as we force preloads, we should never reach here if in unindexed EDFZ mode
+  // i.e. as that was preloaded
+  if ( edf->edfz2 != NULL ) Helper::halt( "internal error: EDFZ should have preloaded" );
   
   // allocate space in the buffer for a single record, and read from file
   
@@ -1184,9 +1212,8 @@ bool edf_record_t::read( int r )
       // and read it
       size_t rdsz = fread( p , 1, edf->record_size , edf->file );
     }
-  else // EDFZ
+  else // EDFZ (BGZF legacy only)
     {
-      
       if ( ! edf->edfz->read_record( r , p , edf->record_size ) ) 
 	return Helper::vmode_halt( "corrupt .edfz or .idx, on record " + Helper::int2str( r ) );
     }
@@ -1638,16 +1665,23 @@ bool edf_t::attach( const std::string & f ,
   id = i; 
 
   //
-  // EDF or EDFZ?
+  // EDF or EDFZ or EDFZ2 (un-indexed)?
   //
   
   file = NULL; 
-
+  
   edfz = NULL;
-
+  
+  edfz2 = NULL;
+  
   bool edfz_mode = Helper::file_extension( filename , "edfz" )
     || Helper::file_extension( filename , "edf.gz" ); 
-
+  
+  // keep old code, but force a pre-read all for EDFZ now, given inefficiencies
+  // and quirks w/ legacy BGZF
+  
+  const bool edfz2_mode = true;
+  
   //
   // Attach the file
   //
@@ -1663,16 +1697,31 @@ bool edf_t::attach( const std::string & f ,
   else
     {
 
-      edfz = new edfz_t;
-      
-      // this also looks for the .idx, which sets the record size
-      if ( ! edfz->open_for_reading( filename ) ) 
+      if ( edfz2_mode )
 	{
-	  delete edfz;
-	  edfz = NULL;
-	  return Helper::vmode_halt( "could not open specified EDFZ (for .idx file): " + filename );
+	  
+	  edfz2 = new edfz2_t;
+	  
+	  if ( ! edfz2->open_for_reading( filename ) )
+	    {
+	      delete edfz2;
+	      edfz2 = NULL;
+	      return Helper::vmode_halt( "could not open specified EDFZ: " + filename );	  
+	    }
 	}
-      
+      else // legacy
+	{
+	  
+	  edfz = new edfz_t;
+	  
+	  // this also looks for the .idx, which sets the record size
+	  if ( ! edfz->open_for_reading( filename ) ) 
+	    {
+	      delete edfz;
+	      edfz = NULL;
+	      return Helper::vmode_halt( "could not open specified EDFZ (or .idx file): " + filename );
+	    }
+	}
     }
 
   
@@ -1702,7 +1751,7 @@ bool edf_t::attach( const std::string & f ,
   // signal codes store so we know how to read records
   //
 
-  inp_signals_n = header.read( file , edfz , inp_signals );
+  inp_signals_n = header.read( file , edfz , edfz2, inp_signals );
 
 
   //
@@ -1772,13 +1821,15 @@ bool edf_t::attach( const std::string & f ,
   for (int s=0;s<header.ns_all;s++)
     record_size += 2 * header.n_samples_all[s] ; // 2 bytes each
 
+  // for legacy EDFZ(BGZF), we keep EDF record duration separate
   
-  if ( edfz ) 
+  if ( edfz && ! edfz2_mode ) 
     {
       if ( record_size != edfz->record_size )
 	{
 	  logger << "  EDFZ idx record size = " << edfz->record_size << "\n"
 		 << "  EDF record size = " << record_size << "\n";
+
 	  return Helper::vmode_halt( "internal error, different record size in EDFZ header versus index" );
 	}
     }
@@ -1800,8 +1851,9 @@ bool edf_t::attach( const std::string & f ,
 	  std::stringstream msg;
 
 	  if ( globals::validation_mode )
-	    return Helper::vmode_halt( "corrupt EDF: expecting " + Helper::int2str(implied) 
-				       + " but observed " + Helper::int2str( fileSize) + " bytes: " + filename  );
+	    return Helper::vmode_halt( "corrupt EDF: expecting " + Helper::int2str( implied ) 
+				       + " but observed " + Helper::int2str( fileSize )
+				       + " bytes: " + filename  );
 
 	  // else give more verbose output (and a chance to fix) 
 
@@ -1853,12 +1905,16 @@ bool edf_t::attach( const std::string & f ,
 
   //
   // pre-load?  this will also read EDF+D timestamps (and so init_timeline() will 
-  // use cached record timestamps when calling timepoint_from_EDF() 
+  // use cached record timestamps when calling timepoint_from_EDF() ;
+  // for new unindexed-EDFZ, always force a preload 
   //
   
-  if ( globals::edf_stream_read ) 
+  if ( ( edfz_mode && edfz2_mode ) || globals::edf_stream_read ) 
     {
-      if ( edfz ) Helper::halt( "cannot preload EDFZ files currently" );
+      // cannot stream BGZF-EDFZ
+      if ( edfz && ! edfz2_mode ) Helper::halt( "cannot preload EDFZ files currently" );
+
+      // EDF or unindexed-EDFZ
       stream_read();
     }
   
@@ -2136,11 +2192,18 @@ bool edf_header_t::write( FILE * file , const std::vector<int> & ch2slot )
   return true;
 }
 
-
-
 bool edf_header_t::write( edfz_t * edfz , const std::vector<int> & ch2slot )
 {
+  Helper::halt( "not supported, BGZF writing" );
+  return false;
+}
 
+bool edf_header_t::write( edfz2_t * edfz , const std::vector<int> & ch2slot )
+{
+  
+  // note: cheat, uses old BGZF code below - so keep 'edfz' but really this
+  // will point to a edfz2_t object...
+  
   // new number of channels (might be less than original)
 
   const int ns2 = ch2slot.size();
@@ -2289,6 +2352,57 @@ bool edf_record_t::write( edfz_t * edfz , const std::vector<int> & ch2slot )
 	    }
 	  
 	  edfz->write( (byte_t*)&(d)[0] , 2 * nsamples ); 
+	  
+	}
+    
+    }
+
+  return true;
+}
+
+bool edf_record_t::write( edfz2_t * edfz2 , const std::vector<int> & ch2slot )
+{
+  
+  const int ns2 = ch2slot.size();
+  
+  for (int s2=0; s2 < ns2; s2++)
+    {
+      
+      const int s = ch2slot[s2];
+
+      const int nsamples = edf->header.n_samples[s];
+
+      //
+      // Normal data channel
+      //
+
+      if ( edf->header.is_data_channel(s) )
+	{  
+	  std::vector<char> d( 2 * nsamples );
+	  
+	  for (int j=0;j<nsamples;j++)
+	    dec2tc( data[s][j] , &(d)[2*j], &(d)[2*j+1] );	  
+
+	  edfz2->write( (byte_t*)&(d)[0] , 2 * nsamples );
+	  
+	}
+      
+      //
+      // EDF Annotations channel
+      //
+      
+      if ( edf->header.is_annotation_channel(s) )
+	{      	  	  
+
+	  std::vector<char> d( 2 * nsamples );
+
+	  for (int j=0;j< 2*nsamples;j++)
+	    {	  	      
+	      char a = j >= data[s].size() ? '\x00' : data[s][j];	      
+	      d[j] = a;
+	    }
+	  
+	  edfz2->write( (byte_t*)&(d)[0] , 2 * nsamples ); 
 	  
 	}
     
@@ -2538,9 +2652,9 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
   else 
     {
 
-      edfz_t edfz;
+      edfz2_t edfz2;
 
-      if ( ! edfz.open_for_writing( filename ) )
+      if ( ! edfz2.open_for_writing( filename ) )
 	{
 	  logger << " ** could not open " << filename << " for writing **\n";
 	  return false;
@@ -2549,8 +2663,8 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
       
       if ( make_EDFC ) set_continuous();
 
-      // write header (as EDFZ)
-      header.write( &edfz , ch2slot );
+      // write header (as non-indexed EDFZ)
+      header.write( &edfz2 , ch2slot );
 
       if ( make_EDFC ) set_discontinuous();
 
@@ -2567,25 +2681,29 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
 	      records.insert( std::map<int,edf_record_t>::value_type( r , record ) );	      
 	    }
 	  
-	  
-	  // set index :
-	  // record -> offset into EDFZ and time-point	  
-	  //        -> string representation of EDF Annots
 
-	  // offset into file
-	  int64_t offset = edfz.tell();	  
-
-	  // time-point offset
-	  uint64_t tp = timeline.timepoint( r );
-	
-	  // any annots
-	  const std::string edf_annot_str = edf_annots[ r ] == "" ? "." : edf_annots[ r ] ;
-	  
-	  // write to the index
-	  edfz.add_index( r , offset , timeline.timepoint( r ) , edf_annot_str  );
+	  // legacy stuff, only needed for BGZF
+	  if ( 0 )
+	    {
+	      // set index :
+	      // record -> offset into EDFZ and time-point	  
+	      //        -> string representation of EDF Annots
+	      
+	      // offset into file
+	      //int64_t offset = edfz.tell();	  
+	      
+	      // time-point offset
+	      //uint64_t tp = timeline.timepoint( r );
+	      
+	      // any annots
+	      //const std::string edf_annot_str = edf_annots[ r ] == "" ? "." : edf_annots[ r ] ;
+	      
+	      // write to the index
+	      //edfz.add_index( r , offset , timeline.timepoint( r ) , edf_annot_str  );
+	    }
 	  
 	  // now write to the .edfz
-	  records.find(r)->second.write( &edfz , ch2slot );
+	  records.find(r)->second.write( &edfz2 , ch2slot );
 	  
 	  // next record
 	  r = timeline.next_record(r);
@@ -2593,36 +2711,40 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
       
 
       //
-      // Write .idx
+      // Write .idx (legacy)
       //
-      
-      logger << "  writing EDFZ index to " << filename << ".idx\n";
-      
-      // update record_size (e.g. if channels dropped)
-      // at this point, we will have read all information in from
-      // the existing 
 
-      int new_record_size = 0;
-
-      // old
-      // for (int s=0;s<header.ns;s++)
-      // 	new_record_size += 2 * header.n_samples[s] ; // 2 bytes each                                                       
-      
-      // now allowing for dropped channels
-      for (int s2=0; s2<ns2; s2++)
+      if ( 0 )
 	{
-	  const int s = ch2slot[s2];
-	  new_record_size += 2 * header.n_samples[s] ; // 2 bytes each                                                       
+
+	  //logger << "  writing EDFZ index to " << filename << ".idx\n";
+	  
+	  // update record_size (e.g. if channels dropped)
+	  // at this point, we will have read all information in from
+	  // the existing 
+	  
+	  // int new_record_size = 0;
+	  
+	  // old
+	  // for (int s=0;s<header.ns;s++)
+	  // 	new_record_size += 2 * header.n_samples[s] ; // 2 bytes each                                                       
+	  
+	  // now allowing for dropped channels
+	  //for (int s2=0; s2<ns2; s2++)
+	  //{
+	  //const int s = ch2slot[s2];
+	  //new_record_size += 2 * header.n_samples[s] ; // 2 bytes each                                                       
+	  //}	  
+	  //edfz.write_index( new_record_size );
+
 	}
       
-      edfz.write_index( new_record_size );
-
       
       //
       // All done
       //
 
-      edfz.close();
+      edfz2.close();
 
 
     }
@@ -2901,7 +3023,9 @@ void edf_t::reset_record_size( const double new_record_duration )
   // this changes the in-memory representation;
   // naturally, new data cannot easily be loaded from disk, so 
   // this command should always write a new EDF and then quit
-  
+
+  // if needed, resamples signals to fit in new record size w/ integer number of samples
+
   // original record size (seconds) , and derived value in tp
   // double record_duration;
   // uint64_t record_duration_tp;
@@ -2917,10 +3041,10 @@ void edf_t::reset_record_size( const double new_record_duration )
 
   // check that all signals can fit evenly into the new record size
 
-  // if not: we require a new SR to be specified, and we'll use cubic-spline
-  //  interpolation to make everything fit...
+  // if not: we'll resample as needed to achieve an integer number of samples
+  // per record
 
-  std::vector<bool> interpolate( header.ns , false );
+  std::map<int,int> sig2resamples_per_record;
   
   for (int s=0;s<header.ns;s++)
     {
@@ -2932,89 +3056,142 @@ void edf_t::reset_record_size( const double new_record_duration )
       double fs = (double)nsamples / header.record_duration;
       
       // does new record size contain an integer number of sample points?
-
+      
       double implied = new_record_duration * fs;
       
-      int   new_nsamples1 = implied;
-
+      //int   new_nsamples1 = implied;
+      int   new_nsamples1 = static_cast<int>(std::round( implied ));
+      
       if ( fabs( (double)new_nsamples1 - implied ) > 0 )
 	{
-
-	  logger << "  implied # samples = " << implied << "\n"
-		 << "  fs = " << fs << "\n"
-		 << "  new_record_duration = " << new_record_duration << "\n"
-		 << "  nsamples (original) = " << nsamples << "\n";
 	  
-	  Helper::halt( "signal " + header.label[s] + " has sample rate " + Helper::int2str( nsamples ) + " per record, "
-			+ "\n which cannot be represented in a record of " + Helper::dbl2str( new_record_duration ) );
+	  sig2resamples_per_record[ s ] = new_nsamples1 ;
+	  
+	  logger << "  resampling " << header.label[s] << " from " << fs << " Hz to "
+		 << new_nsamples1 / new_record_duration << " Hz"
+		 << " (to keep an integer number of samples per record)\n";
+	  
+	  // logger << "  implied # samples = " << implied << "\n"
+	  // 	 << "  fs = " << fs << "\n"
+	  // 	 << "  new_record_duration = " << new_record_duration << "\n"
+	  // 	 << "  nsamples (original) = " << nsamples << "\n";
+	  
+	  // Helper::halt( "signal " + header.label[s] + " has sample rate " + Helper::int2str( nsamples ) + " per record, "
+	  // 		+ "\n which cannot be represented in a record of " + Helper::dbl2str( new_record_duration ) );
 	}
-      new_nsamples.push_back( new_nsamples1 );
 
+      // track new implied SR
+      new_nsamples.push_back( new_nsamples1 );
+      
       // track for record size of the new EDF 
       new_record_size += 2 * new_nsamples1 ; 
       
     }
   
-  // buffer for new records
-  edf_record_t new_record( this );
-
-  std::map<int,edf_record_t> new_records;
   
-  // manually change size of the new buffer record
+  // buffer for new records : allocates space for samples (based on on rec dur)...
+  edf_record_t new_record( this );
+  
+  // ...so manually change size of the new buffer record
   for (int s = 0 ; s < header.ns ; s++)
     new_record.data[s].resize( new_nsamples[s] , 0 );
-    
 
   // get implied number of new records (truncate if this goes over)
   int new_nr = floor( header.nr * header.record_duration ) / (double) new_record_duration ;
 
+  // build up collection of these new records
+  std::map<int,edf_record_t> new_records;
+    
   for (int r=0;r<new_nr;r++) 
     new_records.insert( std::map<int,edf_record_t>::value_type( r , new_record ) );
-  
-  // process one signal at a time
-  std::vector<int> new_rec_cnt( header.ns , 0 );
-  std::vector<int> new_smp_cnt( header.ns , 0 );
+
+
+  // ensure all data are loaded
   
   int r = timeline.first_record();
   while ( r != -1 ) 
     {
-  
       ensure_loaded( r );
-
-      edf_record_t & record = records.find(r)->second;
-
-      for (int s = 0 ; s < header.ns ; s++ )
-	{
-
-	  const int n = header.n_samples[s];
-
-	  for (int i = 0 ; i < n ; i++ )
-	    {
-	      
-	      if ( new_smp_cnt[s] == new_nsamples[s] )
-		{
-		  ++new_rec_cnt[s];
-		  new_smp_cnt[s] = 0;
-		}
-	      
-	      if ( new_rec_cnt[s] < new_nr )
-		{
-		  std::map<int,edf_record_t>::iterator rr = new_records.find( new_rec_cnt[s] );
-		  if ( rr == new_records.end() ) Helper::halt( "internal error" );
-		  edf_record_t & new_record = rr->second;
-		  new_record.data[ s ][ new_smp_cnt[ s ] ] = record.data[ s ][ i ];		  
-		  ++new_smp_cnt[ s ];
-		}
-
-	    } // next sample point
-	  
-	} // next signal
-
       r = timeline.next_record(r);
+    }
 
-    } // next record
+  // now iterate over signals
+  for (int s = 0 ; s < header.ns ; s++ )
+    {
+      // samples per record (orig)
+      const int n = header.n_samples[s];
+
+      const int n1 = new_nsamples[s];
+	
+      // get original signal
+      std::vector<double> xx;
+      
+      int r = timeline.first_record();
+      while ( r != -1 )
+	{
+	  edf_record_t & record = records.find(r)->second;
+	  
+	  for (int i = 0 ; i < n ; i++ )
+	    xx.push_back( record.data[ s ][ i ] );
+	  
+	  r = timeline.next_record(r);	  
+	}
+
+      // resample?
+      const bool do_resampling = sig2resamples_per_record.find( s ) != sig2resamples_per_record.end();    
+
+      if ( do_resampling )
+	{
+	  // original sampling rate
+	  const double sr = n / header.record_duration ;
+	  	  
+	  // implies new SR sr1
+	  const double sr1 = n1 / new_record_duration ;
+	  
+	  //logger << "  resampling " << sr << " --> " << sr1 << "\n";
+	  
+	  const int nt = n * header.nr;
+
+	  if ( xx.size() != n * header.nr ) Helper::halt( "internal error: xx.size() != n * header.nr" );
+
+	  xx = dsptools::resample( &xx, sr, sr1 );
+	  
+	  //std::cout << " xx.size() " << xx.size() <<" " << n1 * new_nr << " " << ( n1 * new_nr ) - (int)xx.size() << "\n";
+	  
+	}
+      
+      // ensure we match the new structure
+      xx.resize( n1 * new_nr , 0 );
+      
+      // load up into new record structure
+
+      int new_rec_cnt = 0;
+      int new_smp_cnt = 0;
+      
+      for (int i = 0 ; i < xx.size() ; i++ )
+	{
+	  
+	  // start a new record?
+	  if ( new_smp_cnt == new_nsamples[s] )
+	    {
+	      ++new_rec_cnt;
+	      new_smp_cnt = 0;
+	    }
+	  
+	  if ( new_rec_cnt < new_nr )
+	    {
+	      std::map<int,edf_record_t>::iterator rr = new_records.find( new_rec_cnt );
+	      if ( rr == new_records.end() ) Helper::halt( "internal error" );
+	      edf_record_t & new_record = rr->second;
+	      new_record.data[ s ][ new_smp_cnt ] = xx[ i ];
+	      ++new_smp_cnt;
+	    }
+	  
+	} // next sample point
+      
+    } // next signal
+
   
-
   //
   // copy over
   //
@@ -3030,11 +3207,11 @@ void edf_t::reset_record_size( const double new_record_duration )
   header.n_samples = new_nsamples;
   header.record_duration = new_record_duration;
   header.record_duration_tp = header.record_duration * globals::tp_1sec;
-
+  
   // also, update edf.record_size : we won't be reading anything else from the original 
   // EDF, but if we are writing an EDFZ, then edf_t needs the /new/ record size for the
   // index
-
+  
   record_size = new_record_size ; 
 
   // make a new timeline & re-epoch
@@ -6150,12 +6327,15 @@ bool edf_t::stream_read()
       // point to the start of the buffer
       p = p0;
       
-      // read record into buffer
-      size_t rdsz = fread( p , 1, record_size , file );
-      
+      // read record into buffer (either from unindexed EDFZ or EDF)     
+      size_t rdsz = edfz2 != NULL ?
+	edfz2->read( p , record_size ) :
+	fread( p , 1, record_size , file ) ;
+      	      
       //std::cout << " read " << r << " / " << header.nr_all << " --> " << rdsz << "\n";
       
-      if ( rdsz != record_size ) Helper::halt( "problem preload EDF - truncated file" );
+      if ( rdsz != record_size ) Helper::halt( "problem preloading EDF - truncated file\n"
+					       "for details, gunzip and then reload w/out preload=T" );
       
       // which signals/channels do we actually want to read?
       // header : 0..(ns-1)

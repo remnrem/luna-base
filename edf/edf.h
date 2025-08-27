@@ -27,6 +27,7 @@
 #include "clocs/clocs.h"
 #include "tal.h"
 #include "edfz/edfz.h"
+#include "edfz/edfz2.h"
 #include "edf/signal-list.h"
 
 #include <iostream>
@@ -185,12 +186,14 @@ struct edf_header_t
 
   std::string summary() const;
 
-  std::set<int> read( FILE * file, edfz_t * edfz , const std::set<std::string> * inp_signals );
-
+  std::set<int> read( FILE * file, edfz_t * edfz , edfz2_t * edfz2 , const std::set<std::string> * inp_signals );
+  
   bool write( FILE * file , const std::vector<int> & ch2slot );
   
   bool write( edfz_t * edfz , const std::vector<int> & ch2slot );
-
+  
+  bool write( edfz2_t * edfz2 , const std::vector<int> & ch2slot );
+  
   int  signal( const std::string & s , bool silent = false );
 
   bool  has_signal( const std::string & s );
@@ -272,9 +275,10 @@ struct edf_record_t
 
   // for writing, split out into two separate functions (no particular reason for the differences...)
   bool write( FILE * file , const std::vector<int> & ch2slot );
-
+  
   bool write( edfz_t * , const std::vector<int> & ch2slot );
 
+  bool write( edfz2_t * , const std::vector<int> & ch2slot );
   
   void add_data( const std::vector<int16_t> & );
   
@@ -355,13 +359,16 @@ public:
   int                        record_size;   // bytes per record (for ns_all signals)
   int                        header_size;   // bytes for entire header
 
+  
   //
   // EDF+ Annotations store (populate on reading, but only used
   // for WRITE edfz , i.e. to store these in the index)
   //
 
   std::map<int,std::string> edf_annots;
+
   bool has_edf_annots;
+
   
   //
   // Primary timeline for masking, annotations, etc
@@ -372,8 +379,9 @@ public:
   annotation_set_t * annotations;
   
   uint64_t timepoint_from_EDF( int r );
-
+  
   std::map<int,uint64_t> cached_EDF_timepoints;
+
   
   //
   // Stream read
@@ -398,15 +406,23 @@ public:
     return edfz;
   }
 
+  
+  edfz2_t * edfz2_ptr() const
+  {
+    return edfz2;
+  }
+
+  
   //
   // Annotations
   //
-
-/*   std::map<std::string,std::string> alist; // map annoations -> annotation files (but do not load) */
-/*   std::map<std::string,std::string> flist; // annotation files -> annoation name  */
-
+  
+  /*   std::map<std::string,std::string> alist; // map annoations -> annotation files (but do not load) */
+  /*   std::map<std::string,std::string> flist; // annotation files -> annoation name  */
+  
   std::map<std::string,int> aoccur;        // map annoations -> # of occurences
 
+  
   //
   // Data access
   //
@@ -489,7 +505,8 @@ public:
   void head_matrix_dumper( param_t & param );
 
   // redundant
-  void reference_and_scale( const int s , const int r , double rescale = 1 ); // perform single channel referencing
+  // perform single channel referencing
+  void reference_and_scale( const int s , const int r , double rescale = 1 ); 
 
   void pairwise_reference( const signal_list_t & signals ,
 			   const signal_list_t & refs ,
@@ -530,13 +547,13 @@ public:
   void set_id( const std::string & s ) { id=s; } 
 
 
-
   //
   // Basic stats
   //
 
   void covar( const std::string & s1, const std::string & s2 );
-	      
+
+  
   //
   // Header reporting 
   //
@@ -555,6 +572,7 @@ public:
   void rescale( const int s , const std::string & sc , const bool quietly = false );
 
   void set_scale( const int s , double * min , double * max , double * clip_min , double * clip_max );
+
   
 private:
   
@@ -566,12 +584,18 @@ private:
 
 
   //
-  // Alternate buffer for EDFZ
+  // Alternate buffer for EDFZ (BGZF)
+  //
+  
+  edfz_t * edfz;
+
+
+  //
+  // Alternate (nonindexed) wrapper for EDFZ (gzstream)
   //
 
-  edfz_t * edfz;
+  edfz2_t * edfz2;
   
-
   
   //
   // Endianness

@@ -334,8 +334,13 @@ int bgzf_read_block(BGZF *fp)
   int64_t block_address;
   block_address = _bgzf_tell((_bgzf_file_t)fp->fp);
   if (load_block_from_cache(fp, block_address)) return 0;
+
+  std::cout << "bgzf_read_block " << block_address << "\n";
+  
   count = _bgzf_read((_bgzf_file_t)fp->fp, header, sizeof(header));
+
   if (count == 0) { // no data read
+    std::cout << " bgzf_read_block : count = 0, *** no data **** \n";
     fp->block_length = 0;
     return 0;
   }
@@ -358,6 +363,7 @@ int bgzf_read_block(BGZF *fp)
   if (fp->block_length != 0) fp->block_offset = 0; // Do not reset offset if this read follows a seek.
   fp->block_address = block_address;
   fp->block_length = count;
+  std::cout << " bgzf_read_block: set  fp->block_length = " << fp->block_length << "\n";
   cache_block(fp, size);
   return 0;
 }
@@ -367,9 +373,10 @@ ssize_t bgzf_read(BGZF *fp, void *data, ssize_t length)
 
   // attempting a bug fix here... adding extra safety guard
   // for edge cases
-  if (fp->block_length < fp->block_offset) {
-    fp->block_offset = fp->block_length = 0;
-  }
+  // if (fp->block_length < fp->block_offset) {
+  //   std::cout << " hmmmm\n";
+  //   fp->block_offset = fp->block_length = 0;
+  // }
   // -----
   
   ssize_t bytes_read = 0;
@@ -377,28 +384,35 @@ ssize_t bgzf_read(BGZF *fp, void *data, ssize_t length)
   uint8_t *output = (uint8_t*)data;
 
   if (length <= 0) return 0;
-
-  assert(fp->open_mode == 'r');
   
+  assert(fp->open_mode == 'r');
+  std::cout << "\n\n----\nin read()\n";
   while (bytes_read < length) {
 
+    std::cout << " while " << bytes_read << " < " << length << "\n";
     int copy_length, available = fp->block_length - fp->block_offset;
-    
+
+    std::cout << " avail = " << available << " " << fp->block_length << " " << fp->block_offset << "\n";
+
     // added code
-    if (available < 0) {
-      fp->errcode |= BGZF_ERR_IO;
-      return -1;
-    }
+    // if (available < 0) {
+    //   fp->errcode |= BGZF_ERR_IO;
+    //   return -1;
+    // }
     // -----
-    
+  
     uint8_t *buffer;
     if (available <= 0) {
+      std::cout << " none available, so making a read_block() \n";
       if (bgzf_read_block(fp) != 0) return -1;
       available = fp->block_length - fp->block_offset;
+      std::cout << " ---> avail = " <<	available << " " << fp->block_length <<	" " << fp->block_offset	<< "\n";
+
       if (available <= 0) break;
     }
-
+    
     copy_length = length - bytes_read < available? length - bytes_read : available;
+    std::cout << " now want to read " << copy_length << "\n";
     buffer = (uint8_t*)fp->uncompressed_block;
     memcpy(output, buffer + fp->block_offset, copy_length);
     fp->block_offset += copy_length;
@@ -406,11 +420,14 @@ ssize_t bgzf_read(BGZF *fp, void *data, ssize_t length)
     bytes_read += copy_length;
   }
 
-  if (fp->block_offset == fp->block_length) {  
+  if (fp->block_offset == fp->block_length) {
+    std::cout << " end of block\n";
     fp->block_address = _bgzf_tell((_bgzf_file_t)fp->fp);
     fp->block_offset = fp->block_length = 0;
   }
   
+  std::cout << " read " << bytes_read << "\n";
+  std::cout << " final fp->block_length = " << fp->block_length << "\n";
   return bytes_read;
 }
 
@@ -511,9 +528,11 @@ int64_t bgzf_seek(BGZF* fp, int64_t pos, int where)
     fp->errcode |= BGZF_ERR_IO;
     return -1;
   }
+
   fp->block_length = 0;  // indicates current block has not been loaded
   fp->block_address = block_address;
   fp->block_offset = block_offset;
+  std::cout << "bgzf_seek() = " << fp->block_length  << " " << fp->block_address  << " " << fp->block_offset  << "\n";
   return 0;
 }
 

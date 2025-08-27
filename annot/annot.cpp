@@ -800,8 +800,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( name.find( globals::class_inst_delimiter ) != std::string::npos )
 	    name = name.substr( 0 , name.find( globals::class_inst_delimiter ) );
 	  
-	  
-	  //
+	  	  
 	  //
 	  // skip this annotation
 	  //
@@ -819,7 +818,6 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  //
 
 	  annot_t * a = parent_edf.annotations->add( name );
-
 
 	  //
 	  // store a temporary lookup table
@@ -913,25 +911,25 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  std::vector<std::string> tok = Helper::parse( line , globals::allow_space_delim ? " \t" : "\t" );
 	  if ( tok.size() >= 6 ) 
 	    {
-	      if ( ! Helper::iequals( tok[0] , "class" ) ) return Helper::vmode_halt( "expecting column 1 to be 'class':\n" + line );
-	      if ( ! Helper::iequals( tok[1] , "instance" ) ) return Helper::vmode_halt( "expecting column 2 to be 'instance':\n" + line );
-	      if ( ! Helper::iequals( tok[2] , "channel" ) ) return Helper::vmode_halt( "expecting column 3 to be 'channel':\n" + line );
-	      if ( ! Helper::iequals( tok[3] , "start" ) ) return Helper::vmode_halt( "expecting column 4 to be 'start':\n" + line );
-	      if ( ! Helper::iequals( tok[4] , "stop" ) ) return Helper::vmode_halt( "expecting column 5 to be 'stop':\n" + line );
-	      if ( ! Helper::iequals( tok[5] , "meta" ) ) return Helper::vmode_halt( "expecting column 6 to be 'meta':\n" + line );
+	      if ( ! Helper::iequals( tok[0] , "class" ) ) return Helper::vmode_halt( "expecting column 1/6 to be 'class':\n" + line );
+	      if ( ! Helper::iequals( tok[1] , "instance" ) ) return Helper::vmode_halt( "expecting column 2/6 to be 'instance':\n" + line );
+	      if ( ! Helper::iequals( tok[2] , "channel" ) ) return Helper::vmode_halt( "expecting column 3/6 to be 'channel':\n" + line );
+	      if ( ! Helper::iequals( tok[3] , "start" ) ) return Helper::vmode_halt( "expecting column 4/6 to be 'start':\n" + line );
+	      if ( ! Helper::iequals( tok[4] , "stop" ) ) return Helper::vmode_halt( "expecting column 5/6 to be 'stop':\n" + line );
+	      if ( ! Helper::iequals( tok[5] , "meta" ) ) return Helper::vmode_halt( "expecting column 6/6 to be 'meta':\n" + line );
 	    } 
 	  else if ( tok.size() == 4 ) // exception: still allowing old .annot format
 	    {
-	      if ( ! Helper::iequals( tok[0] , "class" ) ) return Helper::vmode_halt( "expecting column 1 to be 'class':\n" + line );
-	      if ( ! Helper::iequals( tok[1] , "instance" ) ) return Helper::vmode_halt( "expecting column 2 to be 'instance':\n" + line );
-	      if ( ! Helper::iequals( tok[2] , "start" ) ) return Helper::vmode_halt( "expecting column 3 to be 'start':\n" + line );
-	      if ( ! Helper::iequals( tok[3] , "stop" ) ) return Helper::vmode_halt( "expecting column 4 to be 'stop':\n" + line );	      
+	      if ( ! Helper::iequals( tok[0] , "class" ) ) return Helper::vmode_halt( "expecting column 1/4 to be 'class':\n" + line );
+	      if ( ! Helper::iequals( tok[1] , "instance" ) ) return Helper::vmode_halt( "expecting column 2/4 to be 'instance':\n" + line );
+	      if ( ! Helper::iequals( tok[2] , "start" ) ) return Helper::vmode_halt( "expecting column 3/4 to be 'start':\n" + line );
+	      if ( ! Helper::iequals( tok[3] , "stop" ) ) return Helper::vmode_halt( "expecting column 4/4 to be 'stop':\n" + line );	      
 	    }
 	  else if ( tok.size() == 3 ) // exception: still allowing old .annot format minus instance
 	    {
-	      if ( ! Helper::iequals( tok[0] , "class" ) ) return Helper::vmode_halt( "expecting column 1 to be 'class':\n" + line );
-	      if ( ! Helper::iequals( tok[1] , "start" ) ) return Helper::vmode_halt( "expecting column 2 to be 'start':\n" + line );
-	      if ( ! Helper::iequals( tok[2] , "stop" ) ) return Helper::vmode_halt( "expecting column 3 to be 'stop':\n" + line );	      
+	      if ( ! Helper::iequals( tok[0] , "class" ) ) return Helper::vmode_halt( "expecting column 1/3 to be 'class':\n" + line );
+	      if ( ! Helper::iequals( tok[1] , "start" ) ) return Helper::vmode_halt( "expecting column 2/3 to be 'start':\n" + line );
+	      if ( ! Helper::iequals( tok[2] , "stop" ) ) return Helper::vmode_halt( "expecting column 3/3 to be 'stop':\n" + line );	      
 	    }
 	  else
 	    return Helper::vmode_halt( "invalid header line:\n" + line );
@@ -3392,9 +3390,10 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
   // pool 1+ annotationss
   //
 
-  if ( param.has( "pool" ) )
+  if ( param.has( "pool" ) || param.has( "pool-flatten" ) )
     {
 
+      const bool flatten = param.has( "pool-flatten" );      
       const std::string newannot = param.requires( "annot" );
       const std::vector<std::string> annots = param.strvector_xsigs( "pool" );
 
@@ -3431,6 +3430,9 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
 	    }
 	}
 
+      // optionall, flatten events
+      if ( flatten ) nevs = annotate_t::flatten( nevs );
+      
       // add
       std::set<interval_t>::const_iterator nn = nevs.begin();
       while ( nn != nevs.end() )
