@@ -27,7 +27,7 @@ jobs:
           cd LightGBM
           mkdir build
           cd build
-          /mingw64/bin/cmake.exe -G "MinGW Makefiles"  ..
+          /mingw64/bin/cmake.exe -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release ..
           mingw32-make.exe -j4
           cp ${HOME}/LightGBM/lib_lightgbm.dll /mingw64/bin/
       - uses: actions/checkout@v4
@@ -62,15 +62,15 @@ jobs:
           git clone --recursive https://github.com/microsoft/LightGBM 
           cd LightGBM
           mkdir -p build && cd build
-          cmake ..
+          cmake -DCMAKE_BUILD_TYPE=Release ..
           make -j4
       - name: Install fftw
         run: |
           cd $HOME
-          wget http://www.fftw.org/fftw-3.3.8.tar.gz
-          tar -xzvf fftw-3.3.8.tar.gz
-          cd fftw-3.3.8
-          ./configure --prefix=${HOME}/fftw-3.3.8/
+          curl -L -o fftw-3.3.10.tar.gz http://www.fftw.org/fftw-3.3.10.tar.gz	  
+          tar -xzvf fftw-3.3.10.tar.gz
+          cd fftw-3.3.10
+          ./configure --prefix=${HOME}/fftw-3.3.10/
           make
           make install
           cd ${GITHUB_WORKSPACE}
@@ -78,7 +78,7 @@ jobs:
         run: |
           [[ -e ${HOME}/LightGBM/lib_lightgbm.so ]] && cp ${HOME}/LightGBM/lib_lightgbm.dylib .
           [[ -e ${HOME}/LightGBM/lib_lightgbm.dylib ]] && cp ${HOME}/LightGBM/lib_lightgbm.dylib .
-          make ARCH=MAC FFTW=${HOME}/fftw-3.3.8 LGBM=1 LGBM_PATH=${HOME}/LightGBM
+          make ARCH=MAC FFTW=${HOME}/fftw-3.3.10 LGBM=1 LGBM_PATH=${HOME}/LightGBM
           ref='refs/tags/v'
           if [[ ${{ github.ref }} == *${ref}* ]]; then
             v=$(echo ${{ github.ref }} | cut -d'/' -f3)
@@ -102,25 +102,28 @@ jobs:
       runs-on: macos-14              
       steps:
       - uses: actions/checkout@v4 
-      - name: Install dependencies
+
+      - name: Resolve Homebrew cmake tap conflict
         run: |
-          cd ${HOME}
-          brew install cmake gcc boost
-      
+          brew list --versions cmake && brew uninstall --ignore-dependencies --force cmake || true
+          brew tap-unpin local/pinned || true
+          brew tap-unpin homebrew/core || true
+          brew install homebrew/core/cmake
+          brew install gcc boost
+
       - name: Clone and build LightGBM
         run: |
           cd ${HOME}
           git clone --recursive https://github.com/microsoft/LightGBM
           cd LightGBM
-          mkdir build
-          cd build
-          cmake -DUSE_OPENMP=OFF -DBUILD_STATIC_LIB=ON ..
+          mkdir -p build && cd build
+          cmake -DUSE_OPENMP=OFF -DBUILD_STATIC_LIB=ON -DCMAKE_BUILD_TYPE=Release ..
           make -j4
           
       - name: Build FFTW
         run: |
           cd ${HOME}
-          wget http://www.fftw.org/fftw-3.3.10.tar.gz
+          curl -L -o fftw-3.3.10.tar.gz http://www.fftw.org/fftw-3.3.10.tar.gz          
           tar -xzvf fftw-3.3.10.tar.gz
           cd fftw-3.3.10
           ./configure --prefix=$HOME/fftw-3.3.10 CFLAGS="-arch arm64"
@@ -154,10 +157,10 @@ jobs:
       - name: Install fftw
         run: |
           cd ${HOME}
-          wget http://www.fftw.org/fftw-3.3.8.tar.gz
-          tar -xzvf fftw-3.3.8.tar.gz
-          cd fftw-3.3.8
-          ./configure --enable-shared --prefix=${HOME}/fftw-3.3.8/
+          wget http://www.fftw.org/fftw-3.3.10.tar.gz
+          tar -xzvf fftw-3.3.10.tar.gz
+          cd fftw-3.3.10
+          ./configure --enable-shared --prefix=${HOME}/fftw-3.3.10/
           make
           make install
       - name: Install LightGBM
@@ -167,12 +170,12 @@ jobs:
           cd LightGBM
           mkdir build
           cd build
-          cmake ..
+          cmake -DCMAKE_BUILD_TYPE=Release ..
           make -j4
           cd ${GITHUB_WORKSPACE}
       - name: make
         run: |
-          make FFTW=${HOME}/fftw-3.3.8 LGBM=1 LGBM_PATH=${HOME}/LightGBM
+          make FFTW=${HOME}/fftw-3.3.10 LGBM=1 LGBM_PATH=${HOME}/LightGBM
   release:
     runs-on: ubuntu-latest
     needs: [linux-build, macos-build, windows-build, macos-arm64-build]
