@@ -50,6 +50,12 @@ cmddefs_t & globals::cmddefs()
   return *ans;
 }
 
+optdefs_t & globals::optdefs()
+{
+  static optdefs_t * ans = new optdefs_t();
+  return *ans;
+}
+
 std::set<frequency_band_t> globals::bands;
 
 //std::string globals::annot_folder;
@@ -250,14 +256,14 @@ void globals::init_defs()
   //
 
   // should always be 7 characters
-  version = "v1.2.3 ";
+  version = "v1.3.0 ";
 
   major_version_number = 1;
-  minor_version_number = 2;
-  patch_version_number = 3;
+  minor_version_number = 3;
+  patch_version_number = 0;
 
   // should always be 11 chars
-  date    = "28-May-2025";
+  date    = "05-Sep-2025";
 
   //
   // Return code

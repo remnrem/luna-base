@@ -302,6 +302,8 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t 
       globals::sl_annot_extensions.insert( "eannot" );
       globals::sl_annot_extensions.insert( "txt" );
       globals::sl_annot_extensions.insert( "tsv" );
+      globals::sl_annot_extensions.insert( "-nsrr.xml" );
+      globals::sl_annot_extensions.insert( "-profusion.xml" );
     }
 
   //

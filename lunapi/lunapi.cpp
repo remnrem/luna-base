@@ -1693,3 +1693,57 @@ bool lunapi_inst_t::insert_annotation( const std::string & class_label ,
 
 
 
+//
+// Command descriptions/helpers
+//
+
+std::vector<std::string> lunapi_t::fetch_doms( const bool all )
+{
+  return globals::cmddefs().fetch_doms( all );
+}
+
+std::vector<std::string> lunapi_t::fetch_cmds( const std::string & dom , const bool all )
+{
+  return globals::cmddefs().fetch_cmds( dom ,  all );
+}
+
+std::vector<std::string> lunapi_t::fetch_params( const std::string & cmd, const bool all )
+{
+  return globals::cmddefs().fetch_params( cmd ,  all );
+}
+
+std::vector<std::string> lunapi_t::fetch_tbls( const std::string & cmd, const bool all )
+{
+  return globals::cmddefs().fetch_tbls( cmd ,  all );
+}
+
+std::vector<std::string> lunapi_t::fetch_vars( const std::string & cmd, const std::string & tbl, const bool all )
+{
+  return globals::cmddefs().fetch_vars( cmd , tbl , all );
+}
+
+std::string lunapi_t::fetch_desc_dom( const std::string & dom )
+{
+  return globals::cmddefs().fetch_desc_dom( dom ); 
+}
+
+std::string lunapi_t::fetch_desc_cmd( const std::string & cmd )
+{
+  return globals::cmddefs().fetch_desc_cmd( cmd );
+}
+
+std::string lunapi_t::fetch_desc_param( const std::string & cmd, const std::string & param )
+{
+  return globals::cmddefs().fetch_desc_param( cmd , param );
+}
+
+std::string lunapi_t::fetch_desc_tbl( const std::string & cmd, const std::string & tbl )
+{
+  return globals::cmddefs().fetch_desc_tbl( cmd , tbl  );
+}
+
+std::string lunapi_t::fetch_desc_var( const std::string & cmd, const std::string & tbl, const std::string & var )
+{
+  return globals::cmddefs().fetch_desc_var( cmd , tbl , var );
+}
+

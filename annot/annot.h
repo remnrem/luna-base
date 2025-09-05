@@ -69,9 +69,186 @@ struct avar_t;
 struct edf_t;
 struct edfz_t;
 struct annotation_set_t;
+struct annot_t;
 
 typedef std::map<instance_idx_t,instance_t*> annot_map_t;
 typedef std::map<std::string,avar_t*> instance_table_t;
+
+
+// ------------------------------------------------------------
+// instance-idx type
+
+
+struct instance_idx_t { 
+  
+  instance_idx_t( const annot_t * p , 
+		  const interval_t & i , 
+		  const std::string & s , 
+		  const std::string & ch_str ) 
+  : parent(p) , interval(i) , id(s) , ch_str( ch_str )
+  { } 
+  
+  const annot_t * parent;
+
+  interval_t  interval;
+  
+  std::string id;
+  
+  std::string ch_str;
+
+  bool operator< ( const instance_idx_t & rhs ) const;
+
+};
+
+
+// ------------------------------------------------------------
+// interval-tree for search
+
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <utility>
+#include <vector>
+
+// expected user types:
+// struct interval_t { uint64_t start, stop; }; // [start, stop)
+// struct instance_idx_t { interval_t interval; /* plus other fields (name, id, etc.) */ };
+
+class interval_tree_t {
+  
+public:
+
+  interval_tree_t() = default;
+  
+  template<class It>
+  interval_tree_t(It first, It last) { build(first, last); }
+  
+  template<class It>
+  void build_from_keys(It first, It last) {
+    std::vector<instance_idx_t> v;
+    v.reserve(std::distance(first,last));
+    for(auto it=first; it!=last; ++it)
+      v.push_back(it->first);
+    build(v.begin(), v.end());
+  }
+  
+  template<class It>
+  void build(It first, It last) {
+    // copy inputs
+    std::vector<instance_idx_t> v(first, last);
+    // drop empties
+    v.erase(std::remove_if(v.begin(), v.end(),
+			   [](const instance_idx_t& x){
+			     return x.interval.stop <= x.interval.start;
+			   }),
+	    v.end());
+    if (v.empty()) { nodes_.clear(); root_ = -1; return; }
+    
+    // stable order by (start, stop) without using instance_idx_t::operator<
+    const int n = (int)v.size();
+    std::vector<int> ord(n);
+    for (int i = 0; i < n; ++i) ord[i] = i;
+    std::stable_sort(ord.begin(), ord.end(),
+		     [&](int i, int j){
+		       const auto &ai = v[i].interval, &aj = v[j].interval;
+		       if (ai.start != aj.start) return ai.start < aj.start;
+		       if (ai.stop  != aj.stop ) return ai.stop  < aj.stop;
+		       return i < j; // tie-breaker for strict-weak-order
+		     });
+    
+    nodes_.clear();
+    nodes_.reserve(n);
+    root_ = build_balanced(v, ord, 0, n-1);
+  }
+  
+  // callback form: receives const instance_idx_t&
+  template<class Out>
+  void query(uint64_t qs, uint64_t qe, Out&& out) const {
+    query_rec(root_, qs, qe, out);
+  }
+  
+  // collect pointers to payloads (avoids copying large objects)
+  std::vector<const instance_idx_t*> query_ptrs(uint64_t qs, uint64_t qe) const {
+    std::vector<const instance_idx_t*> res;
+    query_rec(root_, qs, qe, [&](const instance_idx_t& x){ res.push_back(&x); });
+    return res;
+  }
+  
+  // count only
+  uint64_t count(uint64_t qs, uint64_t qe) const {
+    uint64_t c = 0;
+    query_rec(root_, qs, qe, [&](const instance_idx_t&){ ++c; });
+    return c;
+  }
+  
+  bool empty() const { return root_ < 0; }
+
+  size_t size()  const { return nodes_.size(); }
+  
+private:
+
+  struct Node {
+    instance_idx_t item;  // full user object
+    uint64_t maxStop;     // max stop in subtree
+    int l = -1, r = -1;   // child indices
+  };
+  
+    std::vector<Node> nodes_;
+  int root_ = -1;
+  
+  static bool overlaps(const instance_idx_t& x, uint64_t qs, uint64_t qe) {
+    const auto &iv = x.interval;
+    // half-open overlap: [s,e) vs [qs,qe)  <=>  s < qe && e > qs
+    return (iv.start < qe) && (iv.stop > qs);
+  }
+  
+  int build_balanced(const std::vector<instance_idx_t>& v,
+		     const std::vector<int>& ord,
+		     int L, int R)
+  {
+    if (L > R) return -1;
+    int M = (L + R) >> 1;
+    int u = (int)nodes_.size();
+    const instance_idx_t& src = v[ord[M]];
+    nodes_.push_back(Node{src, src.interval.stop, -1, -1});
+    int lc = build_balanced(v, ord, L, M-1);
+    int rc = build_balanced(v, ord, M+1, R);
+    nodes_[u].l = lc; nodes_[u].r = rc;
+    pull(u);
+    return u;
+  }
+  
+  void pull(int u) {
+    uint64_t m = nodes_[u].item.interval.stop;
+    int lc = nodes_[u].l, rc = nodes_[u].r;
+    if (lc >= 0 && nodes_[lc].maxStop > m) m = nodes_[lc].maxStop;
+    if (rc >= 0 && nodes_[rc].maxStop > m) m = nodes_[rc].maxStop;
+    nodes_[u].maxStop = m;
+  }
+  
+  template<class Out>
+  void query_rec(int u, uint64_t qs, uint64_t qe, Out&& out) const {
+    if (u < 0) return;
+    
+    const int lc = nodes_[u].l, rc = nodes_[u].r;
+    
+    // Left can overlap only if some stop > qs
+    if (lc >= 0 && nodes_[lc].maxStop > qs)
+      query_rec(lc, qs, qe, out);
+    
+    // Current node
+    const instance_idx_t& cur = nodes_[u].item;
+    if (overlaps(cur, qs, qe))
+      out(cur);
+    
+    // Right can overlap only if there exists start < qe.
+    // Starts are non-decreasing to the right; if cur.start >= qe, rights start >= qe.
+    if (rc >= 0 && cur.interval.start < qe)
+      query_rec(rc, qs, qe, out);
+  }
+};
+
+
 
 struct annot_t
 {
@@ -104,18 +281,22 @@ struct annot_t
   
   std::map<std::string, globals::atype_t> types;
   
-  // main data store
-  
+  // main data store  
   annot_map_t interval_events;
+
+  // for search
+  interval_tree_t interval_tree;
   
   // for clean-up
-
   std::set<instance_t*> all_instances;
 
   // parent
   annotation_set_t * parent;
   
+  // interval-tree for search 
+  
 
+  
   //
   // Constructor/destructor
   //
@@ -246,46 +427,6 @@ public:
 
 
 
-struct instance_idx_t { 
-  
-  instance_idx_t( const annot_t * p , 
-		  const interval_t & i , 
-		  const std::string & s , 
-		  const std::string & ch_str ) 
-  : parent(p) , interval(i) , id(s) , ch_str( ch_str )
-  { 
-    // for now, do nothing w/ channel info
-
-    /* chs.clear(); */
-    
-    /* if ( ch != "." )  */
-    /*   { */
-    /* 	std::vector<std::string> tok = Helper::quoted_parse( ch , "," ); */
-    /* 	for (int i=0;i<tok.size();i++) chs.insert( Helper::unquote( tok[i]) );	 */
-    /*   } */
-
-} 
-  
-  const annot_t * parent;
-
-  interval_t  interval;
-  
-  std::string id;
-  
-  std::string ch_str;
-
-  bool operator< ( const instance_idx_t & rhs ) const 
-  {
-    if ( interval < rhs.interval ) return true;
-    if ( interval > rhs.interval ) return false;
-    if ( parent->name < rhs.parent->name ) return true;
-    if ( parent->name > rhs.parent->name ) return false;
-    if ( ch_str < rhs.ch_str ) return true;
-    if ( ch_str > rhs.ch_str ) return false;				  
-    return id < rhs.id;
-  }
-
-};
 
 
 
@@ -874,8 +1015,10 @@ struct annotation_set_t
 			  const std::string & stg = "W" );
   
   void clear_sleep_stage();
-  
+
 };
 
+
+ 
 
 #endif

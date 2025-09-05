@@ -190,7 +190,7 @@ void proc_mask( edf_t & edf , param_t & param )
 	  const std::string annot_label_orig = annot_label ; 
 	  
 	  // special syntax to require complete overlap
-	  //  (nb. this means will not be able to combine +annot* )	  
+	  //  (nb. this means will not be able to combine +annot* )
 	  
 	  if ( annot_label[0] == '+' )
 	    {

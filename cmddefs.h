@@ -200,7 +200,36 @@ class cmddefs_t
   // list all commands 
   std::string help_commands() const;
 
+  //
+  // programmatically report all commands/options
+  // 
 
+  // lists: all domains
+  //      : all commands in a given domain
+  //      : all param for a given command
+  //      : all tables for a given command
+  //      : all vars for a given command/table
+
+  // queries (desc)
+  //      : for a given domain
+  //      : for a given command
+  //      : for a given command/param
+  //      : for a given command/table
+  //      : for a given command/table/var
+  
+  std::vector<std::string> fetch_doms( const bool all = true ) const;
+  std::vector<std::string> fetch_cmds( const std::string & dom , const bool all = true ) const;
+  std::vector<std::string> fetch_params( const std::string & cmd, const bool all = true ) const;
+  std::vector<std::string> fetch_tbls( const std::string & cmd, const bool all = true ) const;
+  std::vector<std::string> fetch_vars( const std::string & cmd, const std::string & tbl, const bool all = true ) const;
+
+  std::string fetch_desc_dom( const std::string & dom ) const;
+  std::string fetch_desc_cmd( const std::string & cmd ) const;
+  std::string fetch_desc_param( const std::string & cmd, const std::string & param ) const;
+  std::string fetch_desc_tbl( const std::string & cmd, const std::string & tbl ) const;
+  std::string fetch_desc_var( const std::string & cmd, const std::string & tbl, const std::string & var ) const;
+
+  
   //
   // hide/show variables
   //
@@ -271,6 +300,7 @@ class cmddefs_t
   // domain->human label    ->desc
   std::map<std::string,std::string> domain_label;
   std::map<std::string,std::string> domain_desc;
+  std::vector<std::string> domain_ordered;
   
   // domain->cmds
   std::map<std::string,std::set<std::string> > dcmds;  

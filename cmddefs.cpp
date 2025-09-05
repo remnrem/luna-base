@@ -4174,6 +4174,8 @@ bool cmddefs_t::is_primary_var( const std::string & cmd , const tfac_t & tfac , 
 // domain description
 void cmddefs_t::add_domain( const std::string & domain , const std::string & label ,  const std::string & desc )
 {
+  if ( domain_label.find( domain ) == domain_label.end() )
+    domain_ordered.push_back( domain );  
   domain_label[ domain ] = label;
   domain_desc[ domain ] = desc;
 }
@@ -4507,6 +4509,130 @@ void cmddefs_t::hide_var( const std::string & cmd , const std::string & factors 
 void cmddefs_t::hide_var( const std::string & cmd , const tfac_t & factors , const std::string & var )
 {
   show_var( cmd , factors , var , false );
+}
+
+
+//
+// fetchers
+//
+
+std::vector<std::string> cmddefs_t::fetch_doms( const bool all ) const
+{
+  return domain_ordered;
+}
+
+std::vector<std::string> cmddefs_t::fetch_cmds( const std::string & dom , const bool all ) const
+{
+  std::vector<std::string> res;
+  std::map<std::string,std::set<std::string> >::const_iterator ff = dcmds.find( dom );
+  if ( ff != dcmds.end() )
+    {
+      const std::set<std::string> & s = ff->second;
+      std::set<std::string>::const_iterator ss = s.begin();
+      while ( ss != s.end() )
+	{
+	  res.push_back( *ss );
+	  ++ss;
+	}
+    }  
+  return res;
+}
+
+std::vector<std::string> cmddefs_t::fetch_params( const std::string & cmd, const bool all ) const
+{
+  std::map<std::string,std::map<std::string,std::string> >::const_iterator ff = pdesc.find( cmd );
+  std::vector<std::string> res;
+  if ( ff != pdesc.end() )
+    {
+      const std::map<std::string,std::string> & s = ff->second;
+      std::map<std::string,std::string>::const_iterator ss = s.begin();
+      while( ss != s.end() )
+	{
+	  res.push_back( ss->first );
+	  ++ss;
+	}
+    }
+  return res;  
+}
+
+std::vector<std::string> cmddefs_t::fetch_tbls( const std::string & cmd, const bool all ) const
+{
+  std::map<std::string,std::map<tfac_t,std::string> >::const_iterator ff = otables.find( cmd );
+  std::vector<std::string> res;
+  if ( ff != otables.end() )
+    {
+      const std::map<tfac_t,std::string> & s = ff->second;
+      std::map<tfac_t,std::string>::const_iterator ss = s.begin();
+      while ( ss != s.end() )
+	{
+	  res.push_back( ss->first.as_string() );
+	  ++ss;
+	}
+    }
+  return res;
+}
+
+std::vector<std::string> cmddefs_t::fetch_vars( const std::string & cmd, const std::string & tbl, const bool all ) const
+{
+  std::vector<std::string> res;
+  std::map<std::string,std::map<tfac_t,std::map<std::string,std::string> > >::const_iterator ff = ovars.find( cmd );
+  if ( ff == ovars.end() ) return res;
+  std::map<tfac_t,std::map<std::string,std::string> >::const_iterator gg = ff->second.find( tfac_t( tbl ) );
+  if ( gg == ff->second.end() ) return res;
+  const std::map<std::string,std::string> & s = gg->second;
+  std::map<std::string,std::string>::const_iterator ss = s.begin();
+  while ( ss != s.end() )
+    {
+      res.push_back( ss->first );
+      ++ss;
+    }
+  return res;
+}
+
+
+std::string cmddefs_t::fetch_desc_dom( const std::string & dom ) const
+{
+  std::map<std::string,std::string>::const_iterator ff = domain_desc.find( dom );
+  return ff != domain_desc.end() ? ff->second : ".";
+}
+
+std::string cmddefs_t::fetch_desc_cmd( const std::string & cmd ) const
+{
+  std::map<std::string,std::string>::const_iterator ff = cmds.find( cmd );
+  return ff != cmds.end() ? ff->second : ".";
+}
+
+std::string cmddefs_t::fetch_desc_param( const std::string & cmd, const std::string & param ) const
+{
+  std::map<std::string,std::map<std::string,std::string> >::const_iterator ff = pdesc.find( cmd );
+  if ( ff == pdesc.end() ) return "";
+  const std::map<std::string,std::string> & s = ff->second;  
+  std::map<std::string,std::string>::const_iterator ss = s.find( param );
+  if ( ss == s.end() ) return "";
+  return ss->second;
+}
+
+std::string cmddefs_t::fetch_desc_tbl( const std::string & cmd, const std::string & tbl ) const
+{
+  std::map<std::string,std::map<tfac_t,std::string> >::const_iterator ff = otables.find( cmd );
+  if ( ff == otables.end() ) return "";
+  const std::map<tfac_t,std::string> & s = ff->second;
+  std::map<tfac_t,std::string>::const_iterator ss = s.find( tfac_t( tbl ) );
+  if ( ss == s.end() ) return "";
+  return ss->second;
+}
+
+std::string cmddefs_t::fetch_desc_var( const std::string & cmd, const std::string & tbl, const std::string & var ) const
+{
+  std::map<std::string,std::map<tfac_t,std::map<std::string,std::string> > >::const_iterator ff = ovars.find( cmd );
+  if ( ff == ovars.end() ) return "";
+  const	std::map<tfac_t,std::map<std::string,std::string> > & s = ff->second;
+  std::map<tfac_t,std::map<std::string,std::string> >::const_iterator ss = s.find( tfac_t( tbl ) );
+  if ( ss == s.end() ) return "";
+  const std::map<std::string,std::string> & v = ss->second;
+  std::map<std::string,std::string>::const_iterator vv = v.find( var );
+  if ( vv == v.end() ) return "";
+  return vv->second;
 }
 
 
