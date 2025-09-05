@@ -3394,8 +3394,11 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
     {
 
       const bool flatten = param.has( "pool-flatten" );      
+      if ( flatten && param.has( "pool" ) )
+	Helper::halt( "cannot specify both pool and pool-flatten" );
+
       const std::string newannot = param.requires( "annot" );
-      const std::vector<std::string> annots = param.strvector_xsigs( "pool" );
+      const std::vector<std::string> annots = param.strvector_xsigs( flatten ? "pool-flatten" : "pool" );
 
       std::set<interval_t> nevs;
 

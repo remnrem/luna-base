@@ -1355,6 +1355,9 @@ bool modal_freq_helper( const std::vector<double> & p ,
   for (int i=0; i<n; i++)
     ypad[i+1] = y[i];
 
+  // for (int i=0; i<ypad.size(); i++)
+  //   std::cout << "ypad[" << i << "] = " << ypad[i] << "\n";
+
   //    0 1 2 3 4 5
   //  0 1 2 3 4 5 6 7
 
@@ -1362,7 +1365,7 @@ bool modal_freq_helper( const std::vector<double> & p ,
     {
       const int pi = i+1;
       y[i] = ( ypad[pi] + 0.5 * ( ypad[pi-1] + ypad[pi+1] ) ) * 0.5;
-      //std::cout << " f === " << f[i] << " " << y[i] << "\n";
+      //      std::cout << " f === " << f[i] << " " << y[i] << "\n";
     }
 
   
@@ -1374,7 +1377,7 @@ bool modal_freq_helper( const std::vector<double> & p ,
     {
       if ( flwr != NULL && f[i] < *flwr ) continue;
       if ( fupr != NULL && f[i] > *fupr ) continue;
-      if ( y[i] > mx )
+      if ( y[i] >= mx )
 	{
 	  mx = y[i];
 	  mxi = i;
@@ -1382,13 +1385,12 @@ bool modal_freq_helper( const std::vector<double> & p ,
     }
   
   if ( mxi == -1 ) return false;
-
   
   *peak_freq = f[mxi] ;
   *peak_ampl = y[mxi] ;
 
-  //  std::cout << " f , a = " << *peak_freq << " " << *peak_ampl << "\n";
-  
+  // std::cout << " f , a = " << *peak_freq << " " << *peak_ampl << "\n";
+
   return true;
       
 }

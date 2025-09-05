@@ -1396,7 +1396,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	      // -- TOOD - should add this for all outputs...  thus why for
 	      //           now we add WMTM as a reminder that this is incomplete...
 	      
-	      if (edf.timeline.generic_epochs() )
+	      if ( edf.timeline.generic_epochs() )
 		{
 		  const double wpmean = MiscMath::weighted_mean( etrack_power[ns1][fi] , etrack_length );
 		  writer.value( "WMTM" , wpmean );
