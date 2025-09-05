@@ -15,7 +15,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -30,7 +30,7 @@ jobs:
           /mingw64/bin/cmake.exe -G "MinGW Makefiles"  ..
           mingw32-make.exe -j4
           cp ${HOME}/LightGBM/lib_lightgbm.dll /mingw64/bin/
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - run: |
           mingw32-make.exe ARCH=WINDOWS LGBM=1 LGBM_PATH=${HOME}/LightGBM
           ref='refs/tags/v'
@@ -48,16 +48,20 @@ jobs:
   macos-build:
     runs-on: macos-13
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+      - name: Resolve Homebrew cmake tap conflict
+        run: |
+          brew list --versions cmake && brew uninstall --ignore-dependencies --force cmake || true
+          brew tap-unpin local/pinned || true
+          brew tap-unpin homebrew/core || true
+          brew install homebrew/core/cmake
+          brew install libomp
       - name: Install LightGBM
         run: |
           cd ${HOME}
-          brew install cmake
-          brew install libomp
           git clone --recursive https://github.com/microsoft/LightGBM 
           cd LightGBM
-          mkdir build
-          cd build
+          mkdir -p build && cd build
           cmake ..
           make -j4
       - name: Install fftw
@@ -97,7 +101,7 @@ jobs:
   macos-arm64-build:
       runs-on: macos-14              
       steps:
-      - uses: actions/checkout@v2  
+      - uses: actions/checkout@v4 
       - name: Install dependencies
         run: |
           cd ${HOME}
@@ -146,7 +150,7 @@ jobs:
   linux-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Install fftw
         run: |
           cd ${HOME}
@@ -174,7 +178,7 @@ jobs:
     needs: [linux-build, macos-build, windows-build, macos-arm64-build]
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Create Release
         id: create_release
         uses: ncipollo/release-action@v1
