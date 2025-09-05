@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "cmddefs.h"
+#include "optdefs.h"
 #include "helper/helper.h"
 
 struct param_t; 
@@ -183,9 +184,11 @@ struct globals
   static int patch_version_number;
   static std::string date;
 
-  // command definitions
-  
+  // command definitions  
   static cmddefs_t & cmddefs();
+
+  // knowledge about special options
+  static optdefs_t & optdefs();
   
   // return code (e.g. for CONTAINS)
   static int retcode;

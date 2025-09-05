@@ -47,6 +47,30 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(0);
     }
 
+  if ( p == "interval-tree" )
+    {
+
+      // parent(p) , interval(i) , id(s) , ch_str( ch_str )
+      std::vector<instance_idx_t> v = {
+	{NULL, {10,20}, "1", "A"},
+	{NULL, {10,20}, "2", "B"},   // same [10,20), different id/name
+	{NULL, {15,25}, "3", "C"}
+      };
+      
+      interval_tree_t T(v.begin(), v.end());
+      
+      auto hits = T.query_ptrs(12, 18); // overlaps [12,18)
+
+      for (auto* p : hits) {
+	// You'll see both A and B separately
+	std::cout << p->id << " " << p->ch_str << " ["
+		  << p->interval.start << "," << p->interval.stop << ")\n";
+      }
+            
+      std::exit(0);
+      
+    }
+  
   if ( p == "circ2" )
     {
       Eigen::VectorXd X = Eigen::VectorXd::Zero( 8 );

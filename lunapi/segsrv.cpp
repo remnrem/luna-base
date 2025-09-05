@@ -44,6 +44,8 @@ void segsrv_t::init()
   segments = p->edf.timeline.segments();
   gaps = p->edf.timeline.gaps( segments ); 
 
+  annot_format6 = true; // plotly
+  
   clocktime_t etime( p->edf.header.starttime );
   if ( ! etime.valid )
     {
@@ -400,6 +402,9 @@ int segsrv_t::populate( const std::vector<std::string> & chs , const std::vector
   for (int i=0; i<anns.size(); i++)
     if ( add_annot( anns[i] ) ) ++count;
 
+  // build interval tree
+  etree.build( evts.begin() , evts.end() );
+  
   // make sure we have some sensible default scaling
   
   set_scaling( count ,
@@ -1123,7 +1128,11 @@ bool segsrv_t::add_annot( const std::string & ch )
   return true;
 }
 
-// get events from the current window                                                             
+
+
+
+
+// get events from the current window
 std::map<std::string,std::vector<std::pair<double,double> > > segsrv_t::fetch_evts() const
 {
 
@@ -1132,33 +1141,49 @@ std::map<std::string,std::vector<std::pair<double,double> > > segsrv_t::fetch_ev
   // current window
   uint64_t atp = awin * globals::tp_1sec;
   uint64_t btp = bwin * globals::tp_1sec;
-  uint64_t endtp = btp == 0LLU ? 0LLU : btp - 1LLU;
-  interval_t win( atp , btp );
-  
-  // set 0-dur marker at end of window (at last included point, end-1)
-  evt_t win_end( interval_t( endtp, endtp ) , "__luna#window#marker__" ) ;
-  
-  // get upper bound of this (i.e. next event that is /not/ in the window) 
-  std::set<evt_t>::const_iterator ee = evts.upper_bound( win_end );
-  
-  while ( 1 )
-    {
-      // check
-      if ( ee == evts.begin() ) break;
-      
-      // step back
-      --ee;
 
-      // done?
-      if ( ee->interval.is_before( win ) ) break;
+
+  // legacy search
+  if ( 0 )
+    {
+      uint64_t endtp = btp == 0LLU ? 0LLU : btp - 1LLU;
+      interval_t win( atp , btp );  
+  
+      // set 0-dur marker at end of window (at last included point, end-1)
+      evt_t win_end( interval_t( endtp, endtp ) , "__luna#window#marker__" ) ;
       
-      // overlap?
-      if ( ee->interval.overlaps( win ) )
-	r[ ee->name ].push_back( std::pair<double,double>( ee->interval.start_sec() , ee->interval.stop_sec() ) ) ; 
+      // get upper bound of this (i.e. next event that is /not/ in the window) 
+      std::set<evt_t>::const_iterator ee = evts.upper_bound( win_end );
       
-      // next event      
+      while ( 1 )
+	{
+	  // check
+	  if ( ee == evts.begin() ) break;
+	  
+	  // step back
+	  --ee;
+	  
+	  // done?
+	  if ( ee->interval.is_before( win ) ) break;
+	  
+	  // overlap?
+	  if ( ee->interval.overlaps( win ) )
+	    r[ ee->name ].push_back( std::pair<double,double>( ee->interval.start_sec() , ee->interval.stop_sec() ) ) ; 
+	  
+	  // next event      
+	}
     }
-      
+
+
+  //
+  // interval tree implementation
+  //
+  
+  auto hits = etree.query_ptrs( atp , btp );
+  
+  for ( const auto & p : hits)
+      r[ p->name ].push_back( std::pair<double,double>( p->interval.start_sec() , p->interval.stop_sec() ) );
+  
   return r;
 }
 
@@ -1179,15 +1204,22 @@ std::vector<std::string> segsrv_t::fetch_all_evts( const std::vector<std::string
   return r;
 }
 
+// set format for annotation plots
+void segsrv_t::set_annot_format6( const bool b )
+{
+  annot_format6 = b;
+}
 
 // compile a set of selected events for the current window
 void segsrv_t::compile_evts( const std::vector<std::string> & anns )
 {
   // clear window
-
-  // ultimate (in 6-val format for plottin)
+  
+  // ultimate (in 6-val format or standard) for plotting
   compiled_annots_times.clear();
+  compiled_annots_end_times.clear();
   compiled_annots_stacks.clear();
+  compiled_annots_end_stacks.clear();
 
   // working intermediate
   std::map<std::string,std::vector<std::pair<double,double> > > annots_times;
@@ -1225,83 +1257,8 @@ void segsrv_t::compile_evts( const std::vector<std::string> & anns )
 
 
   //
-  // determine stacking (OLD)
-  //
-
-  // if ( 0 )
-  //   {
-
-  //     std::set<fevt_t> pool;
-  //     int maxd = 0;
-      
-  //     std::set<fevt_t>::const_iterator xx = xevts.begin();
-  //     while ( xx != xevts.end() )
-  // 	{
-	  
-  // 	  // remove any events (that end before start of this one)
-  // 	  const double c = xx->start;
-	  
-  // 	  std::set<fevt_t> pool1;
-  // 	  std::set<fevt_t>::const_iterator pp = pool.begin();
-  // 	  while ( pp != pool.end() )
-  // 	    {
-  // 	      if ( pp->stop > c ) pool1.insert( *pp );
-  // 	      ++pp;
-  // 	    }
-	  
-  // 	  // copy over
-  // 	  pool = pool1;
-	  
-  // 	  // add next event to pool
-  // 	  pool.insert( *xx );
-	  
-  // 	  // add times (w/ clipping at window- boundaries) 
-  // 	  const std::pair<double,double> p2( xx->start < awin ? awin : xx->start ,
-  // 					     xx->stop  > bwin ? bwin : xx->stop );
-	  
-  // 	  annots_times[ xx->name ].push_back( p2 );
-	  
-	  
-  // 	  // determine depth (N-1) [ scale after when we know max depth ]  
-  // 	  const int d = pool.size();
-  // 	  annots_stacks[ xx->name ].push_back( std::pair<double,double>( d , 0 ) );
-	  
-  // 	  // track max depth
-  // 	  if ( d > maxd ) maxd = d;
-	  
-  // 	  // next annot
-  // 	  ++xx;
-  // 	}
-      
-  //     // scale depth into plotting values:
-  //     //  annots go from ( 1 - scaling_fixed_annot - scaling_yheader ) to ( 1 - scaling_yheader )
-  //     const double abase = 1.0 - scaling_fixed_annot - scaling_yheader;
-      
-  //     // maxd +1 i.e to allow for height of top annot
-  //     const double a1height = scaling_fixed_annot / (double)(maxd);
-      
-  //     std::map<std::string,std::vector<std::pair<double,double> > >::iterator cc = annots_stacks.begin();
-  //     while ( cc != annots_stacks.end() )
-  // 	{
-	  
-  // 	  std::vector<std::pair<double,double> > & ds = cc->second;
-	  
-  // 	  for (int i=0; i<ds.size(); i++)
-  // 	    {
-  // 	      double y = ds[i].first; // scale from 1... maxd
-  // 	      y = abase + (y-1) * a1height; // lower y;
-  // 	      ds[i].first = y;
-  // 	      ds[i].second = y + a1height;
-  // 	    }      
-  // 	  ++cc;
-  // 	}
-  //   }
-
-
-  //
-  // Simple y-axis positons (NEW), i.e. no stacking
-  //  -- replaces the code above
-  //
+  // Simple y-axis positons
+  // 
 
   int maxd = amap.size();
   
@@ -1349,11 +1306,21 @@ void segsrv_t::compile_evts( const std::vector<std::string> & anns )
 
   //
   // for annot 'i' we now have (x1,x2) and (y1,y2) 
-  //  for easier plotting, we want to have six entires:
+
+
+  //
+  //  if annot_format6 is True, then for easier plotting, we want to
+  //  have six entires:
+  //  
   //     (x1,x2,x2,x1,x1,NA)
   //     (y1,y1,y2,y2,y1,NA)
   //  i.e. for plotly to make the traces and fill in a rectange
   //
+
+  //
+  // otherwise, we want to pass two separate n-sized vectors: starts, stops, and y-offsets
+  //
+  
   
   cc = annots_times.begin();
   while ( cc != annots_times.end() )
@@ -1364,33 +1331,69 @@ void segsrv_t::compile_evts( const std::vector<std::string> & anns )
 
       const int n = xs.size();
 
-      std::vector<float> xx( 6 * n );
-      std::vector<float> yy( 6 * n );
+      //
+      // format6: 
+      //
 
-      int xidx = 0;
-      int yidx = 0;
-      for (int i=0; i<n; i++)
+      if ( annot_format6 )
 	{
-	  xx[xidx++] = xs[i].first ;
-	  xx[xidx++] = xs[i].second ;
-	  xx[xidx++] = xs[i].second ;
-	  xx[xidx++] = xs[i].first ;
-	  xx[xidx++] = xs[i].first ;
-	  xx[xidx++] = std::numeric_limits<float>::quiet_NaN() ;
 
-	  yy[yidx++] = ys[i].first ;
-	  yy[yidx++] = ys[i].first ;
-	  yy[yidx++] = ys[i].second ;
-	  yy[yidx++] = ys[i].second ;
-	  yy[yidx++] = ys[i].first ;
-	  yy[yidx++] = std::numeric_limits<float>::quiet_NaN() ;
-	  
+	  std::vector<float> xx( 6 * n );
+	  std::vector<float> yy( 6 * n );
+
+	  int xidx = 0;
+	  int yidx = 0;
+	  for (int i=0; i<n; i++)
+	    {
+	      xx[xidx++] = xs[i].first ;
+	      xx[xidx++] = xs[i].second ;
+	      xx[xidx++] = xs[i].second ;
+	      xx[xidx++] = xs[i].first ;
+	      xx[xidx++] = xs[i].first ;
+	      xx[xidx++] = std::numeric_limits<float>::quiet_NaN() ;
+	      
+	      yy[yidx++] = ys[i].first ;
+	      yy[yidx++] = ys[i].first ;
+	      yy[yidx++] = ys[i].second ;
+	      yy[yidx++] = ys[i].second ;
+	      yy[yidx++] = ys[i].first ;
+	      yy[yidx++] = std::numeric_limits<float>::quiet_NaN() ;
+	      
+	    }
+
+	  // store
+	  compiled_annots_times[ cc->first ] = xx;
+	  compiled_annots_stacks[ cc->first ] = yy;
 	}
+      else
+	{
 
-      // store
-      compiled_annots_times[ cc->first ] = xx;
-      compiled_annots_stacks[ cc->first ] = yy;
-			    
+	  //
+	  // or not format6
+	  //
+	  
+	  std::vector<float> xx1( n );
+	  std::vector<float> xx2( n );
+	  std::vector<float> yy1( n );
+	  std::vector<float> yy2( n );
+
+	  for (int i=0; i<n; i++)
+	    {
+	      xx1[i] = xs[i].first;
+	      xx2[i] = xs[i].second;
+
+	      yy1[i] = ys[i].first;
+	      yy2[i] = ys[i].second;
+	    }
+
+	  // store
+	  compiled_annots_times[ cc->first ] = xx1;
+	  compiled_annots_end_times[ cc->first ] = xx2;
+
+	  compiled_annots_stacks[ cc->first ] = yy1;
+	  compiled_annots_end_stacks[ cc->first ] = yy2;
+
+	}
       ++cc;
     }
   
@@ -1405,11 +1408,29 @@ std::vector<float> segsrv_t::get_evnts_xaxes( const std::string & ann ) const
   return empty;  
 }
 
+// given a compilation (subset of all evts), get evts for a particular class
+std::vector<float> segsrv_t::get_evnts_xaxes_ends( const std::string & ann ) const
+{
+  std::map<std::string,std::vector<float> >::const_iterator aa = compiled_annots_end_times.find( ann );
+  if ( aa != compiled_annots_end_times.end() ) return aa->second;
+  std::vector<float> empty;
+  return empty;  
+}
+
 // given a compilation (subset of all evts), get y-axis stacking for a particular class
 std::vector<float> segsrv_t::get_evnts_yaxes( const std::string & ann ) const
 {
   std::map<std::string,std::vector<float> >::const_iterator aa = compiled_annots_stacks.find( ann );
   if ( aa != compiled_annots_stacks.end() ) return aa->second;
+  std::vector<float> empty;
+  return empty;	
+}
+
+// given a compilation (subset of all evts), get y-axis stacking for a particular class
+std::vector<float> segsrv_t::get_evnts_yaxes_ends( const std::string & ann ) const
+{
+  std::map<std::string,std::vector<float> >::const_iterator aa = compiled_annots_end_stacks.find( ann );
+  if ( aa != compiled_annots_end_stacks.end() ) return aa->second;
   std::vector<float> empty;
   return empty;	
 }

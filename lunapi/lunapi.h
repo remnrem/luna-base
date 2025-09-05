@@ -212,6 +212,23 @@ public:
   //
 
   rtables_return_t eval( const std::string & );
+
+  //
+  // Command descriptions/helpers
+  //
+
+  static std::vector<std::string> fetch_doms( const bool all = true );
+  static std::vector<std::string> fetch_cmds( const std::string & dom , const bool all = true );
+  static std::vector<std::string> fetch_params( const std::string & cmd, const bool all = true );
+  static std::vector<std::string> fetch_tbls( const std::string & cmd, const bool all = true );
+  static std::vector<std::string> fetch_vars( const std::string & cmd, const std::string & tbl, const bool all = true );
+
+  static std::string fetch_desc_dom( const std::string & dom );
+  static std::string fetch_desc_cmd( const std::string & cmd );
+  static std::string fetch_desc_param( const std::string & cmd, const std::string & param );
+  static std::string fetch_desc_tbl( const std::string & cmd, const std::string & tbl );
+  static std::string fetch_desc_var( const std::string & cmd, const std::string & tbl, const std::string & var );
+
   
 private:
   

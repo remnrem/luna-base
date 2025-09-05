@@ -43,6 +43,17 @@ extern logger_t logger;
 
 extern globals global;
 
+bool instance_idx_t::operator< ( const instance_idx_t & rhs ) const 
+{
+  if ( interval < rhs.interval ) return true;
+  if ( interval > rhs.interval ) return false;
+  if ( parent->name < rhs.parent->name ) return true;
+  if ( parent->name > rhs.parent->name ) return false;
+  if ( ch_str < rhs.ch_str ) return true;
+  if ( ch_str > rhs.ch_str ) return false;				  
+  return id < rhs.id;
+}
+
 std::string helper_remap( const std::string & a , const std::map<std::string,std::string> & remapping )
 {
   const std::map<std::string,std::string>::const_iterator ii = remapping.find( a );
@@ -2958,55 +2969,103 @@ bool annot_t::savexml( const std::string & f )
 
 annot_map_t annot_t::extract( const interval_t & window ) 
 {
+
+  //
+  // if not built, build an interval tree
+  //
+
+  if ( interval_tree.empty() )
+    interval_tree.build_from_keys( interval_events.begin() , interval_events.end() );
+
+  // but check that it matches - i.e. not allowed to add more annots after doing initial queries
+  //  this is unlikely , but avoids, e.g. SPINLDES annot=S .. MASK ifnot=S ... SPINDLES annot=S ... 
+
+  if ( interval_tree.size() != interval_events.size() )
+    Helper::halt( "annotations have been added after querying, which is not allowed" );
+
+  // overlaps [start,stop)
+  auto hits = interval_tree.query_ptrs( window.start, window.stop ); 
   
+  annot_map_t r;
+  
+  for ( const auto & p : hits) 
+    r[ *p ] = interval_events[ *p ]; 
+  
+  return r;
+
   //
   // Fetch all annotations that overlap this window
   // where overlap is defined as region A to B-1 for interval_t(A,B)
   //
 
-  annot_map_t r; 
-  
+  // UPDATE: now redundant, replaced w/ interval tree above
   // urghhh... need to implement a much better search... 
   // but for now just use brute force... :-(
   
-  annot_map_t::const_iterator ii = interval_events.begin();
-  while ( ii != interval_events.end() )
-    {
-      const interval_t & a = ii->first.interval;
-      if ( a.overlaps( window ) ) r[ ii->first ] = ii->second;
-      else if ( a.is_after( window ) ) break;
-      ++ii;
-    }
-  
-  return r;
+  // annot_map_t::const_iterator ii = interval_events.begin();
+  // while ( ii != interval_events.end() )
+  //   {
+  //     const interval_t & a = ii->first.interval;
+  //     if ( a.overlaps( window ) ) r[ ii->first ] = ii->second;
+  //     else if ( a.is_after( window ) ) break;
+  //     ++ii;
+  //   }  
+  //   return r;
   
 }
 
 
 annot_map_t annot_t::extract_complete_overlap( const interval_t & window ) 
 {
+
+  // e.g. used in MASK '+annot' where the leading '+' implies
+  //      that the epoch must be fully spanned by that annotation
+
+  // new interval-tree based implementation:
+
+  annot_map_t r;
+
+  // build interval tree on demand
+  if ( interval_tree.empty() )
+    interval_tree.build_from_keys( interval_events.begin() , interval_events.end() );
+
+  if ( interval_tree.size() != interval_events.size() )
+    Helper::halt( "annotations have been added after querying, which is not allowed" );
+  
+  // overlaps [start,stop)
+  auto hits = interval_tree.query_ptrs( window.start, window.stop ); 
+    
+  for ( const auto & p : hits)
+    {
+      if ( window.is_completely_spanned_by( p->interval ) )
+	r[ *p ] = interval_events[ *p ]; 
+    }
+  return r;
+
+
+  // OLD CODE
   
   //
   // Fetch all annotations that /completely/ overlap this window
   // where overlap is defined as region A to B-1 for interval_t(A,B)
   //
 
-  annot_map_t r; 
+  // annot_map_t r; 
   
-  // urghhh... need to implement a much better search... 
-  // but for now just use brute force... :-(
+  // // urghhh... need to implement a much better search... 
+  // // but for now just use brute force... :-(
   
-  annot_map_t::const_iterator ii = interval_events.begin();
-  while ( ii != interval_events.end() )
-    {
-      const interval_t & a = ii->first.interval;
-      // note, different ordering vs. overlaps() above in extract()
-      if ( window.is_completely_spanned_by(a) ) r[ ii->first ] = ii->second;
-      else if ( a.is_after( window ) ) break;
-      ++ii;
-    }
+  // annot_map_t::const_iterator ii = interval_events.begin();
+  // while ( ii != interval_events.end() )
+  //   {
+  //     const interval_t & a = ii->first.interval;
+  //     // note, different ordering vs. overlaps() above in extract()
+  //     if ( window.is_completely_spanned_by(a) ) r[ ii->first ] = ii->second;
+  //     else if ( a.is_after( window ) ) break;
+  //     ++ii;
+  //   }
   
-  return r;
+  // return r;
   
 }
 
@@ -3177,8 +3236,6 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
       // all done
       return;
     }
-
-
   
 
   //
@@ -3191,6 +3248,7 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
       const std::string oldannot = param.requires( "split" );
       
       annot_t * a1 = find( oldannot );
+      
       if ( a1 == NULL )
 	{
 	  logger << "  *** warning, could not find any annotation " << oldannot << "\n";

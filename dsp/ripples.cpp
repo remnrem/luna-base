@@ -624,11 +624,14 @@ ripples_t::ripples_t( const std::vector<double> & x ,
 		      
 		      interval_t interval( tp[start] , tp[stop] );
 
+		      // --> note: extract() is fixed now, implemented as an
+		      //     interval tree, so we no longer need this kludge
+
 		      // nb. as extract() is a terrible function and currently
 		      // only extracts things that are completely within the interval
 		      // here we will make a kludge and expand this region to +/- 0.5 secs
 		      
-		      interval.expand( 0.5 * globals::tp_1sec );
+		      // interval.expand( 0.5 * globals::tp_1sec );
 		      
                       annot_t * annot = edf->annotations->find( *ee );
 		      if ( annot == NULL ) Helper::halt( "could not find annotation " + *ee );
