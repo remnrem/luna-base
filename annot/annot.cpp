@@ -2981,8 +2981,20 @@ annot_map_t annot_t::extract( const interval_t & window )
   //  this is unlikely , but avoids, e.g. SPINLDES annot=S .. MASK ifnot=S ... SPINDLES annot=S ... 
 
   if ( interval_tree.size() != interval_events.size() )
-    Helper::halt( "annotations have been added after querying, which is not allowed" );
-
+    {
+      auto ii = interval_events.begin();
+      while ( ii != interval_events.end() )
+	{
+	  std::cout << ii->first.interval.as_string() << "\t" << ii->first.id << "\t" << ii->first.ch_str << "\n";
+	  ++ii;
+	}
+       
+      
+      logger << " interval_tree.size() = " << interval_tree.size() << "\n"
+	     << " interval_events.size() = " << interval_events.size() << "\n";
+      Helper::halt( "annotations have been added after querying, which is not allowed" );
+    }
+  
   // overlaps [start,stop)
   auto hits = interval_tree.query_ptrs( window.start, window.stop ); 
   

@@ -96,10 +96,11 @@ public:
   void build(It first, It last) {
     // copy inputs
     std::vector<evt_t> v(first, last);
-    // drop empties
+
+    // drop degenerates
     v.erase(std::remove_if(v.begin(), v.end(),
 			   [](const evt_t& x){
-			     return x.interval.stop <= x.interval.start;
+			     return x.interval.stop < x.interval.start;
 			   }),
 	    v.end());
     if (v.empty()) { nodes_.clear(); root_ = -1; return; }
@@ -158,14 +159,21 @@ private:
     int l = -1, r = -1;   // child indices
   };
   
-    std::vector<Node> nodes_;
+  std::vector<Node> nodes_;
   int root_ = -1;
   
-  static bool overlaps(const evt_t& x, uint64_t qs, uint64_t qe) {
+  static bool overlaps(const evt_t & x, uint64_t qs, uint64_t qe) {
     const auto &iv = x.interval;
-    // half-open overlap: [s,e) vs [qs,qe)  <=>  s < qe && e > qs
-    return (iv.start < qe) && (iv.stop > qs);
+    if (iv.start < iv.stop) {
+      // normal half-open overlap
+      return (iv.start < qe) && (iv.stop > qs);
+    } else { 
+      // point interval [p,p)
+      uint64_t p = iv.start;
+      return (qs <= p) && (p < qe);
+    }
   }
+
   
   int build_balanced(const std::vector<evt_t>& v,
 		     const std::vector<int>& ord,
