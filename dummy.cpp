@@ -667,6 +667,9 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       lunapi_inst_ptr p = lp->inst( "id1" );
 
       std::cout << " attaching EDFs (local)\n";
+
+      std::cout << "re-init...\n";
+      lp->var( "alias" , "XXX|Light" );
       
       p->attach_edf( "~/tutorial/edfs/learn-nsrr01.edf" );
       p->attach_annot( "~/tutorial/edfs/learn-nsrr01-profusion.xml" );
@@ -675,6 +678,19 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       
       std::vector<std::string> d = p->desc();
       for (int i=0; i<d.size(); i++) std::cout << " d["<<i<<"] = " << d[i] << "\n";
+
+
+      lp->re_init();
+
+      lunapi_inst_ptr p2 = lp->inst( "id2" );
+      p2->attach_edf( "~/tutorial/edfs/learn-nsrr02.edf" );
+      p2->attach_annot( "~/tutorial/edfs/learn-nsrr02-profusion.xml" );
+
+      std::cout << p2->get_id() << " .. " << p2->get_edf_file() << "\n";
+      d = p2->desc();
+      for (int i=0; i<d.size(); i++) std::cout << " d["<<i<<"] = " << d[i] << "\n";
+
+      return;
       
       // introduce some gaps
       //p->eval( "EPOCH & MASK epoch=5-50,500-600,800-850 & MASK flip & RE" );
@@ -825,13 +841,14 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       // void set_scaling( const int nchs , const int nanns ,
       // 			const double yscale , const double ygroup ,
       // 			const double yheader , const double yfooter ,
-      // 			const double scaling_fixed_annot );
+      // 			const double scaling_fixed_annot ,
+      //                        const bool clip );
 
       if ( 0 )
 	{
 	  segsrv.set_scaling( 2 , 1 ,
 			      1 , 0 ,
-			      0.1 , 0.15 , 0.1 );
+			      0.1 , 0.15 , 0.1 , true );
 	  
 	  // check yscaling 
 	  for (int i = 0 ; i < 3; i++)

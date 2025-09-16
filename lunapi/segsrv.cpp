@@ -36,14 +36,15 @@ segsrv_t::segsrv_t( lunapi_inst_ptr inst ) : p( inst )
 
 void segsrv_t::init()
 {
-
+  
   awin = bwin = 0;
   aidx.clear();
   bidx.clear();
+  tidx.clear();
   evts.clear();
   segments = p->edf.timeline.segments();
   gaps = p->edf.timeline.gaps( segments ); 
-
+  
   annot_format6 = true; // plotly
   
   clocktime_t etime( p->edf.header.starttime );
@@ -135,7 +136,7 @@ void segsrv_t::init()
   
   // reset
   awin = bwin = 0;
-  
+
 }
 
 
@@ -156,9 +157,9 @@ void segsrv_t::calc_hjorths( const std::vector<std::string> & chs )
 void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::vector<double> * data ,
 			     const bool do_band, const bool do_hjorth )
 {
-
+  
   if ( ! ( do_band || do_hjorth ) ) return ;
-
+  
   // this is called per-epoch from populate() only 
   double fft_segment_size = 4;
   double fft_segment_overlap = 2;
@@ -382,7 +383,7 @@ Eigen::MatrixXf segsrv_t::get_hjorths( const std::string & ch )
 
 int segsrv_t::populate( const std::vector<std::string> & chs , const std::vector<std::string> & anns )
 {
-
+  
   // for now, can only init this once
   //  (i.e. do a single data pull - this avoids if the internal object is changed
   //   after calling, but the view is still open)
@@ -413,7 +414,8 @@ int segsrv_t::populate( const std::vector<std::string> & chs , const std::vector
 	       1 , // ygroup
 	       0.05, // yheader
 	       0.05, // yfooter
-	       0.10 ); // scaling_fixed_annot
+	       count ? 0.10 : 1 ,
+	       false ); // scaling_fixed_annot
   
   return count;
 }
@@ -586,6 +588,11 @@ bool segsrv_t::add_channel( const std::string & ch )
   const std::vector<double> * data = slice.pdata();
   const int n = data->size();
 
+  // get some sensible ranges
+  const double scaling_plwr = 0.05;
+  const double scaling_pupr = 0.95; 
+  set_empirical_phys_ranges( ch, data , scaling_plwr , scaling_pupr );
+  
   // do means, min/max & SD, as well as spectral/hjorth summaries? (on original data)
   do_summaries( ch, sr, data , bands.find( ch ) != bands.end() , hjorth.find( ch ) != hjorth.end() );  
 
@@ -607,11 +614,12 @@ bool segsrv_t::add_channel( const std::string & ch )
 
   // store new SR post any decimation
   decimated_srmap[ sr ] = sr / (double)decimation_fac;
-
+  
   // do we already have a time-track?
   if ( tidx.find( sr ) == tidx.end() )
-    {      
-      // get time-stampls
+    {
+      
+      // get time-stamps
       const std::vector<uint64_t> * tp = slice.ptimepoints();
       
       // clock
@@ -652,7 +660,7 @@ bool segsrv_t::set_window( double a , double b )
 
   // max time (seconds, 1-tp-unit past end) 
   const double tmax = p->last_sec();
-
+  
   // store seconds 
   awin = a < 0 ? 0 : ( a > tmax ? tmax : a ) ;
   bwin = b < 0 ? 0 : ( b > tmax ? tmax : b ) ;
@@ -680,7 +688,7 @@ bool segsrv_t::set_window( double a , double b )
     {
       int aa = 0, bb = 0;
       const bool okay = get_tidx( awin, bwin , *ss , &aa , &bb );
-      
+
       if ( okay )
 	{
 	  aidx[ *ss ] = aa;
@@ -791,8 +799,10 @@ Eigen::VectorXf segsrv_t::get_timetrack( const std::string & ch ) const
 void segsrv_t::set_scaling( const int nchs , const int nanns ,
 			    const double yscale , const double ygroup ,
 			    const double yheader , const double yfooter ,
-			    const double fixed_annot )
+			    const double fixed_annot ,
+			    const bool clip )
 {
+
   // these parameters adjust the results of get_scaled_signal()
   //  i.e. we will know the signal slot for the requested signal from get_scaled_signal() n1
 
@@ -813,7 +823,6 @@ void segsrv_t::set_scaling( const int nchs , const int nanns ,
   //    (if >1, means it can overlap w/ other bins)
 
   //  yheader, yfooter - allow blank space at top, bottom
-
    
   scaling_nchs = nchs;
   scaling_nanns = nanns;
@@ -822,6 +831,7 @@ void segsrv_t::set_scaling( const int nchs , const int nanns ,
   scaling_yheader = yheader;
   scaling_yfooter = yfooter;
   scaling_fixed_annot = fixed_annot;
+  scaling_clip = clip;
   
   if ( scaling_yheader < 0 ) scaling_yheader = 0;
   if ( scaling_yheader > 1 ) scaling_yheader = 1;
@@ -839,7 +849,7 @@ void segsrv_t::set_scaling( const int nchs , const int nanns ,
   if ( scaling_ygroup > 1 ) scaling_ygroup = 1;
 
   if ( scaling_fixed_annot < 0 ) scaling_fixed_annot = 0;
-  if ( scaling_fixed_annot > 0.5 ) scaling_fixed_annot = 0.5;
+  if ( scaling_fixed_annot > 1 ) scaling_fixed_annot = 1;
 
   //
   // derive and store channel locs
@@ -912,6 +922,13 @@ void segsrv_t::fix_physical_scale( const std::string & ch , const double lwr, co
   phys_ranges[ ch ] = lu;    
 }
 
+// set empirical precalculated (percentile-based) scale
+void segsrv_t::empirical_physical_scale( const std::string & ch )
+{
+  phys_ranges[ ch ] = empirical_phys_ranges[ ch ] ;
+}
+
+
 void segsrv_t::free_physical_scale( const std::string & ch )
 {
   //   std::map<std::string, std::pair<double,double> > phys_ranges;
@@ -922,11 +939,31 @@ void segsrv_t::free_physical_scale( const std::string & ch )
 }
 
 // calc. robust reasonable ranges
-void segsrv_t::set_empirical_phys_ranges()
+void segsrv_t::set_empirical_phys_ranges( const std::string & ch , const std::vector<double> * data ,					  
+					  const double plwr , const double pupr )
 {
-  // clip or show extreme values (beyong 0..1)
-  // bool clip_extremes;  in .h
-  clip_extremes = true;
+  // use 5th and 95th percentiles
+  // or 10th & 90th
+
+  // for discrete signals, we want to keep the original values
+  std::set<double> vals;
+  const int n = data->size();
+  for (int i=0; i<n; i++) vals.insert( (*data)[i] );
+
+  // treat as 'categorical' (e.g. 0/1 flag) if 10 or fewer discrete values
+  if ( vals.size() <= 10 )
+    {
+      const double min = *vals.begin();
+      const double max = *vals.rbegin();      
+      empirical_phys_ranges[ ch ] = std::pair<double,double>( min , max );
+      return;
+    }
+
+  // else percentiles
+  const double p1 = MiscMath::percentile( *data , plwr );
+  const double p2 = MiscMath::percentile( *data , pupr );
+  empirical_phys_ranges[ ch ] = std::pair<double,double>( p1,p2 );
+
 }
 
 
@@ -953,9 +990,9 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
   // set_scaling() multiple times after populate() [ which is only called once ]
 
   Eigen::VectorXf s = get_signal( ch );
-
+  
   // fixed physical scaling, or auto-scaling?
-  // if fixed scaling, then clip if above/below
+  // if fixed scaling, optionally, clip if above/below
   
   float smin, smax; 
 
@@ -974,45 +1011,53 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
       // use pre-specified values
       smin = pp->second.first;
       smax = pp->second.second;
-      
-      // but compare to observed
-      float omin = s.minCoeff();
-      float omax = s.maxCoeff();
-      
-      const int n = s.size();      
-      const bool fix_lwr = omin < smin ;
-      const bool fix_upr = omax > smax ;
-            
-      if ( fix_lwr || fix_upr )
-	{
-	  for (int i=0;i<n;i++)
-	    {
-	      if ( fix_lwr && s[i] < smin ) s[i] = smin;
-	      if ( fix_upr && s[i] > smax ) s[i] = smax;
-	    }
-	}
 
-      // store (observed values)
-      window_phys_range[ ch ] = std::pair<double,double>( fix_lwr ? smin : omin , fix_upr ? smax : omax );
+      // optionally, clip?
+      if ( scaling_clip )
+	{
+	  
+	  // compare to observed
+	  float omin = s.minCoeff();
+	  float omax = s.maxCoeff();
+	  
+	  const int n = s.size();      
+	  const bool fix_lwr = omin < smin ;
+	  const bool fix_upr = omax > smax ;
+	  
+	  if ( fix_lwr || fix_upr )
+	    {
+	      for (int i=0;i<n;i++)
+		{
+		  if ( fix_lwr && s[i] < smin ) s[i] = smin;
+		  if ( fix_upr && s[i] > smax ) s[i] = smax;
+		}
+	    }
+	  
+	  // store (observed values)
+	  window_phys_range[ ch ] = std::pair<double,double>( fix_lwr ? smin : omin , fix_upr ? smax : omax );
+	}
+      else // store just fixed values
+	window_phys_range[ ch ] = std::pair<double,double>( smin , smax );
+
     }
-  
+
   const double srange = smax - smin;
   // special case of smin == smax --> set whole signal to 0.5 
   if ( srange < 1e-3 )
     s = Eigen::VectorXf::Zero( s.size() ).array() + 0.5 ;
   else // normalize to 0..1  X = ( X - min ) / ( max - min )    
     s = ( s.array() - smin ) / (float)srange;
-
+  
   // rescale to display units
   double lwr = 0,  upr = 1;
   const bool okay = get_yscale_signal( n1 , &lwr, &upr );
 
   // to clip between 0 and 1:
   //     vec = vec.cwiseMax(0.0).cwiseMin(1.0);
-  
+    
   if ( okay )
     s = s.array() * ( upr - lwr ) + lwr;
-  
+
   // return
   return s;
       
@@ -1037,7 +1082,7 @@ Eigen::VectorXf segsrv_t::get_signal( const std::string & ch ) const
   const Eigen::VectorXf & data = sigmap.find( ch )->second;
   const int aa = aidx.find(sr)->second;
   const int bb = bidx.find(sr)->second;  
-
+  
   // throttle?
   if ( max_samples_out && ( bb - aa ) > max_samples_out )
     {
@@ -1062,28 +1107,36 @@ Eigen::VectorXf segsrv_t::get_signal( const std::string & ch ) const
 // given two times and a sample rate, get indices
 bool segsrv_t::get_tidx( double a, double b , int sr , int * aa, int *bb ) const
 {
-
   if ( tidx.find( sr ) == tidx.end() ) return false;
 
   const std::map<double,int> & ts = tidx.find( sr )->second ;
 
   // iterator equal/greater than start
   std::map<double,int>::const_iterator abound = ts.lower_bound( a );
-  if ( abound == ts.end() ) return false;
- 
-  // one-past the end
-  std::map<double,int>::const_iterator bbound = ts.lower_bound( b );
-  if ( bbound == ts.end() ) return false;
+  if ( abound == ts.end() )
+    return false;
   
+  // one-past the end
+  //  --> if exactly at end, okay, move to prior sample
+  //      but then add 1tp (below) so we include the final sample)
+  bool at_end = false; 
+
+  std::map<double,int>::const_iterator bbound = ts.lower_bound( b );
+  if ( bbound == ts.end() )
+    {
+      if ( ts.size() == 0 ) return false; // degenerate case
+      --bbound;
+      at_end = true;
+    }
+
   // if we are in a gap, then both abound and bbound will point to the
   // same element (i.e. if not end(), then both the same next segment
   // index;  this means the window is not valid
-
-  if ( abound == bbound ) return false;
   
-  *aa = abound->second;
-  *bb = bbound->second;
+  if ( abound == bbound ) return false;
 
+  *aa = abound->second;
+  *bb = at_end ? bbound->second + 1 : bbound->second;
   return true;
     
 }
@@ -1221,17 +1274,20 @@ void segsrv_t::compile_evts( const std::vector<std::string> & anns )
   compiled_annots_stacks.clear();
   compiled_annots_end_stacks.clear();
 
+  // for fixed position ordering: total number of annots (whether shown or not in this window)
+  const int na = anns.size();
+  
   // working intermediate
   std::map<std::string,std::vector<std::pair<double,double> > > annots_times;
   std::map<std::string,std::vector<std::pair<double,double> > > annots_stacks;
-
+  
   // get all events that overlap this window
   std::map<std::string,std::vector<std::pair<double,double> > > wevts = fetch_evts();
   
   // make uniform time-line: extracted from in-window events
   std::set<fevt_t> xevts;
-
-  // count # of unique annot types in this windo
+  
+  // count # of unique annot types in this window
   std::map<std::string,int> amap;
   
   for (int a=0;a<anns.size();a++)
@@ -1240,10 +1296,12 @@ void segsrv_t::compile_evts( const std::vector<std::string> & anns )
       if ( wevts.find( anns[a] ) == wevts.end() ) continue;
 
       const std::string & aname = anns[a];
-
+      
       // track position for y
-      amap[ aname ] = amap.size() ; 
-	    
+//      amap[ aname ] = amap.size() ; 
+      // alternate: simple scaling (i.e. fixed w.r.t to /all/ annots, not jsut those in the window)
+      amap[ aname ] = a;
+      
       // events
       const std::vector<std::pair<double,double> > & e = wevts.find( aname )->second;
 
@@ -1286,7 +1344,9 @@ void segsrv_t::compile_evts( const std::vector<std::string> & anns )
   //const double abase = 1.0 - scaling_fixed_annot - scaling_yheader;
   
   // maxd +1 i.e to allow for height of top annot
-  const double a1height = scaling_fixed_annot / (double)(maxd);
+// OLD:   const double a1height = scaling_fixed_annot / (double)(maxd);
+  // alternate: simpler y-axis scaling 
+  const double a1height = scaling_fixed_annot / (double)(na);
   
   std::map<std::string,std::vector<std::pair<double,double> > >::iterator cc = annots_stacks.begin();
   while ( cc != annots_stacks.end() )

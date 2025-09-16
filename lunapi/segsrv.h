@@ -235,9 +235,11 @@ public:
   // initialize (or reset) to current internal state
   int populate( const std::vector<std::string> & chs ,
 		const std::vector<std::string> & anns );
-
+		
+  
   // set physical limits (mins) for a given channel
   void fix_physical_scale( const std::string & ch , const double lwr, const double upr );
+  void empirical_physical_scale( const std::string & ch );
   void free_physical_scale( const std::string & ch );
   
   // get overall time-scale
@@ -256,9 +258,8 @@ public:
   void set_scaling( const int nchs , const int nanns ,
 		    const double yscale , const double ygroup ,
 		    const double yheader , const double yfooter ,
-		    const double scaling_fixed_annot );
-
-
+		    const double scaling_fixed_annot ,
+		    const bool clip );
   
   // get scaled signals (0-1 give other annots  
   bool get_yscale_signal( const int n1 , double * lwr, double * upr ) const; // --> can make private
@@ -336,7 +337,7 @@ public:
 
   double get_ylabel( const int idx ) const {
     if ( idx < 0 || idx > scaling_upr.size() ) return -1;
-    return scaling_upr[idx];
+    return ( scaling_lwr[idx] + 2 * scaling_upr[idx] ) / 3.0 ;
   }
   
   bool serve_raw_signals() const { return bwin - awin > summary_threshold_secs ; } 
@@ -396,7 +397,8 @@ private:
   int scaling_nchs, scaling_nanns;
   double scaling_yheader, scaling_yfooter;
   double scaling_fixed_annot;
-
+  bool scaling_clip;
+  
   // physical scaling (for scaled_signal)
   std::map<std::string, std::pair<double,double> > phys_ranges;
 
@@ -404,11 +406,9 @@ private:
   std::map<std::string,std::pair<double,double> > window_phys_range;
 
   // calc. robust reasonable ranges
-  void set_empirical_phys_ranges();
+  void set_empirical_phys_ranges( const std::string & ch, const std::vector<double> * data, const double plwr , const double pupr );
+  std::map<std::string,std::pair<double,double> > empirical_phys_ranges;
 
-  // clip or show extreme values (beyong 0..1)
-  bool clip_extremes;
-  
   // cumulative seconds (length of data, w/out gaps)
   //  double cumul_sec;
   

@@ -226,14 +226,26 @@ void lunapi_t::re_init()
 
   // clear all user-defined variables, signal lists and aliases  
   cmd_t::clear_static_members();
-  
+
   // also reset global variables that may have been changed since
   global.init_defs();
-  
+      
   // but need to re-indicate that we are running inside API
-  global.R( 1 ); // 1 means to cache
-
+  //  global.R( 1 ); // 1 means to cache
+      
   reset();
+  
+  // writer.nodb();
+  
+  // logger << "** luna " 
+  // 	     << globals::version 
+  // 	     << " " << globals::date
+  // 	     << "\n";
+  
+  // logger.print_buffer();
+
+  
+  
 }
 
 // read a Luna @include file and set variables
@@ -516,6 +528,31 @@ int lunapi_t::read_sample_list( const std::string & file )
   
   return nobs();
 }
+
+
+int lunapi_t::set_sample_list( const std::vector<std::vector<std::string> > & d )
+{
+
+  for (int i=0; i<d.size(); i++)
+    {
+      const std::vector<std::string> & row = d[i];
+      if ( row.size() != 3 ) continue;
+      const std::string id = row[0];
+      const std::string edf = row[1];
+
+      std::vector<std::string> toka = Helper::parse( row[2] , "," );
+      std::set<std::string> aset;      
+      for (int a=0;a<toka.size();a++)
+	aset.insert( toka[a] );
+
+      // insert
+      insert_inst( id , edf , aset );
+      
+    }
+  return nobs();
+
+}
+
 
 std::vector<std::tuple<std::string,std::string,std::set<std::string> > > lunapi_t::sample_list() const
 {

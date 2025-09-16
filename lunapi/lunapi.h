@@ -137,6 +137,8 @@ public:
   //
   
   int read_sample_list( const std::string & file );
+
+  int set_sample_list( const std::vector<std::vector<std::string> > & );
   
   int build_sample_list( const std::vector<std::string> & toks );
 

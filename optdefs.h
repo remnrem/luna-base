@@ -40,6 +40,7 @@ enum opt_type_t {
   OPT_BOOL_T ,
   OPT_INT_T ,
   OPT_NUM_T ,
+  OPT_NUM_INTERVAL_T , 
   OPT_STR_T , 
   OPT_FILE_T ,
   OPT_PATH_T ,
@@ -63,18 +64,23 @@ class optdefs_t
   
   void init();
   
-  void add( const std::string & opt , const opt_type_t & type , const std::string & desc );
+  void add( const std::string & domain, const std::string & opt , const opt_type_t & type , const std::string & desc );
 
   bool has( const std::string & opt ) const
   {
     return odesc.find( opt ) == odesc.end(); 
   }
-
+  
   opt_type_t get_type( const std::string & d ) const;
-
+  
   std::string get_desc( const std::string & d ) const;
 
-  std::vector<std::string> get_opts() const; 
+  std::vector<std::string> get_domains( const std::string & ) const
+  {
+    return domains;
+  }
+
+  std::vector<std::string> get_opts( const std::string & ) const; 
 
   static std::string type( opt_type_t t )
   {
@@ -96,7 +102,11 @@ class optdefs_t
   }
 
 private:
+  
+  std::vector<std::string> domains;
 
+  std::map<std::string,std::vector<std::string> > domain2opt;
+  
   std::map<std::string,std::string> odesc;
 
   std::map<std::string,opt_type_t> otype;

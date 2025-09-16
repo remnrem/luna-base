@@ -4617,9 +4617,16 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
   // ... except handle the special case of 'sig' which _appends_ to an
   // existing list unless '.'
+
   
-  globals::optdefs().add( "sig" , OPT_STRVEC_T , "One or more signals to import from the EDF" );
   
+
+
+  
+  //
+  // ------------------------------------------------------------
+  //
+
   if ( tok0 == "sig" )
     {
       std::string curr = cmd_t::vars[ tok0 ];
@@ -4663,17 +4670,14 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // now handle processing of all other special variables
   //
 
-  globals::optdefs().add( "order-signals" , OPT_BOOL_T , "Order signals alphabetically" );
-    
   // return signals alphabetically
   if ( Helper::iequals( tok0 , "order-signals" ) )
     {
       globals::order_signal_list_alphabetically = Helper::yesno( tok1 );
       return;
     }
-
-  globals::optdefs().add( "silent" , OPT_BOOL_T , "Suppress console logging" );
-
+  
+  
   // no console logging?
   if ( Helper::iequals( tok0 , "silent" ) ) 
     {
@@ -4681,8 +4685,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;      
     }
 
-  globals::optdefs().add( "log" , OPT_FILE_T , "Write console output to this file" );
-  
+    
   // save console logging
   if ( Helper::iequals( tok0 , "log" ) )
     {
@@ -4691,8 +4694,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "write-log" , OPT_BOOL_T , "Turn off log-saving (i.e. used via API)" );
-    
+      
   // allow to turn off log saving (e.g. via API)
   if ( Helper::iequals( tok0 , "write-log" ) )
     {
@@ -4700,15 +4702,14 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "verbose" , OPT_BOOL_T , "Set verbose logging" );
-    
+      
   if ( Helper::iequals( tok0 , "verbose" ) )
     {
       globals::verbose = Helper::yesno( tok1 );
       return;
     }
 
-  globals::optdefs().add( "srand" , OPT_INT_T , "Set random seed (long unsigned int)" );
+  
 
   if ( Helper::iequals( tok0 , "srand" ) )
     {
@@ -4729,7 +4730,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "legacy-hjorth" , OPT_BOOL_T , "Use legacy Hjorth complexity calculation" );
+  
   
   if ( Helper::iequals( tok0 , "legacy-hjorth" ) )
     {
@@ -4737,7 +4738,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "show-assignments" , OPT_BOOL_T , "Log all variable assignments" );
+  
   
   if ( Helper::iequals( tok0 , "show-assignments" ) )
     {
@@ -4745,7 +4746,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "mirror" , OPT_BOOL_T , "Mirror inputs in console log" );
+  
 
   // mirror inputs in console log
   if ( Helper::iequals( tok0 , "mirror" ) )
@@ -4754,8 +4755,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-
-  globals::optdefs().add( "digital" , OPT_BOOL_T , "(debug-mode) read digital values, do not map to physical values" );
+  
+  
 
   // debug mode: read digital values from EDF (i.e. do not translate
   // to physical values)
@@ -4766,8 +4767,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "id" , OPT_STRVEC_T , "Select these IDs from the sample list" );
-
+    
   // specify indiv(s) (i.e. can be used if ID is numeric)
   if ( Helper::iequals( tok0 , "id" ) )
     {
@@ -4775,7 +4775,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "skip" , OPT_STRVEC_T , "Skip these IDs from the sample list" );
+ 
 
   // specify indiv(s) to skip (i.e. can be used if ID is numeric)
   if ( Helper::iequals( tok0 , "skip" ) )
@@ -4784,7 +4784,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "anon" , OPT_BOOL_T , "Do not read IDs in" );
+  
   
   // do not read IDs in
   if ( Helper::iequals( tok0 , "anon" ) )
@@ -4793,7 +4793,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "date-format" , OPT_SPECIAL_T , "Set input date format (MDY, DMY or YMD)" );
+  
 
   // read in US style annot dates (mm-dd-yy)
   if ( Helper::iequals( tok0 , "date-format" ) )
@@ -4805,8 +4805,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     } 
 
-  globals::optdefs().add( "write-date-format" , OPT_SPECIAL_T , "Set output date format (MDY, DMY or YMD) - currently not used" );
-
+  
   // write in different date format
   if ( Helper::iequals( tok0 , "write-date-format" ) )
     {
@@ -4817,7 +4816,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "edf-date-format" , OPT_SPECIAL_T , "Set input EDF header date format (MDY, DMY or YMD)" );
+  
 
   // read different format from EDF header
   if ( Helper::iequals( tok0 , "edf-date-format" ) )
@@ -4829,7 +4828,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "starttime" , OPT_TIME_T , "Force EDF start time" );
+  
 
   // force start time/dates
   if ( Helper::iequals( tok0 , "starttime" ) )
@@ -4840,8 +4839,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
-  globals::optdefs().add( "startdate" , OPT_DATE_T , "Force EDF start date" );
-
+  
   if ( Helper::iequals( tok0 , "startdate" ) )
     {
       globals::force_startdate = tok1;
@@ -4850,7 +4848,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "wildcard" , OPT_CHAR_T , "Set ID wildcard character; default = ^" );
+  
   // specify indiv-wildcard (other than ^)
   // which is needed if file ID actually contains ^
   if ( Helper::iequals( tok0 , "wildcard" ) )
@@ -4859,8 +4857,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "sanitize" , OPT_BOOL_T , "Sanitize labels (signals & annots)" );
-
+  
   // always sanitize labels (channels, annots) on first reading?
   if ( Helper::iequals( tok0 , "sanitize" ) )
     {
@@ -4868,8 +4865,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "fix-edf" , OPT_BOOL_T , "Attempt to correct truncated/extended EDFs" );
-
+  
   // "auto-correct" truncated/over-long EDFs
   if ( Helper::iequals( tok0, "fix-edf" ) )
     {
@@ -4877,7 +4873,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "force-digital-minmax" , OPT_BOOL_T , "(debug-mode) Force digitial min/max (if it is invalid)" );
+  
  
   // force dig min/max (if it is invalid)
   if ( Helper::iequals( tok0 , "force-digital-minmax" ) )
@@ -4886,8 +4882,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "force-digital-min" , OPT_INT_T , "(debug-mode) Force digitial min value" );
-  
+    
   // force dig min/max (if it is invalid)
   if ( Helper::iequals( tok0 , "force-digital-min" ) )
     {
@@ -4896,7 +4891,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "force-digital-max" , OPT_INT_T , "(debug-mode) Force digitial max value" );
+  
     
   // force dig min/max (if it is invalid)
   if ( Helper::iequals( tok0 , "force-digital-max" ) )
@@ -4906,7 +4901,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
-  globals::optdefs().add( "sec-dp" , OPT_INT_T , "Set decimal places for certain time outputs" );
+
   
   // dp for time output
   if ( Helper::iequals( tok0, "sec-dp" ) )
@@ -4916,7 +4911,6 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "spaces" , OPT_CHAR_T , "Character to replace spaces with; default = _" );
 
   // swap spaces
   if ( Helper::iequals( tok0 , "spaces" ) )
@@ -4929,7 +4923,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "upper" , OPT_BOOL_T , "Set signal labels to uppercase" );
+
 
   // set channel names as all UPPERCASE
   if ( Helper::iequals( tok0 , "upper" ) )
@@ -4938,7 +4932,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "retain-case" , OPT_BOOL_T , "If aliasing a primary, retain input case (default = T)" );
+
     
   // if mapping to primary, retain original channel case (default=T)
   if ( Helper::iequals( tok0 , "retain-case" ) )
@@ -4947,7 +4941,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "keep-spaces" , OPT_BOOL_T , "Keep spaces as is for channel & annotation labels" );
+
 
   // keep spaces
   if ( Helper::iequals( tok0 , "keep-spaces" ) )
@@ -4957,8 +4951,6 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "keep-annot-spaces" , OPT_BOOL_T , "Keep spaces as is for annotation labels" );
-  
   // keep spaces (annots only) 
   if ( Helper::iequals( tok0 , "keep-annot-spaces" ) )
     {
@@ -4966,8 +4958,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "keep-channel-spaces" , OPT_BOOL_T , "Keep spaces as is for channel labels" );
-    
+      
   // keep spaces (channels only) 
   if ( Helper::iequals( tok0 , "keep-channel-spaces" ) )
     {
@@ -4975,7 +4966,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "add-ellipsis" , OPT_BOOL_T , "Mark 0-duration intervals as '...' (WRITE-ANNOTS --> .annot)" );
+  
     
   // on WRITE-ANNOTS .annot (only), set 0-duration intervals to '...' markers
   if ( Helper::iequals( tok0 , "add-ellipsis" ) ) 
@@ -4984,7 +4975,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "annot-segment" , OPT_STR_T , "Annotation label to mark EDF+D segments; default = segment" );
+  
 
   // treatment of gaps going from EDF+D to EDF in annots
   if ( Helper::iequals( tok0 , "annot-segment" ) )
@@ -4993,8 +4984,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "annot-gap" , OPT_STR_T , "Annotation label to mark EDF+D gaps; default = gap" );
-    
+      
   if ( Helper::iequals( tok0 , "annot-gap" ) )
     {
       globals::annot_disc_gap = tok1[0];
@@ -5008,8 +4998,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "class-instance-delimiter" , OPT_CHAR_T , "Annotation class/instance delimiter, default = :" );
-
+  
   // split class/annot remappings (ABC/DEF|XYZ)
   if ( Helper::iequals( tok0 , "class-instance-delimiter" ) )
     {
@@ -5017,7 +5006,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "combine-annots" , OPT_CHAR_T , "Combine class/instance delimiter, default = _" );
+  
     
   // combine annot class and instance IDs
   if ( Helper::iequals( tok0 , "combine-annots" ) )
@@ -5027,7 +5016,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "annot-whitelist" , OPT_BOOL_T , "Skip annotations not whitelisted (i.e. with an explicit remap)" );
+
 
   // skip annots not on the whitelist (remap list)
   // also applies to EDF Annots 
@@ -5037,7 +5026,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;      
     }
 
-  globals::optdefs().add( "annot-unmapped" , OPT_BOOL_T , "Skip whitelisted annotations (i.e. without an explicit remap)" );
+
   
   // skip annots on the whitelist (i.e. to get unampped remapings are a whitelist
   if ( Helper::iequals( tok0 , "annot-unmapped" ) )
@@ -5046,7 +5035,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
-  globals::optdefs().add( "ss-prefix" , OPT_STR_T , "Set sleep-stage prefix (e.g. pN1, pN2, etc)" );
+
      
   // sleep stage prefix
   if (  Helper::iequals( tok0 , "ss-prefix" ) )
@@ -5055,7 +5044,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "ss-pops" , OPT_BOOL_T , "Implies ss-prefix=p" );
+  
 
   // POPS stages: pN1, pN2, ... 
   if ( Helper::iequals( tok0 , "ss-pops" ) )
@@ -5065,7 +5054,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "ss-soap" , OPT_BOOL_T , "Implies ss-prefix=s" );
+  
     
   // SOAP stages: sN1, sN2, ... 
   if ( Helper::iequals( tok0 , "ss-soap" ) )
@@ -5075,7 +5064,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  globals::optdefs().add( "assume-stage-duration" , OPT_BOOL_T , "Assume 0-dur sleep stages are of epoch-duration" );
+  
 
   // assume 0-dur sleep stage annots are of epoch-duration (change on loading)
   // (by default, true)
@@ -5084,6 +5073,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::sleep_stage_assume_epoch_duration = Helper::yesno( tok1 );
       return;
     }
+
   
   
   if (  Helper::iequals( tok0 , "default-starttime" ) )
@@ -5092,12 +5082,16 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::default_starttime = tok1;
       return;
     }
+
+  
   
   if (  Helper::iequals( tok0 , "no-default-starttime" ) )
     {
       globals::use_default_starttime = ! Helper::yesno( tok1 ); 
       return;
     }
+
+  
 
   if (  Helper::iequals( tok0 , "default-startdate" ) )
     {
@@ -5106,12 +5100,16 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
+  
+
   if (  Helper::iequals( tok0 , "no-default-startdate" ) )
     {
       globals::use_default_startdate = ! Helper::yesno( tok1 ); 
       return;
     }
 
+  
+    
   // individual-specific variables
   if ( Helper::iequals( tok0 , "vars" ) ) 
     {
@@ -5119,6 +5117,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  
+    
   // ID re-mapper?
   if ( Helper::iequals( tok0 , "ids" ) )
     {
@@ -5126,6 +5126,9 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+
+  
+    
   // channel type labels: partial match
   if ( Helper::iequals( tok0 , "ch-match" ) )
     {
@@ -5140,6 +5143,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  
+    
   // channel type labels: exact match
   if ( Helper::iequals( tok0 , "ch-exact" ) )
     {
@@ -5154,13 +5159,17 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  
+
   // wipe channel type map
   if ( Helper::iequals( tok0 , "ch-clear" ) )
     {
       if ( Helper::yesno( tok1 ) ) globals::clear_channel_map();
       return;
     }
+
   
+    
   // naughty list?
   if ( Helper::iequals( tok0 , "fail-list" ) )
     {
@@ -5171,6 +5180,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       P.close();      
       return;
     }
+
+  
 
   // -t output compression 
   if ( Helper::iequals( tok0 , "compressed" ) )
@@ -5186,6 +5197,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // stages   Y
   // others   N
   // i.e. order of annot-remap=F and nsrr-remap=T will matter
+
+  
   
   // annot-remap: if F, then wipe all (stages + any added NSRR terms)
   if ( Helper::iequals( tok0 , "annot-remap" ) )
@@ -5200,6 +5213,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  
+  
   // nsrr-remap: if T, add in extra terms (off by default)  
   if ( Helper::iequals( tok0 , "nsrr-remap" ) )
     {
@@ -5208,6 +5223,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
+  
+  
   // generic annotation re-labelling, same format as 'alias'
   if ( Helper::iequals( tok0 , "remap" ) )
     {
@@ -5215,6 +5232,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  
+			      
   // for EDF-annots only, set these to be a class rather than an annotation
   // (and apply any remappings)
   // if annot-whitelist=T then we *only* add EDF Annots if they are named here 
@@ -5223,7 +5242,9 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       nsrr_t::edf_annot_class( globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
       return;
     }
+
   
+    
   if (  Helper::iequals( tok0 , "edf-annot-class-all" ) )
     {
       // equals 'edf-annot-class=*'
@@ -5234,6 +5255,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   
   
   
+
   // fix delimiter to tab only for .annot
   // default T --> tab-only=F is option to allow spaces  
   if ( Helper::iequals( tok0 , "tab-only" ) )
@@ -5242,7 +5264,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-
+  
+  
   // if annot INST ID black, add hh:mm:ss
   if ( Helper::iequals( tok0 , "inst-hms" ) )
     {
@@ -5250,6 +5273,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  
+    
   // set INST ID to hh:mm:ss, whether it is blank or not
   if ( Helper::iequals( tok0 , "force-inst-hms" ) )
     {
@@ -5257,6 +5282,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  
+    
   // not enforce epoch check for .eannot
   // default = 5 ... (arbitrary, but allow the occassional off-by-one issue)
   if ( Helper::iequals( tok0 , "epoch-check" ) )
@@ -5267,6 +5294,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  
+    
   // set default epoch length
   if ( Helper::iequals( tok0 , "epoch-len" ) )
     {
@@ -5275,21 +5304,20 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  
 
   // additional annot files to add from the command line
   // i.e. so we don't have to edit the sample-list
-  if ( Helper::iequals( tok0 , "annot-file" ) ||
-       Helper::iequals( tok0 , "annot-files" ) ||
-       Helper::iequals( tok0 , "annots-file" ) ||
-       Helper::iequals( tok0 , "annots-files" ) )
+  if ( Helper::iequals( tok0 , "annot-file" ) )
     {
       globals::annot_files = Helper::parse( tok1 , "," );
       return;
     }
   
-
+  
+ 
   // specified annots (only load these)
-  if ( Helper::iequals( tok0 , "annots" ) || Helper::iequals( tok0 , "annot" ) ) 
+  if ( Helper::iequals( tok0 , "annot" ) ) 
     {
       param_t dummy;     
       dummy.add( "dummy" , globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
@@ -5300,8 +5328,10 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  
+    
   // specified annots (only load these - but do not apply sanitization)
-  if ( Helper::iequals( tok0 , "raw-annots" ) || Helper::iequals( tok0 , "raw-annot" ) ) 
+  if ( Helper::iequals( tok0 , "raw-annot" ) ) 
     {
       param_t dummy;     
       dummy.add( "dummy" , tok1 );
@@ -5311,10 +5341,9 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	globals::specified_annots = Helper::combine( globals::specified_annots, dummy.strset( "dummy" , "," ) );
       return;
     }
-
-
+  
   // excluded annots (do not load these)
-  if ( Helper::iequals( tok0 , "ignore-annots" ) || Helper::iequals( tok0 , "ignore-annot" ) ) 
+  if ( Helper::iequals( tok0 , "ignore-annot" ) ) 
     {
       param_t dummy;     
       dummy.add( "dummy" , globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
@@ -5324,9 +5353,9 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	globals::excluded_annots = Helper::combine( globals::excluded_annots, dummy.strset( "dummy" , "," ) );      
       return;
     }
-  
+
   // specified annots (do not load these - but do not apply sanitization)
-  if ( Helper::iequals( tok0 , "ignore-raw-annots" ) || Helper::iequals( tok0 , "ignore-raw-annot" ) ) 
+  if ( Helper::iequals( tok0 , "ignore-raw-annot" ) ) 
     {
       param_t dummy;     
       dummy.add( "dummy" , tok1 );
@@ -5337,7 +5366,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
-  
+
+    
   // delimiter char for annot key=value pairs (default '=')
   if ( Helper::iequals( tok0 , "annot-keyval" ) )
     {
@@ -5346,13 +5376,15 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
 
+  
   // alternate char for default (primary) annot meta delims (default |)
   if ( Helper::iequals( tok0 , "annot-meta-delim1" ) )
     {
       globals::annot_meta_delim = tok1[0];
       return;
     }
-  
+
+
   // char for annot meta delims (default ; )
   if ( Helper::iequals( tok0 , "annot-meta-delim2" ) )
     {
@@ -5360,16 +5392,19 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::annot_meta_delim2 = tok1[0];
       return;
     }
+
+
   
   // default type if numeric if meta-data type of not otherwise defined
-  // true by default - will give error for text, in which case need to specify
-  
+  // true by default - will give error for text, in which case need to specify  
   if ( Helper::iequals( tok0 , "annot-meta-default-num" ) )
     {
       globals::annot_default_meta_num_type = Helper::yesno( tok1 );
       return;
     }
 
+
+			  
   // default type for an annot meta data (all .annots)
   if ( Helper::iequals( tok0 , "num-atype" ) )
     {
@@ -5378,7 +5413,9 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	globals::atypes[ toka[i] ] = globals::A_DBL_T;
       return;
     }
-  
+
+
+    
   if ( Helper::iequals( tok0 , "txt-atype" ) || Helper::iequals( tok0 , "str-atype" ) )
     {
       std::vector<std::string> toka = Helper::parse( tok1 , "," );
@@ -5387,6 +5424,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
+
+
   if ( Helper::iequals( tok0 , "int-atype" ) )
     {
       std::vector<std::string> toka = Helper::parse( tok1 , "," );
@@ -5394,6 +5433,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 	globals::atypes[ toka[i] ] = globals::A_INT_T;
       return;
     }
+
+
   
   if ( Helper::iequals( tok0 , "bool-atype" ) )
     {
@@ -5403,6 +5444,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+
+  
   // annotation alignment
   if ( Helper::iequals( tok0 , "align-annots" ) )
     {
@@ -5410,7 +5453,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
   
-  
+
+    
   // signal alias?
   if ( Helper::iequals( tok0 , "alias" ) )
     {
@@ -5424,6 +5468,8 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       cmd_t::signal_alias( str );
       return;
     }
+
+
   
   // behaviour when a problem encountered
   if ( Helper::iequals( tok0 , "bail-on-fail" ) )
@@ -5431,7 +5477,9 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::bail_on_fail = Helper::yesno( tok1 );
       return;
     }
-  
+
+
+
   // force reading EDF+ as EDF
   // (skips EDF Annotations track, and ignores any time-track information)
   if ( Helper::iequals( tok0 , "force-edf" ) )
@@ -5440,7 +5488,9 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  
 
+  
   // pre-read whole EDF(+D) rather than random access reads
   //  (to avoid slow fseek() implementations) 
   if ( Helper::iequals( tok0, "preload" ) ) 
@@ -5450,6 +5500,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
   
 
+  
   // skip anyt EDF Annotations from EDF+
   if ( Helper::iequals( tok0 , "skip-edf-annots" ) )
     {
@@ -5457,13 +5508,17 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+
+
   // do not load sample-list annotations
   if ( Helper::iequals( tok0 , "skip-sl-annots" ) )
     {
       globals::skip_sl_annots = Helper::yesno( tok1 );
       return;
     }
-  
+
+
+    
   // do not read ANY annotations
   if ( Helper::iequals( tok0 , "skip-annots" ) ||
        Helper::iequals( tok0 , "skip-all-annots" ) )
@@ -5472,13 +5527,17 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::skip_edf_annots = globals::skip_sl_annots = globals::skip_nonedf_annots = Helper::yesno( tok1 );
       return;
     }
-  	
+
+
+    
   // project path
   if ( Helper::iequals( tok0 , "path" ) )
     {
       globals::param.add( "path" , tok1 );
       return;
     }
+
+
 
   // prepend/append for text-table output files
   if ( Helper::iequals( tok0 , "tt-prepend" ) ||  Helper::iequals( tok0 , "tt-prefix" ) )
@@ -5487,12 +5546,16 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+
+
   if ( Helper::iequals( tok0 , "tt-append" ) ||  Helper::iequals( tok0 , "tt-suffix" ) )
     {
       globals::txt_table_append = tok1;
       return;
     }
 
+
+  
   // shift times +12 hours if between 04:00 and 12:00  (--> 16:00 to 00:00 ) 
   if ( Helper::iequals( tok0 , "assume-pm-start" ) )
     {
@@ -5512,7 +5575,6 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       
       return;
     }
-  
 
   // power band defintions
   if ( Helper::iequals( tok0 , "slow" ) 
@@ -5563,6 +5625,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+
   
   // exclude individuals?
   if ( Helper::iequals( tok0 , "exclude" ) )
@@ -5599,6 +5662,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
 
+  
   // exclude individuals?
   if ( Helper::iequals( tok0 , "include" ) )
     {
@@ -6226,6 +6290,8 @@ void proc_has_signals( edf_t & edf , param_t & param )
 	  
 	  bool has_stages = edf.timeline.hypnogram.construct( &edf.timeline , param , false ) ;
 
+	  if ( ! has_stages ) present = false;
+	  
 	  if ( has_stages ) 
 	    {
 	      int ne = edf.timeline.num_epochs();
