@@ -89,7 +89,7 @@ static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a
 	$(CXX) -static -static-libgcc -static-libstdc++ -o luna-static $^ 
 
 destrat: utils/reader.o libluna.a
-	$(CXX) -o $@ $^ -L. $(LDFLAGS)
+	$(CXX) -o $@ $^ -L. $(LDFLAGS) $(DEP_LIB)
 
 regional: utils/region-annotate.o 
 	$(CXX) -o $@ $^ 
@@ -101,7 +101,7 @@ fixrows: utils/fixrows.o
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 cgi-mapper: utils/cgi-mapper.o libluna.a
-	$(CXX)  -o $@ $^ $(LDFLAGS)
+	$(CXX)  -o $@ $^ $(LDFLAGS) $(DEP_LIB)
 
 behead: utils/behead.o
 	$(CXX) -o $@ $^  $(LDFLAGS)
@@ -110,7 +110,7 @@ dmerge: utils/merge.o utils/merge-helpers.o
 	$(CXX) -o $@ $^ 
 
 simassoc: utils/simassoc.o libluna.a
-	$(CXX) -o $@ $^  $(LDFLAGS)
+	$(CXX) -o $@ $^  $(LDFLAGS) $(DEP_LIB)
 
 .PHONY: clean
 

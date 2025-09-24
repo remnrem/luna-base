@@ -1103,10 +1103,39 @@ void proc_headers( edf_t & edf , param_t & param )
 // SET-VAR : set an IVAR
 void proc_set_ivar( edf_t & edf , param_t & param )
 {
-  std::string val;
-  std::string var = param.single_pair( & val );
-  //logger << "  setting individual-level variable " << var << " to " << val << "\n";
-  cmd_t::ivars[ edf.id ][ var ] = val;
+  // expect var=" expr "
+  
+  std::string expr;
+
+  std::string var = param.single_pair( & expr );
+  
+  logger << "  setting individual-level variable " << var << " to [ " << expr << " ]\n";
+  
+  // read a single line
+  std::map<std::string,annot_map_t> inputs;
+  
+  instance_t out;
+  
+  Eval tok( expr );
+
+  tok.bind( inputs , &out );
+
+  const bool verbose = true;
+  
+  bool is_valid = tok.evaluate( verbose );
+  
+  bool retval;
+  
+  if ( ! tok.value( retval ) ) is_valid = false;
+
+  std::cout << "parsed as a valid expression : " << ( is_valid ? "yes" : "no" ) << "\n";
+  std::cout << "return value                 : " << tok.result() << "\n";
+  std::cout << "return value (as T/F)        : " << ( retval ? "true" : "false" ) << "\n";
+  std::cout << "assigned meta-data           : " << out.print() << "\n";  
+
+  // and set (as string value)
+  if ( is_valid ) 
+    cmd_t::ivars[ edf.id ][ var ] = tok.result();
 }
 
 // SET-HEADERS : set EDF header fields

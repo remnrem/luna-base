@@ -28,6 +28,7 @@
 #include "intervals/intervals.h"
 #include "edf/edf.h"
 #include "zfstream.h"
+#include "helper/token-eval.h"
 
 #include <cmath>
 #include <cstdio>
@@ -2328,6 +2329,10 @@ std::string Helper::incexc( const std::string & xx )
 
 void Helper::swap_in_variables( std::string * t , std::map<std::string,std::string> * vars , const bool allow_missing , const bool silent )
 {
+
+  //  std::cout << " -------------------------- entering swap_in_variables() with [" << *t << "]\n";
+  
+
   // comments will have been stripped out
   // variable must be in the form   ${var} 
   // definitions can be as ${var=values,etc}
@@ -2396,7 +2401,7 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		  (*vars)[ lvalue ] += evalue;
 		  break;
 		}
-	      // definition?
+	      // definition? 
 	      else if ( varname.find( "=" ) != std::string::npos )
 		{
 		  std::vector<std::string> tok = Helper::parse( varname , "=" );
@@ -2405,14 +2410,68 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		  // recursively swap in any existing variables in the definition
 		  // ${a=${b}} 
 		  Helper::swap_in_variables( &tok[1] , vars , allow_missing , silent );
+
+		  // expression value
+		  std::string evalue;
 		  
-		  // allow for expansions too
-		  std::string evalue = tok[1];
-		  if ( ! boolvar ) Helper::expand_numerics( &evalue );		    
-		  if ( boolvar ) evalue = Helper::yesno( evalue ) ? "1" : "0" ;		  
+		  // simple boolean vars
+		  if ( boolvar )
+		    evalue = Helper::yesno( evalue ) ? "1" : "0" ;		  
+		  
+		  // standard expressions (Eval)
+		  if ( ! boolvar )
+		    {
+
+		      evalue = tok[1];
+		      
+		      // value can be:
+		      //   1) a standard fixed value, 
+		      //   2) an Eval expression
+		      //   3) or, an expansion
+		      
+		      // currently, we don't check that both expression and expansion
+		      // have been specified... 
+		      
+		      // any expansions
+		      Helper::expand_numerics( &evalue );
+		      
+		      // allow for Eval expressions		      
+		      if ( 1 )
+			{
+			  std::map<std::string,annot_map_t> inputs;
+			  // std::map<std::string,std::string> * vars
+			  instance_t out;			  
+			  Eval tok( evalue );			  
+			  tok.bind( inputs , &out );
+
+			  const bool verbose = false;
+			  bool is_valid = tok.evaluate( verbose );  
+			  bool retval;  
+			  
+			  if ( ! tok.value( retval ) ) is_valid = false;
+			  
+			  // std::cout << "parsed as a valid expression : "
+			  // 	    << ( is_valid ? "yes" : "no" ) << "\n";
+			  // std::cout << "return value                 : "
+			  // 	    << tok.result() << "\n";
+			  // std::cout << "return value (as T/F)        : "
+			  // 	    << ( retval ? "true" : "false" ) << "\n";
+			  // std::cout << "assigned meta-data           : "
+			  // 	    << out.print() << "\n";  
+
+			  // assign only if valid
+			  if ( is_valid ) 
+			    evalue = tok.value().as_string();
+			}
+		      
+		    }
+		  
+		  
 		  if ( globals::verbose_var_assignment || ! silent ) 
 		    logger << "   setting variable ${" << tok[0] << "} = " << evalue << "\n";
+		  
 		  (*vars)[ tok[0] ] = evalue;
+		  
 		  break;
 		}
 	      else if ( boolvar )
@@ -2435,12 +2494,14 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		}
 	      else // swap in new text
 		{
+		  //std::cout << " swapping in new text... s[" << s << "]\n";		  
 		  s += vars->find( varname )->second;
 		  break;
 		}
 	    }
 	}
     }
+  //  std::cout << " setting *t [" << *t << "]\n";
   *t = s;
 
 }
