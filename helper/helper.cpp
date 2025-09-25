@@ -196,6 +196,20 @@ std::string Helper::sanitize( const std::string & s ,
   return j;
 }
 
+
+std::string Helper::kv_print( const std::map<std::string,std::string> & m , char d1 , char d2 )
+{
+  std::stringstream ss;
+  std::map<std::string,std::string>::const_iterator ii = m.begin();
+  while ( ii != m.end() )
+    {
+      if ( ii != m.begin() ) ss << d2;
+      ss << ii->first << d1 << ii->second;
+      ++ii;
+    }
+  return ss.str();
+}
+
 std::string Helper::search_replace( const std::string & s , char a , char b )
 {
   std::string j = s;

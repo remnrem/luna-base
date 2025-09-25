@@ -263,7 +263,7 @@ void globals::init_defs()
   patch_version_number = 0;
 
   // should always be 11 chars
-  date    = "22-Sep-2025";
+  date    = "25-Sep-2025";
 
   //
   // Return code

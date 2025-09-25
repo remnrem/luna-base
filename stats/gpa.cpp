@@ -485,6 +485,12 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   if ( param.has( "Yg" ) ) y_incgrps = Helper::combine( y_incgrps , param.strset( "Yg" ) );
 
   //
+  // if strata flag (for stats) then ensure those variables are pulled to
+  //
+
+  if ( param.has( "strata" ) ) xz_incvars = Helper::combine( xz_incvars , param.strset( "strata" ) );
+  
+  //
   // criteria to drop bad/empty cols (default, at least 5 non-missing,
   //   at least 5% of obs w/ values), although in --gpa-prep mode, we
   //   take everything by default
@@ -812,7 +818,15 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 
       if ( param.has( "stats" ) )
 	{
-	  stats();
+
+	  if ( param.has( "strata" ) )
+	    {
+	      std::vector<std::string> sx = param.strvector( "strata" );
+	      stats( &sx );
+	    }
+	  else
+	    stats();
+	  
 	  return;
 	}
       
@@ -2395,25 +2409,228 @@ void gpa_t::dump()
 }
 
 
-void gpa_t::stats()
+// make strata (for stats())
+std::vector<std::map<std::string,std::string> > gpa_t::make_strata( const std::vector<std::string> & s ,
+								    std::vector<std::vector<int>> * x )
 {
+
+  // given a set of variables in s[], find all N>0 combinations of values (i.e. we're assuming
+  // categorical/integer values passed) and populate two vectors (each element = one combination)
+  //   x - the rows included
+  //   retval - the labels 
+  
+  const int ns = s.size();
+  const int ni = X.rows();
+  
+  // helper for lookups
+  std::map<std::string,int> v2n;
+  const int nv = X.cols();
+  for (int j=0; j<nv; j++)
+    v2n[ vars[j] ] = j;
+  
+  // get slots for each var
+  std::vector<int> cols( ns );  
+  for (int i=0; i<s.size(); i++)
+    {
+      if ( v2n.find( s[i] ) == v2n.end() )
+	Helper::halt( "could not find " + s[i] );
+      cols[i] = v2n[ s[i] ];
+    }
+
+  // get all unique values of each stratifying variable
+  // as well as who has that combo
+  std::vector<std::map<std::string,std::set<int> > > sxs(ns);  
+  std::vector<std::vector<std::string> > lxs (ns);  
+  std::vector<int> nl( ns );
+  
+  for (int j=0; j<cols.size(); j++)
+    {
+      const int slot = cols[j];
+      std::map<std::string,std::set<int> > sx;
+      for (int i=0; i<ni; i++)
+	sx[ Helper::dbl2str( X(i,slot) ) ].insert( i );
+      sxs[j] = sx ;
+      
+      // track rows
+      std::map<std::string,std::set<int> >::const_iterator ii = sx.begin();
+      while ( ii != sx.end() ) { lxs[j].push_back( ii->first ) ; ii++ ; } 
+      nl[j] = sx.size();
+    }
+
+  // now sxs tracks for each stratifying var, what the levels are, and for each
+  // level, who the obs w/ that value are
+  //  sxs[ var ][ level ][ (inds...) ]
+  
+  // want to populate this: std::vector<std::vector<int>> for each
+  // unique combo of levels across vars
+
+  // use this to go over all combos of levels, i.e. 0 to nl[j]-1 
+  std::vector<int> n1( ns , 0 );
+
+  // return vals
+  x->clear();
+  std::vector<std::map<std::string,std::string> > res;
+  
+  do {
+    
+    // populate levels
+    std::vector<std::string> labels( ns );
+    std::map<std::string,std::string> f2l;    
+    std::map<int,int> includes;
+    
+    for (int i=0; i<ns; i++)
+      {
+	const std::map<std::string,std::set<int> > & sx = sxs[ i ];	
+	labels[i] = lxs[ i ][ n1[i] ] ;
+		
+	// get people w/ this level (should always be good)
+	const std::set<int> & p = sx.find( labels[i] )->second;
+	//std::cout << "  " << s[i] << " = " << labels[i] << " n = " << p.size() << "\n";
+	f2l[ s[i]  ] = labels[i] ;
+	
+	std::set<int>::const_iterator pp = p.begin();
+	while ( pp != p.end() )
+	  {
+	    includes[ *pp ]++;
+	    ++pp;
+	  }	
+	
+      }
+
+    // now find people who match all vars
+    std::vector<int> pinc;
+    std::map<int,int>::const_iterator ii = includes.begin();
+    while ( ii != includes.end() )
+      {
+	if ( ii->second == ns )
+	  pinc.push_back( ii->first );
+	++ii;
+      }
+        
+    // add people list to return, if non-missing
+    const int nsi = pinc.size();
+    if ( nsi > 0 )
+      {
+	x->push_back( pinc );
+	res.push_back( f2l ) ;
+      }
+    
+  } while ( next_combo( n1 , nl ) );
+    
+  // return strata defns
+  return res;
+    
+}
+
+// helper: mixed radix counter
+bool gpa_t::next_combo(std::vector<int>& a, const std::vector<int>& L) {
+  const size_t n = a.size();
+  for (size_t i = 0; i < n; ++i) {          // i = 0 is least significant
+    if (++a[i] < L[i]) return true;         // carry stops here
+    a[i] = 0;                               // wrap and carry to next digit
+  }
+  return false;                             // overflow: we’re done
+}
+
+
+void gpa_t::stats( const std::vector<std::string> * s )
+{
+
+  // total
   const int ni = X.rows();
   const int nv = X.cols();
 
+  // by strata?
+  const bool by_strata = s != NULL && s->size() != 0 ; 
+  
+  // which individuals for which strata?
+  std::vector<std::vector<int>> sindiv;
+
+  // strata labels
+  std::vector<std::map<std::string,std::string> > slabels;
+
+  // strata variable lookup
+  std::set<std::string> sset;
+  
+  // make strata
+  if ( by_strata )
+    {
+      slabels = make_strata( *s , &sindiv );
+      for (int i=0; i<s->size(); i++) sset.insert( (*s)[i] );
+    }
+
+  // number of strata
+  const int ns = by_strata ? slabels.size() : 0 ; 
+
+  // report for each variable
   for (int j=0; j<nv; j++)
     {
-      writer.level( vars[j] , globals::var_strat );      
-      int na = 0;
+      
+      // except skip any stratifing variables
+      if ( sset.find( vars[j] ) != sset.end() )
+	continue;
+      
+      writer.level( vars[j] , globals::var_strat );
+      
+      // get variable
       const Eigen::VectorXd & col = X.col(j);
-      for (int i=0; i<ni; i++) if ( std::isnan( col[i] ) ) ++na;
-      const double mean = col.mean();
-      const double sd = eigen_ops::sdev( col );
-      writer.value( "MEAN" , mean );
-      writer.value( "SD" , sd );
-      writer.value( "NOBS" , ni - na );
-    }
+
+      // calc/report for unstratified version
+      if ( ! by_strata )
+	{
+	  // actual number of non-missing obs
+	  int na = 0;
+	  for (int i=0; i<ni; i++) if ( std::isnan( col[i] ) ) ++na;
+	  const double mean = col.mean();
+	  const double sd = eigen_ops::sdev( col );
+	  writer.value( "MEAN" , mean );
+	  writer.value( "SD" , sd );
+	  writer.value( "NOBS" , ni - na );
+	}
+
+      // else, stratified report
+
+      if ( by_strata )
+	{
+	  // stratum count
+	  int si = 0; 
+
+	  while ( 1 )
+	    {
+	      // get indivs for this stratum
+	      const std::vector<int> & idx = sindiv[si];
+	      Eigen::Map<const Eigen::VectorXi> ei(idx.data(), idx.size());
+	      const Eigen::VectorXd & col2 = col(ei);
+	      writer.level( Helper::kv_print( slabels[si] ) , "STRATUM" );
+	      
+	      // actual number of non-missing obs
+	      int na = 0;
+	      int ni2 = col2.size();
+	      for (int i=0; i<ni2; i++) if ( std::isnan( col2[i] ) ) ++na;
+	      const int nobs = ni2 - na;
+	      writer.value( "NOBS" , nobs );
+	      if ( nobs > 0 )
+		{
+		  const double mean = col2.mean();
+		  writer.value( "MEAN" , mean );
+		  if ( nobs > 1 )
+		    {
+		      const double sd = eigen_ops::sdev( col2 ) ; 
+		      writer.value( "SD" , sd );
+		    }
+		}
+	      
+	      // all done?
+	      ++si;
+	      if ( si == ns ) break;
+	    }
+	  writer.unlevel( "STRATUM" );
+	}
+
+    } // next variable
+  
   writer.unlevel( globals::var_strat );
-    
+  
 }
 
 
@@ -3046,7 +3263,7 @@ linmod_results_t linmod_t::run( const int nreps , const bool show_progress )
 
   ni = Y.rows();
   ny = Y.cols();
-  nx = X.cols(); 
+  nx = X.cols();
   nz = Z.cols();
   
   if ( ni == 0 || nx == 0 || ny == 0 ) Helper::halt( "linmod_t has no obs, or not X/Y vars" );

@@ -251,6 +251,7 @@ namespace Helper
       return ss.str();
     }
   
+  std::string kv_print( const std::map<std::string,std::string> & m , char d1 = '=' , char d2 = ';' );
   
   std::string trim( const std::string & s , const char c = ' ' , const char d = ' ' );
   std::string format( const std::string & , int indent = 10 , int width = 60, bool no_initial_indent = true );

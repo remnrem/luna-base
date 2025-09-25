@@ -171,9 +171,17 @@ struct gpa_t {
   // summary of manifest
   void summarize();
 
-  // dump means/SDs/Ns
-  void stats();
+  // dump means/SDs/Ns, optionally by strata
+  void stats( const std::vector<std::string> * s = NULL );
+
+  // make strata (for stats())
+
+  std::vector<std::map<std::string,std::string> > make_strata( const std::vector<std::string> & ,
+							       std::vector<std::vector<int>> * x );
+
+  bool next_combo(std::vector<int>& a, const std::vector<int>& L);
   
+    
   // run
   void run();   // correct for all X considered
   void run1X(); // correction w/in X 
