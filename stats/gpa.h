@@ -60,7 +60,9 @@ struct bfile_t {
 	     const std::set<std::string> & xz_incvars,
              const std::set<std::string> & xz_incgrps,	     
 	     const std::set<std::string> & y_incvars,
-             const std::set<std::string> & y_incgrps,	     
+             const std::set<std::string> & y_incgrps,
+	     const std::set<std::string> & s_incvars,
+             const std::set<std::string> & s_incgrps,	     
 	     std::vector<std::string> * ids ,
 	     std::vector<std::string> * vars ,
 	     std::map<std::string,std::string> * grps ,
@@ -239,9 +241,10 @@ private:
   std::set<std::string> incfacs, excfacs;
   std::set<std::string> incgrps, excgrps;
 
-  // XYZ specific includes
+  // XYZS specific includes
   std::set<std::string> xz_incvars, xz_incgrps;
   std::set<std::string> y_incvars, y_incgrps;
+  std::set<std::string> s_incvars, s_incgrps; // subset-vars / strata-vars
 
   // file-specific incvars
   std::map<std::string,std::set<std::string> > file2incvars;

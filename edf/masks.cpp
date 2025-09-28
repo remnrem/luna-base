@@ -348,20 +348,33 @@ void proc_mask( edf_t & edf , param_t & param )
     }
 
   if ( param.has( "leading" ) )
-    {
-      edf.timeline.select_epoch_until_isnot( param.value( "leading" ) );
-    }
-
-  // to add
-  // if ( param.has( "mask-leading" ) )
-  //   {
-  //     edf.timeline.mask_leading_trailing( param.value( "mask-leading" ) , true , false ) ;
-  //   }
+    edf.timeline.mask_leading_trailing( param.strvector( "leading" ) , true , false , true ) ;
   
-  // if ( param.has( "mask-trailing" ) )
-  //   {
-  //     edf.timeline.mask_leading_trailing( param.value( "mask-leading" ) , false , true ) ;
-  //   }
+  if ( param.has( "trailing" ) )
+    edf.timeline.mask_leading_trailing( param.strvector( "trailing" ) , false , true, true ) ;   
+  
+  if ( param.has( "mask-leading" ) )
+    edf.timeline.mask_leading_trailing( param.strvector( "mask-leading" ) , true , false , true ) ;
+      
+  if ( param.has( "mask-trailing" ) )    
+      edf.timeline.mask_leading_trailing( param.strvector( "mask-trailing" ) , false , true , true ) ;
+  
+  if ( param.has( "unmask-leading" ) )
+    edf.timeline.mask_leading_trailing( param.strvector( "unmask-leading" ) , true , false , false ) ;
+  
+  if ( param.has( "unmask-trailing" ) )
+    edf.timeline.mask_leading_trailing( param.strvector( "unmask-trailing" ) , false , true , false ) ;
+  
+
+  if ( param.has( "leading-trailing" ) )
+    edf.timeline.mask_leading_trailing( param.strvector( "leading-trailing" ) , true , true , true ) ;
+    
+  if ( param.has( "mask-leading-trailing" ) )
+    edf.timeline.mask_leading_trailing( param.strvector( "mask-leading-trailing" ) , true , true , true ) ;
+        
+  if ( param.has( "unmask-leading-trailing" ) )
+    edf.timeline.mask_leading_trailing( param.strvector( "unmask-leading-trailing" ) , true , true , false ) ;
+  
 
   if ( param.has( "regional" ) ) 
     {

@@ -880,6 +880,135 @@ void timeline_t::trim_epochs( std::string & label , int n )
 }
 
 
+
+void timeline_t::mask_leading_trailing( const std::vector<std::string> & anns ,
+					const bool _leading , const bool _trailing, const bool _mask )
+{
+
+  const std::string label = Helper::stringize( anns );
+  
+  // versus trim (above)
+  //   this only does leading or trailing currently (as called)
+  //   you can mask on multiple annots
+  //   you can either mask or unmask those regions
+  //   you cannot specify 'allow N'
+
+  // find first/last annot has /doesn't/ have one of 'anns'
+  //  --> this will delimit the interval to mask/unmask
+
+  const int ne = epochs.size();
+
+  std::vector<bool> x( ne , false );
+  
+  for (int a=0; a<anns.size(); a++)
+    {
+      
+      annot_t * annot = annotations->find( Helper::unquote( anns[a] ) );
+      
+      if ( annot == NULL ) continue;
+      
+      mask_set = true;      
+      
+      for (int e=0;e<ne;e++)
+	{
+	  if ( ! x[e] ) { 
+	    interval_t interval = epoch( e );
+	    annot_map_t events = annot->extract( interval );
+	    if ( events.size() > 0 ) x[e] = true;
+	  }
+	}
+      
+    } // next annot
+
+
+  // find first/last epoch that does not match
+  
+  // find first non-matching epoch
+  // -1 if no leading matches
+  int leading_end = -1;
+  if ( _leading ) 
+    for (int e=0;e<ne;e++)
+      {      
+	if ( ! x[e] ) 
+	  {
+	    leading_end = e - 1;
+	    break;
+	  }
+      }
+  
+  // find last nonmatching
+  int trailing_start = ne;
+  // ne if no trailing matches
+  if ( _trailing ) 
+    for (int e=ne-1;e>=0;e--)
+      {      
+	if ( ! x[e] ) 
+	  {	  
+	    trailing_start = e + 1;
+	    break;
+	  }
+      }
+  
+  if ( leading_end > 0 ) logger << "  trimming from start to epoch " << leading_end + 1 << "\n";
+  if ( trailing_start < ne-1 ) logger << "  trimming from epoch " << trailing_start + 1 << " to end\n";
+  
+  int cnt_mask_set = 0;
+  int cnt_mask_unset = 0;
+  int cnt_unchanged = 0;
+  int cnt_now_unmasked = 0;
+  int cnt_basic_match = 0;  // basic count of matches, whether changes mask or not                                                                                
+  // blank out any ones needed
+  for ( int e=0; e<ne; e++)
+    {
+      // if 'mask' mode (default, set mask for leading/trailing regions
+      // if not, retain those, & set mask for interim region
+      const bool match = _mask
+	? ( e <= leading_end || e >= trailing_start )
+	: ( e > leading_end && e < trailing_start ) ;
+      
+      if ( match )
+	{
+	  ++cnt_basic_match;
+	  
+	  // set new potential mask, depending on match_mode
+	  
+	  bool new_mask = true;
+	  
+	  int mc = set_epoch_mask( e , new_mask );
+	  
+	  if      ( mc == +1 ) ++cnt_mask_set;
+	  else if ( mc == -1 ) ++cnt_mask_unset;
+	  else                 ++cnt_unchanged;
+	}
+    
+      if ( !mask[e] ) ++cnt_now_unmasked;
+    
+    }
+  
+  logger << "  based on leading/trailing " << Helper::stringize( anns ) << " "
+	 << cnt_basic_match << " epochs match; ";
+  
+  logger << cnt_mask_set << " newly masked, " 
+	 << cnt_mask_unset << " unmasked, " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+  
+  // mask, # epochs masked, # epochs unmasked, # unchanged, # total masked , # total epochs
+  
+  writer.level( label , "EMASK" );
+  writer.value( "N_MATCHES"    , cnt_basic_match  );
+  writer.value( "N_MASK_SET"   , cnt_mask_set     );
+  writer.value( "N_MASK_UNSET" , cnt_mask_unset   );
+  writer.value( "N_UNCHANGED"  , cnt_unchanged    );
+  writer.value( "N_RETAINED"   , cnt_now_unmasked );
+  writer.value( "N_TOTAL"      , (int)epochs.size()    );
+
+  writer.unlevel( "EMASK" );
+
+
+  
+}
+
 // retain contiguous stretch of epochs that include these (+/- n epochs on both sides)
 void timeline_t::retain_epochs( const std::set<std::string> & labels )
 {
@@ -1392,6 +1521,7 @@ bool timeline_t::masked_interval( const interval_t & interval , bool all_masked 
 // select all EPOCHs until we come across an EPOCH that does /not/ have the 'str' annotation
 void timeline_t::select_epoch_until_isnot( const std::string & str )
 {
+  Helper::halt( "timeline_t::select_epoch_until_isnot() is no longer supported" );
 
   mask_set = true;
   
@@ -1766,15 +1896,16 @@ void timeline_t::dumpmask( const param_t & param )
 
   // also dump an 
   const bool dump_annot = param.has( "annot" );
+
   const std::string annot_str = dump_annot ? param.value( "annot" ) : "" ; 
 
   // default is to make annot when an epoch is /masked/ (versus opposite)
   const bool annot_unmasked = param.yesno( "annot-unmasked" );
-				   
+  
   annot_t * ann = dump_annot ? annotations->add( annot_str ) : NULL ; 
   
-  // no output?
-  const bool output = param.has( "output" ) && param.yesno( "output" ) == false ; 
+  // output?
+  const bool output = param.has( "output" ) ? param.yesno( "output" ) : true ; 
   
   // no mask set: means all clear so display that
   // if ( ! mask_set ) return;
@@ -1784,7 +1915,8 @@ void timeline_t::dumpmask( const param_t & param )
   if ( output ) 
     logger << "  dumping MASK\n";
   if ( dump_annot )
-    logger << "  creating annotation " << annot_str << " based on mask == " << ( annot_unmasked ? "FALSE" : "TRUE" ) << "\n";
+    logger << "  creating annotation " << annot_str << " to indicate "
+	   << ( annot_unmasked ? "unmasked" : "masked" ) << " epochs\n";
   
   
   while ( 1 ) 
@@ -1798,13 +1930,12 @@ void timeline_t::dumpmask( const param_t & param )
       
       // EPOCH_INTERVAL will already have been output by the EPOCH command
       writer.epoch( display_epoch( e ) );
-      //      writer.var(   "INTERVAL" , "Epoch time start/stop" );
-      writer.var(   "EMASK" ,      "Is masked? (1=Y)" );
-      //      writer.value( "INTERVAL" , interval.as_string() );
-      writer.value( "EMASK" , mask_set ? mask[e] : false );
 
-      const bool m =  mask_set ? mask[e] : false ; 
+      const bool m =  mask_set ? mask[e] : false ;
 
+      if ( output ) 
+	writer.value( "EMASK" , m );
+     
       if ( ann )
 	{
 	  if ( annot_unmasked && ! m ) 

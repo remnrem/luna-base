@@ -229,13 +229,17 @@ void lunapi_t::re_init()
 
   // also reset global variables that may have been changed since
   global.init_defs();
-      
+
+  globals::bail_function = &lunapi_bail_function;
+  
+  globals::bail_on_fail = false;
+
   // but need to re-indicate that we are running inside API
-  //  global.R( 1 ); // 1 means to cache
+  global.R( 1 ); // 1 means to cache
       
   reset();
   
-  // writer.nodb();
+  writer.nodb();
   
   // logger << "** luna " 
   // 	     << globals::version 
@@ -243,8 +247,6 @@ void lunapi_t::re_init()
   // 	     << "\n";
   
   // logger.print_buffer();
-
-  
   
 }
 

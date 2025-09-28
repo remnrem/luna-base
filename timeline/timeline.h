@@ -382,6 +382,9 @@ struct timeline_t
   
   // flip all values of current epoch mask
   void flip_epoch_mask();
+
+  // select leading/trailing based on multiple epochs (but no allowance of N , i.e. vs trim)
+  void mask_leading_trailing( const std::vector<std::string> & , const bool, const bool, const bool );
   
   // select all EPOCHs until we come across an EPOCH that does /not/ have the 'str' annotation
   void select_epoch_until_isnot( const std::string & str );

@@ -1,3 +1,4 @@
+//TODO: handle S/Sg strata vars
 
 //    --------------------------------------------------------------------
 //
@@ -488,7 +489,22 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   // if strata flag (for stats) then ensure those variables are pulled to
   //
 
-  if ( param.has( "strata" ) ) xz_incvars = Helper::combine( xz_incvars , param.strset( "strata" ) );
+  if ( param.has( "S" ) ) s_incvars = Helper::combine( s_incvars , param.strset( "S" ) );
+  if ( param.has( "Sg" ) ) s_incgrps = Helper::combine( s_incgrps , param.strset( "Sg" ) );
+  if ( param.has( "strata" ) ) s_incvars = Helper::combine( s_incvars , param.strset( "strata" ) );
+
+  if ( param.has( "subset" ) ) { // need to strip any '-' from starts
+    std::set<std::string> s1 = param.strset( "subset" );
+    std::set<std::string> s2;
+    std::set<std::string>::const_iterator ss = s1.begin();
+    while ( ss != s1.end() )
+      {
+	if ( ss->substr(0,1) == "-" || ss->substr(0,1) == "+" ) s2.insert( ss->substr(1) );
+	else s2.insert( *ss );
+	++ss;
+      }
+    s_incvars = Helper::combine( s_incvars , s2 ) ;
+  }
   
   //
   // criteria to drop bad/empty cols (default, at least 5 non-missing,
@@ -577,21 +593,42 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  // build cols (i.e. searching for non-null value to include, not NaN or missing)
 	  // allows for each term to be a pos or neg match subset=-MALE implies MALE == 0 (-->F)
 	  //  where subset=MALE or subset=+MALE implies --> M
-	  
+	  std::map<std::string,bool> sub_cols_found;
+	  std::set<std::string>::const_iterator ss = sub_cols.begin();
+	  while ( ss != sub_cols.end() ) { sub_cols_found[*ss] = false; ++ss; }
 	  for (int j=0; j<nv; j++)
 	    {	      
 	      if ( sub_cols.find( vars[j] ) != sub_cols.end() )
-		cols[j] = true;
+		{
+		  cols[j] = true;
+		  sub_cols_found[ vars[j] ] = true;
+		}
 	      else if ( sub_cols.find( "+" + vars[j] ) != sub_cols.end() )
-		cols[j] = true;
+		{
+		  cols[j] = true;
+		  sub_cols_found[ "+" + vars[j] ] = true;
+		}
 	      else if ( sub_cols.find( "-" + vars[j] ) != sub_cols.end() )
-		cols[j] = false;
-
+		{
+		  cols[j] = false;
+		  sub_cols_found[ "-" + vars[j] ] = true;
+		}	      
 	    }
+
+	  // did we find all requsted sub-sets?
+	  std::map<std::string,bool>::const_iterator ff = sub_cols_found.begin();
+	  while ( ff != sub_cols_found.end() )
+	    {
+	      if ( ! ff->second )
+		Helper::halt( "could not find subset variable " + ff->first );
+	      ++ff;
+	    }
+	  
+	  // do the subsetting
 	  subset( rows, cols );
 	}
-      
- 
+
+       
       //
       // store original N (post any selection 
       //
@@ -1381,7 +1418,8 @@ void gpa_t::read()
 	   incfacs, excfacs, incfaclvls, excfaclvls,
 	   incgrps, excgrps,
 	   xz_incvars, xz_incgrps,
-	   y_incvars, y_incgrps,	   
+	   y_incvars, y_incgrps,
+	   s_incvars, s_incgrps,
 	   &ids, &vars , &var2group, &basevar, &faclvl , &X );
   logger << "  read " << ids.size() << " individuals and "
 	 << vars.size() << " variables from " << bfile << "\n";
@@ -1871,6 +1909,8 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 		    const std::set<std::string> & xz_incgrps,		    
 		    const std::set<std::string> & y_incvars,
 		    const std::set<std::string> & y_incgrps,		    
+		    const std::set<std::string> & s_incvars,
+		    const std::set<std::string> & s_incgrps,		    
 		    std::vector<std::string> * ids ,
 		    std::vector<std::string> * vars ,
 		    std::map<std::string,std::string> * var2group ,
@@ -1949,6 +1989,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
        || incfacs.size() || excfacs.size()
        || incfaclvls.size() || excfaclvls.size()
        || xz_incvars.size() || xz_incgrps.size()
+       || s_incvars.size() || s_incgrps.size() 
        || y_incvars.size() || y_incgrps.size() )
     {
       
@@ -2000,6 +2041,9 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
       const bool has_y_vars = y_incvars.size();
       const bool has_y_grps = y_incgrps.size();
 
+      const bool has_s_vars = y_incvars.size();
+      const bool has_s_grps = y_incgrps.size();
+      
       const bool has_excvars = excvars.size();
       const bool has_exclvars = exclvars.size();
       const bool has_excnums = excnums.size();
@@ -2286,7 +2330,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
       // now do xyz-includes as a second loop
       //
 
-      if ( has_xz_vars || has_xz_grps || has_y_vars || has_y_grps )
+      if ( has_xz_vars || has_xz_grps || has_y_vars || has_y_grps | has_s_vars || has_s_grps )
 	{
 	  for (int j=0; j<nv; j++)
 	    {
@@ -2299,6 +2343,12 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 		    readvar[j] = true;		      
 		  else if ( has_xz_grps && 			
 			    xz_incgrps.find( all_groups[j] ) != xz_incgrps.end() )
+		    readvar[j] = true;
+		  else if ( has_s_vars &&
+			    s_incvars.find( all_basevars[j] ) != s_incvars.end() )
+		    readvar[j] = true;
+		  else if ( has_s_grps &&
+			    s_incgrps.find( all_groups[j] ) != s_incgrps.end() )
 		    readvar[j] = true;
 		  else
 		    {
@@ -2895,14 +2945,15 @@ void gpa_t::manifest()
 // subset rows
 void gpa_t::subset( const std::set<int> & rows , const std::map<int,bool> & cols )
 {
-
-  const bool id_subsetting = rows.size() != 0 ;
+  int ni = X.rows();
+  
+  const bool id_subsetting = rows.size() != 0 && rows.size() != ni;
   const bool col_subsetting = cols.size() != 0;
   
   // nothing to do
   if ( ! ( id_subsetting || col_subsetting ) ) return;
   
-  int ni = X.rows();
+
   std::vector<bool> included( ni , true );
   
   // first, select any named IDs (if any specified, else retain all) 
@@ -2916,6 +2967,7 @@ void gpa_t::subset( const std::set<int> & rows , const std::map<int,bool> & cols
   // second, find other rows to select based on matching col conditions
   // if flip == T then reverse selection
   // if multiple cols, implies must match on all
+  std::stringstream ss;
   if ( col_subsetting )
     {            
       std::map<int,bool>::const_iterator cc = cols.begin();
@@ -2923,6 +2975,10 @@ void gpa_t::subset( const std::set<int> & rows , const std::map<int,bool> & cols
 	{
 	  const bool pos_match = cc->second;      
 	  const Eigen::VectorXd & v = X.col( cc->first );
+
+	  if ( cc != cols.begin() )
+	    ss << ", ";
+	  ss << vars[cc->first];
 	  
 	  for (int i=0;i<ni; i++)
 	    {
@@ -2951,8 +3007,21 @@ void gpa_t::subset( const std::set<int> & rows , const std::map<int,bool> & cols
   ids.clear();
   for (int i=0;i<ni;i++)
     if ( included[i] ) ids.push_back( ids2[i] );
+
+  // report
+  const int nvsub = cols.size();
   
-  logger << "  subsetted X from " << ni << " to " << X.rows() << " indivs\n";
+  std::map<int,bool>::const_iterator cc = cols.begin();
+  
+  logger << "  subsetted X to " << X.rows() << "/" << ni << " rows based on " ;
+  if ( id_subsetting )
+    {
+      logger << "row exclusion";
+      if ( col_subsetting ) logger << ", ";
+    }
+  if ( col_subsetting )
+    logger << nvsub << " variable(s) (" << ss.str() << ")";
+  logger << "\n";
 }
 
 // drop bad cols
@@ -3163,7 +3232,7 @@ void gpa_t::qc( const double winsor , const bool stats_mode )
       dvs.clear();
       ivs.clear();
       cvs.clear();
-
+      
 
       for (int j=0; j<nonzeros.size(); j++)
 	{
