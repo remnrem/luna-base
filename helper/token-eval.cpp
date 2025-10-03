@@ -488,7 +488,7 @@ bool Eval::shunting_yard( const std::string & oinput,
 	  
 	  if( !pe )   
 	    {
-	      Helper::halt( "separator or parentheses mismatched" );
+	      Helper::halt( "separator or parentheses mismatched: " + oinput );
 	      return false;
 	    }
 	}
