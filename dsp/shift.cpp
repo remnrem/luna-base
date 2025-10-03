@@ -21,6 +21,8 @@
 //    --------------------------------------------------------------------
 
 #include "dsp/shift.h"
+
+#include "param.h"
 #include "edf/edf.h"
 
 #include <iostream>

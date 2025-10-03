@@ -21,6 +21,8 @@
 //    --------------------------------------------------------------------
 
 #include "dsp/psi.h"
+#include "param.h"
+
 #include "miscmath/miscmath.h"
 #include <iostream>
 #include "defs/defs.h"

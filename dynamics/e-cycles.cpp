@@ -25,7 +25,7 @@
 #include "edf/slice.h"
 #include "timeline/hypno.h"
 #include "fftw/fftwrap.h"
-#include "eval.h"
+#include "param.h"
 #include "db/db.h"
 #include "helper/logger.h"
 #include "stats/Eigen/Dense"

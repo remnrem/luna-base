@@ -22,6 +22,7 @@
 
 
 #include "dsp/psc.h"
+#include "param.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"

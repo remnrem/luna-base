@@ -63,6 +63,7 @@
 #include "stats/statistics.h"
 #include "db/db.h"
 #include "dsp/tv.h"
+#include "param.h"
 
 #include "helper/zfile.h"
 

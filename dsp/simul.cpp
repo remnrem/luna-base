@@ -21,10 +21,11 @@
 //    --------------------------------------------------------------------
 
 #include "simul.h"
+
+#include "param.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "dsp/freqsampling.h"
-#include "eval.h"
 #include "fftw/fftwrap.h"
 #include "miscmath/crandom.h"
 #include "dsp/spline.h"

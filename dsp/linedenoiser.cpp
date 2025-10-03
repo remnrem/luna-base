@@ -22,6 +22,7 @@
 
 #include "dsp/linedenoiser.h"
 
+#include "param.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "fftw/fftwrap.h"

@@ -23,6 +23,7 @@
 
 #include "ecgsuppression.h"
 
+#include "param.h"
 #include "resample.h"
 #include "edf/edf.h"
 #include "edf/slice.h"

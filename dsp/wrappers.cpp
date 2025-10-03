@@ -22,7 +22,8 @@
 
 #include "dsp/wrappers.h"
 #include "edf/edf.h"
-#include "eval.h"
+#include "param.h"
+
 #include "edf/slice.h"
 #include "cwt/cwt.h"
 #include "dsp/hilbert.h"

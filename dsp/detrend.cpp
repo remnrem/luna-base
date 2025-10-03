@@ -24,6 +24,7 @@
 
 #include "edf/edf.h"
 #include "edf/slice.h"
+#include "param.h"
 
 void dsptools::detrend( edf_t & edf , param_t & param )
 {

@@ -22,6 +22,7 @@
 
 #include "annot/align-annots.h"
 
+#include "param.h"
 #include "edf/edf.h"
 #include "annot/annot.h"
 

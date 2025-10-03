@@ -21,6 +21,7 @@
 //    --------------------------------------------------------------------
 
 #include "movavg.h"
+#include "param.h"
 
 #include "stats/eigen_ops.h"
 

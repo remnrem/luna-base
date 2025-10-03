@@ -24,7 +24,7 @@
 
 #include "edf/edf.h"
 #include "edf/slice.h"
-#include "eval.h"
+#include "param.h"
 #include "fftw/fftwrap.h"
 #include "fftw/bandaid.h"
 

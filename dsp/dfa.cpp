@@ -22,6 +22,7 @@
 
 
 #include "dsp/dfa.h"
+#include "param.h"
 #include "fftw/fftwrap.h"
 #include "helper/helper.h"
 #include "db/db.h"

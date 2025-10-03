@@ -22,6 +22,7 @@
 
 
 #include "eval.h"
+#include "param.h"
 #include "luna.h"
 
 extern logger_t logger;

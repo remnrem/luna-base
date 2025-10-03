@@ -22,7 +22,7 @@
 
 #include "edf/edf.h"
 #include "edf/slice.h"
-
+#include "param.h"
 
 void edf_t::set_timestamps( param_t & param )
 {

@@ -21,6 +21,7 @@
 //    --------------------------------------------------------------------
 
 #include "dsp/qc.h"
+#include "param.h"
 
 #include "dsp/fir.h"
 #include "stats/eigen_ops.h"

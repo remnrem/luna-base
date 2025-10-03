@@ -21,6 +21,8 @@
 //    --------------------------------------------------------------------
 
 #include "dsp/sl.h"
+
+#include "param.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "clocs/clocs.h"

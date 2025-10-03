@@ -22,6 +22,7 @@
 
 #include "dsp/gc.h"
 
+#include "param.h"
 #include "edf/slice.h"
 #include "edf/edf.h"
 #include <iostream>

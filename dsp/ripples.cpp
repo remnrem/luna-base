@@ -21,6 +21,8 @@
 //    --------------------------------------------------------------------
 
 #include "dsp/ripples.h"
+
+#include "param.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "annot/annot.h"

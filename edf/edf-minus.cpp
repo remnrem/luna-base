@@ -21,6 +21,8 @@
 //    --------------------------------------------------------------------
 
 #include "edf/edf.h"
+#include "param.h"
+
 #include "edf/slice.h"
 
 #include "helper/helper.h"

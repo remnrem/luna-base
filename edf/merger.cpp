@@ -22,6 +22,7 @@
 
 
 #include "helper/helper.h"
+#include "param.h"
 #include "db/db.h"
 
 #include "defs/defs.h"

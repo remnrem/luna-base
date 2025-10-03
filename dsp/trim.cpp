@@ -22,6 +22,7 @@
 
 #include "dsp/trim.h"
 
+#include "param.h"
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "db/db.h"

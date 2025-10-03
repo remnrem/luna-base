@@ -51,6 +51,29 @@ Eigen::ArrayXd eigen_ops::copy_array( const std::vector<double> & e )
   return v;
 }
 
+Eigen::VectorXd eigen_ops::removeNaNs( const Eigen::VectorXd & input )
+{
+  // First pass: count how many non-NaNs
+  std::vector<double> values;
+  values.reserve(input.size());  // Reserve full size (safe upper bound)  
+  for (int i = 0; i < input.size(); ++i) {
+    if (!std::isnan(input[i])) {
+      values.push_back(input[i]);
+    }
+  }
+  
+  // nothing needed?
+  if ( values.size() == input.size() ) return input;
+  
+  // Copy values into an Eigen::VectorXd
+  Eigen::VectorXd result(values.size());
+  for (size_t i = 0; i < values.size(); ++i) {
+    result[i] = values[i];
+  }
+  
+  return result;
+}
+
 void eigen_ops::random_normal( Eigen::MatrixXd & M )
 {
   const int rows = M.rows();

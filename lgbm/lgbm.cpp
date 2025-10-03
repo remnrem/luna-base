@@ -29,6 +29,7 @@
 #ifdef HAS_LGBM
 
 #include "lgbm/lgbm.h"
+#include "param.h"
 #include "stats/eigen_ops.h"
 #include <fstream>
 

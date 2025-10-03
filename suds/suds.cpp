@@ -23,6 +23,7 @@
 
 #include "suds.h"
 
+#include "param.h"
 #include <vector>
 #include <map>
 #include <set>

@@ -26,7 +26,7 @@
 #include "dsp/tv.h"
 #include "dsp/spline.h"
 #include "db/db.h"
-#include "eval.h"
+#include "param.h"
 #include "edf/edf.h"
 #include "stats/gpa.h" // linmod_t
 #include "stats/Eigen/Dense"

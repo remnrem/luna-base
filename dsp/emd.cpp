@@ -35,6 +35,7 @@
 
 #include "emd.h"
 #include "spline.h"
+#include "param.h"
 
 #include "miscmath/miscmath.h"
 #include "helper/helper.h"

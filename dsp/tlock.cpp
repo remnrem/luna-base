@@ -21,6 +21,8 @@
 //    --------------------------------------------------------------------
 
 #include "dsp/tlock.h"
+
+#include "param.h"
 #include "timeline/timeline.h"
 #include "stats/statistics.h"
 #include "db/db.h"

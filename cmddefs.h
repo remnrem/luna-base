@@ -26,12 +26,10 @@
 
 #include <string>
 #include <map>
-#include "eval.h"
-#include "helper/helper.h"
 #include <vector>
 #include <set>
-#include <sstream>
 
+struct param_t;
 
 
 //

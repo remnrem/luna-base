@@ -26,6 +26,8 @@
 // 3) error/handling/checkpoints
 
 #include "lunapi/lunapi.h"
+
+#include "param.h"
 #include <stdexcept>
 #include <memory>
 

@@ -31,7 +31,7 @@
 #include "pwl_interp_2d_scattered.h"
 #include "stats/eigen_ops.h"
 
-#include "eval.h"
+#include "param.h"
 #include "db/db.h"
 #include "helper/helper.h"
 #include "helper/logger.h"

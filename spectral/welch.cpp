@@ -23,7 +23,7 @@
 #include "spectral/welch.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
-#include "eval.h"
+#include "param.h"
 #include "annot/annot.h"
 #include "helper/helper.h"
 #include "helper/logger.h"

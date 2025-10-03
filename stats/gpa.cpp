@@ -1,4 +1,3 @@
-//TODO: handle S/Sg strata vars
 
 //    --------------------------------------------------------------------
 //
@@ -23,6 +22,7 @@
 
 #include "stats/gpa.h"
 
+#include "param.h"
 #include "helper/logger.h"
 #include "db/db.h"
 #include "stats/eigen_ops.h"
@@ -489,9 +489,17 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   // if strata flag (for stats) then ensure those variables are pulled to
   //
 
-  if ( param.has( "S" ) ) s_incvars = Helper::combine( s_incvars , param.strset( "S" ) );
-  if ( param.has( "Sg" ) ) s_incgrps = Helper::combine( s_incgrps , param.strset( "Sg" ) );
-  if ( param.has( "strata" ) ) s_incvars = Helper::combine( s_incvars , param.strset( "strata" ) );
+  // if ( param.has( "S" ) ) s_incvars = Helper::combine( s_incvars , param.strset( "S" ) );
+  // if ( param.has( "Sg" ) ) s_incgrps = Helper::combine( s_incgrps , param.strset( "Sg" ) );
+  //  n.b. means s_incgrps() is not used/needed now
+  //       we *only* have stratifying vars for strata (stats-only) for subset
+  
+  if ( param.has( "strata" ) )
+    {
+      if ( ! param.has( "stats" ) )
+	Helper::halt( "can only specify strata with stats" );
+      s_incvars = Helper::combine( s_incvars , param.strset( "strata" ) );
+    }
 
   if ( param.has( "subset" ) ) { // need to strip any '-' from starts
     std::set<std::string> s1 = param.strset( "subset" );
@@ -528,7 +536,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
   verbose = param.has( "verbose" ) ? param.yesno( "verbose" ) : false;
 
   show_xfacs = param.has( "X-factors" ) ? param.yesno( "X-factors" ) : false; 
-  
+    
   //
   // read data / make binary file? 
   //
@@ -836,6 +844,9 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
       // can skip QC with qc=F option
       if ( ( ! param.has( "qc" ) ) || param.yesno( "qc" ) )
 	qc( winsor_th , param.has( "stats" ) );
+
+
+      
       
       //
       // optionally dump variables and/or manifest?
@@ -873,11 +884,38 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  return;
 	}
 
+
+      //
+      // drop any stratifying variables (note: currently, s_incgrps() is
+      //  not used, can be dropped; likely these were already dropped - i.e.
+      //  due to invariance (i.e. post selection)... but double-check here
+      //
       
+      if ( s_incvars.size() )
+	{
+	  bool to_drop = false;
+	  std::vector<int> retain;
+	  const int nv = X.cols();
+	  for (int j=0; j<nv; j++)
+	    {
+	      if ( s_incvars.find( vars[j] ) == s_incvars.end() )
+		retain.push_back( j );
+	      else
+		to_drop = true; 
+	    }	  
+
+	  if ( to_drop )
+	    {
+	      Eigen::MatrixXd X1 = X( Eigen::all , retain );
+	      X = X1;
+	      logger << "  dropped " << s_incvars.size() << " stratifying variables\n";
+	    }
+	}
+            
       //
       // run association tests
       //
-
+           
       const bool run_assoc =  dvs.size() != 0 && ivs.size() != 0 ; 
 
       if ( ! run_assoc ) 
@@ -2041,8 +2079,8 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
       const bool has_y_vars = y_incvars.size();
       const bool has_y_grps = y_incgrps.size();
 
-      const bool has_s_vars = y_incvars.size();
-      const bool has_s_grps = y_incgrps.size();
+      const bool has_s_vars = s_incvars.size();
+      const bool has_s_grps = s_incgrps.size();
       
       const bool has_excvars = excvars.size();
       const bool has_exclvars = exclvars.size();
@@ -2354,7 +2392,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
 		    {
 		      // if not XZ included, *and* we have a Y include, then
 		      // if we don't find it, set to exclude
-
+		      
 		      if ( has_y_vars || has_y_grps )
 			{
 			  bool found = false;
@@ -2395,7 +2433,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
       }
   
   const int nv2 = vars->size();;
-
+  
   logger << "  reading " << nv2 << " of " << nv << " vars on " << ni << " indivs\n";
     
   // copy selected factors over
@@ -2629,13 +2667,18 @@ void gpa_t::stats( const std::vector<std::string> * s )
       if ( ! by_strata )
 	{
 	  // actual number of non-missing obs
-	  int na = 0;
-	  for (int i=0; i<ni; i++) if ( std::isnan( col[i] ) ) ++na;
-	  const double mean = col.mean();
-	  const double sd = eigen_ops::sdev( col );
-	  writer.value( "MEAN" , mean );
-	  writer.value( "SD" , sd );
-	  writer.value( "NOBS" , ni - na );
+	  Eigen::VectorXd x = eigen_ops::removeNaNs( col );
+	  int na = x.size();
+	  writer.value( "NOBS" , na );
+	  
+	  if ( na > 0 ) {	    
+	    const double mean = x.mean();
+	    writer.value( "MEAN" , mean );
+	    if ( na > 1 ) { 
+	      const double sd = eigen_ops::sdev( x );
+	      writer.value( "SD" , sd );
+	    }
+	  }
 	}
 
       // else, stratified report
@@ -2651,21 +2694,22 @@ void gpa_t::stats( const std::vector<std::string> * s )
 	      const std::vector<int> & idx = sindiv[si];
 	      Eigen::Map<const Eigen::VectorXi> ei(idx.data(), idx.size());
 	      const Eigen::VectorXd & col2 = col(ei);
-	      writer.level( Helper::kv_print( slabels[si] ) , "STRATUM" );
+	      int ni2 = col2.size();
+	      
+	      writer.level( Helper::kv_print( slabels[si] ) , "STRATUM" );	      
 	      
 	      // actual number of non-missing obs
-	      int na = 0;
-	      int ni2 = col2.size();
-	      for (int i=0; i<ni2; i++) if ( std::isnan( col2[i] ) ) ++na;
-	      const int nobs = ni2 - na;
+	      Eigen::VectorXd x = eigen_ops::removeNaNs( col2 );
+	      int nobs = x.size();
+
 	      writer.value( "NOBS" , nobs );
 	      if ( nobs > 0 )
 		{
-		  const double mean = col2.mean();
+		  const double mean = x.mean();
 		  writer.value( "MEAN" , mean );
 		  if ( nobs > 1 )
 		    {
-		      const double sd = eigen_ops::sdev( col2 ) ; 
+		      const double sd = eigen_ops::sdev( x ) ; 
 		      writer.value( "SD" , sd );
 		    }
 		}
@@ -3166,6 +3210,7 @@ void gpa_t::qc( const double winsor , const bool stats_mode )
 
   // if dumping means/SDs, then we don't want to normalize
   if ( stats_mode ) return;
+
   
   // 2) robust norm & winsorize
   //    but only for DVs
@@ -3211,7 +3256,7 @@ void gpa_t::qc( const double winsor , const bool stats_mode )
       
       Eigen::MatrixXd X1 = X( Eigen::all , nonzeros );
       X = X1;
-
+      
       // now need to update vars, var2group, basevar
       // okay to keep faclvl as is
 

@@ -21,6 +21,7 @@
 //    --------------------------------------------------------------------
 
 #include "dsp/arousals.h"
+#include "param.h"
 #include "defs/defs.h"
 #include "edf/edf.h"
 #include "edf/slice.h"

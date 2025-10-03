@@ -22,6 +22,7 @@
 
 
 #include "spectral/irasa.h"
+#include "param.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "dsp/resample.h"

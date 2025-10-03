@@ -31,73 +31,75 @@
 
 struct edf_t;
 
+struct param_t;
+
 //
 // Helper to parse command syntax
 //
 
-struct param_t
-{
+// struct param_t
+// {
 
- public:
+//  public:
   
-  void add( const std::string & option , const std::string & value = "" ); 
+//   void add( const std::string & option , const std::string & value = "" ); 
 
-  void add_hidden( const std::string & option , const std::string & value = "" );
+//   void add_hidden( const std::string & option , const std::string & value = "" );
 
-  int size() const;
+//   int size() const;
   
-  void parse( const std::string & s );
+//   void parse( const std::string & s );
   
-  void update( const std::string & id , const std::string & wc );
+//   void update( const std::string & id , const std::string & wc );
 
-  void clear();
+//   void clear();
   
-  bool has(const std::string & s ) const;
+//   bool has(const std::string & s ) const;
   
-  bool empty(const std::string & s ) const;
+//   bool empty(const std::string & s ) const;
   
-  // if ! has(X) return F
-  // else return yesno(value(X))
-  bool yesno(const std::string & s ) const;
+//   // if ! has(X) return F
+//   // else return yesno(value(X))
+//   bool yesno(const std::string & s ) const;
 
-  std::string value( const std::string & s , const bool uppercase = false ) const;
+//   std::string value( const std::string & s , const bool uppercase = false ) const;
  
-  bool single() const;  
+//   bool single() const;  
 
-  std::string single_value() const ;
+//   std::string single_value() const ;
 
-  std::string single_pair(std::string * ) const ;
+//   std::string single_pair(std::string * ) const ;
   
-  std::string requires( const std::string & s , const bool uppercase = false ) const;
+//   std::string requires( const std::string & s , const bool uppercase = false ) const;
   
-  int requires_int( const std::string & s ) const;
+//   int requires_int( const std::string & s ) const;
   
-  double requires_dbl( const std::string & s ) const;
+//   double requires_dbl( const std::string & s ) const;
 
-  std::string dump( const std::string & indent = "  ", const std::string & delim = "\n" ) const;
+//   std::string dump( const std::string & indent = "  ", const std::string & delim = "\n" ) const;
 
-  std::set<std::string> strset( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
+//   std::set<std::string> strset( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
 
-  std::set<std::string> strset_xsigs( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
+//   std::set<std::string> strset_xsigs( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
   
-  std::vector<std::string> strvector( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
+//   std::vector<std::string> strvector( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
   
-  std::vector<std::string> strvector_xsigs( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
+//   std::vector<std::string> strvector_xsigs( const std::string & k , const std::string delim = "," , const bool uppercase = false ) const;
   
-  std::vector<double> dblvector( const std::string & k , const std::string delim = "," ) const;
+//   std::vector<double> dblvector( const std::string & k , const std::string delim = "," ) const;
 
-  std::vector<int> intvector( const std::string & k , const std::string delim = "," ) const;
+//   std::vector<int> intvector( const std::string & k , const std::string delim = "," ) const;
 
-  std::set<std::string> keys() const;
+//   std::set<std::string> keys() const;
 
-private:
+// private:
 
-  std::map<std::string,std::string> opt;
+//   std::map<std::string,std::string> opt;
 
-  std::set<std::string> hidden;
+//   std::set<std::string> hidden;
 
 
-};
+// };
 
 
 class cmd_t 

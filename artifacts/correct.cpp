@@ -23,6 +23,7 @@
 #include "artifacts/correct.h"
 
 #include "helper/helper.h"
+#include "param.h"
 
 #include "dsp/emd.h"
 #include "db/db.h"

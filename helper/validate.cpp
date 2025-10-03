@@ -21,6 +21,7 @@
 //    --------------------------------------------------------------------
 
 #include "helper/validate.h"
+#include "param.h"
 
 #include "defs/defs.h"
 #include "edf/edf.h"
