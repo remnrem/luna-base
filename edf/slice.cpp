@@ -24,7 +24,7 @@
 
 #include "helper/helper.h"
 #include "helper/logger.h"
-#include "eval.h"
+#include "param.h"
 
 #include "timeline/timeline.h"
 #include "fftw/fftwrap.h"

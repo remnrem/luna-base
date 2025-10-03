@@ -22,6 +22,8 @@
 
 
 #include "dsp/svd.h"
+
+#include "param.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "stats/Eigen/Dense"

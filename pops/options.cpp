@@ -24,6 +24,7 @@
 
 #include "pops/options.h"
 #include "pops/pops.h"
+#include "param.h"
 
 #include "lgbm/lgbm.h"
 #include "helper/helper.h"

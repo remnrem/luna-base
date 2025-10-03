@@ -33,8 +33,8 @@
 #include <iostream>
 #include <sstream>
 
-
 struct edf_t;
+
 struct param_t;
 
 enum slow_wave_type { SO_FULL , SO_HALF, SO_NEGATIVE_HALF , SO_POSITIVE_HALF } ;
@@ -43,117 +43,7 @@ struct slow_wave_param_t {
 
   slow_wave_param_t() { } ;
   
-  slow_wave_param_t( const param_t & param )
-  {
-    
-    // freq.
-    f_lwr = param.has( "f-lwr" ) ? param.requires_dbl( "f-lwr" ) : 0.5  ; 
-    f_upr = param.has( "f-upr" ) ? param.requires_dbl( "f-upr" ) : 4.0  ; 
-    
-    // time - for full wave
-    t_lwr = param.has( "t-lwr" ) ? param.requires_dbl( "t-lwr" ) : 0 ;
-    t_upr = param.has( "t-upr" ) ? param.requires_dbl( "t-upr" ) : 2 ;
-
-    // time - separately for neg and pos HWs
-    t_neg_lwr = param.has( "t-neg-lwr" ) ? param.requires_dbl( "t-neg-lwr" ) : 0;
-    t_neg_upr = param.has( "t-neg-upr" ) ? param.requires_dbl( "t-neg-upr" ) : 0;
-
-    t_pos_lwr = param.has( "t-pos-lwr" ) ? param.requires_dbl( "t-pos-lwr" ) : 0;
-    t_pos_upr = param.has( "t-pos-upr" ) ? param.requires_dbl( "t-pos-upr" ) : 0;
-    
-
-    // amplitude thresholds
-
-    // relative: magnitude threshold, e.g. 2 = twice the mean for a) p2p amp. AND , b) negative peak amp
-    thr = param.has( "mag" ) ? param.requires_dbl( "mag" )       : 0 ;
-    using_rel = thr > 0 ;
-    
-    // or, base this on median of all events rather than mean
-    use_mean = param.has( "th-mean" ) ;
-
-    // only look at p2p AMP
-    ignore_neg_peak = param.has( "ignore-neg-peak" ) ? Helper::yesno( param.value( "ignore-neg-peak" ) ) : false; 
-
-    // fixed
-    uV_neg = param.has("uV-neg" ) ? param.requires_dbl( "uV-neg" ) : 0 ; 
-    if ( uV_neg > 0 ) Helper::halt( "uV-neg should be negative" ) ;
-
-    uV_p2p = param.has("uV-p2p" ) ? param.requires_dbl( "uV-p2p" ) : 0 ; 
-    if ( uV_p2p < 0 ) Helper::halt( "uV-p2p should be positive" ) ;
-
-    //
-    // FS/SS distinction
-    //
-
-    fast_slow_switcher_th = -9 ; 
-    do_fast_slow = 0;
-    if ( param.has( "so-fast-trans" ) )
-      {
-	fast_slow_switcher_th = param.requires_dbl( "so-fast-trans" );
-	do_fast_slow = 1 ; 
-      }
-    else if ( param.has( "so-slow-trans" ) ) 
-      {
-	fast_slow_switcher_th =param.requires_dbl( "so-slow-trans" );
-	do_fast_slow = -1;
-      }
-    
-    //
-    // SO/delta distinctions
-    //
-
-    // e.g. Kim et al neg bottom 15% (of -ve values),  pos = top 40% (of +ve values)
-    pct_neg = param.has( "pct-neg" ) ? param.requires_dbl( "pct-neg" ) / 100.0 : -1 ;
-    pct_pos = param.has( "pct-pos" ) ? param.requires_dbl( "pct-pos" ) / 100.0 : -1 ; 
-    
-    if ( pct_neg > 1 ) Helper::halt( "pct-neg should be between 0 and 100" );
-    if ( pct_pos > 1 ) Helper::halt( "pct-pos should be between 0 and 100" );
-
-    // percentile for neg & P2P (as per mag)
-    pct = param.has( "pct" ) ? param.requires_dbl( "pct" ) / 100.0 : -1;
-    
-    // Kim et al. peak-to-peak time interval : 0.15  0.5 
-    t_p2p_min = param.has( "t-p2p-min" ) ? param.requires_dbl( "t-p2p-min" ) : 0 ;
-    t_p2p_max = param.has( "t-p2p-max" ) ? param.requires_dbl( "t-p2p-max" ) : 0 ;
-
-    SO_delta_mode = 0;
-    if ( param.has( "SO-only" ) ) SO_delta_mode = 1 ;
-    if ( param.has( "delta-only" ) )
-      {
-	if ( SO_delta_mode == 1 ) 
-	  Helper::halt( "cannot specify both SO-only and delta-only" );
-	SO_delta_mode = 2 ;
-      }
-
-    // default FIR settings for filter-Hilbert
-    fir_ripple = param.has( "sw-ripple" ) ? param.requires_dbl( "sw-ripple" ) : 0.01 ;
-    fir_tw = param.has( "sw-tw" ) ? param.requires_dbl( "sw-tw" ) : 0.5 ; 
-    
-    // legacy/ignored
-    pos2neg_zc = ! param.has( "neg2pos" ) ;
-    
-    // legacy/ignored
-    type = SO_FULL;
-    if      ( param.has( "half-wave" ) ) type = SO_HALF;
-    else if ( param.has( "negative-half-wave" ) ) type = SO_NEGATIVE_HALF;
-    else if ( param.has( "positive-half-wave" ) ) type = SO_POSITIVE_HALF;
-
-    // annotations -- first check so-annot then annot (i.e. if called from SPINDLES)
-    astr = ".";
-
-    if ( param.has( "so-annot" ) )
-      astr = param.value( "so-annot" );
-    /* else if ( param.has( "annot" ) ) */
-    /*   astr = param.value( "annot" ); */
-    
-    // do not skip SO detection
-    skip = false;
-
-    // verbose display? (epoch/event level)    
-    out_all_slopes = param.has( "out-all-slopes" ) ? param.yesno( "out-all-slopes" ) : false;
-    out_idx        = param.has( "out-idx" ) ? param.yesno( "out-idx" ) : false; 
-    
-  }
+  slow_wave_param_t( const param_t & param );
   
   // relative threshold based on mean of 
   // all SOs (based on negative peak & P2P )

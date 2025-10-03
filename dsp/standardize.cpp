@@ -21,6 +21,8 @@
 //    --------------------------------------------------------------------
 
 #include "dsp/standardize.h"
+
+#include "param.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "stats/eigen_ops.h"

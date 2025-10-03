@@ -21,16 +21,9 @@
 //    --------------------------------------------------------------------
 
 
-#include "eval.h"
+#include "param.h"
 
-#include "luna.h"
-
-extern logger_t logger;
-
-extern writer_t writer;
-
-extern freezer_t freezer;
-
+#include "defs/defs.h"
 
 //
 // param_t 

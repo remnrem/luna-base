@@ -23,6 +23,7 @@
 #include "helper/mapper.h"
 #include "annot/nsrr-remap.h"
 #include "edf/canonical.h"
+#include "eval.h"
 
 extern globals global;
 

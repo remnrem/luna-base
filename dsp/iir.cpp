@@ -27,7 +27,7 @@
 #include "helper/logger.h"
 #include "fftw/fftwrap.h"
 #include "db/db.h"
-#include "eval.h"
+#include "param.h"
 
 #include "edf/slice.h"
 #include "edf/edf.h"

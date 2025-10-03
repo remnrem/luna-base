@@ -22,6 +22,7 @@
 
 #include "artifacts.h"
 
+#include "param.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "annot/annot.h"
@@ -30,7 +31,6 @@
 
 #include "helper/helper.h"
 #include "helper/logger.h"
-#include "eval.h"
 #include "db/db.h"
 
 #include "dsp/resample.h"

@@ -22,6 +22,8 @@
 
 
 #include "cwt-design.h"
+
+#include "param.h"
 #include "cwt/cwt.h"
 #include "fftw/fftwrap.h"
 #include "db/db.h"

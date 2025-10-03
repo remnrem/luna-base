@@ -22,6 +22,8 @@
 
 
 #include "dsp/tsync.h"
+
+#include "param.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "helper/helper.h"

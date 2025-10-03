@@ -2350,8 +2350,10 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
   // comments will have been stripped out
   // variable must be in the form   ${var} 
   // definitions can be as ${var=values,etc}
+  // if ${x:=expr}, then evaluate expr as an expression
   // appends can be in form ${var+=val1,val2}
   // allow for ?{x} which are evaluated as T/F and allow missing always
+
   
   int open = 0;
   std::string s;
@@ -2361,9 +2363,9 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
       // if here at last char : cannot be the start of a valid variable
       if ( i == t->size() - 1 ) { s = s + (*t)[i]; continue; } 
       
-      // otherwise scan for '${' or '?{'
+      // otherwise scan for '${' or '?{' or '&{'
       if ( ! ( ( (*t)[i] == '$' || (*t)[i] == '?' ) && (*t)[i+1] == '{' ) ) { s = s + (*t)[i]; continue; } 
-
+      
       // looks like we've found the start of a variable 
       const bool boolvar = (*t)[i] == '?' ;
 
@@ -2415,12 +2417,26 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		  (*vars)[ lvalue ] += evalue;
 		  break;
 		}
-	      // definition? 
+	      // definition? (standard '=' or an expression := )
 	      else if ( varname.find( "=" ) != std::string::npos )
 		{
+
+		  // evaluate as an expression?
+		  const bool exprvar = varname.find( ":=" ) != std::string::npos;
+		  
 		  std::vector<std::string> tok = Helper::parse( varname , "=" );
 		  
-		  if ( tok.size() != 2 ) Helper::halt( "bad format for ${var=value} definition" );
+		  if ( tok.size() != 2 )
+		    {
+		      if ( exprvar )
+			Helper::halt( "bad format for ${var:=value} definition" );
+		      else
+			Helper::halt( "bad format for ${var=value} definition" );
+		    }
+
+		  // variable name (may need to strip : from x:=y)
+		  const std::string lvalue = exprvar ? tok[0].substr( 0 , tok[0].size() - 1 ) : tok[0];
+		  
 		  // recursively swap in any existing variables in the definition
 		  // ${a=${b}} 
 		  Helper::swap_in_variables( &tok[1] , vars , allow_missing , silent );
@@ -2449,8 +2465,8 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		      // any expansions
 		      Helper::expand_numerics( &evalue );
 		      
-		      // allow for Eval expressions		      
-		      if ( 1 )
+		      // allow for Eval expressions? &{}
+		      if ( exprvar )
 			{
 			  std::map<std::string,annot_map_t> inputs;
 			  // std::map<std::string,std::string> * vars
@@ -2482,9 +2498,9 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		  
 		  
 		  if ( globals::verbose_var_assignment || ! silent ) 
-		    logger << "   setting variable ${" << tok[0] << "} = " << evalue << "\n";
+		    logger << "   setting variable ${" << lvalue << "} = " << evalue << "\n";
 		  
-		  (*vars)[ tok[0] ] = evalue;
+		  (*vars)[ lvalue ] = evalue;
 		  
 		  break;
 		}

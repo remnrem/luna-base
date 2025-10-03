@@ -23,6 +23,7 @@
 #include "edf/sedf.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
+#include "param.h"
 
 extern logger_t logger;
 

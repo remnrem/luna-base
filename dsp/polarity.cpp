@@ -21,6 +21,7 @@
 //    --------------------------------------------------------------------
 
 #include "polarity.h"
+#include "param.h"
 
 #include "dsp/fir.h"
 #include "fftw/fftwrap.h"
@@ -28,7 +29,6 @@
 
 #include "helper/helper.h"
 #include "helper/logger.h"
-#include "eval.h"
 #include "db/db.h"
 
 #include "edf/edf.h"

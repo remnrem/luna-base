@@ -23,7 +23,7 @@
 #include "mi.h"
 
 #include "helper/helper.h"
-#include "eval.h"
+#include "param.h"
 #include "miscmath/miscmath.h"
 #include "miscmath/crandom.h"
 #include "edf/edf.h"

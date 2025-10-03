@@ -21,6 +21,7 @@
 //    --------------------------------------------------------------------
 
 #include "fftw/bandaid.h"
+#include "param.h"
 
 
 bandaid_t::bandaid_t()

@@ -22,6 +22,7 @@
 
 #include "hilbert.h"
 
+#include "param.h"
 #include "fftw/fftwrap.h"
 #include "miscmath/crandom.h"
 #include "miscmath/miscmath.h"

@@ -26,6 +26,8 @@
 #include <cstdlib>
 #include "helper/helper.h"
 
+#include "param.h"
+#include "eval.h"
 #include "helper/logger.h"
 
 extern logger_t logger;

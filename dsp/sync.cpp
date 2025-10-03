@@ -22,6 +22,7 @@
 
 #include "dsp/sync.h"
 
+#include "param.h"
 #include "dsp/hilbert.h"
 #include "fftw/fftwrap.h"
 #include "dsp/wrappers.h"

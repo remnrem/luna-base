@@ -25,7 +25,7 @@
 #include "resample.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
-#include "eval.h"
+#include "param.h"
 #include "db/db.h"
 #include "fftw/cohfft.h"
 #include "helper/logger.h"

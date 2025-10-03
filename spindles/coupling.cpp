@@ -24,6 +24,8 @@
 
 #include "helper/logger.h"
 
+#include "param.h"
+
 #include "db/db.h"
 
 extern logger_t logger;

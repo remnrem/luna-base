@@ -21,6 +21,7 @@
 //    --------------------------------------------------------------------
 
 #include "dsp/peaks.h"
+#include "param.h"
 #include "timeline/cache.h"
 #include "edf/edf.h"
 #include "edf/slice.h"

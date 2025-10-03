@@ -22,6 +22,7 @@
 
 
 #include "dsp/acf.h"
+#include "param.h"
 #include "fftw/fftwrap.h"
 #include "miscmath/miscmath.h"
 #include "db/db.h"

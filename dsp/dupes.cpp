@@ -22,6 +22,7 @@
 
 #include "dsp/dupes.h"
 
+#include "param.h"
 #include "stats/matrix.h"
 #include "edf/edf.h"
 #include "edf/slice.h"

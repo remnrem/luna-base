@@ -21,6 +21,7 @@
 //    --------------------------------------------------------------------
 
 #include "edf/align-epochs.h"
+#include "param.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"

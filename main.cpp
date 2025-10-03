@@ -22,6 +22,7 @@
 
 #include "luna.h"
 #include "main.h"
+#include "param.h"
 
 //
 // global resources

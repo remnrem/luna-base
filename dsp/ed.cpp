@@ -26,7 +26,7 @@
 #include "stats/matrix.h"
 #include "stats/statistics.h"
 
-#include "eval.h"
+#include "param.h"
 #include "db/db.h"
 
 extern writer_t writer;

@@ -37,7 +37,7 @@ int  prune_n;
 
 #include "edf/edf.h"
 #include "edf/slice.h"
-#include "eval.h"
+#include "param.h"
 
 #include "annot/annot.h"
 #include "intervals/intervals.h"

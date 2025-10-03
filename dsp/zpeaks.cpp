@@ -22,6 +22,7 @@
 
 #include "dsp/zpeaks.h"
 
+#include "param.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "timeline/cache.h"

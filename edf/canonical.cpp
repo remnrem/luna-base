@@ -22,6 +22,7 @@
 
 #include "canonical.h"
 
+#include "param.h"
 #include "edf.h"
 #include "defs/defs.h"
 #include "helper/helper.h"

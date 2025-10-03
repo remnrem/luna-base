@@ -23,6 +23,7 @@
 #ifdef HAS_LGBM
 
 #include "assoc/massoc.h"
+#include "param.h"
 #include "db/db.h"
 #include "helper/logger.h"
 #include "stats/eigen_ops.h"

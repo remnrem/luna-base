@@ -46,6 +46,8 @@ namespace eigen_ops {
   bool robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool , bool , double , bool second_rescale = true , const bool ignore_invariants = false , std::vector<int> * zeros = NULL );    
 
   Eigen::VectorXd percentile_scale( const Eigen::VectorXd & x , const double pct , const int nsegs );
+
+  Eigen::VectorXd removeNaNs( const Eigen::VectorXd & x );
   
   void accumulate( Eigen::Ref<Eigen::VectorXd> m , const int ctype );
 

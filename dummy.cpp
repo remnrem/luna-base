@@ -20,6 +20,7 @@
 //    --------------------------------------------------------------------
 
 #include "luna.h"
+#include "param.h"
 #include "main.h"
 
 // DUMMY : a generic placeholder/scratchpad for templating new things

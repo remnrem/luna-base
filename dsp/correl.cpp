@@ -24,7 +24,7 @@
 #include "correl.h"
 
 #include "miscmath/miscmath.h"
-
+#include "param.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "eval.h"
