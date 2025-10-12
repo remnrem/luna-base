@@ -5294,7 +5294,19 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  // allow/do not allow spaces in param files
+  if ( Helper::iequals( tok0 , "param-spaces" ) )
+    {
+      globals::allow_space_param = Helper::yesno( tok1 );
+      return;
+    }
   
+  // allow/do not allow spaces in param files
+  if ( Helper::iequals( tok0 , "param-equals" ) )
+    {
+      globals::allow_equals_param = Helper::yesno( tok1 );
+      return;
+    }
   
   // if annot INST ID black, add hh:mm:ss
   if ( Helper::iequals( tok0 , "inst-hms" ) )

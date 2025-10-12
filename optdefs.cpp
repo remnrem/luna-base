@@ -59,6 +59,9 @@ void optdefs_t::init()
   globals::optdefs().add( "logging" , "write-log" , OPT_BOOL_T , "Turn off log-saving (i.e. used via API)" );
   globals::optdefs().add( "logging" , "mirror" , OPT_BOOL_T , "Mirror inputs in console log" );
 
+  // parameter files
+  globals::optdefs().add( "param" , "param-spaces" , OPT_BOOL_T , "Allow space-delimiters in parameter files (default T)" );
+  globals::optdefs().add( "param" , "param-equals" , OPT_BOOL_T , "Allow equal-delimiters in parameter files (default T)" );
 
   // reading EDFs
   globals::optdefs().add( "signals", "force-edf" , OPT_BOOL_T , "Read EDF+ as EDF (i.e. ignore gaps, annotations)");

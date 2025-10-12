@@ -665,6 +665,37 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       lunapi_t * lp = lunapi_t::inaugurate();
       std::cout << " done\n";
 
+      lp->var( "path" , "~/dropbox/projects/joyita/mros-masking/" );
+      int nobs = lp->read_sample_list("~/dropbox/projects/joyita/mros-masking/ss.lst");
+      std::cout << " read " << nobs << "\n";      
+      
+      
+      // lunapi_inst_ptr p0 = lp->inst( "mros-visit1-aa1580" );
+      // std::cout << p0->get_id() << " .. [" << p0->get_edf_file() << "]\n";
+      // std::vector<std::string> dx = p0->desc();
+      // for (int i=0; i<dx.size(); i++) std::cout << " d["<<i<<"] = " << dx[i] << "\n";
+      //std::exit(0);
+      
+      // std::optional<lunapi_inst_ptr> p1 = lp->inst( 1 );
+      // if ( p1 )
+      // 	{
+      // 	  lunapi_inst_ptr p = *p1;
+      // 	  std::cout << p->get_id() << " .. " << p->get_edf_file() << "\n"; 
+      // 	}
+      // std::exit(0);
+      for (int i=0; i<nobs; i++)
+	{
+	  std::optional<lunapi_inst_ptr> p1 = lp->inst( i );
+	  if ( p1 )
+	    {
+	      lunapi_inst_ptr p = *p1;
+	      std::cout << p->get_id() << " .. " << p->get_edf_file() << "\n";	    
+	    }
+	  else
+	    std::cout << " no " << i << "\n";
+	}
+      std::exit(0);
+      
       lunapi_inst_ptr p = lp->inst( "id1" );
 
       std::cout << " attaching EDFs (local)\n";

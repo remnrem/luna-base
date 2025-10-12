@@ -452,6 +452,10 @@ struct globals
   // allow spaces in .annot files, or only tab delimited?
   static bool allow_space_delim;
 
+  // allow spaces or equals in .param files, or only tabs?
+  static bool allow_space_param;
+  static bool allow_equals_param;
+    
   // always sanitize labels (e.g. for eval expressions)
   static bool sanitize_everything;
   

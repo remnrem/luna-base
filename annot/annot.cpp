@@ -4180,10 +4180,10 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
       
       interval_t curr = jj->first;
       
-      // ensure no overlaps
+      // ensure no conflicting overlaps
       if ( jj != stages.begin() )
 	{
-	  if ( curr.start < prior.stop )
+	  if ( curr.start < prior.stop && jj->second != prior_stage )
 	    {
 
 	      logger << "\n*** overlapping stage annotations detected when compiling hypnogram:\n";
@@ -4255,7 +4255,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   
   for ( int i=0; i<vec_stages.size(); i++ )
     ss->add( globals::stage( vec_stages[i] ) , vec_intervals[i] , "." );
-  
+ 
 
   return true;
   

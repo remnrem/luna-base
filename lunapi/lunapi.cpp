@@ -558,19 +558,31 @@ int lunapi_t::set_sample_list( const std::vector<std::vector<std::string> > & d 
 }
 
 
-std::vector<std::tuple<std::string,std::string,std::set<std::string> > > lunapi_t::sample_list() const
-{
-  std::vector<std::tuple<std::string,std::string,std::set<std::string> > > r;
-  std::map<std::string,std::string>::const_iterator ee = edfs.begin();
-  while ( ee != edfs.end() )
-    {
-      std::optional<int> n = get_n( ee->first );
-      if ( n ) 
-	r.push_back( std::make_tuple( ee->first , ee->second , get_annot( *n ) ) );
-      ++ee;
-    }
+// std::vector<std::tuple<std::string,std::string,std::set<std::string> > > lunapi_t::sample_list() const
+// {
+//   std::vector<std::tuple<std::string,std::string,std::set<std::string> > > r;
+//   std::map<std::string,std::string>::const_iterator ee = edfs.begin();
+//   while ( ee != edfs.end() )
+//     {
+//       std::optional<int> n = get_n( ee->first );
+//       if ( n ) 
+// 	r.push_back( std::make_tuple( ee->first , ee->second , get_annot( *n ) ) );
+//       ++ee;
+//     }
+//   return r;
+// }
+
+
+std::vector<std::tuple<std::string,std::string,std::set<std::string>>> lunapi_t::sample_list() const {
+  std::vector<std::tuple<std::string,std::string,std::set<std::string>>> r;
+  for (int i = 0; i < nobs(); ++i) {
+    auto id = get_id(i);              // uses n2id to preserve insertion order
+    if (!id) continue;
+    r.emplace_back(*id, edfs.at(*id), annots.at(*id));
+  }
   return r;
 }
+
 
 void lunapi_t::insert_inst( const std::string & id ,
 			    const std::string & edf ,

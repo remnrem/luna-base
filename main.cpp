@@ -1620,6 +1620,12 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
 
 void include_param_file( const std::string & paramfile )
 {
+
+  // otherwise parse as a normal line: i.e. two tab-delim cols
+  // alternatively, allow space/equals delimiters
+  std::string delim = "\t";
+  if ( globals::allow_space_param ) delim += " ";
+  if ( globals::allow_equals_param ) delim += "=";
   
   bool parse_line = true;
 
@@ -1680,10 +1686,14 @@ void include_param_file( const std::string & paramfile )
 	    }
 	  
 		      
-	  // otherwise parse as a normal line: i.e. two tab-delim cols		      
-	  std::vector<std::string> tok = Helper::quoted_parse( line , "\t" );
+	  
+	  std::vector<std::string> tok = Helper::quoted_parse( line , delim );
+
 	  if ( tok.size() != 2 )
-	    Helper::halt("badly formatted line ( # tabs != 2 ) in " + filename + "\n" + line );
+	    Helper::halt("badly formatted line parameter file line ( # cols != 2 ) in " + filename
+			 + "\n" + line
+			 + "\n - see param-spaces and param-equals option possibly, which are set to T by default" 
+			 );
 	  
 	  cmd_t::parse_special( tok[0] , tok[1] );
 	  
