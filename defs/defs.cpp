@@ -61,6 +61,8 @@ std::set<frequency_band_t> globals::bands;
 //std::string globals::annot_folder;
 std::vector<std::string> globals::annot_files;
 bool globals::allow_space_delim = false;
+bool globals::allow_space_param = true;
+bool globals::allow_equals_param = true;
 char globals::annot_class_inst_combiner = '_';
 bool globals::combine_annot_class_inst = false;
 char globals::class_inst_delimiter = ':';
@@ -256,14 +258,14 @@ void globals::init_defs()
   //
 
   // should always be 7 characters
-  version = "v1.3.1 ";
+  version = "v1.3.2 ";
 
   major_version_number = 1;
   minor_version_number = 3;
   patch_version_number = 0;
 
   // should always be 11 chars
-  date    = "25-Sep-2025";
+  date    = "12-Oct-2025";
 
   //
   // Return code
