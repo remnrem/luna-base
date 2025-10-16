@@ -527,13 +527,13 @@ void process_edfs( cmd_t & cmd )
 	    tok[t] = Helper::unquote( tok[t] );
 	  
 	  // add in project path to relative paths?
-	  // (but keep absolute paths as they are)
+	  // (but keep absolute paths or empty files (.) as they are)
 
 	  if ( has_project_path )
 	    {
 	      for (int t=1;t<tok.size();t++)
 		{
-		  if ( tok[t][0] != globals::folder_delimiter )
+		  if ( tok[t] != "." && tok[t][0] != globals::folder_delimiter )
 		    tok[t] = globals::project_path + tok[t];
 		}
 	    }
@@ -666,7 +666,86 @@ void process_edfs( cmd_t & cmd )
 
       globals::empty = false; 
 
+      //
+      // Compile annotation file names before loading
+      //
+
+      for (int i=0;i<globals::annot_files.size();i++)
+	{
+	  // if absolute path given, add in as in  /home/joe/etc
+	  if ( globals::annot_files[i][0] == globals::folder_delimiter ) 
+	    tok.push_back( globals::annot_files[i] );
+	  else  // project path may be "" if not set; but if set, will end in /
+	    tok.push_back( globals::project_path + globals::annot_files[i] );
+	}
       
+      //
+      // Get annotation files (as the above may contain folders)
+      //
+
+      std::vector<std::string> afiles;
+      
+      if ( ! globals::skip_nonedf_annots ) 
+	{
+	  
+	  for (int i=2;i<tok.size();i++) 
+	    {
+	      
+	      std::string fname = Helper::expand( tok[i] );
+	      
+	      if ( fname[ fname.size() - 1 ] == globals::folder_delimiter ) 
+		{
+		  // this means we are specifying a folder, in which case search for all files that 
+		  // start id_<ID>_* and attach thoses
+		  DIR * dir;		  
+		  struct dirent *ent;
+		  if ( (dir = opendir ( fname.c_str() ) ) != NULL )
+		    {
+		      /* print all the files and directories within directory */
+		      while ((ent = readdir (dir)) != NULL)
+			{
+			  std::string fname2 = ent->d_name;
+			  // only annot files (.xml, .ftr, .annot, .eannot)
+			  if ( Helper::file_extension( fname2 , "annot" ) ||
+			       Helper::file_extension( fname2 , "txt" ) ||
+			       Helper::file_extension( fname2 , "tsv" ) ||
+			       Helper::file_extension( fname2 , "xml" ) ||
+			       Helper::file_extension( fname2 , "ameta" ) ||
+			       Helper::file_extension( fname2 , "stages" ) ||
+			       Helper::file_extension( fname2 , "eannot" ) )   
+			    {
+			      afiles.push_back( fname + fname2 );
+			    }			 
+			}
+		      closedir (dir);
+		    }
+		  else 
+		    Helper::halt( "could not open folder " + fname );
+		}
+	      else
+		{
+		  
+		  // only annot files (.xml, .ftr, .annot, .eannot)                                            
+		  // i.e. skip .sedf files that might also be specified as 
+		  // attached to this EDF
+		  if ( Helper::file_extension( fname , "annot" ) ||
+		       Helper::file_extension( fname , "txt" ) ||
+		       Helper::file_extension( fname , "tsv" ) ||
+		       Helper::file_extension( fname , "xml" ) ||
+		       Helper::file_extension( fname , "ameta" ) ||
+		       Helper::file_extension( fname , "stages" ) ||
+		       Helper::file_extension( fname , "eannot" ) )
+		    {
+		      afiles.push_back( fname );	 
+		    }
+		  else
+		    Helper::halt( "did not recognize annotation file extension: " + fname );
+		} 
+	      
+	    }
+	}
+      
+
       //
       // Limited to specific signals to load in?
       //
@@ -711,30 +790,48 @@ void process_edfs( cmd_t & cmd )
       else if ( empty_edf || edffile == "." ) // i.e. sample-list empty EDF called for
 	{	  
 
+	  int default_nr = 60 * 60 * 6 ; // 6 hrs
+	  std::string default_startdate = "01.01.00";
+	  std::string default_starttime = "00.00.00";
+
+	  const bool has_specifics = globals::param.has( "-date" )
+	    || globals::param.has( "-time"  )
+	    || globals::param.has( "-rs"  ) 
+	    || globals::param.has( "-nr"  ) ;
+	  
+
+	  //
+	  // Update start time/date from annots (if *no* parameters otherwise given)
+	  //
+	  
+	  if ( ! has_specifics )
+	    annotation_set_t::detect_times( afiles ,
+					    &default_starttime, &default_startdate, &default_nr );
+	  	  
 	  //
 	  // Generate an empty EDF
 	  //
-
+	  
 	  const int nr = globals::param.has( "-nr" ) 
 	    ? globals::param.requires_int( "-nr" ) 
-	    : 60 * 60 * 6 ; // 6 hr default
-
+	    : default_nr ; 
+	  
 	  const int rs = globals::param.has( "-rs" )
 	    ? globals::param.requires_int( "-rs" )
 	    : 1 ; // in full seconds (integer)
-
+	  
 	  const std::string startdate = globals::param.has("-date")
 	    ? globals::param.value( "-date" )
-	    : "01.01.00" ;
+	    : default_startdate ; 
 
 	  const std::string starttime = globals::param.has("-time")
 	    ? globals::param.value( "-time" )
-	    : "00.00.00" ;
+	    : default_starttime ; 
 
 	  const std::string id = globals::param.has("-id")
 	    ? globals::param.value( "-id" )
 	    : rootname ;
-
+	  
 	  okay = edf.init_empty( id , nr , rs , startdate , starttime );
 	}
       else // attach an EDF from disk
@@ -786,84 +883,13 @@ void process_edfs( cmd_t & cmd )
 
       edf.annotations->set( &edf );
       
-      //
-      // Add additional annotations? 
-      //
-
-      for (int i=0;i<globals::annot_files.size();i++)
-	{
-	  // if absolute path given, add in as in  /home/joe/etc
-
-	  if ( globals::annot_files[i][0] == globals::folder_delimiter ) 
-	    tok.push_back( globals::annot_files[i] );
-	  else  // project path may be "" if not set; but if set, will end in /
-	    tok.push_back( globals::project_path + globals::annot_files[i] );
-	}
     
       //
-      // Attach annotations
+      // Attach annotations from files
       //
       
-      if ( ! globals::skip_nonedf_annots ) 
-	{
-
-	  for (int i=2;i<tok.size();i++) 
-	    {
-	      
-	      std::string fname = Helper::expand( tok[i] );
-	      
-	      if ( fname[ fname.size() - 1 ] == globals::folder_delimiter ) 
-		{
-		  // this means we are specifying a folder, in which case search for all files that 
-		  // start id_<ID>_* and attach thoses
-		  DIR * dir;		  
-		  struct dirent *ent;
-		  if ( (dir = opendir ( fname.c_str() ) ) != NULL )
-		    {
-		      /* print all the files and directories within directory */
-		      while ((ent = readdir (dir)) != NULL)
-			{
-			  std::string fname2 = ent->d_name;
-			  // only annot files (.xml, .ftr, .annot, .eannot)
-			  if ( Helper::file_extension( fname2 , "annot" ) ||
-			       Helper::file_extension( fname2 , "txt" ) ||
-			       Helper::file_extension( fname2 , "tsv" ) ||
-			       Helper::file_extension( fname2 , "xml" ) ||
-			       Helper::file_extension( fname2 , "ameta" ) ||
-			       Helper::file_extension( fname2 , "stages" ) ||
-			       Helper::file_extension( fname2 , "eannot" ) )   
-			    {
-			      edf.load_annotations( fname + fname2 );	 			   
-			    }			 
-			}
-		      closedir (dir);
-		    }
-		  else 
-		    Helper::halt( "could not open folder " + fname );
-		}
-	      else
-		{
-		  
-		  // only annot files (.xml, .ftr, .annot, .eannot)                                            
-		  // i.e. skip .sedf files that might also be specified as 
-		  // attached to this EDF
-		  if ( Helper::file_extension( fname , "annot" ) ||
-		       Helper::file_extension( fname , "txt" ) ||
-		       Helper::file_extension( fname , "tsv" ) ||
-		       Helper::file_extension( fname , "xml" ) ||
-		       Helper::file_extension( fname , "ameta" ) ||
-		       Helper::file_extension( fname , "stages" ) ||
-		       Helper::file_extension( fname , "eannot" ) )
-		    {
-		      edf.load_annotations( fname );	 
-		    }
-		  else
-		    Helper::halt( "did not recognize annotation file extension: " + fname );
-		} 
-	      
-	    }
-	}
-
+      for (int i=0;i<afiles.size();i++) 
+	edf.load_annotations( afiles[i] );  
       
       //
       // Attach EDF Annotations, potentially
@@ -878,7 +904,6 @@ void process_edfs( cmd_t & cmd )
 	    edf.annotations->from_EDF( edf , edf.edfz_ptr() );
 	  else if ( ! edf.header.continuous )
 	    edf.annotations->from_EDF( edf , edf.edfz_ptr() );
-
 	}
       
       
@@ -1621,7 +1646,7 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
 void include_param_file( const std::string & paramfile )
 {
 
-  // otherwise parse as a normal line: i.e. two tab-delim cols
+  // parse as a normal line: i.e. two tab-delim cols
   // alternatively, allow space/equals delimiters
   std::string delim = "\t";
   if ( globals::allow_space_param ) delim += " ";

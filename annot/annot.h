@@ -851,10 +851,7 @@ struct textvec_avar_t : public avar_t
 
 
 
-
-
-
-
+// struct to organize all annotations for a recording
 
 struct annotation_set_t;
 struct edf_t;
@@ -894,6 +891,13 @@ struct annotation_set_t
     clear();
   }
   
+  // helper to find start time/date from a set of annotations
+  // i.e. can be called when working w/ an empty annotation set
+  
+  static bool detect_times( const std::vector<std::string> & afiles ,
+			    std::string * starttime ,
+			    std::string * startdate ,
+			    int * seconds );
   
   // data
 

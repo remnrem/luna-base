@@ -1893,6 +1893,10 @@ interval_t annot_t::get_interval( const std::string & line ,
       bool is_hms1 = tok_start_hms.size() == 3 || tok_start_hms.size() == 4; 
       bool is_hms2 = ( *readon || col2dur ) ? false : ( tok_stop_hms.size() == 3 || tok_stop_hms.size() == 4 );
 
+      // check for invalid hh:mm or mm:ss forms
+      if ( tok_start_hms.size() == 2 ) Helper::halt( "invalid time string: " + start_str );
+      if ( tok_stop_hms.size() == 2 ) Helper::halt( "invalid time string: " + stop_str );
+      
       //      std::cout << " is hms = " << is_hms1 << " " << is_hms2 << "\n";
       
       // if so, check that there is a valid EDF header starttime
@@ -1944,23 +1948,24 @@ interval_t annot_t::get_interval( const std::string & line ,
 	      //  i.e. if start = 10pm,  then 9pm --> 23 hours later, assumed the next day
 	      
 	      // if start is before EDF start, flag that ( special flag interval interval_t(1,0)   
-
-	      //	      std::cout << " atime.d " << atime.valid << " " << atime.d << "\n";
+	      
+	      // std::cout << " atime.d " << atime.valid << " " << atime.d << "\n";
 	      
 	      // day information specified?
 	      
 	      if ( startdatetime.d != 0 && atime.d != 0 ) 
 		{
-
+		  
 		  // sanity check -- if annot is *years and years* past EDF start, will
-		  // get floating point issues... catch here (limit = 10years.... no idea why
+		  // get floating point issues... catch here (limit = 1year.... no idea why
 		  // somebody would specify this type of data, but to catch errors in formats, etc
-		  if ( abs( startdatetime.d - atime.d ) > 3650 )
-		    {
-		      Helper::vmode_halt( "annotation start date > 10 years from EDF start... please check data" );		  
-		      return interval_t( 123456789, 987654321 );
-		    }
-
+		  if ( globals::check_annot_dates ) 
+		    if ( abs( startdatetime.d - atime.d ) > 365 )
+		      {
+			Helper::vmode_halt( "annotation start date > 1 year from EDF start... please check data" );		  
+			return interval_t( 123456789, 987654321 );
+		      }
+		  
 		  int earlier = clocktime_t::earlier( startdatetime , atime );
 		  
 		  if ( earlier == 2 )
@@ -6555,3 +6560,116 @@ void annotation_set_t::espan( edf_t & edf , param_t & param )
 
 
 
+// helper to find start time/date from a set of annotations
+// i.e. can be called when working w/ an empty annotation set
+
+bool annotation_set_t::detect_times( const std::vector<std::string> & afiles ,
+				     std::string * starttime ,
+				     std::string * startdate ,
+				     int * seconds )
+{
+
+  // nothing to do
+  if ( afiles.size() == 0 ) return false;
+
+  // any annots found?
+  bool any_annots = false;
+  
+  // make a dummy EDF w/ null start date
+  const int _nr = 60 * 60 * 6 ; // 6 hr default but should not matter
+  const int _rs = 1;
+  const std::string _startdate = "02.01.85"; // null + 1 (i.e. earliest non-null date)
+  const std::string _starttime = "12.00.00"; // noon start, so will map AM times to next day 
+  const std::string _id = "placeholder";
+
+  // make a dummy/empty EDF
+  annotation_set_t annotations;
+  edf_t dummy( &annotations );
+  const bool okay = dummy.init_empty( _id , _nr , _rs , _startdate , _starttime , true ); // T -> silent
+  
+  // attach EDFs, but turn off date sanity checking (i.e. can be > 1 year past EDF start)
+  globals::check_annot_dates = false;
+
+  for (int i=0;i<afiles.size();i++)
+    dummy.load_annotations( afiles[i] );
+  
+  globals::check_annot_dates = true;
+
+
+  // find min/max times from attached annotations
+  bool first = true;
+  uint64_t tp0 = 0LLU;
+  uint64_t tp1 = 0LLU;
+    
+  // check annots for min/max 
+  std::vector<std::string> names = dummy.annotations->names();
+  for (int a = 0 ; a < names.size() ; a++ )
+    {
+      annot_t * annot = dummy.annotations->find( names[a] );
+      if ( annot->special() ) continue;      
+      const int num_events = annot->num_interval_events();
+      if ( num_events != 0 ) any_annots = true;
+      
+      // get all events
+      const annot_map_t & events = annot->interval_events;
+      annot_map_t::const_iterator aa = events.begin();
+      while ( aa != events.end() )
+	{	  
+	  const interval_t & interval = aa->first.interval;
+
+	  if ( first )
+	    {
+	      tp0 = interval.start ;
+	      tp1 = interval.stop ;
+	      first = false;
+	    }
+	  else
+	    {
+	      if ( interval.start < tp0 ) tp0 = interval.start;
+	      if ( interval.stop > tp1 ) tp1 = interval.stop;	      
+	    }
+	  // next annotation 
+	  ++aa;
+	}      
+    }
+
+  // we didn't find any annots
+  if ( ! any_annots ) return false;
+
+  // calculate implied duration, etc, and update
+  // defaults
+  
+  const double s0 = tp0 / globals::tp_1sec;
+  const double s1 = tp1 / globals::tp_1sec;
+  
+  // get times as strings
+  clocktime_t dt0( dummy.header.startdate, dummy.header.starttime );
+  clocktime_t dt1( dummy.header.startdate, dummy.header.starttime );
+
+  dt0.advance_seconds( s0 );
+  dt1.advance_seconds( s1 );
+  
+  // determine whether a date explicitly given:
+  //  we cannot tell from elapsed seconds alone... but
+  //  unless the annotations contained a first elapsed sec
+  //  annot start > 24hrs, then we should have tp0 within the
+  //  first 24 hrs from 2.1.85, i.e. if no other dates given
+  
+  bool has_dates = s0 >= 60 * 60 * 24 ; 
+
+  if ( ! has_dates ) 
+    logger << "  annotations span " << dt0.as_string() << " to " << dt1.as_string() << " (assuming no dates specified)\n";
+  else
+    logger << "  annotations span " << dt0.as_datetime_string() << " to " << dt1.as_datetime_string() << " (assuming dates specified)\n";
+
+  *starttime = dt0.as_string();
+
+  if ( has_dates )
+    *startdate = dt0.as_date_string();
+  else
+    *startdate = "01.01.85"; // null
+  
+  *seconds = s1 - s0;
+ 
+  return true;
+}

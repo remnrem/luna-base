@@ -1349,7 +1349,8 @@ bool edf_t::init_empty( const std::string & i ,
 			const int nr ,
 			const int rs ,
 			const std::string & startdate ,
-			const std::string & starttime )
+			const std::string & starttime ,
+			const bool silent )
 {
 
   if ( nr == 0 || rs == 0 ) return false;
@@ -1381,7 +1382,12 @@ bool edf_t::init_empty( const std::string & i ,
   set_continuous();
 
   timeline.init_timeline();
-
+  
+  //
+  // Store original last point
+  //
+ 
+  header.last_time_point_tp_orig = timeline.last_time_point_tp;
 
   //
   // if and only if running in --validation mode, we can quit now
@@ -1401,7 +1407,10 @@ bool edf_t::init_empty( const std::string & i ,
       records.insert( std::map<int,edf_record_t>::value_type( r , record ) );
     }
 
-  logger << "  created an empty EDF of duration " << rs * nr << " seconds\n";
+  if ( ! silent ) 
+    logger << "  created an empty EDF with start time "
+	   << starttime << ", date " << startdate << " ("
+	   << rs * nr << " seconds)\n";
   
   return true;
 
@@ -1932,6 +1941,7 @@ bool edf_t::attach( const std::string & f ,
   //
 
   header.last_time_point_tp_orig = timeline.last_time_point_tp;
+  
   
   //
   // Output some basic information

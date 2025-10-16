@@ -270,9 +270,12 @@ public:
   // attach data 
   //
 
-  bool attach_edf( const std::string & filename );
+  bool attach_edf( const std::string & filename ,
+		   const std::set<std::string>& annots = {} );
   
   bool attach_annot( const std::string & filename );
+
+  bool attach_empty_edf( const std::set<std::string>& afiles );
 
   bool empty_edf( const std::string & id,
 		  const int nr, const int rs,
@@ -366,7 +369,9 @@ public:
   //
   // Luna commands
   //
-
+  
+  std::string eval_dummy( const std::string & ); // for debug only
+  
   std::string eval( const std::string & );
   std::string eval_project( const std::string & , retval_t * accumulator );
   std::string eval1( const std::string & , retval_t * accumulator );

@@ -728,6 +728,40 @@ std::string segsrv_t::get_hms( const double s ) const
   return t1.as_string( ':' );
 }
 
+std::map<double,std::string> segsrv_t::get_hour_ticks() const
+{
+  std::map<double,std::string> t;
+  // take the entire record, and get the positions of the on-the-hour marks
+  // we have edf_start
+
+  clocktime_t t1 = edf_start;
+  
+  // whole record spans s0 to s1 seconds (units = sec past epoch)
+  const double s0 = t1.seconds();
+  const double s1 = s0 + get_total_sec_original();
+  
+  // is EDF on the hour? if so include?
+  if ( t1.m == 0 && t1.s == 0 )
+    t[ 0 ] = "| " + t1.as_string( ':' );
+  
+  // else, advance through the night
+  while ( 1 ) 
+    {
+      // advance to top of the hour
+      t1.advance_next_hr();
+
+      // past end of recording?
+      const double s = t1.seconds();      
+      if ( s >= s1 ) break;
+
+      // add, as fraction
+      t[ s - s0 ] = "| " + t1.as_string( ':' );
+      
+    }
+  
+  return t;
+}
+
 
 std::map<double,std::string> segsrv_t::get_clock_ticks(const int n) const
 {

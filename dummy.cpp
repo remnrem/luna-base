@@ -659,6 +659,27 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "lunapi" )
     {
+      
+      // test segsrv w/ annot-only files
+      lunapi_t * lp1 = lunapi_t::inaugurate();
+      int nobs1 = lp1->read_sample_list("t0.lst");
+      std::cout << " read " << nobs1 << "\n";      
+      
+      std::optional<lunapi_inst_ptr> po = lp1->inst( 1 );      
+      lunapi_inst_ptr p1 = *po;
+      std::cout << p1->get_id() << " .. " << p1->get_edf_file() << "\n";
+      std::vector<std::string> d1 = p1->desc();
+      for (int i=0; i<d1.size(); i++) std::cout << " d["<<i<<"] = " << d1[i] << "\n";
+
+      //segsrv_t segsrv1( p1 );
+
+      double ls = p1->last_sec();
+      double ls0 = p1->last_sec_original();
+      std::cout << " ls, ls0 = " << ls << " " << ls0 << "\n";
+
+      
+      std::exit(0);
+
       std::cout << "lunapi test\n";
 
       std::cout << " firing up ... \n";
@@ -730,6 +751,8 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       
       segsrv_t segsrv( p );
 
+
+      
       std::vector<std::string> chs = { "SaO2" , "PR" , "EEG", "EEG_sec" , "ECG" , "EMG" ,  "EOG_L" , "EOG_R" , "EEG",
 				       "AIRFLOW" , "THOR_RES" , "ABDO_RES" , "POSITION" , "LIGHT" , "OX_STAT"   };
 

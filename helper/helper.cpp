@@ -1476,6 +1476,26 @@ void clocktime_t::advance_days( int days )
   
 }
 
+void clocktime_t::advance_next_hr()
+{
+  if ( ! valid ) return;
+  // can operate directly on the d/h/m/s level
+
+  // always advance one hour
+  ++h;
+
+  // and going exactly to the hour
+  m = s = 0;
+
+  // need to advance day?
+  if ( h == 24 )
+    {
+      ++d;
+      h = 0;
+    }
+
+}
+  
 
 void clocktime_t::advance_hrs( double hrs ) 
 {

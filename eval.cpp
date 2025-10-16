@@ -5207,7 +5207,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::naughty_list = tok1;
       // create an empty file (i.e. as we append things to this subsequently
       std::ofstream P( globals::naughty_list.c_str() , std::ios::out );
-      P.close();      
+      P.close();
       return;
     }
 
@@ -5305,6 +5305,13 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   if ( Helper::iequals( tok0 , "param-equals" ) )
     {
       globals::allow_equals_param = Helper::yesno( tok1 );
+      return;
+    }
+
+  // do not register special variables
+  if ( Helper::iequals( tok0 , "register-specials" ) )
+    {
+      globals::register_default_special_vars = Helper::yesno( tok1 );
       return;
     }
   
@@ -5974,7 +5981,7 @@ void cmd_t::attach_idmapper( const std::string & file )
 
 void cmd_t::register_specials()
 {
-
+  
   specials.insert( "ch-match" );
   specials.insert( "ch-exact" ) ;
   specials.insert( "ch-clear" ) ;
@@ -6058,6 +6065,15 @@ void cmd_t::register_specials()
   // specials.insert( "pre-frontal" );  
   // specials.insert( "temporal" );
 
+
+  //
+  // optionally (register-specials=T) define special variables
+  //
+
+  if ( ! globals::register_default_special_vars )
+    return;
+  
+
   //
   // EEG topographical groupings
   //
@@ -6122,24 +6138,6 @@ void cmd_t::register_specials()
     
   vars[ "temporal" ]  
     = "FT7,T7,TP7,FT8,T8,TP8";
-
-
-  // specials.insert( "eeg" );
-  // specials.insert( "ref" );
-  // specials.insert( "ic" );
-  // specials.insert( "eog" );
-  // specials.insert( "ecg" );
-  // specials.insert( "emg" );
-  // specials.insert( "leg" );  
-  // specials.insert( "generic" );
-  // specials.insert( "airflow" );
-  // specials.insert( "effort" );  
-  // specials.insert( "oxygen" );
-  // specials.insert( "position" );
-  // specials.insert( "light" );
-  // specials.insert( "snore" );
-  // specials.insert( "hr" );
-  // specials.insert( "ignore" );
 
 }
 

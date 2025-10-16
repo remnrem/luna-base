@@ -219,6 +219,8 @@ struct globals
 
   static bool autofix_edf;
 
+  static bool register_default_special_vars;
+  
   static bool force_digital_minmax;
   static int  force_digital_min;
   static int  force_digital_max;
@@ -244,6 +246,7 @@ struct globals
   static date_format_t read_annot_date_format;
   static date_format_t write_annot_date_format;
   static date_format_t read_edf_date_format;
+  static bool check_annot_dates;
   
   static std::set<std::string> annot_alignment;
 

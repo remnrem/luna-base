@@ -653,7 +653,8 @@ public:
 
   bool init_empty( const std::string & id , const int nr , const int rs ,
 		   const std::string & startdate ,
-		   const std::string & starttime );
+		   const std::string & starttime ,
+		   const bool silent = false );
   
   //
   // Utility to append to an EDF (static function)
