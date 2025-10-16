@@ -745,9 +745,11 @@ bool cmd_t::eval( edf_t & edf )
   
   for ( int c = 0 ; c < num_cmds() ; c++ )
     {	        
-      
+
+      //
       // was a problem flag raised when loading the EDF?
-          
+      //
+      
       if ( globals::problem ) return false;
       
       //
@@ -815,7 +817,7 @@ bool cmd_t::eval( edf_t & edf )
 	  else if ( is( c, "REPORT" ) ) skip = false;
 	  if ( skip )
 	    {
-	      logger << "  ** skipping " << cmd(c) << " as there are no unmasked records\n"; 
+	      logger << "  ** skipping " << cmd(c) << " as there are too few unmasked records\n"; 
 	      continue;
 	    }
 	}
@@ -2903,7 +2905,8 @@ void proc_epoch( edf_t & edf , param_t & param )
 		     << edf.id << " when setting EPOCH: "
 		     << "required=" << r << "\t"
 		     << "but observed=" << edf.timeline.num_epochs()  << "\n";
-	      globals::problem = true;
+	      
+	      globals::empty = true; // used to set problem, but this better as allows THAW
 	    }	  
 	}
       // all done for generic epoch detection
@@ -2934,7 +2937,7 @@ void proc_epoch( edf_t & edf , param_t & param )
 		 << edf.id << " when setting EPOCH: "
 		 << "required=" << r << "\t"
 		 << "but observed=" << edf.timeline.num_epochs()  << "\n";
-	  globals::problem = true;
+	  globals::empty = true; // empty rather than problem now, to allow THAW
 	}
       return;
     }
