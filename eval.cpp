@@ -506,121 +506,121 @@ void cmd_t::replace_wildcards( const std::string & id )
 bool cmd_t::read( const std::string * str , bool silent )
 {
   
-  bool cmdline_mode = str == NULL;   
-  
-  if ( std::cin.eof() && cmdline_mode ) return false;
-  
-  if ( (!cmdline_mode) && str->size() == 0 ) return false;
+  // Parse Luna commands
+  // EITHER read from std::cin,                 [ from_stdcin ]
+  // OR          from -s command line           [ from_cmdarg ]
+  // OR          from a string (e.g. lunapi)    [ from_cmdstr ] 
+
+  const bool from_cmdstr = str != NULL;
+  const bool from_cmdarg = cmd_t::cmdline_cmds != "" && ! from_cmdstr;
+  const bool from_stdcin = ! ( from_cmdstr || from_cmdarg ) ;
+
+  // checking for input
+  if ( from_stdcin && std::cin.eof() ) return false;  
+  if ( from_cmdstr && str->size() == 0 ) return false;
   
   reset();
   
-  // CMD param=1 p=1,2,3 f=true out=o1 & CMD2 etc ; 
-  
-  // EITHER read from std::cin, 
-  // OR          from -s command line
-  // OR          from a string (e.g. lunaR)
+
+  // apply same processing in all cases
   
   // Commands are delimited by & symbols (i.e. multi-line statements allowed)
 
   //   line continuations must start with + or ... (after whitespace)  
-  // also, can have \ which means a continuation on the next line
-  //  i.e replace \\n with space
-  
-  std::istringstream allinput;
-  
-  if ( ! cmdline_mode ) // read from 'str', such as R interface
-    {
-      
-      // split by commands ('&' symbols), but allowing for & witin eval expressions 
-      std::vector<std::string> tok = Helper::quoted_parse( *str , "&" );
-      
-      std::stringstream ss;
-      
-      for (int l=0;l<tok.size();l++)
-	{
-	  if ( tok[l] == "" ) continue;
-	  if ( l != 0 ) ss << " & ";
-	  ss << tok[l];
-	}     
-      allinput.str( ss.str() );
+  //     also, can have \ which means a continuation on the next line
+  //     i.e replace \\n with space
 
+
+  // if not from std::cin, first collate the input string here
+  std::istringstream inpstr;
+  
+  // read from 'str', such as R/Python interface
+  if ( from_cmdstr )
+    {      
+      inpstr.str( *str );
+      inpstr.clear();  
+    }  
+  
+  // or read from -s string
+  if ( from_cmdarg )
+    {
+      // allow multi-line commands via \ at end 
+      inpstr.str( cmd_t::cmdline_cmds );
+      inpstr.clear();
     }
+    
+  // now process, either from inpstr or std::cin input stream
+  std::istream * in = from_stdcin
+    ? static_cast<std::istream*>(&std::cin)
+    : static_cast<std::istream*>(&inpstr);
 
-  // read from std::cin
-  else if ( cmd_t::cmdline_cmds == "" )
+  // from whatever source, expand to this;
+  std::stringstream allinput;
+
+  bool first_cmd = true;
+  while ( 1 )
     {
-      std::stringstream ss;
-      bool first_cmd = true;
-      while ( 1 )
+      std::string s;
+      Helper::safe_getline( *in , s );
+      if ( in->eof() ) break;
+      if ( s == "" ) continue;	  
+      
+      s = Helper::ltrim( s ) ;
+      
+      // is this a continuation line?
+      // ... or + as first character
+      bool continuation = s.substr(0,1) == "+" || s.substr(0,3) == "..." ;
+      if ( continuation )
 	{
-	  std::string s;
-	  Helper::safe_getline( std::cin , s );
-	  if ( std::cin.eof() ) break;
-	  if ( s == "" ) continue;	  
-
-	  s = Helper::ltrim( s ) ;
-	  
-	  // is this a continuation line?
-	  // ... or + as first character
-	  bool continuation = s.substr(0,1) == "+" || s.substr(0,3) == "..." ;
-	  if ( continuation )
-	    {
-	      if ( s.substr(0,1) == "+" ) s = s.substr(1);
-	      else s = s.substr(3);
-	    }
-	      
-	  // only read up to a % comment, although this may be quoted
-	  if ( s.find( "%" ) != std::string::npos ) 
-	    {
-	      bool inquote = false;
-	      int comment_start = -1;
-	      for (int i=0;i<s.size();i++)
-		{
-		  if ( s[i] == '"' ) inquote = ! inquote;
-		  if ( s[i] == '%' && ! inquote ) { comment_start = i; break; }
-		}
-	      
-	      // remove comment
-	      if ( comment_start != -1 )
-		s = s.substr( 0 , comment_start );
-	    }
-
-	  // trim leading/trailing whitespace
-	  s = Helper::ltrim( s );
-	  s = Helper::rtrim( s );
-
-	  // anything left to add?
-	  if ( s.size() > 0 ) 
-	    {
-	      if ( ! continuation ) 
-		{
-		  if ( ! first_cmd ) ss << " & ";		  
-		  first_cmd = false;
-		}
-	      else 
-		{
-		  ss << " "; // spacer
-		}	      
-	      // add actual non-empty command
-	      ss << s ;	      
-	    }
-
+	  if ( s.substr(0,1) == "+" ) s = s.substr(1);
+	  else s = s.substr(3);
 	}
-
-      allinput.str( ss.str() );
+      
+      // only read up to a % comment, although this may be quoted
+      if ( s.find( "%" ) != std::string::npos ) 
+	{
+	  bool inquote = false;
+	  int comment_start = -1;
+	  for (int i=0;i<s.size();i++)
+	    {
+	      if ( s[i] == '"' ) inquote = ! inquote;
+	      if ( s[i] == '%' && ! inquote ) { comment_start = i; break; }
+	    }
+	  
+	  // remove comment
+	  if ( comment_start != -1 )
+	    s = s.substr( 0 , comment_start );
+	}
+      
+      // trim leading/trailing whitespace
+      s = Helper::ltrim( s );
+      s = Helper::rtrim( s );
+      
+      // anything left to add?
+      if ( s.size() > 0 ) 
+	{
+	  if ( ! continuation ) 
+	    {
+	      if ( ! first_cmd ) allinput << " & ";		  
+	      first_cmd = false;
+	    }
+	  else 
+	    {
+	      allinput << " "; // spacer
+	    }	      
+	  // add actual non-empty command
+	  allinput << s ;	      
+	}
+      
     }
-
-  // read from -s string
-  else
-    {
-      // allow multi-line commands via \ at end
-      allinput.str( Helper::search_replace( cmd_t::cmdline_cmds , "\\\n", " " ) );
-    }
-
+  
+  
+  // ---- we've now compiled from whatever source needed
   
   // take everything
   line = allinput.str();
-
+  allinput.clear();
+  
   // change any '&' (back) to '\n', unless they are quoted (" or #)
   bool inquote = false;
   for (int i=0;i<line.size();i++) 

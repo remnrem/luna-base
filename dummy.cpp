@@ -670,12 +670,17 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::cout << p1->get_id() << " .. " << p1->get_edf_file() << "\n";
       std::vector<std::string> d1 = p1->desc();
       for (int i=0; i<d1.size(); i++) std::cout << " d["<<i<<"] = " << d1[i] << "\n";
-
+      
       //segsrv_t segsrv1( p1 );
 
       double ls = p1->last_sec();
       double ls0 = p1->last_sec_original();
       std::cout << " ls, ls0 = " << ls << " " << ls0 << "\n";
+
+
+      // fetch evts
+      //      xxxxstd::vector<std::string> aa = ss.fetch_all_evts( const std::vector<std::string> & , const bool hms = false ) const;
+
 
       
       std::exit(0);

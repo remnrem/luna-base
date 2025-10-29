@@ -1000,8 +1000,6 @@ void segsrv_t::set_empirical_phys_ranges( const std::string & ch , const std::ve
 
 }
 
-
-
 bool segsrv_t::get_yscale_signal( const int n1 , double * lwr, double * upr ) const
 {
   // for a signal, given it's place in the slots, return the scaled (within 0.1)
@@ -1276,18 +1274,52 @@ std::map<std::string,std::vector<std::pair<double,double> > > segsrv_t::fetch_ev
 
 
 // for selection window
-std::vector<std::string> segsrv_t::fetch_all_evts( const std::vector<std::string> & avec ) const
+std::vector<std::string> segsrv_t::fetch_all_evts( const std::vector<std::string> & avec , const bool hms ) const
 {
+
+  // !hms : return annot | startsec-stopsec
+  //  hms : return annot | startsec-stopsec | hh:mm:ss | +duration
+
+  // hms uses clocktime_t edf_start, if it is valid
+    
   std::vector<std::string> r;
   std::set<std::string> aset = Helper::vec2set( avec );
   
   std::set<evt_t>::const_iterator ee = evts.begin();
+
+  
   while ( ee != evts.end() )
     {
       if ( aset.find( ee->name ) != aset.end() )
-	r.push_back( ee->name + " | " + ee->interval.as_string(1,"-") );
+	{
+
+	  std::string str = ee->name + " | " + ee->interval.as_string(3,"-") ; // 3dp
+	  
+	  if ( hms )
+	    {
+	      // duration in seconds
+	      const std::string dur = Helper::dbl2str( ee->interval.duration_sec() , 3 ); // 3 dp
+
+	      if  (edf_start.valid )
+		{
+		  
+		  // start hh:mm:ss
+		  clocktime_t t = edf_start;
+		  t.advance_tp( ee->interval.start );
+		  std::string clock = t.as_string( ':' , false ); // F = do not include any fractional seconds
+		  
+		  str += " | " + clock + " | " + dur ;
+		}
+	      else
+		str += " | ? | " + dur ;
+	    }
+
+	  r.push_back( str );
+	  
+	}
       ++ee;
     }
+  
   return r;
 }
 

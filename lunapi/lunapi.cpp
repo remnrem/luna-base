@@ -1079,7 +1079,8 @@ bool lunapi_inst_t::attach_annot( const std::string & annotfile )
 {
   
   if ( annotfile.size() == 0 ) return false;
-
+  if ( annotfile == "." ) return false;
+  
   // is 'annotfile' in fact a folder (i.e. ending in '/') ?
   
   if ( annotfile[ annotfile.size() - 1 ] == globals::folder_delimiter )

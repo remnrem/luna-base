@@ -399,6 +399,7 @@ private:
   double scaling_yheader, scaling_yfooter;
   double scaling_fixed_annot;
   bool scaling_clip;
+  std::vector<int> yorder;
   
   // physical scaling (for scaled_signal)
   std::map<std::string, std::pair<double,double> > phys_ranges;
@@ -463,7 +464,7 @@ public:
   std::map<std::string,std::vector<std::pair<double,double> > > fetch_evts() const;
   
   // for selection window
-  std::vector<std::string> fetch_all_evts( const std::vector<std::string> & ) const;
+  std::vector<std::string> fetch_all_evts( const std::vector<std::string> & , const bool hms = false ) const;
   
 private:
 

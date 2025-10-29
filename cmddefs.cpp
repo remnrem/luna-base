@@ -383,6 +383,9 @@ void cmddefs_t::init()
   add_var( "STATS" , "CH" , "MEAN" , "Signal mean" );
   add_var( "STATS" , "CH" , "MEDIAN" , "Signal median" );
   add_var( "STATS" , "CH" , "RMS" , "Signal root mean square" );
+  add_var( "STATS" , "CH" , "SKEW" , "Signal skewness" );
+  add_var( "STATS" , "CH" , "KURT" , "Signal kurtosis" );
+  add_var( "STATS" , "CH" , "SD" , "Signal SD" );
 
   add_var( "STATS" , "CH" , "P01" , "1st percentile" );
   add_var( "STATS" , "CH" , "P02" , "2nd percentile" );

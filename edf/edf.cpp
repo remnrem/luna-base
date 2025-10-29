@@ -565,12 +565,13 @@ void edf_t::terse_summary( param_t & param )
   writer.value( "START_DATE" , Helper::trim( header.startdate ) );
 
   // stop time
-  clocktime_t et( header.starttime );
+  clocktime_t et( header.startdate , header.starttime );
   if ( et.valid )
     {
       double time_sec = ( timeline.last_time_point_tp+1LLU) * globals::tp_duration ;
       et.advance_seconds( time_sec );
       writer.value( "STOP_TIME" , et.as_string() );
+      writer.value( "STOP_DATE" , et.as_date_string('.',2) );
     }
   
   if ( write_signals ) 
@@ -2066,7 +2067,8 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   
   if ( ! okay ) 
     {
-      logger << " ** warning ... empty intervals returned (check intervals/sampling rates)\n";
+      if ( ! globals::api_mode ) 
+	logger << " ** warning ... empty intervals returned (check intervals/sampling rates)\n";
       return ret; // i.e. empty
     }
 
@@ -3556,13 +3558,15 @@ void edf_t::reference( const signal_list_t & signals0 ,
 bool edf_t::load_annotations( const std::string & f0 )
 {
 
+  if ( f0 == "." || f0 == "" ) return false;
+  
   //
   // parse annotation filename
   //
 
   const std::string f = Helper::expand( f0 );
 
-
+   
   // allow wildcards
     
   if ( ! Helper::fileExists( f ) ) 
