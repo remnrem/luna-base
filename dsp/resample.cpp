@@ -82,7 +82,7 @@ std::vector<double> dsptools::resample( const std::vector<double> * d ,
   src.data_out = &(f2[0]);
   src.output_frames = n2;
   src.src_ratio = ratio;
-
+  
   //  int r = src_simple( &src, SRC_SINC_FASTEST , 1 );
   int r = src_simple( &src, converter , 1 );
   
@@ -126,19 +126,19 @@ void dsptools::resample_channel( edf_t & edf , const int s , const double nsr , 
   //
   // Pull entire signals out
   //
-  
+
   interval_t interval = edf.timeline.wholetrace();
 
   slice_t slice( edf , s , interval );
 
   const std::vector<double> * d = slice.pdata();
-  
+
   //
   // Resample to new SR
   //
-
-  std::vector<double> resampled = resample( d , Fs , nsr , converter );
   
+  std::vector<double> resampled = resample( d , Fs , nsr , converter );
+
   // 
   // Ensure that resultant signal is the exact correct length 
   //

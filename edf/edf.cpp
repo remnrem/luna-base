@@ -3095,17 +3095,19 @@ void edf_t::reset_record_size( const double new_record_duration )
   // ...so manually change size of the new buffer record
   for (int s = 0 ; s < header.ns ; s++)
     new_record.data[s].resize( new_nsamples[s] , 0 );
-
+  
   // get implied number of new records (truncate if this goes over)
   int new_nr = floor( header.nr * header.record_duration ) / (double) new_record_duration ;
+
+  logger << "  allocated " << new_nr << " new records\n";
 
   // build up collection of these new records
   std::map<int,edf_record_t> new_records;
     
   for (int r=0;r<new_nr;r++) 
     new_records.insert( std::map<int,edf_record_t>::value_type( r , new_record ) );
-
-
+  
+  
   // ensure all data are loaded
   
   int r = timeline.first_record();
@@ -3136,10 +3138,11 @@ void edf_t::reset_record_size( const double new_record_duration )
 	  
 	  r = timeline.next_record(r);	  
 	}
-
+      
       // resample?
       const bool do_resampling = sig2resamples_per_record.find( s ) != sig2resamples_per_record.end();    
-
+      
+      
       if ( do_resampling )
 	{
 	  // original sampling rate
@@ -3148,15 +3151,18 @@ void edf_t::reset_record_size( const double new_record_duration )
 	  // implies new SR sr1
 	  const double sr1 = n1 / new_record_duration ;
 	  
-	  //logger << "  resampling " << sr << " --> " << sr1 << "\n";
+	  logger << "  resampling " << header.label[s] << " " << sr << " --> " << sr1 << "\n";
 	  
 	  const int nt = n * header.nr;
 
 	  if ( xx.size() != n * header.nr ) Helper::halt( "internal error: xx.size() != n * header.nr" );
+	  
+	  //	  std::cout << " xx.size() " << xx.size() <<" " << nt << " " << n1 * new_nr << " " << ( n1 * new_nr ) - (int)xx.size() << "\n";
+	  
 
 	  xx = dsptools::resample( &xx, sr, sr1 );
 	  
-	  //std::cout << " xx.size() " << xx.size() <<" " << n1 * new_nr << " " << ( n1 * new_nr ) - (int)xx.size() << "\n";
+	  //	  std::cout << " xx.size() " << xx.size() <<" " << n1 * new_nr << " " << ( n1 * new_nr ) - (int)xx.size() << "\n";
 	  
 	}
       
@@ -3189,8 +3195,9 @@ void edf_t::reset_record_size( const double new_record_duration )
 	  
 	} // next sample point
       
-    } // next signal
 
+    } // next signal
+  
   
   //
   // copy over
