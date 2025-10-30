@@ -506,121 +506,121 @@ void cmd_t::replace_wildcards( const std::string & id )
 bool cmd_t::read( const std::string * str , bool silent )
 {
   
-  bool cmdline_mode = str == NULL;   
-  
-  if ( std::cin.eof() && cmdline_mode ) return false;
-  
-  if ( (!cmdline_mode) && str->size() == 0 ) return false;
+  // Parse Luna commands
+  // EITHER read from std::cin,                 [ from_stdcin ]
+  // OR          from -s command line           [ from_cmdarg ]
+  // OR          from a string (e.g. lunapi)    [ from_cmdstr ] 
+
+  const bool from_cmdstr = str != NULL;
+  const bool from_cmdarg = cmd_t::cmdline_cmds != "" && ! from_cmdstr;
+  const bool from_stdcin = ! ( from_cmdstr || from_cmdarg ) ;
+
+  // checking for input
+  if ( from_stdcin && std::cin.eof() ) return false;  
+  if ( from_cmdstr && str->size() == 0 ) return false;
   
   reset();
   
-  // CMD param=1 p=1,2,3 f=true out=o1 & CMD2 etc ; 
-  
-  // EITHER read from std::cin, 
-  // OR          from -s command line
-  // OR          from a string (e.g. lunaR)
+
+  // apply same processing in all cases
   
   // Commands are delimited by & symbols (i.e. multi-line statements allowed)
 
   //   line continuations must start with + or ... (after whitespace)  
-  // also, can have \ which means a continuation on the next line
-  //  i.e replace \\n with space
-  
-  std::istringstream allinput;
-  
-  if ( ! cmdline_mode ) // read from 'str', such as R interface
-    {
-      
-      // split by commands ('&' symbols), but allowing for & witin eval expressions 
-      std::vector<std::string> tok = Helper::quoted_parse( *str , "&" );
-      
-      std::stringstream ss;
-      
-      for (int l=0;l<tok.size();l++)
-	{
-	  if ( tok[l] == "" ) continue;
-	  if ( l != 0 ) ss << " & ";
-	  ss << tok[l];
-	}     
-      allinput.str( ss.str() );
+  //     also, can have \ which means a continuation on the next line
+  //     i.e replace \\n with space
 
+
+  // if not from std::cin, first collate the input string here
+  std::istringstream inpstr;
+  
+  // read from 'str', such as R/Python interface
+  if ( from_cmdstr )
+    {      
+      inpstr.str( *str );
+      inpstr.clear();  
+    }  
+  
+  // or read from -s string
+  if ( from_cmdarg )
+    {
+      // allow multi-line commands via \ at end 
+      inpstr.str( cmd_t::cmdline_cmds );
+      inpstr.clear();
     }
+    
+  // now process, either from inpstr or std::cin input stream
+  std::istream * in = from_stdcin
+    ? static_cast<std::istream*>(&std::cin)
+    : static_cast<std::istream*>(&inpstr);
 
-  // read from std::cin
-  else if ( cmd_t::cmdline_cmds == "" )
+  // from whatever source, expand to this;
+  std::stringstream allinput;
+
+  bool first_cmd = true;
+  while ( 1 )
     {
-      std::stringstream ss;
-      bool first_cmd = true;
-      while ( 1 )
+      std::string s;
+      Helper::safe_getline( *in , s );
+      if ( in->eof() ) break;
+      if ( s == "" ) continue;	  
+      
+      s = Helper::ltrim( s ) ;
+      
+      // is this a continuation line?
+      // ... or + as first character
+      bool continuation = s.substr(0,1) == "+" || s.substr(0,3) == "..." ;
+      if ( continuation )
 	{
-	  std::string s;
-	  Helper::safe_getline( std::cin , s );
-	  if ( std::cin.eof() ) break;
-	  if ( s == "" ) continue;	  
-
-	  s = Helper::ltrim( s ) ;
-	  
-	  // is this a continuation line?
-	  // ... or + as first character
-	  bool continuation = s.substr(0,1) == "+" || s.substr(0,3) == "..." ;
-	  if ( continuation )
-	    {
-	      if ( s.substr(0,1) == "+" ) s = s.substr(1);
-	      else s = s.substr(3);
-	    }
-	      
-	  // only read up to a % comment, although this may be quoted
-	  if ( s.find( "%" ) != std::string::npos ) 
-	    {
-	      bool inquote = false;
-	      int comment_start = -1;
-	      for (int i=0;i<s.size();i++)
-		{
-		  if ( s[i] == '"' ) inquote = ! inquote;
-		  if ( s[i] == '%' && ! inquote ) { comment_start = i; break; }
-		}
-	      
-	      // remove comment
-	      if ( comment_start != -1 )
-		s = s.substr( 0 , comment_start );
-	    }
-
-	  // trim leading/trailing whitespace
-	  s = Helper::ltrim( s );
-	  s = Helper::rtrim( s );
-
-	  // anything left to add?
-	  if ( s.size() > 0 ) 
-	    {
-	      if ( ! continuation ) 
-		{
-		  if ( ! first_cmd ) ss << " & ";		  
-		  first_cmd = false;
-		}
-	      else 
-		{
-		  ss << " "; // spacer
-		}	      
-	      // add actual non-empty command
-	      ss << s ;	      
-	    }
-
+	  if ( s.substr(0,1) == "+" ) s = s.substr(1);
+	  else s = s.substr(3);
 	}
-
-      allinput.str( ss.str() );
+      
+      // only read up to a % comment, although this may be quoted
+      if ( s.find( "%" ) != std::string::npos ) 
+	{
+	  bool inquote = false;
+	  int comment_start = -1;
+	  for (int i=0;i<s.size();i++)
+	    {
+	      if ( s[i] == '"' ) inquote = ! inquote;
+	      if ( s[i] == '%' && ! inquote ) { comment_start = i; break; }
+	    }
+	  
+	  // remove comment
+	  if ( comment_start != -1 )
+	    s = s.substr( 0 , comment_start );
+	}
+      
+      // trim leading/trailing whitespace
+      s = Helper::ltrim( s );
+      s = Helper::rtrim( s );
+      
+      // anything left to add?
+      if ( s.size() > 0 ) 
+	{
+	  if ( ! continuation ) 
+	    {
+	      if ( ! first_cmd ) allinput << " & ";		  
+	      first_cmd = false;
+	    }
+	  else 
+	    {
+	      allinput << " "; // spacer
+	    }	      
+	  // add actual non-empty command
+	  allinput << s ;	      
+	}
+      
     }
-
-  // read from -s string
-  else
-    {
-      // allow multi-line commands via \ at end
-      allinput.str( Helper::search_replace( cmd_t::cmdline_cmds , "\\\n", " " ) );
-    }
-
+  
+  
+  // ---- we've now compiled from whatever source needed
   
   // take everything
   line = allinput.str();
-
+  allinput.clear();
+  
   // change any '&' (back) to '\n', unless they are quoted (" or #)
   bool inquote = false;
   for (int i=0;i<line.size();i++) 
@@ -745,9 +745,11 @@ bool cmd_t::eval( edf_t & edf )
   
   for ( int c = 0 ; c < num_cmds() ; c++ )
     {	        
-      
+
+      //
       // was a problem flag raised when loading the EDF?
-          
+      //
+      
       if ( globals::problem ) return false;
       
       //
@@ -815,7 +817,7 @@ bool cmd_t::eval( edf_t & edf )
 	  else if ( is( c, "REPORT" ) ) skip = false;
 	  if ( skip )
 	    {
-	      logger << "  ** skipping " << cmd(c) << " as there are no unmasked records\n"; 
+	      logger << "  ** skipping " << cmd(c) << " as there are too few unmasked records\n"; 
 	      continue;
 	    }
 	}
@@ -2903,7 +2905,8 @@ void proc_epoch( edf_t & edf , param_t & param )
 		     << edf.id << " when setting EPOCH: "
 		     << "required=" << r << "\t"
 		     << "but observed=" << edf.timeline.num_epochs()  << "\n";
-	      globals::problem = true;
+	      
+	      globals::empty = true; // used to set problem, but this better as allows THAW
 	    }	  
 	}
       // all done for generic epoch detection
@@ -2934,7 +2937,7 @@ void proc_epoch( edf_t & edf , param_t & param )
 		 << edf.id << " when setting EPOCH: "
 		 << "required=" << r << "\t"
 		 << "but observed=" << edf.timeline.num_epochs()  << "\n";
-	  globals::problem = true;
+	  globals::empty = true; // empty rather than problem now, to allow THAW
 	}
       return;
     }
@@ -5207,7 +5210,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::naughty_list = tok1;
       // create an empty file (i.e. as we append things to this subsequently
       std::ofstream P( globals::naughty_list.c_str() , std::ios::out );
-      P.close();      
+      P.close();
       return;
     }
 
@@ -5305,6 +5308,13 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   if ( Helper::iequals( tok0 , "param-equals" ) )
     {
       globals::allow_equals_param = Helper::yesno( tok1 );
+      return;
+    }
+
+  // do not register special variables
+  if ( Helper::iequals( tok0 , "register-specials" ) )
+    {
+      globals::register_default_special_vars = Helper::yesno( tok1 );
       return;
     }
   
@@ -5974,7 +5984,7 @@ void cmd_t::attach_idmapper( const std::string & file )
 
 void cmd_t::register_specials()
 {
-
+  
   specials.insert( "ch-match" );
   specials.insert( "ch-exact" ) ;
   specials.insert( "ch-clear" ) ;
@@ -6058,6 +6068,15 @@ void cmd_t::register_specials()
   // specials.insert( "pre-frontal" );  
   // specials.insert( "temporal" );
 
+
+  //
+  // optionally (register-specials=T) define special variables
+  //
+
+  if ( ! globals::register_default_special_vars )
+    return;
+  
+
   //
   // EEG topographical groupings
   //
@@ -6122,24 +6141,6 @@ void cmd_t::register_specials()
     
   vars[ "temporal" ]  
     = "FT7,T7,TP7,FT8,T8,TP8";
-
-
-  // specials.insert( "eeg" );
-  // specials.insert( "ref" );
-  // specials.insert( "ic" );
-  // specials.insert( "eog" );
-  // specials.insert( "ecg" );
-  // specials.insert( "emg" );
-  // specials.insert( "leg" );  
-  // specials.insert( "generic" );
-  // specials.insert( "airflow" );
-  // specials.insert( "effort" );  
-  // specials.insert( "oxygen" );
-  // specials.insert( "position" );
-  // specials.insert( "light" );
-  // specials.insert( "snore" );
-  // specials.insert( "hr" );
-  // specials.insert( "ignore" );
 
 }
 
@@ -6296,18 +6297,46 @@ void proc_has_signals( edf_t & edf , param_t & param )
 
   if ( check_stages )
     {
-      
+
+      bool present = true;
+	    
       //
       // try to make and extract stages
       // by default, this sets sslabel to SleepStage
       //
       
-      edf.annotations->make_sleep_stage( edf.timeline );
+      edf.annotations->tolerate_conflict( true ); // do not bail on this
+      
+      // if false, indicates at least one overlapping stage annotation
+      
+      // true -> force remake
+      const bool unconflicted = edf.annotations->make_sleep_stage( edf.timeline , true );
+       
+      writer.value( "OVERLAP" , int( ! unconflicted ) );
+      
+      edf.annotations->tolerate_conflict( false );
+
+      if ( ! unconflicted )
+	{
+	  present = false;
+
+	  if ( skip ) 
+	    {
+	      globals::problem = true;
+	      return;
+	    }
+	  
+	  // otherwise, flag a problem 
+	  globals::retcode = 2;
+	  
+	}
+
+      //
+      // other checks as needed
+      //
       
       annot_t * annot = (*edf.annotations)( "SleepStage" );
-      
-      bool present = true;
-      
+           
       if ( annot == NULL )
 	{
 
@@ -6324,14 +6353,16 @@ void proc_has_signals( edf_t & edf , param_t & param )
 	 	 
 	}
 
-
+      
+      //
       // Stages present, but not the correct amount?
-
-      if ( annot != NULL )
+      //
+      
+      if ( annot != NULL && unconflicted )
 	{
 	  
 	  bool has_stages = edf.timeline.hypnogram.construct( &edf.timeline , param , false ) ;
-
+	  
 	  if ( ! has_stages ) present = false;
 	  
 	  if ( has_stages ) 
@@ -6340,6 +6371,9 @@ void proc_has_signals( edf_t & edf , param_t & param )
 
 	      if ( ne != edf.timeline.hypnogram.stages.size() )
 		{
+
+		  // clean up SleepStage
+		  edf.annotations->clear_sleep_stage();
 
 		  present = false; 
 		  
@@ -6392,6 +6426,9 @@ void proc_has_signals( edf_t & edf , param_t & param )
 	}
       
       writer.value( "STAGES" , present );
+      
+      // clean up SleepStage
+      edf.annotations->clear_sleep_stage();
       
       return;
     }

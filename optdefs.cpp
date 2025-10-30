@@ -62,7 +62,8 @@ void optdefs_t::init()
   // parameter files
   globals::optdefs().add( "param" , "param-spaces" , OPT_BOOL_T , "Allow space-delimiters in parameter files (default T)" );
   globals::optdefs().add( "param" , "param-equals" , OPT_BOOL_T , "Allow equal-delimiters in parameter files (default T)" );
-
+  globals::optdefs().add( "param" , "register-specials" , OPT_BOOL_T , "Register default special variables (default T)" );
+  
   // reading EDFs
   globals::optdefs().add( "signals", "force-edf" , OPT_BOOL_T , "Read EDF+ as EDF (i.e. ignore gaps, annotations)");
   globals::optdefs().add( "signals", "sig" , OPT_STRVEC_T , "One or more signals to import from the EDF" );

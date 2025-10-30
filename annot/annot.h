@@ -851,10 +851,7 @@ struct textvec_avar_t : public avar_t
 
 
 
-
-
-
-
+// struct to organize all annotations for a recording
 
 struct annotation_set_t;
 struct edf_t;
@@ -884,7 +881,8 @@ struct annotation_set_t
     annot_offset_dir = -1;
 
     annot_offset_table.clear();
-    
+
+    tolerate_conflicts = false; 
   }
   
   void set( edf_t * edf );
@@ -894,6 +892,13 @@ struct annotation_set_t
     clear();
   }
   
+  // helper to find start time/date from a set of annotations
+  // i.e. can be called when working w/ an empty annotation set
+  
+  static bool detect_times( const std::vector<std::string> & afiles ,
+			    std::string * starttime ,
+			    std::string * startdate ,
+			    int * seconds );
   
   // data
 
@@ -922,6 +927,8 @@ struct annotation_set_t
   // for multiple gaops:  if above 'first' then add offset 'second'
   std::map<double,uint64_t> annot_offset_table;
 
+  bool tolerate_conflicts;
+  
   // multiple offsets
   void clear_annot_offsets()
   {
@@ -1024,6 +1031,8 @@ struct annotation_set_t
 			  const std::string & stg = "W" );
   
   void clear_sleep_stage();
+
+  void tolerate_conflict( const bool b ) { tolerate_conflicts = b; } 
 
 };
 

@@ -544,7 +544,9 @@ struct clocktime_t
   
   // default (midnight)
   // day = days past epoch 1/1/85
-  //  missing = 0 (i.e.  == 1/1/85)
+  //  missing/null = 0 (i.e.  == 1/1/85)
+  //   *but* we allow to advance this, i.e. as many EDFs
+
   clocktime_t() 
   {
     valid = true;
@@ -623,13 +625,12 @@ struct clocktime_t
     return Helper::timestring( h,m,s, tchar , fractional );
   }
 
-  // dd-mm-yy                                                                                                      
+  // dd-mm-yy
   std::string as_date_string( const char tchar = '.' , const int ydigs = 4 ) const
   {
     if ( ! valid ) return "NA";    
     return date_t::datestring( d , std::string(1,tchar) , ydigs ) ;
   }
-
   
   // dd-mm-yyyy-hh:mm:ss
   std::string as_datetime_string( const char tchar = '.' , bool fractional = false ) const
@@ -664,6 +665,7 @@ struct clocktime_t
   void advance_seconds( double secs );
   void advance_days( int days );
   void advance( const clocktime_t & t );
+  void advance_next_hr();
   
   static int earlier( const clocktime_t & t1 , const clocktime_t & t2 );
     

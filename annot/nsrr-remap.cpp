@@ -275,7 +275,7 @@ void nsrr_t::init()
   add( "N1" , "Stage NREM1" ); 
   add( "N1" , "StageNREM1" ); 
   add( "N1" , "S1" );
-
+  
   add( "N2" , "NREM2" );
   add( "N2" , "NREM2 sleep" );
   add( "N2" , "N2 sleep" );
@@ -321,7 +321,8 @@ void nsrr_t::init()
 
   add( "R" , "REM" );
   add( "R" , "REM sleep" ); 
-  add( "R" , "REM sleep|5" ); 
+  add( "R" , "REM sleep|5" );
+  add( "R" , "REM|5" );
   add( "R" , "Sleep stage REM" );
   add( "R" , "Sleep stage R" ); 
   add( "R" , "Stage R" );
@@ -351,16 +352,21 @@ void nsrr_t::init()
   add( "NR" , "NREM sleep" );
   add( "NR" , "NR sleep" ); 
 
+  // non-sleep stage
   add( "U" , "Unscored" ); 
   add( "U" , "Unscored|9" ); 
 
   add( "?" , "Unknown" ); 
   add( "?" , "Sleep stage ?" ); 
   add( "?" , "Stage ?" );
-  
+  add( "?" , "missing" );
+
+  add( "M" , "Movement" ); 
   add( "M" , "Movement|6" ); 
 
-  add( "L" , "Lights" ); 
+  // lights 
+  add( "L" , "Lights" );
+  add( "L" , "lights" ); 
   add( "L" , "Light" ); 
 
   add( "lights_on" , "Lights On" ); 
@@ -368,7 +374,12 @@ void nsrr_t::init()
 
   add( "lights_off" , "Lights Off" );
   add( "lights_off" , "LightsOff" ); 
-    
+
+  // gaps
+  add( "G", "GAP" );
+  add( "G", "-" );
+  
+  
   //
   // EDF+ annotations
   //   - by default, take sleep stages (remapped) and arousals as class-level vars
@@ -502,6 +513,22 @@ add( "notes" , "Technician Notes" );
   
   // END of auto-generated code (from NSRR/NAP harm.annots)
 
+ // some additional edge-case NSRR-specific stage remappings
+ 
+ add( "W" , "SRO:Wake" );
+ add( "N1" , "SRO:Stage1Sleep" );
+ add( "N2" , "SRO:Stage2Sleep" );
+ add( "N3" , "SRO:Stage3Sleep" );
+ add( "N3" , "SRO:Stage4Sleep" );
+ add( "N3" , "SRO:Stage34Sleep" );
+ add( "R" , "SRO:RapidEyeMovement" );
+
+ add( "W", "SDO:WakeState" );
+ add( "N1", "SDO:NonRapidEyeMovementSleep-N1" );
+ add( "N2", "SDO:NonRapidEyeMovementSleep-N2" );
+ add( "N3", "SDO:NonRapidEyeMovementSleep-N3" );
+ add( "N3", "SDO:NonRapidEyeMovementSleep-N4" );
+ add( "R", "SDO:RapidEyeMovementSleep" );
 
 }
 

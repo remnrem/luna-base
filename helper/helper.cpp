@@ -1476,6 +1476,26 @@ void clocktime_t::advance_days( int days )
   
 }
 
+void clocktime_t::advance_next_hr()
+{
+  if ( ! valid ) return;
+  // can operate directly on the d/h/m/s level
+
+  // always advance one hour
+  ++h;
+
+  // and going exactly to the hour
+  m = s = 0;
+
+  // need to advance day?
+  if ( h == 24 )
+    {
+      ++d;
+      h = 0;
+    }
+
+}
+  
 
 void clocktime_t::advance_hrs( double hrs ) 
 {
@@ -1501,8 +1521,7 @@ void clocktime_t::advance_hrs( double hrs )
 
 void clocktime_t::advance_seconds( double secs )
 {
-  
-  // use current day as the anchor
+    // use current day as the anchor
   double t_sec = seconds( d );
   
   t_sec += secs;
@@ -1518,12 +1537,13 @@ void clocktime_t::advance_seconds( double secs )
       if ( t_sec < 0 )
 	{
 	  t_sec += 86400.0;
-	  if ( d ) --d;
+	  if ( d ) --d; // keep at 1.1.85
 	} 
       else if ( t_sec >= 86400.0 )
 	{
 	  t_sec -= 86400.0;
-	  if ( d ) ++d;
+	  // if ( d ) ++d; 
+	  ++d; // allow advance /past/ 1.1.85
 	} 
     }    
 
@@ -1555,14 +1575,15 @@ void clocktime_t::advance( const clocktime_t & t )
   
   // need to wrap? 
   // seconds in the day = 0 .. 86400
-  // and move day forward (if we are tracking d)
+  // and move day forward 
   
   while ( 1 )
     {
       if ( secs >= 86400 )
 	{
 	  secs -= 86400;
-	  if (d) ++d;
+	  //if (d) ++d;
+	  ++d; // always allow day to move forward
 	} 
       else break;
     }

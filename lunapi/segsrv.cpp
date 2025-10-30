@@ -728,6 +728,40 @@ std::string segsrv_t::get_hms( const double s ) const
   return t1.as_string( ':' );
 }
 
+std::map<double,std::string> segsrv_t::get_hour_ticks() const
+{
+  std::map<double,std::string> t;
+  // take the entire record, and get the positions of the on-the-hour marks
+  // we have edf_start
+
+  clocktime_t t1 = edf_start;
+  
+  // whole record spans s0 to s1 seconds (units = sec past epoch)
+  const double s0 = t1.seconds();
+  const double s1 = s0 + get_total_sec_original();
+  
+  // is EDF on the hour? if so include?
+  if ( t1.m == 0 && t1.s == 0 )
+    t[ 0 ] = "| " + t1.as_string( ':' );
+  
+  // else, advance through the night
+  while ( 1 ) 
+    {
+      // advance to top of the hour
+      t1.advance_next_hr();
+
+      // past end of recording?
+      const double s = t1.seconds();      
+      if ( s >= s1 ) break;
+
+      // add, as fraction
+      t[ s - s0 ] = "| " + t1.as_string( ':' );
+      
+    }
+  
+  return t;
+}
+
 
 std::map<double,std::string> segsrv_t::get_clock_ticks(const int n) const
 {
@@ -965,8 +999,6 @@ void segsrv_t::set_empirical_phys_ranges( const std::string & ch , const std::ve
   empirical_phys_ranges[ ch ] = std::pair<double,double>( p1,p2 );
 
 }
-
-
 
 bool segsrv_t::get_yscale_signal( const int n1 , double * lwr, double * upr ) const
 {
@@ -1242,18 +1274,52 @@ std::map<std::string,std::vector<std::pair<double,double> > > segsrv_t::fetch_ev
 
 
 // for selection window
-std::vector<std::string> segsrv_t::fetch_all_evts( const std::vector<std::string> & avec ) const
+std::vector<std::string> segsrv_t::fetch_all_evts( const std::vector<std::string> & avec , const bool hms ) const
 {
+
+  // !hms : return annot | startsec-stopsec
+  //  hms : return annot | startsec-stopsec | hh:mm:ss | +duration
+
+  // hms uses clocktime_t edf_start, if it is valid
+    
   std::vector<std::string> r;
   std::set<std::string> aset = Helper::vec2set( avec );
   
   std::set<evt_t>::const_iterator ee = evts.begin();
+
+  
   while ( ee != evts.end() )
     {
       if ( aset.find( ee->name ) != aset.end() )
-	r.push_back( ee->name + " | " + ee->interval.as_string(1,"-") );
+	{
+
+	  std::string str = ee->name + " | " + ee->interval.as_string(3,"-") ; // 3dp
+	  
+	  if ( hms )
+	    {
+	      // duration in seconds
+	      const std::string dur = Helper::dbl2str( ee->interval.duration_sec() , 3 ); // 3 dp
+
+	      if  (edf_start.valid )
+		{
+		  
+		  // start hh:mm:ss
+		  clocktime_t t = edf_start;
+		  t.advance_tp( ee->interval.start );
+		  std::string clock = t.as_string( ':' , false ); // F = do not include any fractional seconds
+		  
+		  str += " | " + clock + " | " + dur ;
+		}
+	      else
+		str += " | ? | " + dur ;
+	    }
+
+	  r.push_back( str );
+	  
+	}
       ++ee;
     }
+  
   return r;
 }
 

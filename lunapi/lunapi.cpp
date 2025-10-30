@@ -255,6 +255,13 @@ void lunapi_t::re_init()
 // read a Luna @include file and set variables
 int lunapi_t::includefile( const std::string & f )
 {
+  
+  // parse as a normal line: i.e. two tab-delim cols
+  // alternatively, allow space/equals delimiters
+  std::string delim = "\t";
+  if ( globals::allow_space_param ) delim += " ";
+  if ( globals::allow_equals_param ) delim += "=";
+
   const std::string filename = Helper::expand( f );
   
   if ( ! Helper::fileExists( filename ) )
@@ -314,11 +321,15 @@ int lunapi_t::includefile( const std::string & f )
 	}
       
       
-      // otherwise parse as a normal line: i.e. two tab-delim cols		      
-      std::vector<std::string> tok = Helper::quoted_parse( line , "\t" );
+      // otherwise parse as a normal line: i.e. two cols, delimited by tab, space or = 
+      std::vector<std::string> tok = Helper::quoted_parse( line , delim );
       if ( tok.size() != 2 )
 	{
-	  Helper::halt("badly formatted line ( # tabs != 2 ) in " + filename + "\n" + line );
+	  Helper::halt("badly formatted line parameter file line ( # cols != 2 ) in " + filename
+		       + "\n" + line
+		       + "\n - see param-spaces and param-equals option possibly, which are set to T by default"
+		       );
+
 	  return tokens;
 	}
       
@@ -505,7 +516,7 @@ int lunapi_t::read_sample_list( const std::string & file )
       if ( has_project_path )
 	{
 	  // EDF
-	  if ( tok[1][0] != globals::folder_delimiter )
+	  if ( tok[1] != "." && tok[1][0] != globals::folder_delimiter )
 	    tok[1] = globals::project_path + tok[1];	  
 	}
 
@@ -518,7 +529,7 @@ int lunapi_t::read_sample_list( const std::string & file )
 	  for (int a=0;a<toka.size();a++)
 	    {
 	      if ( has_project_path )
-		if ( toka[a][0] != globals::folder_delimiter )
+		if ( toka[a] != "." && toka[a][0] != globals::folder_delimiter )
 		  toka[a] = globals::project_path + toka[a];	      
 	      aset.insert( toka[a] );
 	    }
@@ -670,7 +681,7 @@ lunapi_inst_ptr lunapi_t::inst( const std::string & id , const std::string & edf
 {
   reset();
   lunapi_inst_ptr p( new lunapi_inst_t( id ) );
-  p->attach_edf( edf );
+  p->attach_edf( edf , std::set<std::string>{annot} );
   p->attach_annot( annot );
   return p;
 }
@@ -679,7 +690,7 @@ lunapi_inst_ptr lunapi_t::inst( const std::string & id , const std::string & edf
 {
   reset();
   lunapi_inst_ptr p( new lunapi_inst_t( id ) );
-  p->attach_edf( edf );
+  p->attach_edf( edf , annots );
   std::set<std::string>::const_iterator aa = annots.begin();
   while ( aa != annots.end() )
     {
@@ -697,11 +708,13 @@ std::optional<lunapi_inst_ptr> lunapi_t::inst( const int i ) const
   
   lunapi_inst_ptr p( new lunapi_inst_t( *id ) );
 
-  // edf
-  p->attach_edf( get_edf( i ) );
-
   // annots
   std::set<std::string> a = get_annot( i );
+
+  // edf
+  p->attach_edf( get_edf( i ) , a );
+
+  // attach annots
   std::set<std::string>::const_iterator aa = a.begin();
   while ( aa != a.end() )
     {
@@ -753,10 +766,11 @@ rtables_return_t lunapi_t::eval( const std::string & cmdstr )
 
       // check for ctrl-C from python
 #ifdef HAS_LUNAPI
+      py::gil_scoped_acquire ag;          // ensure GIL
       if ( PyErr_CheckSignals() != 0 )
-	throw py::error_already_set();
+ 	throw py::error_already_set();
 #endif
-
+      
       std::optional<lunapi_inst_ptr> l1 = inst( i );
       if ( l1 ) 
 	{
@@ -882,7 +896,7 @@ void lunapi_inst_t::refresh()
   edf.init();
   
   // reattach EDF (and this will remake the timeline too)
-  attach_edf( edf_filename );
+  attach_edf( edf_filename , annot_filenames );
   
   if ( state != 1 ) 
     {
@@ -992,18 +1006,43 @@ bool lunapi_inst_t::empty_edf( const std::string & id,
   
 }
 
-
-bool lunapi_inst_t::attach_edf( const std::string & _filename )
+bool lunapi_inst_t::attach_empty_edf( const std::set<std::string> & afiles )
 {
+  // defaults, can be overwritten if annots present
+  const std::string id = "empty";
+  const int rs = 1 ;
+  int default_nr = 60 * 60 * 6 ; // 6 hrs
+  std::string default_startdate = "01.01.00";
+  std::string default_starttime = "00.00.00";
+
+  // update given annots?
+  annotation_set_t::detect_times( Helper::set2vec( afiles ) , &default_starttime, &default_startdate, &default_nr );
+
+  // construct
+  return empty_edf( id, default_nr , rs , default_startdate , default_starttime );
+  
+}
+
+bool lunapi_inst_t::attach_edf( const std::string & _filename ,
+				const std::set<std::string> & annots )
+				
+{
+  
+  // optionally passing annots, in case we are making an empty EDF
+  // i.e. will get start/stop from annots if present
   
   const std::string filename = Helper::expand( _filename );
   
   if ( ! Helper::fileExists( filename ) ) 
     Helper::halt( "cannot find " + filename );
 
+  // empty EDF?
+  if ( _filename == "." )
+    return attach_empty_edf( annots );
+  
   // restrict to limited set of input signals?
   const std::set<std::string> * inp_signals = cmd.signals().size() > 0 ? &cmd.signals() : NULL;
-  
+   
   // load EDF
   bool okay = edf.attach( filename , id , inp_signals );
 
@@ -1018,7 +1057,7 @@ bool lunapi_inst_t::attach_edf( const std::string & _filename )
   // EDF+ annotations?
   if ( edf.header.edfplus )
     {
-      // must read if EDF+D (but only the time-track will be taken in)                                          
+      // must read if EDF+D (but only the time-track will be taken in)
       // if EDF+C, then look at 'skip-edf-annots' flag                                                          
       if ( edf.header.continuous && ! globals::skip_edf_annots )
         edf.annotations->from_EDF( edf , edf.edfz_ptr() );
@@ -1040,7 +1079,8 @@ bool lunapi_inst_t::attach_annot( const std::string & annotfile )
 {
   
   if ( annotfile.size() == 0 ) return false;
-
+  if ( annotfile == "." ) return false;
+  
   // is 'annotfile' in fact a folder (i.e. ending in '/') ?
   
   if ( annotfile[ annotfile.size() - 1 ] == globals::folder_delimiter )
@@ -1089,7 +1129,11 @@ bool lunapi_inst_t::attach_annot( const std::string & annotfile )
 
 }
 
-
+std::string lunapi_inst_t::eval_dummy( const std::string & cmdstr )
+{
+  std::string s = "processed: [" + cmdstr + "]";
+  return s;
+}
 
 // #1 eval returning all output to caller 
 std::tuple<std::string,rtables_return_t> lunapi_inst_t::eval_return_data( const std::string & cmdstr )
@@ -1183,7 +1227,7 @@ std::string lunapi_inst_t::eval1( const std::string & cmdstr , retval_t * accumu
   //
 
   if ( accumulator ) return "";
-  
+
   return logger.print_buffer();
   
 }

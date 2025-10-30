@@ -174,7 +174,7 @@ void Helper::validate_slist( param_t & param )
 	{
 	  for (int t=1;t<tok.size();t++)
 	    {
-	      if ( tok[t][0] != globals::folder_delimiter )
+	      if ( tok[t] != "." && tok[t][0] != globals::folder_delimiter )
 		tok[t] = globals::project_path + tok[t];
 	    }
 	}

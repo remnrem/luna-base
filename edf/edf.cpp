@@ -565,12 +565,13 @@ void edf_t::terse_summary( param_t & param )
   writer.value( "START_DATE" , Helper::trim( header.startdate ) );
 
   // stop time
-  clocktime_t et( header.starttime );
+  clocktime_t et( header.startdate , header.starttime );
   if ( et.valid )
     {
       double time_sec = ( timeline.last_time_point_tp+1LLU) * globals::tp_duration ;
       et.advance_seconds( time_sec );
       writer.value( "STOP_TIME" , et.as_string() );
+      writer.value( "STOP_DATE" , et.as_date_string('.',2) );
     }
   
   if ( write_signals ) 
@@ -1349,7 +1350,8 @@ bool edf_t::init_empty( const std::string & i ,
 			const int nr ,
 			const int rs ,
 			const std::string & startdate ,
-			const std::string & starttime )
+			const std::string & starttime ,
+			const bool silent )
 {
 
   if ( nr == 0 || rs == 0 ) return false;
@@ -1381,7 +1383,12 @@ bool edf_t::init_empty( const std::string & i ,
   set_continuous();
 
   timeline.init_timeline();
-
+  
+  //
+  // Store original last point
+  //
+ 
+  header.last_time_point_tp_orig = timeline.last_time_point_tp;
 
   //
   // if and only if running in --validation mode, we can quit now
@@ -1401,7 +1408,10 @@ bool edf_t::init_empty( const std::string & i ,
       records.insert( std::map<int,edf_record_t>::value_type( r , record ) );
     }
 
-  logger << "  created an empty EDF of duration " << rs * nr << " seconds\n";
+  if ( ! silent ) 
+    logger << "  created an empty EDF with start time "
+	   << starttime << ", date " << startdate << " ("
+	   << rs * nr << " seconds)\n";
   
   return true;
 
@@ -1933,6 +1943,7 @@ bool edf_t::attach( const std::string & f ,
 
   header.last_time_point_tp_orig = timeline.last_time_point_tp;
   
+  
   //
   // Output some basic information
   //
@@ -2056,7 +2067,8 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   
   if ( ! okay ) 
     {
-      logger << " ** warning ... empty intervals returned (check intervals/sampling rates)\n";
+      if ( ! globals::api_mode ) 
+	logger << " ** warning ... empty intervals returned (check intervals/sampling rates)\n";
       return ret; // i.e. empty
     }
 
@@ -3553,13 +3565,15 @@ void edf_t::reference( const signal_list_t & signals0 ,
 bool edf_t::load_annotations( const std::string & f0 )
 {
 
+  if ( f0 == "." || f0 == "" ) return false;
+  
   //
   // parse annotation filename
   //
 
   const std::string f = Helper::expand( f0 );
 
-
+   
   // allow wildcards
     
   if ( ! Helper::fileExists( f ) ) 

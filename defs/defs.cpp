@@ -74,6 +74,8 @@ std::string globals::annot_disc_gap = "gap";
 bool globals::annot_disc_drop_spanning = true;
 bool globals::annot_default_meta_num_type = false; // str by default
 
+bool globals::register_default_special_vars = true;
+
 bool globals::sanitize_everything = true;
 
 std::set<std::string> globals::annot_alignment;
@@ -140,6 +142,7 @@ bool globals::use_default_startdate;
 date_format_t globals::read_annot_date_format;
 date_format_t globals::write_annot_date_format;
 date_format_t globals::read_edf_date_format;
+bool globals::check_annot_dates;
 
 std::string globals::current_tag;
 std::string globals::indiv_wildcard;
@@ -447,9 +450,9 @@ void globals::init_defs()
   // Primary sleep stage encoding 
   //
 
-  // i.e. to track different schemes, SUDS_N1,  sleep_stage_prefix == "SUDS"
-  // SOAP 's'
-  // POPS 'p' (predicted)
+  // i.e. to track different schemes:
+  //  SOAP 's'
+  //  POPS 'p' (predicted)
   
   sleep_stage_prefix       = ""; // by default not  
 
@@ -466,7 +469,7 @@ void globals::init_defs()
   sleep_stage[ MOVEMENT ]  = "M";
   sleep_stage[ UNSCORED ]  = "U"; // ambiguous - 'unscorable'
   sleep_stage[ UNKNOWN ]   = "?"; // missing
-  sleep_stage[ GAP ]       = "GAP"; // GAP
+  sleep_stage[ GAP ]       = "G"; // GAP
 
   // minimal: default
   sleep_stage_labels[ "W" ]     = WAKE;  
@@ -480,97 +483,16 @@ void globals::init_defs()
   sleep_stage_labels[ "M" ]     = MOVEMENT;  
   sleep_stage_labels[ "L" ]     = LIGHTS_ON;
   sleep_stage_labels[ "G" ]     = GAP ; 
-
   
-  //
-  // POPS predictions
-  //
+  // allow generic NR for non-human data (map to N2 here)
+  sleep_stage_labels[ "NR" ]    = NREM2;
   
-  // sleep_stage_labels[ "pW" ]  = WAKE;
-  // sleep_stage_labels[ "pN1" ] = NREM1;
-  // sleep_stage_labels[ "pN2" ] = NREM2;
-  // sleep_stage_labels[ "pN3" ] = NREM3;
-  // sleep_stage_labels[ "pR" ]  = REM;
-  // sleep_stage_labels[ "p?" ]  = UNKNOWN;
+  // all other mappings now in annotation mapping
+  //  i.e. done via nsrr_t::remap()
+  //       and controlled via annot-remap, nsrr-remap and remap
 
-  
-  // //
-  // // SOAP predictions
-  // //
-  
-  // sleep_stage_labels[ "sW" ]  = WAKE;
-  // sleep_stage_labels[ "sN1" ] = NREM1;
-  // sleep_stage_labels[ "sN2" ] = NREM2;
-  // sleep_stage_labels[ "sN3" ] = NREM3;
-  // sleep_stage_labels[ "sR" ]  = REM;
-  // sleep_stage_labels[ "s?" ]  = UNKNOWN;
-
-  
-  //
-  // Common/NSRR labels
-  //
-
-  // e.g. SOF study
-  sleep_stage_labels[ "SRO:Wake" ]             = WAKE;
-  sleep_stage_labels[ "SRO:Stage1Sleep" ]      = NREM1;
-  sleep_stage_labels[ "SRO:Stage2Sleep" ]      = NREM2;
-  sleep_stage_labels[ "SRO:Stage3Sleep" ]      = NREM3;
-  sleep_stage_labels[ "SRO:Stage4Sleep" ]      = NREM4;
-  sleep_stage_labels[ "SRO:Stage34Sleep" ]     = NREM3; // if this exists?
-  sleep_stage_labels[ "SRO:RapidEyeMovement" ] = REM;
-
-  // e.g. SHHS
-  sleep_stage_labels[ "SDO:WakeState" ]                   = WAKE;
-  sleep_stage_labels[ "SDO:NonRapidEyeMovementSleep-N1" ] = NREM1;
-  sleep_stage_labels[ "SDO:NonRapidEyeMovementSleep-N2" ] = NREM2;
-  sleep_stage_labels[ "SDO:NonRapidEyeMovementSleep-N3" ] = NREM3;
-  sleep_stage_labels[ "SDO:NonRapidEyeMovementSleep-N4" ] = NREM4;
-  sleep_stage_labels[ "SDO:RapidEyeMovementSleep" ]       = REM;
-
-  // other
-  sleep_stage_labels[ "Stage1" ] = NREM1;
-  sleep_stage_labels[ "Stage2" ] = NREM2;
-  sleep_stage_labels[ "Stage3" ] = NREM3;
-  sleep_stage_labels[ "Stage4" ] = NREM4;
-  sleep_stage_labels[ "S1" ] = NREM1;
-  sleep_stage_labels[ "S2" ] = NREM2;
-  sleep_stage_labels[ "S3" ] = NREM3;
-  sleep_stage_labels[ "S4" ] = NREM4;
-
-  sleep_stage_labels[ "lights" ] = LIGHTS_ON;
-  sleep_stage_labels[ "unknown" ] = UNKNOWN;
-  sleep_stage_labels[ "missing" ] = UNKNOWN;
-  sleep_stage_labels[ "A" ] = UNKNOWN;
-  sleep_stage_labels[ "artifact" ] = UNKNOWN;
-
-  sleep_stage_labels[ "G" ] = GAP;
-  sleep_stage_labels[ "-" ] = GAP;
-
-  
-  // other NSRR
-  sleep_stage_labels[ "Wake|0" ]          = WAKE;
-  sleep_stage_labels[ "Stage 1 sleep|1" ] = NREM1;
-  sleep_stage_labels[ "Stage 2 sleep|2" ] = NREM2;
-  sleep_stage_labels[ "Stage 3 sleep|3" ] = NREM3;
-  sleep_stage_labels[ "Stage 4 sleep|4" ] = NREM4;
-  sleep_stage_labels[ "REM sleep|5" ]     = REM;
-  //  sleep_stage_labels[ "Unsure|Unsure" ]   = UNSCORED;
-
-  // Basic
-  sleep_stage_labels[ "wake" ]     = WAKE;  
-  sleep_stage_labels[ "NREM1" ]    = NREM1;  
-  sleep_stage_labels[ "NREM2" ]    = NREM2;  
-  sleep_stage_labels[ "NREM3" ]    = NREM3;  
-  sleep_stage_labels[ "NREM4" ]    = NREM4;  
-  sleep_stage_labels[ "REM" ]      = REM;
-  sleep_stage_labels[ "Unscored" ] = UNSCORED;
-
-  
-  // mouse: make generic 'NR' -> NREM2
-  sleep_stage_labels[ "W" ]     = WAKE;  
-  sleep_stage_labels[ "NR" ]    = NREM2;  
-  sleep_stage_labels[ "R" ]     = REM;
-  sleep_stage_labels[ "?" ]     = UNSCORED;
+  // we still have this to disambiguate e.g. N1 from pN1 (stage prefixes)
+  //  but we should only ever have prefixes in front of these standard mappings
   
 
   //
@@ -702,6 +624,10 @@ void globals::init_defs()
   //  13:00 -> 13:00 (as is)
   //  18:00 -> 18:00 (as is)
 
+  // check that date in annot file is not > 1 year past EDF start (if defined)
+  // (turned off programmatically for empty EDF detect_times() ) 
+  check_annot_dates = true;
+  
   problem = false;
   empty = false;
   
