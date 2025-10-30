@@ -6297,18 +6297,46 @@ void proc_has_signals( edf_t & edf , param_t & param )
 
   if ( check_stages )
     {
-      
+
+      bool present = true;
+	    
       //
       // try to make and extract stages
       // by default, this sets sslabel to SleepStage
       //
       
-      edf.annotations->make_sleep_stage( edf.timeline );
+      edf.annotations->tolerate_conflict( true ); // do not bail on this
+      
+      // if false, indicates at least one overlapping stage annotation
+      
+      // true -> force remake
+      const bool unconflicted = edf.annotations->make_sleep_stage( edf.timeline , true );
+       
+      writer.value( "OVERLAP" , int( ! unconflicted ) );
+      
+      edf.annotations->tolerate_conflict( false );
+
+      if ( ! unconflicted )
+	{
+	  present = false;
+
+	  if ( skip ) 
+	    {
+	      globals::problem = true;
+	      return;
+	    }
+	  
+	  // otherwise, flag a problem 
+	  globals::retcode = 2;
+	  
+	}
+
+      //
+      // other checks as needed
+      //
       
       annot_t * annot = (*edf.annotations)( "SleepStage" );
-      
-      bool present = true;
-      
+           
       if ( annot == NULL )
 	{
 
@@ -6325,14 +6353,16 @@ void proc_has_signals( edf_t & edf , param_t & param )
 	 	 
 	}
 
-
+      
+      //
       // Stages present, but not the correct amount?
-
-      if ( annot != NULL )
+      //
+      
+      if ( annot != NULL && unconflicted )
 	{
 	  
 	  bool has_stages = edf.timeline.hypnogram.construct( &edf.timeline , param , false ) ;
-
+	  
 	  if ( ! has_stages ) present = false;
 	  
 	  if ( has_stages ) 
@@ -6341,6 +6371,9 @@ void proc_has_signals( edf_t & edf , param_t & param )
 
 	      if ( ne != edf.timeline.hypnogram.stages.size() )
 		{
+
+		  // clean up SleepStage
+		  edf.annotations->clear_sleep_stage();
 
 		  present = false; 
 		  
@@ -6393,6 +6426,9 @@ void proc_has_signals( edf_t & edf , param_t & param )
 	}
       
       writer.value( "STAGES" , present );
+      
+      // clean up SleepStage
+      edf.annotations->clear_sleep_stage();
       
       return;
     }

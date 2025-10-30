@@ -3915,8 +3915,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
 					 const std::string & a_light , 
 					 const std::string & a_other )
 {
-
-
+    
   //
   // force a remake?
   //
@@ -3931,7 +3930,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   if ( find( "SleepStage" ) != NULL )
     return true; 
   
-   
+
   //
   // Use default annotation labels, if not otherwise specified
   // 
@@ -4178,7 +4177,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   
   std::vector<interval_t> vec_intervals;
   std::vector<sleep_stage_t> vec_stages;
-  
+
   std::map<interval_t,sleep_stage_t>::const_iterator jj = stages.begin();
   while ( jj != stages.end() )
     {
@@ -4188,27 +4187,31 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
       // ensure no conflicting overlaps
       if ( jj != stages.begin() )
 	{
+	  
 	  if ( curr.start < prior.stop && jj->second != prior_stage )
 	    {
-
+	      
 	      logger << "\n*** overlapping stage annotations detected when compiling hypnogram:\n";
 	      
 	      logger << "   current interval : "
 		     << curr.start * globals::tp_duration << " .. "
 		     << curr.stop * globals::tp_duration
 		     << "  stage = " << globals::stage( jj->second ) << "\n";
-		
+	      
 	      
 	      logger << "   prior            : "
 		     << prior.start * globals::tp_duration << " .. "
 		     << prior.stop * globals::tp_duration 
 		     << "  stage = " << globals::stage( prior_stage ) << "\n";
 	      
-	      Helper::problem( "overlapping sleep stages not allowed: please check/revise annotations" );
-	      logger << "\n";
+	      if ( ! tolerate_conflicts )
+		Helper::problem( "overlapping sleep stages not allowed: please check/revise annotations" );
 	      
+	      logger << "\n";
+
+	      // return indicating a problem 
 	      return false;
-	    }
+	    }	  
 	}
       
       vec_intervals.push_back( curr );
@@ -4261,7 +4264,7 @@ bool annotation_set_t::make_sleep_stage( const timeline_t & tl ,
   for ( int i=0; i<vec_stages.size(); i++ )
     ss->add( globals::stage( vec_stages[i] ) , vec_intervals[i] , "." );
  
-
+  
   return true;
   
 }
