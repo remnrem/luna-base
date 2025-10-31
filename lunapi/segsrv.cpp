@@ -23,6 +23,8 @@
 #include "lunapi/segsrv.h"
 #include "lunapi/lunapi.h"
 
+#include <algorithm>
+
 segsrv_t::segsrv_t( lunapi_inst_ptr inst ) : p( inst ) 
 {
   awin = bwin = 0;
@@ -1023,6 +1025,24 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
 
   Eigen::VectorXf s = get_signal( ch );
   
+  // on-the-fly filtering?
+  const bool do_filters = filter_map.find( ch ) != filter_map.end();
+  
+  if ( do_filters ) 
+    {      
+      const std::vector<double> & sos = filter_map[ ch ];
+
+      sos_filter_t f( sos );
+
+      // prime filter with mirrored padding
+      std::size_t M = sos.size() / 6;
+      int pad = std::min(std::max(32, (int)(16*M) ), (int)(s.size() /8 ) );
+      sos_filter_prime_with_reflection( f , s , pad );
+
+      // apply
+      f.process( s );
+    }
+
   // fixed physical scaling, or auto-scaling?
   // if fixed scaling, optionally, clip if above/below
   
@@ -1560,3 +1580,5 @@ std::vector<float> segsrv_t::get_evnts_yaxes_ends( const std::string & ann ) con
   std::vector<float> empty;
   return empty;	
 }
+
+

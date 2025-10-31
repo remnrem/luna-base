@@ -272,6 +272,24 @@ public:
   Eigen::MatrixXf get_summary_stats( const std::string & ch );
   Eigen::VectorXf get_summary_timetrack( const std::string & ch ) const;
 
+  // filtering
+  void apply_filter( const std::string & ch , const std::vector<double> & sos )
+  {    
+    filter_map[ ch ] = sos ;
+  }
+  
+  void clear_filter( const std::string & ch )
+  {
+    filter_map.erase( ch );
+  } 
+  
+  void clear_filters()
+  {
+    filter_map.clear();
+  } 
+  
+  std::map<std::string,std::vector<double> > filter_map;
+  
   
   // also, a mask of gapped regions in a given time-window   
   // e.g. if 0 .. 300 is total window and gaps between 30-60 and 270 - 350
@@ -489,7 +507,94 @@ private:
 
 
 
+#include <vector>
+#include <cstddef>
+#include <stdexcept>
 
+// second-order-sections (SOS) biquad cascade with Direct Form II Transposed
+
+
+struct biquad_t {
+
+  // y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
+  double b0{}, b1{}, b2{}, a1{}, a2{};
+
+  // Direct Form II Transposed state
+  double s1{}, s2{};
+
+  inline double step(double x) {
+    const double y = b0 * x + s1;
+    s1 = b1 * x - a1 * y + s2;
+    s2 = b2 * x - a2 * y;
+    return y;
+  }
+  inline void reset() { s1 = 0.0; s2 = 0.0; }
+};
+
+
+struct sos_filter_t {
+
+  std::vector<biquad_t> sec;
+
+  sos_filter_t() = default;
+
+  explicit sos_filter_t(const std::vector<double> & sos_flat) { load(sos_flat); }
+
+  // sos_flat is SciPy/Matlab layout: [b0,b1,b2, a0,a1,a2] repeated
+  void load(const std::vector<double>& sos_flat) {
+    if (sos_flat.size() % 6 != 0)
+      throw std::invalid_argument("SOS array length must be a multiple of 6");
+    const std::size_t M = sos_flat.size() / 6;
+    sec.clear();
+    sec.reserve(M);
+    for (std::size_t i = 0; i < M; ++i) {
+      const double b0 = sos_flat[6*i + 0];
+      const double b1 = sos_flat[6*i + 1];
+      const double b2 = sos_flat[6*i + 2];
+      const double a0 = sos_flat[6*i + 3];
+      const double a1 = sos_flat[6*i + 4];
+      const double a2 = sos_flat[6*i + 5];
+      if (a0 == 0.0)
+	throw std::invalid_argument("SOS a0 must be nonzero");
+      biquad_t q;
+      q.b0 = b0 / a0;
+      q.b1 = b1 / a0;
+      q.b2 = b2 / a0;
+      q.a1 = a1 / a0;  // note: SciPy gives +a1,+a2; DF2T uses minus in recurrence
+      q.a2 = a2 / a0;
+      sec.push_back(q);
+    }
+  }
+  
+  inline double step(double x) {
+    for (auto& q : sec) x = q.step(x);
+    return x;
+  }
+  
+  void process(Eigen::VectorXf& x) {
+    for (std::size_t i = 0; i < x.size(); ++i) {
+      float v = x[i];
+      for (auto& q : sec) v = q.step(v);
+      x[i] = v;
+    }
+  }
+  
+  void reset() { for (auto& q : sec) q.reset(); }
+};
+
+
+// prime with mirrored prefix, then discard the primed outputs
+static inline void sos_filter_prime_with_reflection(sos_filter_t & f, const Eigen::VectorXf & x, int pad) {
+  const int n = static_cast<int>(x.size());
+  if (n <= 1 || pad <= 0) { f.reset(); return; }
+  f.reset();
+  // run the mirrored prefix through to settle state
+  for (int k = pad; k >= 1; --k) {
+    const int idx = (k < n ? k : n-1);          // clamp for short signals
+    double v = x[idx];                           // x[1], x[2], ...
+    for (auto& q : f.sec) v = q.step(v);
+  }
+}
 
 
 #endif
