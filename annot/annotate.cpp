@@ -330,6 +330,29 @@ void annotate_t::set_options( param_t & param )
 	midpoint_annot = param.strset( "midpoint" ); // do some
     }
 
+  // reduce annotations to starts
+
+  starts = false;  
+  if ( param.has( "start" ) )
+    {
+      if ( param.empty( "start" ) )
+	starts = true; // do all 
+      else
+	starts_annot = param.strset( "start" ); // do some
+    }
+
+  stops = false;  
+  if ( param.has( "stop" ) )
+    {
+      if ( param.empty( "stop" ) )
+	stops = true; // do all 
+      else
+	stops_annot = param.strset( "stop" ); // do some
+    }
+  
+  if ( midpoint + starts + stops > 1 ) 
+    Helper::halt( "cannot specify midpoint, start and stop together" );
+  
   // reduce annotations to a relative position (rp_) specified meta
   // field (this will be 0..1 as a relative position w/in the interval)
   // e.g. SO peaks, SP midpoints, etc
@@ -614,7 +637,10 @@ void annotate_t::set_options( param_t & param )
 
   if ( overlap_th < 0 || overlap_th > 1 ) Helper::halt( "invalid value for 'overlap' (0 - 1)" );
 
+
   if ( midpoint ) logger << "  reducing all annotations to midpoints\n";
+  if ( starts ) logger << "  reducing all annotations to starts\n";
+  if ( stops ) logger << "  reducing all annotations to stops\n";
   if ( use_rps ) logger <<"  reducing some annotations to rp-tags\n";
   if ( flanking_sec ) logger << "  adding f=" << flanking_sec << " seconds to each annotation\n";
   if ( window_sec ) logger << "  truncating distance at w=" << window_sec << " seconds for nearest neighbours\n";
@@ -1073,6 +1099,18 @@ void annotate_t::prep()
 	      midpoint_annot.insert( instance_idx.parent->name + "_" + instance_idx.ch_str );
 	    }
 
+	  // need to add channel-specific version for 'start'?
+	  if ( ( ! pool ) && starts_annot.find( instance_idx.parent->name ) != starts_annot.end() )
+	    {
+	      starts_annot.insert( instance_idx.parent->name + "_" + instance_idx.ch_str );
+	    }
+
+	  // need to add channel-specific version for 'start'?
+	  if ( ( ! pool ) && stops_annot.find( instance_idx.parent->name ) != stops_annot.end() )
+	    {
+	      stops_annot.insert( instance_idx.parent->name + "_" + instance_idx.ch_str );
+	    }
+
 	  // need to add channel-specific version for 'rp'?
 	  if ( ( ! pool ) && rp_annot.find( instance_idx.parent->name ) != rp_annot.end() )
 	    {
@@ -1165,6 +1203,26 @@ void annotate_t::prep()
 	      uint64_t m = interval.mid();
 	      // zero-duration midpoint marker
 	      interval.start = interval.stop = m;
+	    }
+
+	  //
+	  // set to start?
+	  //
+	  
+	  if ( starts || starts_annot.find( aid ) != starts_annot.end() )
+	    {	      
+	      // zero-duration midpoint marker
+	      interval.stop = interval.start;
+	    }
+
+	  //
+	  // set to stop?
+	  //
+	  
+	  if ( stops || stops_annot.find( aid ) != stops_annot.end() )
+	    {	      
+	      // zero-duration midpoint marker	      
+	      interval.start = interval.stop;
 	    }
 
 	  //
@@ -1391,6 +1449,8 @@ void annotate_t::prep()
       if ( use_rps && rp_annot.find( qq->first ) != rp_annot.end() ) logger << " [rp=" << rp_annot[qq->first ] << "]";
       
       if ( midpoint || midpoint_annot.find( qq->first ) != midpoint_annot.end() ) logger << " [midpoint]";
+      if ( starts   || starts_annot.find( qq->first ) != starts_annot.end() ) logger << " [start]";
+      if ( stops    || stops_annot.find( qq->first ) != stops_annot.end() ) logger << " [stop]";
 
       if ( flanking_sec > 0 && sachs.find( qq->first ) != sachs.end() )
 	logger << " [f=" << flanking_sec << "]";

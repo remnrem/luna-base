@@ -508,7 +508,17 @@ void cmddefs_t::init()
   // TABULATE
   //
 
-  
+  add_cmd( "summaries" , "TABULATE" , "Tabulates discrete values in a signal" );
+  add_url( "TABULATE" , "summaries/#tabulate" );
+  add_param( "TABULATE" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
+  add_param( "TABULATE" , "req" , "1000", "Count distinct values w/ at least this many observations" );
+
+  add_table( "TABULATE" , "CH" , "Per-channel tabulation" );
+  add_var( "TABULATE" , "CH" , "NV" , "Number of discrete values observed for this channel" );
+
+  add_table( "TABULATE" , "CH,VALUE" , "Per-channel/value tabulation statistics" );
+  add_var( "TABULATE" , "CH,VALUE" , "N" , "Number of sample points for this value/channel" );
+
 
   //
   // DUPES

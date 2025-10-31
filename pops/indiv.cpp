@@ -501,12 +501,23 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       //
       // Add annotations
       //
-
-      if ( has_staging || force_prefix ) 
-	logger << "  adding POPS annotations (pN1, pN2, pN3, pR, pW, p?)\n";
+     
+      if ( pops_opt_t::n_stages == 3 )
+	{
+	  if ( has_staging || force_prefix ) 
+	    logger << "  adding POPS annotations (pNR, pR, pW, p?)\n";
+	  else
+	    logger << "  adding POPS annotations (NR, R, W, ?)\n";
+	}
       else
-	logger << "  adding POPS annotations (N1, N2, N3, R, W, ?)\n";
-      
+	{
+	  if ( has_staging || force_prefix ) 
+	    logger << "  adding POPS annotations (pN1, pN2, pN3, pR, pW, p?)\n";
+	  else
+	    logger << "  adding POPS annotations (N1, N2, N3, R, W, ?)\n";
+	}
+
+
       add_annots( edf , has_staging || force_prefix ? "p" : "" );      
 
       //
@@ -1879,12 +1890,21 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       // format always: W R N1 N2 N3
       if ( ! pops_opt_t::eval_mode )
 	{
-	  writer.value( "PP_W" , P(e,0) );   // 0 W 
-	  writer.value( "PP_R" , P(e,1) );   // 1 R
-	  writer.value( "PP_N1" , P(e,2) );  // 2 NR
-	  writer.value( "PP_N2" , P(e,3) );
-	  writer.value( "PP_N3" , P(e,4) );      
-	  
+	  if ( pops_opt_t::n_stages == 3 ) 
+	    {
+	      writer.value( "PP_W" , P(e,0) );   // 0 W 
+	      writer.value( "PP_R" , P(e,1) );   // 1 R
+	      writer.value( "PP_NR" , P(e,2) );  // 2 NR	      
+	    }
+	  else
+	    {
+	      writer.value( "PP_W" , P(e,0) );   
+	      writer.value( "PP_R" , P(e,1) );   
+	      writer.value( "PP_N1" , P(e,2) );  
+	      writer.value( "PP_N2" , P(e,3) );
+	      writer.value( "PP_N3" , P(e,4) );      
+	    }
+
 	  // predicted (original) --> predx
 	  double pmax = P.row(e).maxCoeff(&predx);
 	  
@@ -1893,14 +1913,14 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
 	  
 	  writer.value( "CONF" , pmax );
 	  avg_pmax += pmax;
-	  writer.value( "PRED" , pops_t::labels5[ predx ] ) ; 
+	  writer.value( "PRED" , pops_opt_t::n_stages == 3 ? pops_t::labels3[ predx ] : pops_t::labels5[ predx ] ) ; 
 	}
 
-      // 'predictions' from an external fike?
+      // 'predictions' from an external file?
       if ( pops_opt_t::eval_mode )
 	{
 	  predx = PS[e];
-	  writer.value( "PRED" , pops_t::labels5[ PS[e] ] );
+	  writer.value( "PRED" , pops_opt_t::n_stages == 3 ? pops_t::labels3[ PS[e] ] : pops_t::labels5[ PS[e] ] );
 	}
 
       // priors
@@ -2631,40 +2651,64 @@ void pops_indiv_t::add_annots( edf_t & edf , const std::string & prefix )
 {
   
   // ensure cleared if already present
-  edf.annotations->clear( prefix + "N1" );
-  edf.annotations->clear( prefix + "N2" );
-  edf.annotations->clear( prefix + "N3" );
+
+  if ( pops_opt_t::n_stages == 3 ) 
+    edf.annotations->clear( prefix + "NR" );
+  else
+    {
+      edf.annotations->clear( prefix + "N1" );
+      edf.annotations->clear( prefix + "N2" );
+      edf.annotations->clear( prefix + "N3" );
+    }
   edf.annotations->clear( prefix + "R" );
   edf.annotations->clear( prefix + "W" );
   edf.annotations->clear( prefix + "?" );
   
-  annot_t * aN1 = edf.annotations->add( prefix + "N1" );
-  annot_t * aN2 = edf.annotations->add( prefix + "N2" );
-  annot_t * aN3 = edf.annotations->add( prefix + "N3" );
+  
+  annot_t * aN1 = pops_opt_t::n_stages == 3 ? NULL : edf.annotations->add( prefix + "N1" );
+  annot_t * aN2 = pops_opt_t::n_stages == 3 ? NULL : edf.annotations->add( prefix + "N2" );
+  annot_t * aN3 = pops_opt_t::n_stages == 3 ? NULL : edf.annotations->add( prefix + "N3" );
+  annot_t * aNR = pops_opt_t::n_stages != 3 ? NULL : edf.annotations->add( prefix + "NR" );
   annot_t * aR = edf.annotations->add( prefix + "R" );
   annot_t * aW = edf.annotations->add( prefix + "W" );
   annot_t * aU = edf.annotations->add( prefix + "?" );
-  
-  aN1->description = "N1, POPS prediction";
-  aN2->description = "N2, POPS prediction";
-  aN3->description = "N3, POPS prediction";
+
+  if ( pops_opt_t::n_stages == 3 ) 
+    aNR->description = "N1, POPS prediction";
+  else
+    {  
+      aN1->description = "N1, POPS prediction";
+      aN2->description = "N2, POPS prediction";
+      aN3->description = "N3, POPS prediction";
+    }
   aR->description = "R, POPS prediction";
   aW->description = "W, POPS prediction";
   aU->description = "?, POPS prediction";
     
   int ne = E.size();
-  
+
   for (int e=0; e<ne; e++)
     {      
-      interval_t interval = edf.timeline.epoch( E[e] );      
-      if      ( PS[e] == POPS_WAKE ) aW->add( "." , interval , "." );
-      else if ( PS[e] == POPS_REM )  aR->add( "." , interval , "." );
-      else if ( PS[e] == POPS_N1 )   aN1->add( "." , interval , "." );
-      else if ( PS[e] == POPS_N2 )   aN2->add( "." , interval , "." );
-      else if ( PS[e] == POPS_N3 )   aN3->add( "." , interval , "." );
-      else aU->add( "." , interval , "." );
+      interval_t interval = edf.timeline.epoch( E[e] );                  
       
+      if ( pops_opt_t::n_stages == 3  )
+	{
+	  if      ( PS[e] == POPS_WAKE ) aW->add( "." , interval , "." );
+	  else if ( PS[e] == POPS_REM )  aR->add( "." , interval , "." );
+	  else if ( PS[e] == POPS_N1 )   aNR->add( "." , interval , "." );
+	  else aU->add( "." , interval , "." );      
+	}
+      else
+	{	  
+	  if      ( PS[e] == POPS_WAKE ) aW->add( "." , interval , "." );
+	  else if ( PS[e] == POPS_REM )  aR->add( "." , interval , "." );
+	  else if ( PS[e] == POPS_N1 )   aN1->add( "." , interval , "." );
+	  else if ( PS[e] == POPS_N2 )   aN2->add( "." , interval , "." );
+	  else if ( PS[e] == POPS_N3 )   aN3->add( "." , interval , "." );
+	  else aU->add( "." , interval , "." );      
+	}
     }
+  
       		  
 }
 

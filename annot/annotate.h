@@ -184,6 +184,12 @@ struct annotate_t {
   bool midpoint;
   std::set<std::string> midpoint_annot;
 
+  bool starts;
+  std::set<std::string> starts_annot;
+
+  bool stops;
+  std::set<std::string> stops_annot;
+
   bool use_rps;
   std::map<std::string,std::string> rp_annot;
   
