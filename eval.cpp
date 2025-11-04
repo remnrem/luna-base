@@ -1821,8 +1821,7 @@ void proc_runpops( edf_t & edf , param_t & param )
 	 << "  cleaning up temporary signals\n";
   
   param_t drop_param;
-  drop_param.add( "sig" , allsigs + "," + allzigs );
-  drop_param.add( "drop" );
+  drop_param.add( "drop" , allsigs + "," + allzigs );
   proc_drop_signals( edf , drop_param );
 
     
