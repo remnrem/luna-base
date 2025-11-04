@@ -277,8 +277,8 @@ bool edf_t::edf_minus( param_t & param )
   // store all signals
   //
 
-  std::map<std::string, std::vector<double> > sdat;
-  std::map<std::string, int> sr;
+  std::map<std::string, std::vector<int16_t> > sdat;
+  std::map<std::string, int> sr;  
   std::map<int, std::vector<uint64_t> > tdat;
 
   signal_list_t signals = header.signal_list( param.value( "sig" ) );
@@ -289,11 +289,11 @@ bool edf_t::edf_minus( param_t & param )
     {
       if ( header.is_annotation_channel( signals(s) ) ) continue;
       
-      slice_t slice( *this , signals(s) , timeline.wholetrace() );
+      slice_t slice( *this , signals(s) , timeline.wholetrace() , 1 , true ); // get int16 digital values only
 
       const std::string slab = signals.label(s);
 	
-      sdat[ slab ] = *slice.pdata();
+      sdat[ slab ] = *slice.ddata(); // nb. digital data
 
       // enforce sample-rate rules
 
@@ -618,7 +618,7 @@ bool edf_t::edf_minus( param_t & param )
   //
   
   std::set<instance_idx_t> events1; // --> all annots in new EDF/annot
-  std::map<std::string, std::vector<double> > sdat1; // --> all signals in new EDF
+  std::map<std::string, std::vector<int16_t> > sdat1; // --> all signals in new EDF
 
   
   //
@@ -732,19 +732,19 @@ bool edf_t::edf_minus( param_t & param )
       // Signals
       //
       
-      std::map<std::string, std::vector<double> >::const_iterator ss = sdat.begin();
+      std::map<std::string, std::vector<int16_t> >::const_iterator ss = sdat.begin();
       while ( ss != sdat.end() )
 	{
 
 	  // tp-map
 	  int Fs = sr[ ss->first ];
 	  const std::vector<uint64_t> & tp = tdat[ Fs ];
-	  const std::vector<double> & x  = ss->second;
+	  const std::vector<int16_t> & x  = ss->second;
 	  const int n = x.size();
 	  
 	  // create a new signal
-	  std::vector<double> x1;
-
+	  std::vector<int16_t> x1;
+	  
 	  // same logic as for annotations, i.e. iterate over
 	  // segments, then samples
 
@@ -792,6 +792,10 @@ bool edf_t::edf_minus( param_t & param )
 	  // next signal
 	  ++ss;
 	}
+
+
+      // can reclaim some space...
+      sdat.clear();
       
     }
   
@@ -973,19 +977,33 @@ bool edf_t::edf_minus( param_t & param )
       // Signals
       //      
       
-      std::map<std::string, std::vector<double> >::const_iterator ss = sdat.begin();
+      std::map<std::string, std::vector<int16_t> >::const_iterator ss = sdat.begin();
       while ( ss != sdat.end() )
 	{
-
+	  
 	  // tp-map
 	  int Fs = sr[ ss->first ];
 	  const std::vector<uint64_t> & tp = tdat[ Fs ];
-	  const std::vector<double> & x  = ss->second;
+	  const std::vector<int16_t> & x  = ss->second;
 	  const int n = x.size();
 	  
 	  // create a new signal
-	  std::vector<double> x1;
+	  std::vector<int16_t> x1;
 
+	  // physical zero in digital space?
+	  const	int slot = header.signal( ss->first );
+	  
+	  const int pmin = header.physical_min[ slot ];
+	  const int pmax = header.physical_max[ slot ];
+	  
+	  const int dmin = header.digital_min[ slot ];
+	  const int dmax = header.digital_max[ slot ];
+	  
+	  const double bv = ( pmax - pmin ) / (double)( dmax - dmin );
+	  const double os = ( pmax / bv ) - dmax;
+	  
+	  int16_t zero_value = edf_record_t::phys2dig( 0.0 , bv , os );
+	  
 	  // same logic as for annotations, i.e. iterate over
 	  // segments, then samples
 	  
@@ -1000,7 +1018,7 @@ bool edf_t::edf_minus( param_t & param )
 
 	  int nrecs = zpad_recs[ ii->start ] ;
 	  for (int i=0; i< nrecs * Fs; i++) // i.e. assumes rec = 1s                                                
-	    x1.push_back( 0.0 );
+	    x1.push_back( zero_value );
 	  
 	  
 	  while ( ii != retained.end() )
@@ -1023,7 +1041,7 @@ bool edf_t::edf_minus( param_t & param )
 		  // zero-pad?
 		  int nrecs = zpad_recs[ ii->start ] ;
 		  for (int i=0; i< nrecs * Fs; i++) // i.e. assumes rec = 1s
-		    x1.push_back( 0.0 );
+		    x1.push_back( zero_value );
 		  
 		  // loop back
 		  continue;
@@ -1048,7 +1066,9 @@ bool edf_t::edf_minus( param_t & param )
 	  // next signal
 	  ++ss;
 	}
-      
+
+      // reclaim space
+      sdat.clear();
     }
 
   
@@ -1060,7 +1080,7 @@ bool edf_t::edf_minus( param_t & param )
 
   int nr = -1;
   
-  std::map<std::string,std::vector<double> >::const_iterator ss1 = sdat1.begin();
+  std::map<std::string,std::vector<int16_t> >::const_iterator ss1 = sdat1.begin();
   while ( ss1 != sdat1.end() )
     {
       int Fs = sr[ ss1->first ];
@@ -1238,36 +1258,45 @@ bool edf_t::edf_minus( param_t & param )
    		1 ,         // record size fixed at 1 second
 		startdatetime.as_date_string('.',2) , // date only, YY format
 		startdatetime.as_string('.') ); // time only
+
+  e.header.recording_info = header.recording_info;
   
   //
   // add signals
   //
 
-  std::map<std::string, std::vector<double> >::const_iterator xx = sdat1.begin();
+  std::map<std::string, std::vector<int16_t> >::iterator xx = sdat1.begin();
   while ( xx != sdat1.end() )
     {
-      int Fs = sr[ xx->first ];
-      e.add_signal( xx->first , Fs , xx->second );		   	
-      ++xx;
-    }
+      const int Fs = sr[ xx->first ];
+      const int slot = header.signal( xx->first );
+	  
+      const int pmin = header.physical_min[ slot ];
+      const int pmax = header.physical_max[ slot ];
+	  
+      const int dmin = header.digital_min[ slot ];
+      const int dmax = header.digital_max[ slot ];
 
-  //
-  // copy over transducer info and other header information
-  //
-
-  e.header.recording_info = header.recording_info;
-    
-  xx = sdat1.begin();
-  while ( xx != sdat1.end() )
-    {      
-      const int slot0 = header.signal( xx->first );
+      // add digital value back directly
+      e.add_signal_int16( xx->first , Fs , xx->second , pmin, pmax, dmin, dmax );    	
+      
+      // copy over transducer info and other header information
       const int slot1 = e.header.signal( xx->first );      
-      e.header.transducer_type[ slot1 ] = header.transducer_type[ slot0 ];
-      e.header.phys_dimension[ slot1 ] = header.phys_dimension[ slot0 ];
-      e.header.prefiltering[ slot1 ] = header.prefiltering[ slot0 ];
+      e.header.transducer_type[ slot1 ] = header.transducer_type[ slot ];
+      e.header.phys_dimension[ slot1 ] = header.phys_dimension[ slot ];
+      e.header.prefiltering[ slot1 ] = header.prefiltering[ slot ];
+      e.header.physical_min[ slot1 ] = header.physical_min[ slot ];
+      e.header.physical_max[ slot1 ] = header.physical_max[ slot ];
+      e.header.digital_min[ slot1 ] = header.digital_min[ slot ];
+      e.header.digital_max[ slot1 ] = header.digital_max[ slot ];
+
+      // can tidy-as-we-go a little
+      xx->second.clear();
+      
+      // next signal
       ++xx;
     }
-
+  
 
   //
   // add annotations

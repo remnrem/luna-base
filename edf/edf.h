@@ -319,13 +319,23 @@ private:
   // 2-byte two's complement integers (little-endian format)
   
   inline static int16_t tc2dec( char a , char b );
+  
   inline static void dec2tc( int16_t x , char * a , char * b );
+
 
   // convert between physical (double) and digitial (int16_t) scales
   // directly give bit-value and offset
-  inline static double dig2phys( int16_t , double , double );
-  inline static int16_t phys2dig( double , double , double );
+
+  inline static double dig2phys( int16_t d , double bv , double offset )
+  {
+    return bv * ( offset + d ) ; 
+  }
   
+  inline static int16_t phys2dig( double d , double bv , double offset )
+  {
+    return d / bv - offset ;
+  }
+
 };
 
 
@@ -471,6 +481,10 @@ public:
 		   double pmin = 0 , double pmax = 0 ,
 		   int16_t dmin = 0 , int16_t dmax = 0 );
   
+  void add_signal_int16( const std::string & label , const int n_samples , const std::vector<int16_t> & data ,
+			 double pmin , double pmax ,
+			 int16_t dmin , int16_t dmax );
+
   void copy_signal( const std::string & from_label , const std::string & to_label );
 
   void preread( param_t & param );

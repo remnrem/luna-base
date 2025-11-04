@@ -448,9 +448,11 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   
   const bool do_channel_merge = param.has( "collate-within-channel" ) ;
 
-  const bool do_merge = do_channel_merge || param.has( "collate" ); 
+  const std::string merge_annot = param.has( "collate-annot" ) ? param.value( "collate-annot" ) : "" ; 
 
+  const bool do_merge = do_channel_merge || param.has( "collate" ) || param.has( "collate-annot" ) ;
   
+    
   if ( do_merge )
     {
       // merge two spindles if do_mergeion / union > t
@@ -3075,7 +3077,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	      mspindles_t & ms = mm->second;	      
 	      ms.collate();
-	      ms.output( signals );
+	      ms.output( signals , merge_annot );
 	      
 	      writer.unlevel( globals::signal_strat );
 
@@ -3092,9 +3094,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  mspindles.collate();
 	  
 	  // some output
-	  mspindles.output( signals );
+	  mspindles.output( signals , merge_annot );
 	  
-	  // plot merged spindles?
+	  // plot merged spindles? (not implemented / ignore ) 
 	  mspindles.plot( "mspindles.pdf" );
 	}
 

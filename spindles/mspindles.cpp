@@ -176,8 +176,19 @@ void mspindles_t::collate()
 }
   
 
-void mspindles_t::output( const signal_list_t & signals )
+void mspindles_t::output( const signal_list_t & signals , const std::string & ann )
 {
+  
+
+  //
+  // Also output annotations?
+  //
+
+  const bool do_annots = ann != "";
+
+  annot_t * annot = NULL;
+
+  if ( do_annots ) annot = edf->annotations->add( ann );
   
   //
   // Maximum number of minutes (for density)
@@ -240,11 +251,25 @@ void mspindles_t::output( const signal_list_t & signals )
   for (int i=0; i<M.size(); i++) 
     {
       
+      //
+      // Annotations?
+      //
+
+      if ( do_annots )
+	{
+	  // instance ID = number of spindles
+	  annot->add( Helper::int2str( (int)(M[i].n()) ) , interval_t( M[i].start , M[i].stop ) , "." );
+	}
+      
 //       std::cout << "MSPINDLE " << i+1 << "\n";
 //       const int nn = M[i].n();
 //       for (int j = 0 ; j < nn ; j++ ) 
 // 	std::cout << "\t" << M[i].spindles[j]->tp.start << " .. " << M[i].spindles[j]->tp.stop << "\n";
 //       std::cout << "\n";
+
+      //
+      // DB output
+      //
 
       writer.level( i+1 , "MSPINDLE" );
       writer.value( "MSP_F" , M[i].frq );
@@ -300,29 +325,8 @@ void mspindles_t::output( const signal_list_t & signals )
 
 
 void mspindles_t::plot( const std::string & fname )
-{	  
-  
+{	    
   //
-  // Create plots for the merged spindle set?
-  //
-  
-  // logger << " writing PDF of f-merged spindle traces to " << fname << "\n";	      
-  
-  // std::vector<spindle_t> mspindles_tp; // need to make a time-points
-  
-  // for (int i=0;i<M.size();i++)
-  //   {
-  //     spindle_t s( (*tp)[ mspindles[i].start ] , 
-  // 		   (*tp)[ mspindles[i].stop ]  , 
-  // 		   mspindles[i].start , 
-  // 		   mspindles[i].stop ) ;
-      
-  //     mspindles_tp.push_back( s );
-  //     // avg_map is already made above
-  //   }	      
-  
-  // draw_mspindles( edf , param , fname , signals(s) , mspindles ) ; 
-  
 }
 
 

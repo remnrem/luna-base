@@ -217,16 +217,6 @@ std::vector<char> edf_t::get_bytes( byte_t ** p , int sz )
 }
 
 
-inline double edf_record_t::dig2phys( int16_t d , double bv , double offset )
-{  
-  return bv * ( offset + d ) ; 
-}
-
-inline int16_t edf_record_t::phys2dig( double d , double bv , double offset )
-{
-  return d / bv - offset ; 
-}
-
 
 inline int16_t edf_record_t::tc2dec( char a , char b )
 {        
@@ -257,7 +247,7 @@ inline void edf_record_t::dec2tc( int16_t x , char * a , char * b )
     int16_t       one[1];    
     unsigned char two[2];      
   } buffer;    
-
+  
   buffer.one[0] = x;
   
   if ( edf_t::endian == edf_t::MACHINE_LITTLE_ENDIAN )
@@ -272,7 +262,6 @@ inline void edf_record_t::dec2tc( int16_t x , char * a , char * b )
     }
   
 }
-
 
 
 std::string edf_header_t::summary() const
@@ -2945,6 +2934,117 @@ void edf_t::add_signal( const std::string & label ,
       for (int i=0;i<n_samples;i++) 
 	t[i] = edf_record_t::phys2dig( data[c++] , bv , os );
 
+      records.find(r)->second.add_data(t);
+
+      r = timeline.next_record(r);
+
+    }
+
+  // add to header
+  ++header.ns;
+    
+  header.bitvalue.push_back( bv );
+  header.offset.push_back( os );
+  
+  header.label.push_back( label );
+  
+  if ( ! Helper::imatch( label , "EDF Annotation" , 14 ) )
+    header.label2header[ Helper::toupper( label ) ] = header.label.size()-1;     
+  
+  header.annotation_channel.push_back( ( header.edfplus ? 
+					 Helper::imatch( label , "EDF Annotation" , 14 ) :
+					 false ) ) ;
+
+  header.transducer_type.push_back( "n/a" );
+  header.phys_dimension.push_back( "n/a" );
+  header.physical_min.push_back( pmin );
+  header.physical_max.push_back( pmax );
+  header.digital_min.push_back( dmin );
+  header.digital_max.push_back( dmax );
+  header.orig_physical_min.push_back( pmin );
+  header.orig_physical_max.push_back( pmax );
+  header.orig_digital_min.push_back( dmin );
+  header.orig_digital_max.push_back( dmax );
+  header.prefiltering.push_back( "n/a" );
+  header.n_samples.push_back( n_samples );  
+  header.signal_reserved.push_back( "" );  
+
+  // add to TYPES, by recallig this
+  cmd_t::define_channel_type_variables( *this );
+  
+}
+
+
+
+void edf_t::add_signal_int16( const std::string & label ,
+			      const int Fs ,
+			      const std::vector<int16_t> & data ,
+			      double pmin , double pmax ,
+			      int16_t dmin , int16_t dmax )
+{
+
+  // this function, as add_signal() except takes vector of digitial int16_t values
+  //  i.e. for use in EDF-MINUS when we don't need to look at the whole signal
+  
+  const int ndata = data.size();
+
+  // normally, n_samples is Fs * record length.
+  
+  // *however*, as we are currently otherwise enforcing that sample rate must be an integer 
+  //   we've also added a backdoor for sedf_t creation here, to allow for
+  //   has sample rate < 1 Hz and very long records (e.g. 30 seconds): namely,
+  //   if Fs is negative, assume this directly encode the n_samples (negative of)
+  //   rather than the sample rate per say
+  
+  const int n_samples = Fs < 0 ? -Fs : Fs * header.record_duration ;
+
+  if ( ndata == 0 ) 
+    {
+      logger << " **empty EDF, not going to add channel " << label << " **\n";
+      return;
+    }
+
+
+  // sanity check -- ie. require that the data is an appropriate length
+  if ( ndata != header.nr * n_samples ) 
+    {
+      logger << " observed n = " << ndata << " but expected = " << header.nr << " * " <<  n_samples << " = " << header.nr * n_samples << "\n";
+      Helper::halt( "internal error: problem with length of input data" );  
+    }
+
+  //
+  // determine bitvalue and offset
+  //
+  
+  // if not otherwise specified, set dmin/dmax 
+  if ( dmax == dmin ) // i.e. 0 == 0 if not set 
+    {
+      dmax = 32767;
+      dmin = -32768;
+    }
+
+  double bv = ( pmax - pmin ) / (double)( dmax - dmin );
+
+  double os = ( pmax / bv ) - dmax;
+
+  //
+  // store (no need to convert from digital form)
+  //
+  
+  int c = 0;
+
+  int r = timeline.first_record();
+  
+  while ( r != -1 ) 
+    {
+      
+      ensure_loaded( r );
+      
+      std::vector<int16_t> t(n_samples);
+      
+      for (int i=0;i<n_samples;i++) 
+	t[i] = data[c++];
+      
       records.find(r)->second.add_data(t);
 
       r = timeline.next_record(r);

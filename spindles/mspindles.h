@@ -139,7 +139,7 @@ struct mspindles_t
 
   void collate();
   void proc_overlaps( const std::vector<sort_t> & );
-  void output( const signal_list_t & );
+  void output( const signal_list_t & , const std::string & annot );
   void plot( const std::string & );
   void pairwise_statistics( int, int );
   
