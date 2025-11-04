@@ -356,6 +356,10 @@ struct timeline_t
   // randomly select up to 'n' epochs from the current set 
   void select_epoch_randomly( int n );
 
+  // randomly select up to 'n' epochs from the current set, looking only to 
+  // epochs w/ annotatons 'a'
+  void select_epoch_randomly( const std::set<std::string> & a , int n );
+
   // trim leading and trailing epochs (allow only n)
   void trim_epochs( std::string & , int );
   

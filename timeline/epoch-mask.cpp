@@ -707,8 +707,8 @@ void timeline_t::apply_eval_mask( const std::string & str , int mask_mode , cons
 }
 
 
-  // other masks : randomly select up to 'n' epochs from the current set 
-  // other masks : randomly select up to 'n' epochs from the current set 
+// other masks : randomly select up to 'n' epochs from the current set 
+
 void timeline_t::select_epoch_randomly( int n )
 {
 
@@ -770,6 +770,110 @@ void timeline_t::select_epoch_randomly( int n )
 	 << cnt_mask_unset << " unmasked and " 
 	 << cnt_unchanged << " unchanged\n";
   logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+
+}
+
+
+
+// random select N unmasked epochs from set of epochs w/ 1+ annot from anns 
+void timeline_t::select_epoch_randomly( const std::set<std::string> & anns , int n )
+{
+  // e.g. MASK random-from=10,N1,N2,N3
+  // --> randomly select up to 10 NREM epochs of any type
+  
+  // MASK random-from=10,N1
+  // MASK random-from=10,N2
+  // MASK random-from=10,N3
+  // --> random select up to 10 N1, up to 10 N2, up to 10 N3
+
+  // similar implemention to MASK random above, but imposes additional 
+  // constraint on which epochs to select from
+
+  mask_set = true;
+    
+  const int ne = epochs.size();
+  
+  // has 1+ annot A?
+  std::vector<bool> x( ne , false );
+  
+  std::set<std::string>::const_iterator aa = anns.begin();
+  while ( aa != anns.end() )
+    {
+      annot_t * annot = annotations->find( Helper::unquote( *aa ) );
+      if ( annot == NULL ) continue;
+      
+      for (int e=0;e<ne;e++)
+	{
+	  if ( ! x[e] ) { 
+	    interval_t interval = epoch( e );
+	    annot_map_t events = annot->extract( interval );
+	    if ( events.size() > 0 ) x[e] = true;
+	  }
+	}  
+      ++aa;
+    } // next annot
+  
+  
+  // from the unmasked set, pick at random 'n' (or as many as possible)
+  std::vector<int> unmasked;
+
+  // consider mask status also to select events
+  for (int e=0;e<ne;e++)
+    if ( x[e] && ! mask[e] ) 
+      unmasked.push_back(e);
+
+
+  // select N from this set
+  std::set<int> selected;
+  
+  int s = 0;
+  
+  const int num_unmasked = unmasked.size();
+  
+  const int n_to_select = num_unmasked < n ? num_unmasked : n;
+
+  while ( s < n_to_select )
+    {
+      int rnd = CRandom::rand( num_unmasked );
+      int sel = unmasked[ rnd ];
+
+      if ( selected.find( sel ) == selected.end() )
+	{
+	  selected.insert( sel );
+	  ++s;
+	}
+    }
+  
+  
+  int cnt_mask_set = 0;
+  int cnt_mask_unset = 0;
+  int cnt_unchanged = 0;
+  int cnt_now_unmasked = 0;
+
+
+  // mask everything that was /not/ in the selected set but was
+  // in the requested set (i.e. leave other non-A epochs as is
+  for (int e=0;e<ne;e++)
+    {
+      
+      if ( x[e] && selected.find(e) == selected.end() ) 
+	{
+	  int mc = set_epoch_mask( e , true );
+	  if ( mc == +1 ) ++cnt_mask_set;
+	  else if ( mc == -1 ) ++cnt_mask_unset;
+	  else ++cnt_unchanged;
+	}
+      
+      if ( ! mask[e] ) ++cnt_now_unmasked;
+    }
+
+  logger << "  randomly selected up to " << n << " epochs from [" << Helper::stringize( anns ) << "]; ";
+
+  logger << cnt_mask_set << " newly masked " 
+	 << cnt_mask_unset << " unmasked and " 
+	 << cnt_unchanged << " unchanged\n";
+  logger << "  total of " << cnt_now_unmasked << " of " << epochs.size() << " retained\n";
+
 
 }
 
