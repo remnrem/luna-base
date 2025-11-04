@@ -342,6 +342,19 @@ void proc_mask( edf_t & edf , param_t & param )
       edf.timeline.select_epoch_randomly(n);
     }
 
+  if ( param.has( "random-from" ) )
+    {
+      const std::vector<std::string> p = param.strvector( "random-from" );
+      if ( p.size() < 2 ) Helper::halt( "expecting random-each=N,annot1,annot2,..." );
+      int n;
+      if ( ! Helper::str2int( p[0] , &n ) )
+	Helper::halt( "expecting random-each=N,annot1,annot2,..."); 
+      if ( n < 1 ) Helper::halt( "random value must be >= 1" );
+      std::set<std::string> anns;
+      for (int i=1;i<p.size();i++) anns.insert( p[i] );
+      edf.timeline.select_epoch_randomly(anns,n);
+    }
+
   if ( param.has( "flip" ) ) 
     {
       edf.timeline.flip_epoch_mask();
