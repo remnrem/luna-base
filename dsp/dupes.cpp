@@ -124,13 +124,18 @@ void dsptools::dupes( edf_t & edf , param_t & param )
   //
   // different Fs implies divergent
   //
-
-  for (int i=0; i<ns-1; i++)
-    for (int j=i+1; j<ns; j++)
-      if ( edf.header.n_samples[i] != edf.header.n_samples[j] )
-	divergent[ i ].insert( j );	  
   
-
+  for (int i=0; i<ns-1; i++)
+    {
+      const int slot_i = signals(i);
+      for (int j=i+1; j<ns; j++)
+	{
+	  const int slot_j = signals(j);	  
+	  if ( edf.header.n_samples[slot_i] != edf.header.n_samples[slot_j] )
+	    divergent[ i ].insert( j );	  
+	}
+    }
+  
   //
   // Do epoch-wise (but giving up on a channel pair as needed)
   //
@@ -220,7 +225,7 @@ void dsptools::dupes( edf_t & edf , param_t & param )
 	  for (int s2=s+1; s2<ns; s2++)
 	    {
 	      
-	      //std::cout << "  CONSIDER " << signals.label(s) << " x " << signals.label(s2) << "\n";
+	      std::cout << "  CONSIDER " << signals.label(s) << " x " << signals.label(s2) << "\n";
 
 	      // skip if an invalid signal
 	      
@@ -232,7 +237,7 @@ void dsptools::dupes( edf_t & edf , param_t & param )
 	      
 	      if ( test_divergent )
 		{
-		  //std::cout << " testing " << signals.label(s) << " x " << signals.label(s2) << "\n";
+		  std::cout << " testing " << signals.label(s) << " x " << signals.label(s2) << "\n";
 		  
 		  slice_t slice2( edf , signals(s2) , interval , 1 , ! physical_check );
 		  
@@ -243,8 +248,10 @@ void dsptools::dupes( edf_t & edf , param_t & param )
 		  const int np2 = physical_check ? p2->size() : d2->size();
 		  
 		  if ( np2 != np )
-		    Helper::halt( "internal error in dupes() " );
-
+		    {
+		      std::cerr << "np2 , np = " << np2 << " " << np << "\n";
+		      Helper::halt( "internal error in dupes() " );
+		    }
 		  int cnt = 0;
 		  
 		  if ( physical_check )
