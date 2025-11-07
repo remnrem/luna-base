@@ -1860,10 +1860,7 @@ void gpa_t::run1X() // correction within X
 	  const std::string & xvar = vars[ ivs[j] ];
 	  writer.level( xvar , "X" );
 
-	  std::cout << "xvar = " << xvar << "\n";
 	  linmod_comp_t * comp = comps.comp( xvar );
-	  
-	  std::cout << "comp = " << ( comp == NULL ) << "\n";
 
 	  comp->evaluate();
 	  writer.value( "MATCH_OBS" , comp->stat() );
