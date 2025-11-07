@@ -463,6 +463,8 @@ public:
   
   // compile a set of selected events for the current window
   void compile_evts( const std::vector<std::string> & anns );
+
+  void set_clip_xaxes( const bool clip ) { clip_xaxes = clip; } 
   
   // given a compilation (subset of all evts), get evts for a particular class
   std::vector<float> get_evnts_xaxes( const std::string & ann ) const;
@@ -498,6 +500,9 @@ private:
   // format for annot coordinates (i.e. plotly/scope versus pyqtgraph/lunaP)
   bool annot_format6;
 
+  // clip x-axes of annots?
+  bool clip_xaxes;
+  
   // used only with ! format6
   // get_evnts_xaxes_ends() , get_evnts_yaxes_ends()
   std::map<std::string,std::vector<float> > compiled_annots_end_times;

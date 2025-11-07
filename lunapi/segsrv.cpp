@@ -48,6 +48,7 @@ void segsrv_t::init()
   gaps = p->edf.timeline.gaps( segments ); 
   
   annot_format6 = true; // plotly
+  clip_xaxes = true;
   
   clocktime_t etime( p->edf.header.starttime );
   if ( ! etime.valid )
@@ -1095,7 +1096,7 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
 
   const double srange = smax - smin;
   // special case of smin == smax --> set whole signal to 0.5 
-  if ( srange < 1e-3 )
+  if ( srange < 1e-6f )
     s = Eigen::VectorXf::Zero( s.size() ).array() + 0.5 ;
   else // normalize to 0..1  X = ( X - min ) / ( max - min )    
     s = ( s.array() - smin ) / (float)srange;
@@ -1410,9 +1411,11 @@ void segsrv_t::compile_evts( const std::vector<std::string> & anns )
   while ( xx != xevts.end() )
     {
       	  
-      // add times (w/ clipping at window- boundaries) 
-      const std::pair<double,double> p2( xx->start < awin ? awin : xx->start ,
-					 xx->stop  > bwin ? bwin : xx->stop );
+      // add times (optionally, clipping at window- boundaries) 
+      const std::pair<double,double> p2(
+					clip_xaxes ? std::max(xx->start, awin) : xx->start,
+					clip_xaxes ? std::min(xx->stop,  bwin) : xx->stop
+					);
       
       annots_times[ xx->name ].push_back( p2 );
       	  

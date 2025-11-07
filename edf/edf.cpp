@@ -1068,8 +1068,12 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , edfz2_t * edfz2,
       const bool annotation = Helper::imatch( tlabels[s] , "EDF Annotation" , 14 ) ;
       if ( ! annotation )
 	{
+
 	  double sr = x / record_duration;
-	  if ( fabs( trunc(sr) - sr ) > 1e-8 )
+
+	  const bool non_integer = std::fabs(sr - std::round(sr)) > 1e-6;
+	  
+	  if ( non_integer )
 	    {
 	      logger << "  *** warning, signal " << s << " ( " << tlabels[s] << " ) has a non-integer SR\n"
 		     << "  *** may wish to use RECORD-SIZE if this is due to a fractional EDF record size\n"
@@ -2847,7 +2851,7 @@ void edf_record_t::drop( const int s )
 }
 
 void edf_t::add_signal( const std::string & label ,
-			const int Fs ,
+			const double Fs ,
 			const std::vector<double> & data ,
 			double pmin , double pmax ,
 			int16_t dmin , int16_t dmax )
@@ -2862,8 +2866,8 @@ void edf_t::add_signal( const std::string & label ,
   //   has sample rate < 1 Hz and very long records (e.g. 30 seconds): namely,
   //   if Fs is negative, assume this directly encode the n_samples (negative of)
   //   rather than the sample rate per say
-  
-  const int n_samples = Fs < 0 ? -Fs : Fs * header.record_duration ;
+   
+  const int n_samples = std::lround( Fs < 0 ? -Fs : Fs * header.record_duration ) ; 
 
   if ( ndata == 0 ) 
     {
@@ -2876,6 +2880,14 @@ void edf_t::add_signal( const std::string & label ,
   if ( ndata != header.nr * n_samples ) 
     {
       logger << " observed n = " << ndata << " but expected = " << header.nr << " * " <<  n_samples << " = " << header.nr * n_samples << "\n";
+
+      logger << " EDF record size = " << header.record_duration << "\n";
+      
+      logger << " Note: the EDF record size must be able to contain an\n"
+	     << "       integer number of samples at the requested sampling rate\n"
+	     << "       (if needed, use RECORD-SIZE dur=1 to change EDF record size\n"
+	     << "       to allow an arbitrary integer sampling rate)\n\n"; 
+      
       Helper::halt( "internal error: problem with length of input data" );  
     }
 
@@ -2977,7 +2989,7 @@ void edf_t::add_signal( const std::string & label ,
 
 
 void edf_t::add_signal_int16( const std::string & label ,
-			      const int Fs ,
+			      const double Fs ,
 			      const std::vector<int16_t> & data ,
 			      double pmin , double pmax ,
 			      int16_t dmin , int16_t dmax )
@@ -2996,8 +3008,8 @@ void edf_t::add_signal_int16( const std::string & label ,
   //   if Fs is negative, assume this directly encode the n_samples (negative of)
   //   rather than the sample rate per say
   
-  const int n_samples = Fs < 0 ? -Fs : Fs * header.record_duration ;
-
+  const int n_samples = std::lround( Fs < 0 ? -Fs : Fs * header.record_duration ) ;
+    
   if ( ndata == 0 ) 
     {
       logger << " **empty EDF, not going to add channel " << label << " **\n";
@@ -3009,6 +3021,14 @@ void edf_t::add_signal_int16( const std::string & label ,
   if ( ndata != header.nr * n_samples ) 
     {
       logger << " observed n = " << ndata << " but expected = " << header.nr << " * " <<  n_samples << " = " << header.nr * n_samples << "\n";
+
+      logger << " EDF record size = " << header.record_duration << "\n";
+      
+      logger << " Note: the EDF record size must be able to contain an\n"
+	     << "       integer number of samples at the requested sampling rate\n"
+	     << "       (if needed, use RECORD-SIZE dur=1 to change EDF record size\n"
+	     << "       to allow an arbitrary integer sampling rate)\n\n"; 
+
       Helper::halt( "internal error: problem with length of input data" );  
     }
 
@@ -3174,7 +3194,7 @@ void edf_t::reset_record_size( const double new_record_duration )
       //int   new_nsamples1 = implied;
       int   new_nsamples1 = static_cast<int>(std::round( implied ));
       
-      if ( fabs( (double)new_nsamples1 - implied ) > 0 )
+      if ( fabs( (double)new_nsamples1 - implied ) > 1e-6 )
 	{
 	  
 	  sig2resamples_per_record[ s ] = new_nsamples1 ;
@@ -3199,7 +3219,6 @@ void edf_t::reset_record_size( const double new_record_duration )
       new_record_size += 2 * new_nsamples1 ; 
       
     }
-  
   
   // buffer for new records : allocates space for samples (based on on rec dur)...
   edf_record_t new_record( this );
@@ -4644,8 +4663,15 @@ void edf_t::update_signal( int s , const std::vector<double> * d , int16_t * dmi
     {
       logger << " obs N = " << n << "\n"
 	     << " exp N = " << header.nr << " * " << points_per_record << " = " << header.nr * points_per_record << "\n";
-	
-      Helper::halt( "internal error in update_signal()" );
+
+      logger << " EDF record size = " << header.record_duration << "\n";
+      
+      logger << " Note: the EDF record size must be able to contain an\n"
+	     << "       integer number of samples at the requested sampling rate\n"
+	     << "       (if needed, use RECORD-SIZE dur=1 to change EDF record size\n"
+	     << "       to allow an arbitrary integer sampling rate)\n\n"; 
+			 
+      Helper::halt( "problem with EDF structure; otherwise, an internal error in update_signal()" );
     }
   if ( debug ) std::cout << " n = " << n << "\n";
   

@@ -4478,6 +4478,7 @@ void proc_rerecord( edf_t & edf , param_t & param )
   logger << "  *** now WRITE'ing EDF to disk, and will set 'problem' flag to skip to next EDF *** \n";
   
   proc_write( edf , param );
+
   globals::problem = true;
 }
 

@@ -659,6 +659,19 @@ void proc_dummy( const std::string & p , const std::string & p2 )
 
   if ( p == "lunapi" )
     {
+
+      // test scaling issues (e.g. w/ V scaling)
+      lunapi_t * lpV = lunapi_t::inaugurate();
+      lunapi_inst_ptr pV = lpV->inst( "T1" );
+      pV->attach_edf( "t0.edf" );
+      segsrv_t segsrvV( pV );
+      std::vector<std::string> chsV = { "C3_M2" };
+      segsrvV.populate( chsV , { } ) ;
+      segsrvV.set_window( 1000, 1030 );
+      Eigen::VectorXf XX = segsrvV.get_scaled_signal( "C3_M2" , 0 );
+      std::cout << "XX" << XX << "\n";
+	        
+      std::exit(0);
       
       // test segsrv w/ annot-only files
       lunapi_t * lp1 = lunapi_t::inaugurate();

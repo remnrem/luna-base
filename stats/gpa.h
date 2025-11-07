@@ -139,6 +139,62 @@ private:
 
 
 
+struct linmod_results_t;
+
+
+struct linmod_comps_t;
+
+struct linmod_comp_t {
+
+  linmod_comp_t( linmod_comps_t * _parent ) { parent = _parent; } 
+  double compare( const std::vector<std::string> & yvars , const Eigen::VectorXd & b , int * t = NULL );
+  void compare_observed( const std::vector<std::string> & yvars , const Eigen::VectorXd & b );
+  void compare_null( const std::vector<std::string> & yvars , const Eigen::VectorXd & b );
+  
+  void evaluate();
+  double stat() const;
+  double expected() const;
+  double zstat() const;
+  double pvalue() const;
+  double pvalue2() const;
+  int ntests() const;
+  
+private:
+
+  linmod_comps_t * parent;
+
+  double stat1;
+  std::vector<double> stat0;
+  int nt; // # tests actually found
+  double pval, pval2, zval, xval;
+  double t_threshold, p_threshold; // not used
+};
+
+
+struct linmod_comps_t {
+
+  // evaluate against a fixed set of directional results
+  void load( const std::string & );
+  
+  linmod_comp_t * add( const std::string & xvar );
+
+  linmod_comp_t * comp( const std::string & xvar )
+  {
+    auto it = comp_map.find(xvar);
+    return (it == comp_map.end()) ? NULL : &it->second;
+  }
+
+  // X-var -> aggrgete Y-var comps
+  std::map<std::string,linmod_comp_t> comp_map;
+
+  // shared Y -> dir-eff template
+  std::map<std::string,int> deff;
+
+};
+
+
+
+
 struct gpa_t { 
 
   gpa_t( param_t & param , const bool prep_mode );
@@ -182,7 +238,9 @@ struct gpa_t {
 							       std::vector<std::vector<int>> * x );
 
   bool next_combo(std::vector<int>& a, const std::vector<int>& L);
-  
+
+  // for comparisons (optional)
+  linmod_comps_t comps;
     
   // run
   void run();   // correct for all X considered
@@ -292,7 +350,8 @@ private:
   // do perm-corrections independently for each X
   bool correct_all_X;
 
-  
+  // comparisons
+  bool do_comparisons;
   
 };
 
@@ -314,16 +373,14 @@ struct linmod_results_t {
   // generate corrected results
   void make_corrected( const std::vector<std::string> & xvars ,
 		       const std::vector<std::string> & yvars );
-		       
-
+   
   // return corrected results
   double fdr_bh(const std::string & , const std::string & );
   double fdr_by(const std::string & , const std::string & );
   double holm(const std::string & , const std::string & );
   double bonf(const std::string & , const std::string & );
-
+  
 };
-
 
 
 struct linmod_t {
@@ -356,7 +413,7 @@ struct linmod_t {
   // Do the work 
   //
 
-  linmod_results_t run( const int , const bool show_progress = true ) ;
+  linmod_results_t run( const int , const bool show_progress = true , linmod_comps_t * comp = NULL ) ;
 
   Eigen::VectorXd get_tstats( const Eigen::VectorXd & B ,
 			      const Eigen::MatrixXd & Yres ,

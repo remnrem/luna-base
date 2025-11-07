@@ -966,6 +966,7 @@ std::map<std::string,datum_t> lunapi_inst_t::status() const
   r[ "ns" ] = n_data_channels;
   r[ "nt" ] = edf.header.ns_all;
   r[ "na" ] = (int)edf.annotations->names().size();
+  r[ "rs" ] = edf.header.record_duration;
   
   // Record duration, as hh:mm:ss string
 

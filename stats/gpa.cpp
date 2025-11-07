@@ -884,7 +884,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  return;
 	}
 
-
+    
       //
       // drop any stratifying variables (note: currently, s_incgrps() is
       //  not used, can be dropped; likely these were already dropped - i.e.
@@ -960,6 +960,19 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	    for (int j=0; j<dvs.size(); j++)
 	      if ( ivs[i] != dvs[j] ) ++ntests;
 
+
+	  // optional: comparison against a template
+
+	  if ( param.has( "comp" ) )
+	    {
+	      if ( param.empty( "comp" ) )
+		Helper::halt( "comp requires a filename" );
+	      comps.load( param.value( "comp" ) );
+	      do_comparisons = true;
+	    }
+	  else do_comparisons = false;
+	  
+	  
 	  //
 	  // report tests/Ns (and flag potential problems)
 	  //
@@ -1370,7 +1383,6 @@ void gpa_t::prep()
     }
   
   // make final, ordered vars list
-  
   vars.clear();
   std::map<std::string,int> final_var2slot;
   int cidx = 0;
@@ -1485,8 +1497,8 @@ void gpa_t::run()
   linmod_t lm( Y , yvars, X( Eigen::all , ivs ), xvars, Z );
 
   // run
-  linmod_results_t results = lm.run( nreps , show_progress );
-  
+  linmod_results_t results = lm.run( nreps , show_progress , do_comparisons ? &comps : NULL );
+
   // outputs
 
   // manifest details
@@ -1634,6 +1646,33 @@ void gpa_t::run()
     logger << "  " << count_padj05 << " (prop = " << count_padj05 / (double)count_all << ") "
 	   << "significant after empirical family-wise type I error control p < 0.05\n";
 
+
+  // optional comparison test
+  if ( do_comparisons )
+    {
+
+      for (int j=0; j<ivs.size(); j++)
+	{	  
+	  const std::string & xvar = vars[ ivs[j] ];
+	  writer.level( xvar , "X" );
+
+	  linmod_comp_t * comp = comps.comp( xvar );
+    	  
+	  comp->evaluate();
+	  writer.value( "MATCH_OBS" , comp->stat() );
+	  writer.value( "MATCH_EXP" , comp->expected() );
+	  writer.value( "Z" , comp->zstat() );
+	  writer.value( "P" , comp->pvalue() );
+	  writer.value( "P2" , comp->pvalue2() );
+
+	}
+      
+      // iterate over all X values
+      writer.unlevel( "X" );
+      
+    }
+  
+  
 }
 
 
@@ -1691,7 +1730,7 @@ void gpa_t::run1X() // correction within X
       lm.set_IV( X.col( ivs[j] ) , xvar );
       
       // run
-      linmod_results_t results = lm.run( nreps , show_progress );
+      linmod_results_t results = lm.run( nreps , show_progress , do_comparisons ? &comps : NULL );
 
       // output
       bool shown_y = false;
@@ -1812,6 +1851,32 @@ void gpa_t::run1X() // correction within X
     logger << "  " << count_padj05 << " (prop = " << count_padj05 / (double)count_all << ") "
 	   << "significant after empirical family-wise type I error control p < 0.05\n";
 
+  // optional comparison test
+  
+  if ( do_comparisons )
+    {
+      for (int j=0; j<ivs.size(); j++)
+	{	  
+	  const std::string & xvar = vars[ ivs[j] ];
+	  writer.level( xvar , "X" );
+
+	  std::cout << "xvar = " << xvar << "\n";
+	  linmod_comp_t * comp = comps.comp( xvar );
+	  
+	  std::cout << "comp = " << ( comp == NULL ) << "\n";
+
+	  comp->evaluate();
+	  writer.value( "MATCH_OBS" , comp->stat() );
+	  writer.value( "MATCH_EXP" , comp->expected() );
+	  writer.value( "Z" , comp->zstat() );
+	  writer.value( "P" , comp->pvalue() );
+	  writer.value( "P2" , comp->pvalue2() );
+	}
+      
+      // iterate over all X values
+      writer.unlevel( "X" );
+
+    }
   
 }
 
@@ -3370,7 +3435,9 @@ void linmod_t::set_Z( const Eigen::MatrixXd & Z_ )
 }
 
 
-linmod_results_t linmod_t::run( const int nreps , const bool show_progress )
+
+
+linmod_results_t linmod_t::run( const int nreps , const bool show_progress , linmod_comps_t * comps )
 {
   
   linmod_results_t results;
@@ -3444,6 +3511,9 @@ linmod_results_t linmod_t::run( const int nreps , const bool show_progress )
 
   for (int x=0; x<nx; x++)
     {
+
+      // comps? add a new one for this X var
+      linmod_comp_t * comp = comps != NULL ? comps->add( xname[x] ) : NULL ; 
       
       //
       // M is full model: intercept + nuissance + design (1 X term)
@@ -3473,6 +3543,14 @@ linmod_results_t linmod_t::run( const int nreps , const bool show_progress )
       
       Eigen::ArrayXd U = Eigen::ArrayXd::Ones( ny );
 
+      // optional, template comparisons
+      if ( comp != NULL )
+	comp->compare_observed( vname , B.row(idx) ) ;
+            
+      //
+      // begin perms
+      //
+      
       if ( nreps != 0 && show_progress ) 
 	logger << "  ";
       
@@ -3507,6 +3585,10 @@ linmod_results_t linmod_t::run( const int nreps , const bool show_progress )
 	  Eigen::MatrixXd B_perm = Minv_perm * YZres;
 	  Eigen::MatrixXd Yres_perm = Rm_perm * YZres;      
 	  Eigen::VectorXd T_perm = get_tstats( B_perm.row(idx) , Yres_perm , VX(idx,idx) , ni - nterms );
+
+	  // optional, template comparisons
+	  if ( comp != NULL )
+	    comp->compare_null( vname , B_perm.row(idx) ) ;
 
 	  // accumulate
 	  //double max_t = 0;
@@ -4342,3 +4424,163 @@ double linmod_results_t::fdr_bh(const std::string & x , const std::string & y )
 
 double linmod_results_t::fdr_by(const std::string & x , const std::string & y )
   { return corr( index[ x ][ y ] , 3 ); }
+
+
+
+//
+// comparison mode
+//
+
+linmod_comp_t * linmod_comps_t::add( const std::string & xvar )
+{
+  // insert if absent
+  comp_map.try_emplace(xvar, this);
+  return comp( xvar );
+}
+
+void linmod_comps_t::load( const std::string & file )
+{
+
+  deff.clear();
+  
+  std::string filename = Helper::expand( file );
+
+  if ( ! Helper::fileExists( filename ) )
+    Helper::halt( "could not load " + filename );
+
+  std::ifstream IN1( filename.c_str() , std::ios::in );
+
+  int t = 0;
+  
+  std::string line;
+  while ( Helper::safe_getline( IN1 , line ) )
+    {
+      if ( line.empty() ) continue;
+      
+      // whitespce delimited  :   XVAR YVAR DEFF
+      std::vector<std::string> tok = Helper::parse( line, " \t" );
+
+      double d;
+      
+      if ( tok.size() != 3 )	
+	Helper::halt( "bad line: " + line );
+      
+      if ( ! Helper::str2dbl( tok[2] , &d ) )
+	Helper::halt( "bad line: " + line );	
+      
+      if ( d != 0 )
+	{
+	  deff[ tok[1] ] = d > 0 ? 1 : -1;
+	  ++t;
+	}
+    }
+  
+  logger << "  read " << t << " direction-of-effect values from " << filename << "\n"; 
+  
+  IN1.close();
+  
+}
+
+
+void linmod_comp_t::compare_observed( const std::vector<std::string> & yvars , const Eigen::VectorXd & b )
+{
+  // also set # of tests actually found
+  stat1 = compare( yvars, b , &nt );
+}
+
+void linmod_comp_t::compare_null( const std::vector<std::string> & yvars , const Eigen::VectorXd & b )
+{
+  double s0 = compare( yvars, b );
+  stat0.push_back( s0 );
+}
+
+double linmod_comp_t::compare( const std::vector<std::string> & yvars , const Eigen::VectorXd & b , int * nt )
+{
+  double s = 0;
+  
+  const int n = yvars.size();
+  int cnt = 0;
+  
+  for (int i=0; i<n; i++)
+    {      
+      std::map<std::string,int>::const_iterator yy = parent->deff.find( yvars[i] );      
+      if ( yy != parent->deff.end() )
+	{
+	  // found
+	  ++cnt;
+	  
+	  // passed
+	  int sign1 = b[i] > 0 ? +1 : -1;
+	  bool zero1 = b[i] == 0 ;
+	  
+	  // template
+	  int sign2 = yy->second  > 0 ? +1 : -1;
+
+	  // no weighting etc
+	  if ( sign1 == sign2 && ! zero1 )
+	    s++;  
+
+	}      
+    }
+  
+  // number of tests found 
+  if ( nt != NULL ) *nt = cnt;
+  
+  // return statistic 
+  return s;
+}
+
+void linmod_comp_t::evaluate()
+{
+
+  int r = 0;
+  int n = stat0.size();
+  if ( n == 0 ) return;
+  for (int i=0; i<n; i++)
+    if ( stat0[i] >= stat1 ) ++r;
+  pval = (r+1) / double(n+1);
+
+  xval = MiscMath::mean( stat0 );
+  double sd = MiscMath::sdev( stat0 , xval );
+  zval = ( stat1 - xval ) / sd;
+  
+  // two-sided p-value: statistic is difference from expectation (which we get from stat0)
+  const double t1 = fabs( stat1 - xval );
+  
+  r = 0;
+  for (int i=0; i<n; i++)
+    if ( fabs( stat0[i] - xval ) >= t1 ) ++r;
+
+  pval2 = (r+1) / double(n+1);
+
+}
+
+double linmod_comp_t::stat() const
+{
+  return stat1;
+}
+
+double linmod_comp_t::expected() const
+{
+  return xval;
+}
+
+double linmod_comp_t::zstat() const
+{
+  return zval;
+}
+
+double linmod_comp_t::pvalue() const
+{
+  return pval;
+}
+
+double linmod_comp_t::pvalue2() const
+{
+  return pval2;
+}
+
+
+
+
+

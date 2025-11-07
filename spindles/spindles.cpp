@@ -1327,9 +1327,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
  	  std::map<std::string,double> means;
 
 
-
-	  
-
 	  //
 	  // Calculate additional spindle parameters, and final spindle-level QC (Q scores, PASS/ENRICH)
 	  //	  
@@ -1355,7 +1352,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	    }
 	  
-
 	  
 	  //
 	  // Get mean spindle parameters for this channel/frequency 
@@ -3169,9 +3165,8 @@ void characterize_spindles( edf_t & edf ,
     {
 
       // copy the existing signal
-
       edf.copy_signal( edf.header.label[s0] , new_label );
-      
+
       const int s = edf.header.signal( new_label );
 
       // and do we need to band-pass filter this new signal?

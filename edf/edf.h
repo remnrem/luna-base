@@ -303,13 +303,9 @@ private:
   //
   
   edf_t * edf;
-
   
   std::vector<std::vector<int16_t> >    data;
-  
-  // compute this on-the-fly
-  //  std::vector<std::vector<double> > pdata;  // physically-scaled
-  
+    
  public:
 
   //
@@ -477,11 +473,11 @@ public:
   
   void drop_signal( const int s );
 
-  void add_signal( const std::string & label , const int n_samples , const std::vector<double> & data ,
+  void add_signal( const std::string & label , const double Fs , const std::vector<double> & data ,
 		   double pmin = 0 , double pmax = 0 ,
 		   int16_t dmin = 0 , int16_t dmax = 0 );
   
-  void add_signal_int16( const std::string & label , const int n_samples , const std::vector<int16_t> & data ,
+  void add_signal_int16( const std::string & label , const double Fs , const std::vector<int16_t> & data ,
 			 double pmin , double pmax ,
 			 int16_t dmin , int16_t dmax );
 
