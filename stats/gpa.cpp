@@ -969,6 +969,9 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 		Helper::halt( "comp requires a filename" );
 	      comps.load( param.value( "comp" ) );
 	      do_comparisons = true;
+
+	      do_comparisons_dump_nulls = param.has( "comp-verbose" );
+	      
 	    }
 	  else do_comparisons = false;
 	  
@@ -1664,6 +1667,19 @@ void gpa_t::run()
 	  writer.value( "Z" , comp->zstat() );
 	  writer.value( "P" , comp->pvalue() );
 	  writer.value( "P2" , comp->pvalue2() );
+	  
+	  if ( do_comparisons_dump_nulls )
+	    {
+	      std::vector<double> nulls = comp->dump();
+	      if (  nulls.size() != nreps ) 
+		Helper::halt( "internal error in comp-verbose: nulls.size() != nreps" );
+	      for (int r=0; r<nreps; r++)
+		{
+		  writer.level( r+1, "N" );
+		  writer.value( "S", nulls[r] );
+		}
+	      writer.unlevel( "N" );
+	    }
 
 	}
       
@@ -1868,6 +1884,20 @@ void gpa_t::run1X() // correction within X
 	  writer.value( "Z" , comp->zstat() );
 	  writer.value( "P" , comp->pvalue() );
 	  writer.value( "P2" , comp->pvalue2() );
+
+	  if ( do_comparisons_dump_nulls )
+	    {
+	      std::vector<double> nulls = comp->dump();
+	      if (  nulls.size() != nreps ) 
+		Helper::halt( "internal error in comp-verbose: nulls.size() != nreps" );
+	      for (int r=0; r<nreps; r++)
+		{
+		  writer.level( r+1, "N" );
+		  writer.value( "S", nulls[r] );
+		}
+	      writer.unlevel( "N" );
+	    }
+
 	}
       
       // iterate over all X values

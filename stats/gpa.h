@@ -158,7 +158,8 @@ struct linmod_comp_t {
   double pvalue() const;
   double pvalue2() const;
   int ntests() const;
-  
+  std::vector<double> dump() const { return stat0; } 
+
 private:
 
   linmod_comps_t * parent;
@@ -352,7 +353,8 @@ private:
 
   // comparisons
   bool do_comparisons;
-  
+  bool do_comparisons_dump_nulls;
+
 };
 
 
