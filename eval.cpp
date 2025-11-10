@@ -4479,7 +4479,8 @@ void proc_rerecord( edf_t & edf , param_t & param )
   
   proc_write( edf , param );
 
-  globals::problem = true;
+  if ( ! param.has( "no-problem" ) ) // special case for lunascope to not throw error
+    globals::problem = true;
 }
 
 
