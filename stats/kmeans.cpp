@@ -388,7 +388,6 @@ void kmeans_t::variance_explained( const std::vector<point_t> & pts , const std:
 
 
 
-
 //======================================================================================
 //
 // EEG modified K means

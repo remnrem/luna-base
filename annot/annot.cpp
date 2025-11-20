@@ -2981,7 +2981,7 @@ annot_map_t annot_t::extract( const interval_t & window )
 
   if ( interval_tree.empty() )
     interval_tree.build_from_keys( interval_events.begin() , interval_events.end() );
-
+  
   // but check that it matches - i.e. not allowed to add more annots after doing initial queries
   //  this is unlikely , but avoids, e.g. SPINLDES annot=S .. MASK ifnot=S ... SPINDLES annot=S ... 
 

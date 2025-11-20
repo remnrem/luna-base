@@ -222,8 +222,95 @@ private:
 };
 
 
+struct sigmod_segment_t {
+  std::vector<Eigen::VectorXf> t;  // per-bin time with NaN separators
+  std::vector<Eigen::VectorXf> x;  // per-bin values with NaN separators
+};
+
+struct segsrv_t;
+
+struct sigmod_t
+{
+  
+  sigmod_t( segsrv_t * p ) { parent = p ; }
+  
+  // currently fixed N = 18 ( 20-degree ) bins
+
+  const int nbins = 18;
+
+  bool status;
+  
+  void make_mod( const std::string & mod_label ,
+		 const std::string & mod_ch ,
+		 const std::string & type ,
+		 const std::vector<double> & sos , 
+		 const bool ylim = false , const double ylwr = 0 , const double yupr = 0 );
+  
+  void apply_mod( const std::string & mod_label ,
+		  const std::string & ch , const int slot );
+		    
+  Eigen::VectorXf get_timetrack( const int bin ) const;
+
+  Eigen::VectorXf get_scaled_signal( const int bin ) const; 
+
+  void clear()
+  {
+    segments.t.clear();
+    segments.x.clear();
+    mod_bins.clear();
+    mod_tt.clear();
+  }
+  
+private:
+
+  // members
+  segsrv_t * parent;
+  sigmod_segment_t segments;
+  std::map<std::string,Eigen::ArrayXi> mod_bins;
+  std::map<std::string,Eigen::VectorXf> mod_tt; 
+
+
+  // helper functions
+  
+    // Map whole-night S-bin labels to the X timeline.
+    Eigen::ArrayXi bins_from_Sbins_at_X(const Eigen::VectorXf& tS,
+                                        const Eigen::ArrayXi&  bS,
+                                        const Eigen::VectorXf& tX);
+
+    // Build per-bin segments with NaN gaps from binned X.
+    sigmod_segment_t segments_from_bins_dual(const Eigen::VectorXf& tX,
+                                             const Eigen::VectorXf& X,
+                                             const Eigen::ArrayXi&  bX);
+
+    // End-to-end: t(S), bins(S) → per-bin (tX, X).
+    sigmod_segment_t bin_X_by_Sbins(const Eigen::VectorXf& tS,
+                                    const Eigen::ArrayXi&  bS,
+                                    const Eigen::VectorXf& tX,
+                                    const Eigen::VectorXf& X);
+  
+  
+  // altered flow
+  //  1) on initial rendering: sigmod_t::make_mod( )
+  //    --> mod signal does not need to have same SR as target chs
+  
+  //  2) on viewing a window:
+  //    a)  sigmod_t::apply_mod( mod_label, ch , slot )
+  //    b)  get t values = sigmod_t::get_timetrack() returns nbins arrays
+  //    c)  get x values = sigmod_t::get_scaled_signal() returns nbins arrays
+
+  // colors are tracked and applied by caller
+  // each vector is NaN-delimited, i.e. to draw interlaced segments w/ gaps
+    
+  // t = self.ss.get_timetrack( ch ) -->           segsrv_t::get_timetrack
+  // x = self.ss.get_scaled_signal( ch , idx ) --> segsrv_t::get_scaled_signal 
+  
+};
+
 
 struct segsrv_t {
+
+
+  friend struct sigmod_t;
   
 public:
 
@@ -361,6 +448,23 @@ public:
   
   bool serve_raw_signals() const { return bwin - awin > summary_threshold_secs ; } 
 
+
+  // signal modulation
+  sigmod_t sigmod;
+
+  auto sigmod_make_mod(const std::string & mod_label ,
+		       const std::string & mod_ch ,
+		       const std::string & type ,
+		       const std::vector<double> & sos )
+  { return sigmod.make_mod( mod_label, mod_ch, type, sos ); }
+  
+  auto sigmod_apply_mod(const std::string & mod_label ,
+			const std::string & ch , const int slot )
+  { return sigmod.apply_mod( mod_label, ch, slot ); }
+
+  auto sigmod_get_timetrack(const int bin) const { return sigmod.get_timetrack(bin); }
+
+  auto sigmod_get_scaled_signal(const int bin) const { return sigmod.get_scaled_signal(bin); }
   
 private:
   
@@ -518,7 +622,6 @@ private:
 
 // second-order-sections (SOS) biquad cascade with Direct Form II Transposed
 
-
 struct biquad_t {
 
   // y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
@@ -600,6 +703,8 @@ static inline void sos_filter_prime_with_reflection(sos_filter_t & f, const Eige
     for (auto& q : f.sec) v = q.step(v);
   }
 }
+
+
 
 
 #endif

@@ -338,7 +338,6 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 	      
 	      writer.level( signals2.label(j) , "CH2" );
 	      
-
 	      //
 	      // calculate correlation, using slots[] to look up correct value
 	      // returns -9 if N/A
@@ -346,7 +345,6 @@ void dsptools::correlate_channels( edf_t & edf , param_t & param )
 
 	      double r = Statistics::correlation( X[ slots[ signals1(i) ] ] , X[ slots[ signals2(j) ] ] );
 
-	      
 	      //
 	      // Output
 	      //

@@ -25,7 +25,7 @@
 
 #include <algorithm>
 
-segsrv_t::segsrv_t( lunapi_inst_ptr inst ) : p( inst ) 
+segsrv_t::segsrv_t( lunapi_inst_ptr inst ) : p( inst ) , sigmod( this )
 {
   awin = bwin = 0;
   
@@ -46,6 +46,8 @@ void segsrv_t::init()
   evts.clear();
   segments = p->edf.timeline.segments();
   gaps = p->edf.timeline.gaps( segments ); 
+
+  sigmod.clear();
   
   annot_format6 = true; // plotly
   clip_xaxes = true;
@@ -617,6 +619,8 @@ bool segsrv_t::add_channel( const std::string & ch )
 
   // store new SR post any decimation
   decimated_srmap[ sr ] = sr / (double)decimation_fac;
+
+  std::cout << "ch = " << ch << " " << sr << " " << sr / (double)decimation_fac << "\n";
   
   // do we already have a time-track?
   if ( tidx.find( sr ) == tidx.end() )
@@ -1135,13 +1139,14 @@ Eigen::VectorXf segsrv_t::get_signal( const std::string & ch ) const
   const Eigen::VectorXf & data = sigmap.find( ch )->second;
   const int aa = aidx.find(sr)->second;
   const int bb = bidx.find(sr)->second;  
-  
+  std::cout << " max_samples_out = " << max_samples_out << " " << bb - aa << "\n";
   // throttle?
   if ( max_samples_out && ( bb - aa ) > max_samples_out )
     {
       const int original_length = bb - aa;
       const int reduction_factor = original_length / max_samples_out;
-
+      std::cout << " reduction_factor = " << reduction_factor << "\n";
+	
       // decimation here on second level - but note that the SR may
       // have been adjusted from initial decimation; note also that SR
       // is cast to an int here, but for this single purpose (of
@@ -1584,4 +1589,254 @@ std::vector<float> segsrv_t::get_evnts_yaxes_ends( const std::string & ann ) con
   return empty;	
 }
 
+
+
+//
+// sigmod_t
+//
+
+void sigmod_t::make_mod( const std::string & mod_label ,
+			 const std::string & mod_ch ,			 
+			 const std::string & type ,
+			 const std::vector<double> & sos , // filter if populated
+			 const bool ylim , const double ylwr , const double yupr )
+{
+
+  status = false;
+  
+  const bool has_filter = sos.size() != 0 ;
+  
+  // type of modulation
+  const bool mod_raw = type == "raw";
+  const bool mod_amp = type == "amp";
+  const bool mod_pha = type == "phase";
+  const bool mod_frq = type == "freq";
+  if ( ! ( mod_raw || mod_amp || mod_pha || mod_frq ) )
+    return;
+
+  // get original mod-sig
+  std::map<std::string,Eigen::VectorXf>::const_iterator ss = parent->sigmap.find( mod_ch );
+  if ( ss == parent->sigmap.end() ) return;
+
+  // get entire signal 
+  parent->set_window( 0 , parent->p->last_sec() );
+  Eigen::VectorXf s = parent->get_signal( mod_ch );
+  
+  std::cout << " length = " << s.size() << "\n";
+  std::cout << " dur = " << parent->p->last_sec() << "\n";
+    
+  // filter? 
+  if ( has_filter ) 
+    {            
+      sos_filter_t f( sos );
+      std::size_t M = sos.size() / 6;
+      int pad = std::min(std::max(32, (int)(16*M) ), (int)(s.size() /8 ) );
+      sos_filter_prime_with_reflection( f , s , pad );
+      f.process( s );
+    }
+
+  // tmp XXX update
+  //  parent->sigmap[ mod_ch ] = s; 
+  // tmp XXX
+  
+  // currently, yscale not used
+  
+  // upper limit of each bin
+  std::vector<double> cuts( nbins );
+  
+  // process 's' as needed
+  if ( ! mod_raw )
+    {
+      std::vector<double> d(s.data(), s.data() + s.size());      
+      hilbert_t h( d );
+      const std::vector<double> * out;
+      if ( mod_amp ) out = h.magnitude();
+      else if ( mod_pha ) out = h.phase();
+      //      else out = instantaneous_frequency();
+
+      if ( out->size() != s.size() )
+	Helper::halt( "internal error: hilbert output size" );
+      for (int i = 0; i < s.size(); ++i)
+	s[i] = static_cast<float>((*out)[i]);
+      
+    }
+
+  // get range
+  double smin = s.minCoeff();
+  double smax = s.maxCoeff();
+
+  // find segments
+  const float span = smax - smin;
+  if (span <= 0) return;  
+  const float inv_span = nbins / span;
+  
+  // compute bin indices for all s
+  Eigen::ArrayXf t = (s.array() - smin) * inv_span;
+  Eigen::ArrayXi b = t.floor().cast<int>();
+  b = b.min(nbins - 1); // clamp right edge
+
+  // mark out-of-range as -1
+  // Eigen::Array<bool, Eigen::Dynamic, 1> in = (s.array() >= smin) && (s.array() <= smax);
+  // for (int i = 0; i < b.size(); ++i) if (!in(i)) b(i) = -1;
+
+  // save modulator: a) need bins, b) time-track, both for entire recording
+  mod_bins[ mod_label ] = b;
+  mod_tt[ mod_label ] = parent->get_timetrack( mod_ch );
+
+  // indicate that we've got good data now
+  status = true;
+
+}
+
+
+void sigmod_t::apply_mod( const std::string & mod_label ,
+			  const std::string & ch ,
+			  const int slot )
+			  
+{
+
+  if ( ! status ) return;
+ 
+  Eigen::VectorXf tX = parent->get_timetrack( ch );
+  Eigen::VectorXf X = parent->get_scaled_signal( ch , slot );
+  
+  // // Inputs: tS (N_S), bS (N_S), tX (N_X), X (N_X)
+  segments = bin_X_by_Sbins( mod_tt[ mod_label ] , // tS
+			     mod_bins[ mod_label ] , // bS
+			     parent->get_timetrack( ch ) , // tX
+			     parent->get_scaled_signal( ch , slot ) ); // X
+
+  
+  
+}
+
+ 
+Eigen::VectorXf sigmod_t::get_timetrack( const int bin ) const
+{
+  if ( ! status ) return Eigen::VectorXf::Zero(0);
+  return segments.t[ bin ];
+}
+
+Eigen::VectorXf sigmod_t::get_scaled_signal( const int bin ) const
+{
+  if ( ! status ) return Eigen::VectorXf::Zero(0);
+  return segments.x[ bin ];
+}
+
+
+
+
+#include <algorithm>
+#include <limits>
+#include <cassert>
+
+// Left-constant over [tS[i], tS[i+1)).
+// Out-of-range policy: returns -1 for tx < tS[0] or tx >= tS.back().
+Eigen::ArrayXi sigmod_t::bins_from_Sbins_at_X(const Eigen::VectorXf& tS,
+                                              const Eigen::ArrayXi&  bS,
+                                              const Eigen::VectorXf& tX)
+{
+    assert(tS.size() == bS.size());
+    const int nS = static_cast<int>(tS.size());
+    const int nX = static_cast<int>(tX.size());
+
+    Eigen::ArrayXi bX = Eigen::ArrayXi::Constant(nX, -1);
+    if (nS == 0 || nX == 0) return bX;
+
+    // Start i at the last index with tS[i] <= tX[0] using binary search
+    int i = 0;
+    {
+        const float* s0 = tS.data();
+        const float* sN = s0 + nS;
+        const float* it = std::upper_bound(s0, sN, tX[0]); // first > tX[0]
+        i = static_cast<int>(std::max<std::ptrdiff_t>(0, (it - s0) - 1));
+    }
+
+    for (int j = 0; j < nX; ++j) {
+        const float tx = tX[j];
+
+        // Out-of-range to -1; change to (tx < tS[0]) only if you want last bin to hold to +inf
+        if (tx < tS[0] || tx >= tS[nS - 1]) { bX[j] = -1; continue; }
+
+        while (i + 1 < nS && tS[i + 1] <= tx) ++i;
+        bX[j] = bS(i);
+    }
+    return bX;
+}
+
+// Build per-bin (tX, X) arrays with NaN separators so pyqtgraph connect='finite' draws segments only.
+sigmod_segment_t sigmod_t::segments_from_bins_dual(const Eigen::VectorXf& tX,
+                                                   const Eigen::VectorXf& X,
+                                                   const Eigen::ArrayXi&  bX)
+{
+    assert(tX.size() == X.size());
+    assert(X.size() == bX.size());
+    assert(nbins > 0);
+
+    const int n = static_cast<int>(X.size());
+    const float NaN = std::numeric_limits<float>::quiet_NaN();
+
+    // First pass: count points per bin and number of segment separators
+    std::vector<int> counts(nbins, 0), seps(nbins, 0);
+    int prev = -1;
+    for (int i = 0; i < n; ++i) {
+        const int bi = bX(i);
+        if (bi != prev && prev >= 0) seps[prev]++;            // leaving a run -> separator in prev bin
+        if (bi >= 0 && bi < nbins) counts[bi]++;              // accept only valid bins
+        prev = (bi >= 0 && bi < nbins) ? bi : -1;
+    }
+    if (prev >= 0) seps[prev]++;                               // trailing separator for last run
+
+    // Allocate output with exact sizes
+    sigmod_segment_t out;
+    out.t.resize(nbins);
+    out.x.resize(nbins);
+    for (int k = 0; k < nbins; ++k) {
+        const int m = counts[k] + seps[k];                    // one NaN per run plus all points
+        out.t[k].resize(m);
+        out.x[k].resize(m);
+    }
+
+    // Second pass: fill data with NaN separators
+    std::vector<int> pos(nbins, 0);
+    prev = -1;
+    for (int i = 0; i < n; ++i) {
+        const int bi = bX(i);
+
+        if (bi != prev && prev >= 0) {
+            int p = pos[prev]++;
+            out.t[prev][p] = NaN;
+            out.x[prev][p] = NaN;
+        }
+
+        if (bi >= 0 && bi < nbins) {
+            int p = pos[bi]++;
+            out.t[bi][p] = tX[i];
+            out.x[bi][p] = X[i];
+        }
+
+        prev = (bi >= 0 && bi < nbins) ? bi : -1;
+    }
+
+    if (prev >= 0) {
+        int p = pos[prev]++;
+        out.t[prev][p] = NaN;
+        out.x[prev][p] = NaN;
+    }
+
+    return out;
+}
+
+// End-to-end: precomputed whole-night S bins -> per-bin segments on X window
+sigmod_segment_t sigmod_t::bin_X_by_Sbins(const Eigen::VectorXf& tS,
+                                          const Eigen::ArrayXi&  bS,
+                                          const Eigen::VectorXf& tX,
+                                          const Eigen::VectorXf& X)
+{
+    assert(tS.size() == bS.size());
+    assert(tX.size() == X.size());
+
+    const Eigen::ArrayXi bX = bins_from_Sbins_at_X(tS, bS, tX);
+    return segments_from_bins_dual(tX, X, bX);
+}
 

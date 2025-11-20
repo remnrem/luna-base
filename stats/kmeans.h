@@ -112,8 +112,6 @@ struct kmeans_t {
 };
 
 
-
-
 // modified K-means for EEG, following ...
 
 // Pascual-Marqui, R. D., Michel, C. M., & Lehmann, D. (1995).

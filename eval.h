@@ -297,6 +297,7 @@ void proc_rename( edf_t & , param_t & );
 void proc_enforce_signals( edf_t & , param_t & );
 void proc_copy_signal( edf_t & , param_t & );
 void proc_read_signal( edf_t & , param_t & );
+void proc_init_empty_signal( edf_t & , param_t & );
 void proc_order_signals( edf_t & , param_t & );
 void proc_scale( edf_t & , param_t & , const std::string & s );
 void proc_setscale( edf_t & , param_t & );

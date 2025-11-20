@@ -2846,9 +2846,67 @@ void edf_record_t::drop( const int s )
 {
   data[ s ].clear();
   data.erase( data.begin() + s );
-//   pdata[ s ].clear();
-//   pdata.erase( pdata.begin() + s );
 }
+
+
+bool edf_t::init_signal( const std::string & label, const double Fs )
+{
+
+  if ( header.has_signal( label ) ) return false;
+  
+  const int n_samples = Fs * header.record_duration ;
+  const int64_t dmax = 32767;
+  const int16_t dmin = -32768;
+  const double  pmax = 1.0;
+  const double  pmin = -1.0;
+  const double bv = ( pmax - pmin ) / (double)( dmax - dmin );
+  const double os = ( pmax / bv ) - dmax;
+
+  // add space in each record  
+  int r = timeline.first_record();
+  // empty vector
+  std::vector<int16_t> t(n_samples,0);
+  
+  while ( r != -1 ) 
+    {
+      ensure_loaded( r );
+      records.find(r)->second.add_data(t);
+      r = timeline.next_record(r);
+    }
+      
+  // add to header
+  ++header.ns;
+  header.bitvalue.push_back( bv );
+  header.offset.push_back( os );  
+  header.label.push_back( label );
+  
+  if ( ! Helper::imatch( label , "EDF Annotation" , 14 ) )
+    header.label2header[ Helper::toupper( label ) ] = header.label.size()-1;     
+  
+  header.annotation_channel.push_back( ( header.edfplus ? 
+					 Helper::imatch( label , "EDF Annotation" , 14 ) :
+					 false ) ) ;
+
+  header.transducer_type.push_back( "n/a" );
+  header.phys_dimension.push_back( "n/a" );
+  header.physical_min.push_back( pmin );
+  header.physical_max.push_back( pmax );
+  header.digital_min.push_back( dmin );
+  header.digital_max.push_back( dmax );
+  header.orig_physical_min.push_back( pmin );
+  header.orig_physical_max.push_back( pmax );
+  header.orig_digital_min.push_back( dmin );
+  header.orig_digital_max.push_back( dmax );
+  header.prefiltering.push_back( "n/a" );
+  header.n_samples.push_back( n_samples );  
+  header.signal_reserved.push_back( "" );  
+
+  // add to TYPES, by recallig this
+  cmd_t::define_channel_type_variables( *this );
+
+  return true;
+}
+
 
 void edf_t::add_signal( const std::string & label ,
 			const double Fs ,

@@ -23,12 +23,200 @@
 #include "param.h"
 #include "main.h"
 
+#include "miscmath/ghmm.h"
+
+// Read next non-empty line
+std::string next_line() {
+  std::string line;
+  while (std::getline(std::cin, line)) {
+    if (line.size() == 0) continue;
+    return line;
+  }
+  return "";
+}
+
+
 // DUMMY : a generic placeholder/scratchpad for templating new things
 //  -- tests here generally hard-coded, not intended to be used/reproducible
 
 void proc_dummy( const std::string & p , const std::string & p2 )
 {
 
+  if ( p == "ghmm" )
+    {
+      
+      using Eigen::VectorXd;
+      using Eigen::MatrixXd;
+      
+      int N = 0, M = 0;
+      
+      // ------------------------------
+      // Read N
+      // ------------------------------
+      {
+        std::stringstream ss(next_line());
+        std::string tag;
+        ss >> tag >> N;
+      }
+
+      std::cerr << " N = " << N << "\n";
+      
+      // ------------------------------
+      // Read M
+      // ------------------------------
+      {
+        std::stringstream ss(next_line());
+        std::string tag;
+        ss >> tag >> M;
+      }
+
+
+      std::cerr << " M = " << M << "\n";
+      
+      gaussian_hmm_t hmm(N, M);
+      
+      // ------------------------------
+      // PI
+      // ------------------------------
+      next_line(); // "PI"
+      VectorXd pi(N);
+      {
+        std::stringstream ss(next_line());
+        for (int i = 0; i < N; ++i) ss >> pi(i);
+      }
+      hmm.set_initial(pi);
+
+      std::cout << " got pi\n";
+      
+      // ------------------------------
+      // A
+      // ------------------------------
+      next_line(); // "A"
+      MatrixXd A(N, N);
+      for (int i = 0; i < N; ++i) {
+        std::stringstream ss(next_line());
+        for (int j = 0; j < N; ++j) ss >> A(i, j);
+      }
+      hmm.set_transition(A);
+
+      std::cout << " got A\n";
+	    
+      // ------------------------------
+      // MU
+      // ------------------------------
+      next_line(); // "MU"
+      MatrixXd MU(M, N);
+      for (int r = 0; r < M; ++r) {
+        std::stringstream ss(next_line());
+        for (int c = 0; c < N; ++c) ss >> MU(r, c);
+      }
+
+      std::cout << " got Mu\n";
+      
+      // ------------------------------
+      // COV
+      // ------------------------------
+      next_line(); // "COV"
+      std::vector<MatrixXd> COV(N, MatrixXd(M, M));
+      
+      for (int k = 0; k < N; ++k) {
+        next_line(); // "STATE k"
+        for (int r = 0; r < M; ++r) {
+	  std::stringstream ss(next_line());
+	  for (int c = 0; c < M; ++c)
+	    ss >> COV[k](r, c);
+        }
+      }
+      hmm.set_emission(MU, COV);
+
+      std::cout << " got Cov\n";
+	    
+      // ------------------------------
+      // SEQUENCES
+      // ------------------------------
+      std::string line = next_line();   // <-- READ "SEQUENCES 2" HERE
+      int S = 0;
+      {
+        std::stringstream ss( line );
+        std::string tag;
+        ss >> tag >> S;
+      }
+
+      std::cout << " got S = " << S << "\n";
+      
+      // ------------------------------
+      // Read sequences
+      // ------------------------------
+      std::vector<std::vector<VectorXd>> sequences;
+      
+      for (int s = 0; s < S; ++s) {
+        std::string line = next_line(); 
+        int T = 0;
+        {
+	  std::stringstream ss( line );
+	  std::string tag;
+	  ss >> tag >> T;
+        }
+	
+	std::cout << "[" << next_line() << "]\n"; // "OBS"
+	std::cout << "got OBS = " << T << "\n";
+        std::vector<VectorXd> seq;
+        seq.reserve(T);
+	
+        for (int t = 0; t < T; ++t) {
+	  std::stringstream ss(next_line());
+	  VectorXd obs(M);
+	  for (int i = 0; i < M; ++i)
+	    {
+	      ss >> obs(i);
+	      std::cout << "  " << i << " " << obs(i) << "\n";
+	    }
+	  seq.push_back(obs);
+        }
+        sequences.push_back(seq);
+      }
+      
+      // ------------------------------
+      // Finished parsing — use the HMM
+      // ------------------------------
+      double ll = hmm.train_multi(sequences, 30, 1e-4);
+      std::cerr << "Final log-likelihood: " << ll << "\n";
+      
+      std::vector<int> path;
+      hmm.viterbi(sequences[0], path);
+      
+      std::cerr << "Viterbi states:\n";
+      for (int s : path) std::cerr << s << " ";
+      std::cerr << "\n";
+      
+      // For each sequence, compute and print posteriors
+      for (std::size_t s = 0; s < sequences.size(); ++s) {
+	const auto &seq = sequences[s];
+	Eigen::MatrixXd gamma;
+	double ll_seq = 0.0;
+	
+	hmm.posteriors(seq, gamma, &ll_seq);
+	
+	std::cout << "SEQUENCE " << s << " loglik " << ll_seq << "\n";
+	std::cout << "t";
+	for (int i = 0; i < hmm.n_states(); ++i)
+	  std::cout << "  p(state=" << i << ")";
+	std::cout << "\n";
+	
+	const int T = (int)seq.size();
+	for (int t = 0; t < T; ++t) {
+	  std::cout << t;
+	  for (int i = 0; i < hmm.n_states(); ++i)
+            std::cout << "  " << gamma(t, i);
+	  std::cout << "\n";
+	}
+	std::cout << "\n";
+      }
+
+      return;
+      
+    }
+  
   // circular SD calcs
 
   if ( p == "circ" )
@@ -660,6 +848,62 @@ void proc_dummy( const std::string & p , const std::string & p2 )
   if ( p == "lunapi" )
     {
 
+
+      // sig-mod
+      {
+	lunapi_t * lp = lunapi_t::inaugurate();
+	lunapi_inst_ptr p = lp->inst( "id1" );
+	p->attach_edf( "~/tutorial/edfs/learn-nsrr01.edf" );
+	p->attach_annot( "~/tutorial/edfs/learn-nsrr01-profusion.xml" );      
+	std::cout << p->get_id() << " .. " << p->get_edf_file() << "\n";
+
+	segsrv_t ss(p);
+	std::vector<std::string> chs = { "EEG" };
+	ss.populate( chs , { } ) ;
+
+	// EEG, sr = 125 
+	// from scipy.signal import butter
+	// order = 4
+	// frqs = [0.1 , 2 ] 
+	// butter( order, frqs, btype='band',fs= 125  , output='sos' ) 
+	//   >>> butter( order, frqs, btype='band',fs= 125  , output='sos' ).reshape(-1)
+
+	std::vector<double> sos = {  4.60339712e-06,  9.20679425e-06,  4.60339712e-06,  1.00000000e+00,
+				     -1.83866754e+00,  8.46459393e-01,  1.00000000e+00,  2.00000000e+00,
+				     1.00000000e+00,  1.00000000e+00, -1.92338411e+00,  9.32904138e-01,
+				     1.00000000e+00, -2.00000000e+00,  1.00000000e+00,  1.00000000e+00,
+				     -1.99005344e+00,  9.90083528e-01,  1.00000000e+00, -2.00000000e+00,
+				     1.00000000e+00,  1.00000000e+00, -1.99641605e+00,  9.96441903e-01 };
+
+	// modifies window -> takes whole recording...
+	ss.sigmod.make_mod( "mod1" , "EEG", "phase" , sos );
+
+	// typically now assume a smaller window
+	ss.set_window( 1000, 1030 );
+
+	ss.sigmod.apply_mod( "mod1", "EEG" , 0  );
+
+	for (int b=0; b<18; b++)
+	  {
+	    std::cout << " b = " << b << "\n";
+	    Eigen::VectorXf t = ss.sigmod.get_timetrack( b );
+	    Eigen::VectorXf x = ss.sigmod.get_scaled_signal( b );
+
+	    // Eigen::MatrixXf m(t.size(), 2);
+	    // m.col(0) = t;
+	    // m.col(1) = x;
+	    // std::cout << "Concatenated (cbind) matrix: " << b << "\n" << m << std::endl;
+
+	  }
+	
+	
+	
+      }
+
+      std::exit(1);
+      
+      
+      
       // test scaling issues (e.g. w/ V scaling)
       lunapi_t * lpV = lunapi_t::inaugurate();
       lunapi_inst_ptr pV = lpV->inst( "T1" );

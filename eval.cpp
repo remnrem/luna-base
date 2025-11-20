@@ -915,6 +915,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "RENAME" ) )       { fnd = true; proc_rename( edf, param(c) ); }
       if ( (!fnd) && is( c, "ENFORCE-SR" ) )   { fnd = true; proc_enforce_signals( edf , param(c) ); }
       if ( (!fnd) && is( c, "COPY" ) )         { fnd = true; proc_copy_signal( edf , param(c) ); }
+      if ( (!fnd) && is( c, "EMPTY" ) )        { fnd = true; proc_init_empty_signal( edf , param(c) ); } 
       if ( (!fnd) && is( c, "READ" ) )         { fnd = true; proc_read_signal( edf , param(c) ); }
       if ( (!fnd) && is( c, "ORDER" ) )        { fnd = true; proc_order_signals( edf , param(c) ); }
       if ( (!fnd) && is( c, "REQUIRES" ) )     { fnd = true; proc_requires( edf , param(c) ); } 
@@ -2912,6 +2913,7 @@ void proc_epoch( edf_t & edf , param_t & param )
       return;
     }
 
+  
   //
   // otherwise, define standard epochs 
   //  
@@ -3918,6 +3920,21 @@ void proc_order_signals( edf_t & edf , param_t & param )
 void proc_read_signal( edf_t & edf , param_t & param )
 {
   edf.preread(param);
+}
+
+// EMPTY : make a new (empty) signal
+void proc_init_empty_signal( edf_t & edf , param_t & param )
+{
+  const std::vector<std::string> label = param.strvector( "sig" );
+  const int sr = param.requires_int( "sr" );
+  if ( sr < 1 || sr > 10000 ) Helper::halt( "invalid sample rate ('sr') : 1 - 10,000 Hz" );
+  for (int s=0; s<label.size(); s++)
+    {
+      if ( ! edf.init_signal( label[s] , sr ) )
+	logger << "  ** " << label[s] << " already exists, skipping...\n";
+      else
+	logger << "  created new signal " << label[s] << " (" << sr << "Hz)\n";
+    }
 }
 
 // COPY : mirror a signal
