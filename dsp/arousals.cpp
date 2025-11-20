@@ -1140,7 +1140,7 @@ std::map<std::string,std::set<interval_t> > arousals_t::event_heuristic( const s
   const int idx_pwr = 0;
   const int idx_beta = 1;
   const int idx_emg = 2;
-  const int idx_sig = 3;
+  const int idx_sigma = 3;
   const int idx_h3 = 4;
     
   // Only NREM for now
@@ -1227,25 +1227,31 @@ std::map<std::string,std::set<interval_t> > arousals_t::event_heuristic( const s
 
       const double th_beta_peak = 1.2;
       const double th_beta_hysteresis = 0.6;
-      
+      const double th_sigma_veto = 0.8;
+      const double th_sigma_veto2 = 0.4;
+ 
       // get peaks: high beta, peak, not artifact
+      // allow high sigma to veto
+
       std::vector<int> pks;
       for (int i=0; i<ne; i++)
 	{
 	  if ( artifact[i] ) continue;
-
+	  
 	  const Eigen::VectorXd & ftr = D[i];
 		    
 	  if ( ftr(idx_beta) < th_beta_peak ) continue;
 
+	  if ( ftr(idx_sigma) > th_sigma_veto ) continue;
+	  
 	  if ( i != 0 )
 	    if ( ftr(idx_beta) <= D[i-1](idx_beta) )
 	      continue;
-
+	  
 	  if ( i != ne-1 )
 	    if ( ftr(idx_beta ) < D[i+1](idx_beta) )
 	      continue;
-
+	  
 	  pks.push_back(i);
 	  
 	}
@@ -1264,6 +1270,8 @@ std::map<std::string,std::set<interval_t> > arousals_t::event_heuristic( const s
 	      break;
 	    if ( D[start-1](idx_beta) < th_beta_hysteresis )
 	      break;
+	    if ( D[start-1](idx_sigma) > th_sigma_veto2 )
+	      break;
 	    --start;
 	  }
 	  
@@ -1276,6 +1284,8 @@ std::map<std::string,std::set<interval_t> > arousals_t::event_heuristic( const s
               break;
             if ( D[stop+1](idx_beta) < th_beta_hysteresis )
               break;
+	    if ( D[stop+1](idx_sigma) > th_sigma_veto2 )
+	      break;
             ++stop;
           }
 
