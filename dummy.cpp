@@ -1244,7 +1244,7 @@ void proc_dummy( const std::string & p , const std::string & p2 )
   std::vector<double> x;
   
 
-  if ( p == "fir" || p == "decimate" || p == "fft"
+  if ( p == "fir" || p == "decimate" || p == "fft" || p == "catch22" 
        || p == "dfa" || p == "fft-test" || p == "mtm"
        || p == "tv" || p == "psi" || p == "cwt" 
        || p == "dynam" || p == "ica" || p == "robust"
@@ -1781,6 +1781,22 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       std::exit(0);
     }
 
+  // catch 22 ts-stats
+  if ( p == "catch22" ) 
+    {
+      const int n = x.size();
+
+      catch22_t c22;
+      
+      bool okay = c22.calc( x.data() , n );
+      
+      for (const auto &[key,val]  : c22.res ) {
+	std::cout << key << " = " << val << "\n";	
+      }
+      
+      
+    }
+  
 
   // generic application of FFT 
   

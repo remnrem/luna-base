@@ -84,6 +84,9 @@ struct spindle_t
   double so_phase_anchor;
   double so_nearest;
   int so_nearest_num;
+
+  // catch22 metrics
+  std::vector<double> c22_raw, c22_flt;
   
   double if_spindle;
 

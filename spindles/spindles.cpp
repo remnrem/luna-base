@@ -38,6 +38,7 @@ int  prune_n;
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "param.h"
+#include "stats/catch22/catch22.h"
 
 #include "annot/annot.h"
 #include "intervals/intervals.h"
@@ -2693,7 +2694,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  //
 	  // Main output
 	  //
-
+	
 	  
 	  //
 	  // Output over all epochs
@@ -2750,6 +2751,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.value( "FWHM" , means["FWHM"] );
 	      writer.value( "NOSC" , means["NOSC"] );
 
+	      if ( param.has( "catch22" ) ) 
+		for (int i=0; i<22; i++)
+		  {
+		    std::string n = "C22_" + catch22_t::short_name( i );
+		    writer.value( n , means[ n ] );
+		    writer.value( n + "_FLT" , means[ n + "_FLT" ] );
+		  }
+	      
 	      writer.value( "SYMM" , means["SYMM"] );
 	      writer.value( "SYMM2" , means["SYMM2"] );
 	      writer.value( "SYMM_AMP" , means["SYMM_AMP"] );
@@ -3234,7 +3243,13 @@ void characterize_spindles( edf_t & edf ,
   
   const int s = edf.header.signal( new_label );
   
- 
+
+  //
+  // Catch22 stats per spindle?
+  //
+
+  const bool calc_catch22 = param.has( "catch22" ) ;
+  
   //
   // Iterate over each spindle
   //
@@ -3255,7 +3270,8 @@ void characterize_spindles( edf_t & edf ,
        //
        
        slice_t slice( edf , s , spindle->tp );
-
+       
+       
        // nb. we are going to mean-centre these data too
        // for this particular spindle... avoids some weird cases
        // where we have huge offsets in original signal amplitudes around
@@ -4129,7 +4145,35 @@ void characterize_spindles( edf_t & edf ,
 	    q->output( spindle , i  );
 	}
      
-          
+
+      //
+      // Catch22 stats (on both raw and filtered signals)
+      // 
+
+      if ( calc_catch22 )
+	{
+
+	  slice_t slice( edf , s0 , spindle->tp );
+	  const std::vector<double> * d_raw = slice.pdata();
+
+	  // raw      : * d_raw
+	  // filtered :   d 
+
+	  catch22_t c22_raw, c22_flt;
+	  c22_raw.calc( d_raw->data() , d_raw->size() );
+	  c22_flt.calc( d.data() , d.size() );
+
+	  spindle->c22_raw.resize(22);
+	  spindle->c22_flt.resize(22);
+
+	  for (int i=0;i<22;i++)
+	    {
+	      spindle->c22_raw[i] = c22_raw.stat(i);
+	      spindle->c22_flt[i] = c22_flt.stat(i);				  
+	    }
+	  	  
+	}
+      
       
       //
       // [ REMOVE - i.e. do generically ] Optional, time-locked analysis?  [ for QC+ spindles only ] 
@@ -4319,7 +4363,17 @@ void per_spindle_output( std::vector<spindle_t> * spindles ,
       
       if ( spindle->winsor != -1 )
 	writer.value( "WINSOR"    , spindle->winsor / (double)( spindle->stop_sp - spindle->start_sp + 1 )  );
-       
+
+
+      if ( spindle->c22_raw.size() != 0 )
+	{
+	  for (int i=0; i<22; i++)
+	    {
+	      writer.value( "C22_" + catch22_t::short_name(i) , spindle->c22_raw[i] );
+	      writer.value( "C22_" + catch22_t::short_name(i) + "_FLT" , spindle->c22_flt[i] );	      
+	    }
+	}
+      
       if ( starttime != NULL )
 	{
 	  
@@ -4624,6 +4678,9 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
   double neg2f = 0 , pos2f = 0 ;
   double neg2b = 0 , pos2b = 0 ;
 
+  // c22 stats
+  std::vector<double> c22_raw(22,0), c22_flt(22,0);
+  
   int denom = 0;
 
   std::vector<spindle_t>::const_iterator ii = spindles.begin();
@@ -4693,6 +4750,16 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
       negsp += ii->negsp;
       
       qual += ii->qual;
+
+      // c22
+      if ( ii->c22_raw.size() == 22 )
+	{
+	  for (int i=0; i<22; i++)
+	    {
+	      c22_raw[i] += ii->c22_raw[i];
+	      c22_flt[i] += ii->c22_flt[i];	      
+	    }
+	}
       
       ++ii;
     }
@@ -4756,7 +4823,12 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
 
   results[ "NEGISA_PER_SP" ] = negisa / (double)denom;
   results[ "NEGSP" ] = negsp / (double)denom;
-    
 
+  for (int i=0; i<22; i++)
+    {
+      results[ "C22" + catch22_t::short_name(i) ] = c22_raw[i] / (double)denom;
+      results[ "C22" + catch22_t::short_name(i) + "FLT" ] = c22_flt[i] / (double)denom;
+    }
+ 
 }
 

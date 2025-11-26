@@ -2901,7 +2901,7 @@ bool edf_t::init_signal( const std::string & label, const double Fs )
   header.n_samples.push_back( n_samples );  
   header.signal_reserved.push_back( "" );  
 
-  // add to TYPES, by recallig this
+  // add to TYPES, by recalling this
   cmd_t::define_channel_type_variables( *this );
 
   return true;

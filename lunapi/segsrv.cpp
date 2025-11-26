@@ -24,6 +24,11 @@
 #include "lunapi/lunapi.h"
 
 #include <algorithm>
+#include <limits>
+#include <cassert>
+#include <vector>
+#include <cmath>
+#include <random>
 
 segsrv_t::segsrv_t( lunapi_inst_ptr inst ) : p( inst ) , sigmod( this )
 {
@@ -33,6 +38,8 @@ segsrv_t::segsrv_t( lunapi_inst_ptr inst ) : p( inst ) , sigmod( this )
   max_samples_out = 0;  // no output throttling by default
 
   epoch_sec = 30;
+
+  xpixels = 800; // default, but should always be changed by caller
   
 }
 
@@ -42,7 +49,7 @@ void segsrv_t::init()
   awin = bwin = 0;
   aidx.clear();
   bidx.clear();
-  tidx.clear();
+  tmap.clear();
   evts.clear();
   segments = p->edf.timeline.segments();
   gaps = p->edf.timeline.gaps( segments ); 
@@ -162,8 +169,12 @@ void segsrv_t::calc_hjorths( const std::vector<std::string> & chs )
 void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::vector<double> * data ,
 			     const bool do_band, const bool do_hjorth )
 {
-  
+
+  std::cout << " about to summ\n";
+    
   if ( ! ( do_band || do_hjorth ) ) return ;
+
+  std::cout << " DOING SUMMS\n";
   
   // this is called per-epoch from populate() only 
   double fft_segment_size = 4;
@@ -587,7 +598,7 @@ bool segsrv_t::add_channel( const std::string & ch )
   int decimation_fac = 1;
   if ( sr > max_samples_in )
     decimation_fac = sr / max_samples_in ;
-  
+
   // get all data
   slice_t slice( p->edf , slot , p->edf.timeline.wholetrace() );
   const std::vector<double> * data = slice.pdata();
@@ -595,8 +606,14 @@ bool segsrv_t::add_channel( const std::string & ch )
 
   // get some sensible ranges
   const double scaling_plwr = 0.05;
-  const double scaling_pupr = 0.95; 
-  set_empirical_phys_ranges( ch, data , scaling_plwr , scaling_pupr );
+  const double scaling_pupr = 0.95;
+  bool is_discrete;
+  set_empirical_phys_ranges( ch, data->data() , n, scaling_plwr , scaling_pupr , &is_discrete );
+
+  // show whether channel is discrete or continuous (for downsampling treatment)
+  discrete[ ch ] = is_discrete;
+
+  std::cout << " is dis = " << is_discrete << " " << ch << "\n";
   
   // do means, min/max & SD, as well as spectral/hjorth summaries? (on original data)
   do_summaries( ch, sr, data , bands.find( ch ) != bands.end() , hjorth.find( ch ) != hjorth.end() );  
@@ -620,12 +637,11 @@ bool segsrv_t::add_channel( const std::string & ch )
   // store new SR post any decimation
   decimated_srmap[ sr ] = sr / (double)decimation_fac;
 
-  std::cout << "ch = " << ch << " " << sr << " " << sr / (double)decimation_fac << "\n";
+  //  std::cout << "adding::: ch = " << ch << " " << sr << " " << sr / (double)decimation_fac << "\n";
   
   // do we already have a time-track?
-  if ( tidx.find( sr ) == tidx.end() )
+  if ( tmap.find( sr ) == tmap.end() )
     {
-      
       // get time-stamps
       const std::vector<uint64_t> * tp = slice.ptimepoints();
       
@@ -640,21 +656,12 @@ bool segsrv_t::add_channel( const std::string & ch )
       // decimate? (nb. need eval() to avoid aliasing issues)
       if ( decimation_fac > 1 )
       	ts = ts( Eigen::seq(0,Eigen::last,decimation_fac) ).eval(); 
-      
-      // lookup index - note, here ts.size() as we may have decimtaed
-      std::map<double,int> tt;
-      for (int i=0; i<ts.size(); i++)
-	tt[ ts[i] ] = i;
-
-      
-      // store lookup index (time->sample #)
-      tidx[ sr ] = tt;
-      
+            
       // and the time-series (sample # -> time)
       tmap[ sr ] = ts;
       
     }
-    
+
   return true;
 }
 
@@ -825,10 +832,19 @@ Eigen::VectorXf segsrv_t::get_timetrack( const std::string & ch ) const
   // throttle?
   if ( max_samples_out && ( bb - aa ) > max_samples_out )
     {
-      const int original_length = bb - aa;
-      const int reduction_factor = original_length / max_samples_out;      
-      Eigen::VectorXf f1 = tt.segment( aa , bb - aa );
-      return f1( Eigen::seq( 0 , Eigen::last , reduction_factor ) );
+
+      // for discrete signals, decimate
+      if ( is_discrete( ch ) )
+	{
+	  const int original_length = bb - aa;
+	  const int reduction_factor = original_length / max_samples_out;      
+	  Eigen::VectorXf f1 = tt.segment( aa , bb - aa );
+	  return f1( Eigen::seq( 0 , Eigen::last , reduction_factor ) );
+	}
+      else // for contiuous signals, get envelope (tt-version)
+	{
+	  return envelope_timetrack( tt.segment( aa , bb - aa ) , xpixels );	  
+	}
     }
 
   return tt.segment( aa , bb - aa );
@@ -979,31 +995,44 @@ void segsrv_t::free_physical_scale( const std::string & ch )
   phys_ranges.erase( pp );
 }
 
+
 // calc. robust reasonable ranges
-void segsrv_t::set_empirical_phys_ranges( const std::string & ch , const std::vector<double> * data ,					  
-					  const double plwr , const double pupr )
+template<typename T>
+void segsrv_t::set_empirical_phys_ranges( const std::string & ch , const T * data , const int n , 
+					  const double plwr , const double pupr ,
+					  bool * is_discrete )
 {
-  // use 5th and 95th percentiles
-  // or 10th & 90th
+
+  std::cout << " n = " << n << "\n";
+  // for (int i=0; i<n; i++)
+  //   {
+  //     double d = static_cast<double>(data[i]);  
+  //     std::cout << "  " << d << "\n";
+  //   }
+      
+  // fixed at 9/95 for now 9i.e. this ignores plwr/pupr
+  axis_stats_t stats = compute_axis_stats( data , n );
+
+  std::cout << " is_discrete = " << stats.is_discrete << "\n";
+  
+  // track back?
+  if ( is_discrete != NULL )
+    *is_discrete = stats.is_discrete;
+
+  std::cout << "stats.min_val, stats.max_val  = " << stats.min_val << " " <<  stats.max_val  << "\n";
 
   // for discrete signals, we want to keep the original values
-  std::set<double> vals;
-  const int n = data->size();
-  for (int i=0; i<n; i++) vals.insert( (*data)[i] );
-
   // treat as 'categorical' (e.g. 0/1 flag) if 10 or fewer discrete values
-  if ( vals.size() <= 10 )
+  if ( stats.is_discrete )
     {
-      const double min = *vals.begin();
-      const double max = *vals.rbegin();      
-      empirical_phys_ranges[ ch ] = std::pair<double,double>( min , max );
+      empirical_phys_ranges[ ch ] = std::pair<double,double>( stats.min_val, stats.max_val );
       return;
     }
-
+  
   // else percentiles
-  const double p1 = MiscMath::percentile( *data , plwr );
-  const double p2 = MiscMath::percentile( *data , pupr );
-  empirical_phys_ranges[ ch ] = std::pair<double,double>( p1,p2 );
+  empirical_phys_ranges[ ch ] = std::pair<double,double>( stats.p5 , stats.p95 );
+
+  std::cout << " setting " <<  stats.p5 << " " << stats.p95 << "\n";
 
 }
 
@@ -1017,7 +1046,8 @@ bool segsrv_t::get_yscale_signal( const int n1 , double * lwr, double * upr ) co
   return true;
 }
 
-			    
+
+
 // get scaled signals (0-1 give other annots)                                
 Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int n1 )
 {
@@ -1027,27 +1057,9 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
   // allow to specify n1 separate from actual channel list (i.e. may be
   // showing a subset of all channes, and so we would have recalled 
   // set_scaling() multiple times after populate() [ which is only called once ]
-
+  
   Eigen::VectorXf s = get_signal( ch );
   
-  // on-the-fly filtering?
-  const bool do_filters = filter_map.find( ch ) != filter_map.end();
-  
-  if ( do_filters ) 
-    {      
-      const std::vector<double> & sos = filter_map[ ch ];
-
-      sos_filter_t f( sos );
-
-      // prime filter with mirrored padding
-      std::size_t M = sos.size() / 6;
-      int pad = std::min(std::max(32, (int)(16*M) ), (int)(s.size() /8 ) );
-      sos_filter_prime_with_reflection( f , s , pad );
-
-      // apply
-      f.process( s );
-    }
-
   // fixed physical scaling, or auto-scaling?
   // if fixed scaling, optionally, clip if above/below
   
@@ -1057,8 +1069,8 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
   if ( pp == phys_ranges.end() )
     {
       // auto-scaling  
-      smin = s.minCoeff();
-      smax = s.maxCoeff();
+      smin = min_skip_nan( s );
+      smax = max_skip_nan( s ); // s.maxCoeff();
 
       // store
       window_phys_range[ ch ] = std::pair<double,double>( smin, smax );
@@ -1074,8 +1086,8 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
 	{
 	  
 	  // compare to observed
-	  float omin = s.minCoeff();
-	  float omax = s.maxCoeff();
+	  float omin = min_skip_nan(s); // s.minCoeff();
+	  float omax = max_skip_nan(s); // s.maxCoeff();
 	  
 	  const int n = s.size();      
 	  const bool fix_lwr = omin < smin ;
@@ -1113,13 +1125,35 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
   //     vec = vec.cwiseMax(0.0).cwiseMin(1.0);
     
   if ( okay )
-    s = s.array() * ( upr - lwr ) + lwr;
+    {
+      // make signal
+      s = s.array() * ( upr - lwr ) + lwr;
 
+      // also track to reconstruct particular y-values from get_scaled_y()
+      // to be called **only after this whole-window function**
+      track_ylwr[ ch ] = lwr;
+      track_yupr[ ch ] = upr;
+      track_smin[ ch ] = smin;
+      track_smax[ ch ] = smax;
+    }
+  
   // return
   return s;
       
 }
 
+float segsrv_t::get_scaled_y( const std::string & ch , const float y ) const
+{
+  std::map<std::string,float>::const_iterator ylwr = track_ylwr.find( ch );
+  if ( ylwr == track_ylwr.end() ) return -9;
+  std::map<std::string,float>::const_iterator yupr = track_yupr.find( ch );
+  std::map<std::string,float>::const_iterator smin = track_smin.find( ch );
+  std::map<std::string,float>::const_iterator smax = track_smax.find( ch );
+    
+  double t = ( y - smin->second ) / (float)( smax->second - smin->second );
+  return t * ( yupr->second - ylwr->second ) + ylwr->second;
+
+}
 
 
 Eigen::VectorXf segsrv_t::get_signal( const std::string & ch ) const 
@@ -1135,25 +1169,42 @@ Eigen::VectorXf segsrv_t::get_signal( const std::string & ch ) const
   
   int sr = ss->second;
 
-  // return data (signal)
-  const Eigen::VectorXf & data = sigmap.find( ch )->second;
+  // filtered or original signal?
+  bool is_filtered = filtered.find( ch ) != filtered.end();
+      
+  // return data (signal) - optionally filtered
+  const Eigen::VectorXf & data = is_filtered ? sigmap_f.find( ch )->second : sigmap.find( ch )->second;
   const int aa = aidx.find(sr)->second;
   const int bb = bidx.find(sr)->second;  
-  std::cout << " max_samples_out = " << max_samples_out << " " << bb - aa << "\n";
+
+
   // throttle?
   if ( max_samples_out && ( bb - aa ) > max_samples_out )
     {
       const int original_length = bb - aa;
       const int reduction_factor = original_length / max_samples_out;
-      std::cout << " reduction_factor = " << reduction_factor << "\n";
-	
-      // decimation here on second level - but note that the SR may
-      // have been adjusted from initial decimation; note also that SR
-      // is cast to an int here, but for this single purpose (of
-      // designing a low-pass anti-aliasing filter) this should not
-      // matter.
-      return decimate( data.segment( aa , bb - aa ) , decimated_srmap.find( sr )->second , reduction_factor );
-      
+
+      // std::cout << " reduction_factor = " << reduction_factor << "\n";
+      // int spp = std::max(1, original_length / xpixels );  // samples per pixel
+      // std::cout << " spp = " << spp << "\n";
+
+
+      // for discrete signals, decimate                                                                                                       
+      if ( is_discrete( ch ) )
+	{
+	      
+	  // decimation here on second level - but note that the SR may
+	  // have been adjusted from initial decimation; note also that SR
+	  // is cast to an int here, but for this single purpose (of
+	  // designing a low-pass anti-aliasing filter) this should not
+	  // matter.
+	  
+	  return decimate( data.segment( aa , bb - aa ) , decimated_srmap.find( sr )->second , reduction_factor );
+	}
+      else // for continuous signals
+	{
+	  return envelope_signal( data.segment( aa , bb - aa ) , xpixels );
+	}
     }
 
   // else return full
@@ -1163,41 +1214,45 @@ Eigen::VectorXf segsrv_t::get_signal( const std::string & ch ) const
 
 
 // given two times and a sample rate, get indices
-bool segsrv_t::get_tidx( double a, double b , int sr , int * aa, int *bb ) const
+bool segsrv_t::get_tidx(double a, double b, int sr, int *aa, int *bb) const
 {
-  if ( tidx.find( sr ) == tidx.end() ) return false;
-
-  const std::map<double,int> & ts = tidx.find( sr )->second ;
-
-  // iterator equal/greater than start
-  std::map<double,int>::const_iterator abound = ts.lower_bound( a );
-  if ( abound == ts.end() )
-    return false;
+  auto it = tmap.find(sr);
+  if (it == tmap.end()) return false;
   
-  // one-past the end
-  //  --> if exactly at end, okay, move to prior sample
-  //      but then add 1tp (below) so we include the final sample)
-  bool at_end = false; 
-
-  std::map<double,int>::const_iterator bbound = ts.lower_bound( b );
-  if ( bbound == ts.end() )
-    {
-      if ( ts.size() == 0 ) return false; // degenerate case
-      --bbound;
-      at_end = true;
-    }
-
-  // if we are in a gap, then both abound and bbound will point to the
-  // same element (i.e. if not end(), then both the same next segment
-  // index;  this means the window is not valid
+  const Eigen::VectorXf &ts = it->second;
+  const int n = ts.size();
+  if (n == 0) return false;
   
-  if ( abound == bbound ) return false;
-
-  *aa = abound->second;
-  *bb = at_end ? bbound->second + 1 : bbound->second;
+  const float af = static_cast<float>(a);
+  const float bf = static_cast<float>(b);
+  
+  const float *beg = ts.data();
+  const float *end = beg + n;
+  
+  // first sample with time >= a
+  const float *pa = std::lower_bound(beg, end, af);
+  if (pa == end) return false;
+  
+  // first sample with time >= b
+  const float *pb = std::lower_bound(beg, end, bf);
+  bool at_end = false;
+  if (pb == end) {
+    // move to last valid sample, then we'll add +1 below
+    --pb;
+    at_end = true;
+  }
+  
+  // gap case: window [a,b) lies entirely between two samples
+  if (pa == pb) return false;
+  
+  const int ia = int(pa - beg);
+  const int ib = int(pb - beg);
+  
+  *aa = ia;
+  *bb = at_end ? ib + 1 : ib;
   return true;
-    
 }
+
 
 Eigen::MatrixXf segsrv_t::get_summary_stats( const std::string & ch )
 {
@@ -1219,7 +1274,7 @@ Eigen::VectorXf segsrv_t::get_summary_timetrack( const std::string & ch ) const
 
 bool segsrv_t::add_annot( const std::string & ch )
 {
-
+  
   annot_t * annot = p->edf.annotations->find( ch );
   if ( annot == NULL ) return false;
   if ( annot->interval_events.size() == 0 ) return false;
@@ -1228,8 +1283,27 @@ bool segsrv_t::add_annot( const std::string & ch )
   while ( ii != annot->interval_events.end() )
     {
       const instance_idx_t & instance_idx = ii->first;
+
+      bool has_id = ii->first.id != "" && ii->first.id != ".";
+      bool has_ch = ii->first.ch_str != "" && ii->first.ch_str != ".";
+
+      std::string meta; 
+
+      if ( has_id )
+	{
+	  meta = ii->first.id;
+	  if ( has_ch )
+	    meta += "; " + ii->first.ch_str;
+	}
+      else
+	{
+	  if ( has_ch )
+	    meta = ii->first.ch_str;
+	  else
+	    meta = ".";
+	}
       
-      evt_t evt( ii->first.interval , ii->first.parent->name );
+      evt_t evt( ii->first.interval , ii->first.parent->name , meta );
 
       evts.insert( evt );
 
@@ -1296,6 +1370,82 @@ std::map<std::string,std::vector<std::pair<double,double> > > segsrv_t::fetch_ev
       r[ p->name ].push_back( std::pair<double,double>( p->interval.start_sec() , p->interval.stop_sec() ) );
   
   return r;
+}
+
+
+// for lunascope in particular (include instance IDs)
+std::vector<std::vector<std::string> >
+segsrv_t::fetch_all_evts_with_inst_ids( const std::vector<std::string> & avec ,
+					const bool hms ) const
+{
+
+  // !hms : return annot | inst | startsec | stopsec
+  //  hms : return annot | inst | hh:mm:ss | startsec | +duration
+  //               0       1      2          3          4
+
+  const int cols = hms ? 5 : 4;
+    
+  // hms uses clocktime_t edf_start, if it is valid
+    
+  std::vector<std::vector<std::string> > r;
+  
+  std::set<std::string> aset = Helper::vec2set( avec );
+  
+  std::set<evt_t>::const_iterator ee = evts.begin();
+  
+  while ( ee != evts.end() )
+    {
+      if ( aset.find( ee->name ) != aset.end() )
+	{
+	  
+	  std::vector<std::string> row( cols );
+
+	  row[0] = ee->name;
+	  row[1] = ee->meta;
+	  
+	  std::string str = ee->name + " | " + ee->interval.as_string(3,"-") ; // 3dp
+	  
+	  if ( hms )
+	    {
+
+	      // clock time (start)
+	      if  (edf_start.valid )
+		{
+		  clocktime_t t = edf_start;
+		  t.advance_tp( ee->interval.start );
+		  row[2] = t.as_string( ':' , false ); // F = do not include any fractional seconds
+		}
+	      else
+		row[2] = "?";
+
+	      // start in seconds
+	      row[3] = Helper::dbl2str( ee->interval.start_sec() , 3 );
+	      
+	      // duration in seconds	      	      
+	      row[4] = Helper::dbl2str( ee->interval.duration_sec() , 3 );
+	      
+	    }
+	  else
+	    {
+	      // !hms : return annot | inst | startsec | stopsec
+	      //               0       1      2          3
+	      
+	      // start in seconds
+	      row[2] = Helper::dbl2str( ee->interval.start_sec() , 3 );
+	      
+	      // start in seconds
+	      row[3] = Helper::dbl2str( ee->interval.stop_sec() , 3 );
+	      
+	    }
+
+	  r.push_back( row );
+	  
+	}
+      ++ee;
+    }
+  
+  return r;
+
 }
 
 
@@ -1595,6 +1745,17 @@ std::vector<float> segsrv_t::get_evnts_yaxes_ends( const std::string & ann ) con
 // sigmod_t
 //
 
+void sigmod_t::clear_mod( const std::string & mod_label )
+{
+  if ( mod_bins.find( mod_label ) == mod_bins.end() )
+    return;
+
+  // clear
+  mod_bins.erase( mod_label );
+  mod_tt.erase( mod_label );
+
+}
+
 void sigmod_t::make_mod( const std::string & mod_label ,
 			 const std::string & mod_ch ,			 
 			 const std::string & type ,
@@ -1602,30 +1763,28 @@ void sigmod_t::make_mod( const std::string & mod_label ,
 			 const bool ylim , const double ylwr , const double yupr )
 {
 
-  status = false;
-  
+  // has this already been created?
+  if ( mod_bins.find( mod_label ) != mod_bins.end() )
+    return;
+
+  // given a filter to apply (presumably for filter-Hilbert but allow for 'raw' amplitude too)
   const bool has_filter = sos.size() != 0 ;
   
   // type of modulation
-  const bool mod_raw = type == "raw";
-  const bool mod_amp = type == "amp";
-  const bool mod_pha = type == "phase";
-  const bool mod_frq = type == "freq";
-  if ( ! ( mod_raw || mod_amp || mod_pha || mod_frq ) )
+  const bool mod_raw = type == "raw";  // take signal as is
+  const bool mod_amp = type == "amp";  // filter-Hilbert --> amplitude
+  const bool mod_pha = type == "phase"; // filter-Hilbert --> magnitude
+  if ( ! ( mod_raw || mod_amp || mod_pha ) )
     return;
-
+  
   // get original mod-sig
   std::map<std::string,Eigen::VectorXf>::const_iterator ss = parent->sigmap.find( mod_ch );
   if ( ss == parent->sigmap.end() ) return;
 
   // get entire signal 
-  parent->set_window( 0 , parent->p->last_sec() );
-  Eigen::VectorXf s = parent->get_signal( mod_ch );
+  Eigen::VectorXf s = parent->sigmap[ mod_ch ];
   
-  std::cout << " length = " << s.size() << "\n";
-  std::cout << " dur = " << parent->p->last_sec() << "\n";
-    
-  // filter? 
+  // filter?
   if ( has_filter ) 
     {            
       sos_filter_t f( sos );
@@ -1635,16 +1794,12 @@ void sigmod_t::make_mod( const std::string & mod_label ,
       f.process( s );
     }
 
-  // tmp XXX update
-  //  parent->sigmap[ mod_ch ] = s; 
-  // tmp XXX
-  
   // currently, yscale not used
   
   // upper limit of each bin
   std::vector<double> cuts( nbins );
   
-  // process 's' as needed
+  // Hilbert transform?
   if ( ! mod_raw )
     {
       std::vector<double> d(s.data(), s.data() + s.size());      
@@ -1652,15 +1807,14 @@ void sigmod_t::make_mod( const std::string & mod_label ,
       const std::vector<double> * out;
       if ( mod_amp ) out = h.magnitude();
       else if ( mod_pha ) out = h.phase();
-      //      else out = instantaneous_frequency();
-
+      
       if ( out->size() != s.size() )
 	Helper::halt( "internal error: hilbert output size" );
       for (int i = 0; i < s.size(); ++i)
 	s[i] = static_cast<float>((*out)[i]);
       
     }
-
+  
   // get range
   double smin = s.minCoeff();
   double smax = s.maxCoeff();
@@ -1674,17 +1828,12 @@ void sigmod_t::make_mod( const std::string & mod_label ,
   Eigen::ArrayXf t = (s.array() - smin) * inv_span;
   Eigen::ArrayXi b = t.floor().cast<int>();
   b = b.min(nbins - 1); // clamp right edge
-
-  // mark out-of-range as -1
-  // Eigen::Array<bool, Eigen::Dynamic, 1> in = (s.array() >= smin) && (s.array() <= smax);
-  // for (int i = 0; i < b.size(); ++i) if (!in(i)) b(i) = -1;
-
+  
   // save modulator: a) need bins, b) time-track, both for entire recording
   mod_bins[ mod_label ] = b;
-  mod_tt[ mod_label ] = parent->get_timetrack( mod_ch );
-
-  // indicate that we've got good data now
-  status = true;
+  
+  //  pull entire signal
+  mod_tt[ mod_label ] = parent->tmap.find( parent->srmap[ mod_ch ] )->second; 
 
 }
 
@@ -1692,21 +1841,23 @@ void sigmod_t::make_mod( const std::string & mod_label ,
 void sigmod_t::apply_mod( const std::string & mod_label ,
 			  const std::string & ch ,
 			  const int slot )
-			  
+  
 {
 
+  // did we have this modulator made correctly?
+  status = mod_tt.find( mod_label ) != mod_tt.end() ;
+
   if ( ! status ) return;
- 
+  
   Eigen::VectorXf tX = parent->get_timetrack( ch );
-  Eigen::VectorXf X = parent->get_scaled_signal( ch , slot );
+
+  Eigen::VectorXf X = parent->get_scaled_signal( ch , slot ); // will set y0 also
   
   // // Inputs: tS (N_S), bS (N_S), tX (N_X), X (N_X)
   segments = bin_X_by_Sbins( mod_tt[ mod_label ] , // tS
 			     mod_bins[ mod_label ] , // bS
 			     parent->get_timetrack( ch ) , // tX
-			     parent->get_scaled_signal( ch , slot ) ); // X
-
-  
+			     parent->get_scaled_signal( ch , slot ) ); // X  
   
 }
 
@@ -1726,9 +1877,6 @@ Eigen::VectorXf sigmod_t::get_scaled_signal( const int bin ) const
 
 
 
-#include <algorithm>
-#include <limits>
-#include <cassert>
 
 // Left-constant over [tS[i], tS[i+1)).
 // Out-of-range policy: returns -1 for tx < tS[0] or tx >= tS.back().
@@ -1781,12 +1929,18 @@ sigmod_segment_t sigmod_t::segments_from_bins_dual(const Eigen::VectorXf& tX,
     int prev = -1;
     for (int i = 0; i < n; ++i) {
         const int bi = bX(i);
-        if (bi != prev && prev >= 0) seps[prev]++;            // leaving a run -> separator in prev bin
-        if (bi >= 0 && bi < nbins) counts[bi]++;              // accept only valid bins
+        if (bi != prev && prev >= 0)
+	  {
+	    counts[prev]++;  
+	    seps[prev]++;    // leaving a run -> separator in prev bin
+	  }
+
+	if (bi >= 0 && bi < nbins)
+	  counts[bi]++;      // accept only valid bins
         prev = (bi >= 0 && bi < nbins) ? bi : -1;
     }
-    if (prev >= 0) seps[prev]++;                               // trailing separator for last run
-
+    if (prev >= 0) seps[prev]++;                      // trailing separator for last run
+    
     // Allocate output with exact sizes
     sigmod_segment_t out;
     out.t.resize(nbins);
@@ -1804,9 +1958,15 @@ sigmod_segment_t sigmod_t::segments_from_bins_dual(const Eigen::VectorXf& tX,
         const int bi = bX(i);
 
         if (bi != prev && prev >= 0) {
-            int p = pos[prev]++;
-            out.t[prev][p] = NaN;
-            out.x[prev][p] = NaN;
+	  // write the extra point + NaN in previous bin
+	  int p = pos[prev]++;
+	  out.t[prev][p] = tX[i];
+	  out.x[prev][p] = X[i];
+	  
+	  p = pos[prev]++;     // advance pos[prev] again
+	  out.t[prev][p] = NaN;
+	  out.x[prev][p] = NaN;
+	  
         }
 
         if (bi >= 0 && bi < nbins) {
@@ -1840,3 +2000,476 @@ sigmod_segment_t sigmod_t::bin_X_by_Sbins(const Eigen::VectorXf& tS,
     return segments_from_bins_dual(tX, X, bX);
 }
 
+
+// filtering
+void segsrv_t::apply_filter( const std::string & ch , const std::vector<double> & sos )
+{    
+  // indicate this channel is filtered
+  filtered.insert( ch );
+
+  // copy whole signal
+  sigmap_f[ ch ] = sigmap[ ch ];
+  Eigen::VectorXf & data = sigmap_f[ ch ];
+  
+  // filter
+  sos_filter_t f( sos );
+  std::size_t M = sos.size() / 6;
+  int pad = std::min(std::max(32, (int)(16*M) ), (int)(data.size() /8 ) );
+  sos_filter_prime_with_reflection( f , data, pad );
+  f.process( data );
+  
+  // reset 5/95 percentiles
+  empirical_phys_ranges_orig[ ch ] = empirical_phys_ranges[ ch ];
+  set_empirical_phys_ranges( ch , data.data(), data.size(), 0.05, 0.95 );
+}
+  
+void segsrv_t::clear_filter( const std::string & ch )
+{
+
+  // indicate not filtered
+  filtered.erase( ch );
+  
+  // restore scaling
+  empirical_phys_ranges[ ch ] = empirical_phys_ranges_orig[ ch ];
+  
+  // clear up storage
+  sigmap_f[ ch ].resize(0);
+  
+} 
+
+void segsrv_t::clear_filters()
+{
+  std::set<std::string> c = filtered;
+  std::set<std::string>::const_iterator cc = c.begin();
+  while ( cc != c.end() )
+    {
+      clear_filter( *cc );
+      ++cc;
+    }    
+} 
+
+
+
+
+template<typename T>
+axis_stats_t<T> segsrv_t::compute_axis_stats(const T* x,
+                                             std::size_t n,
+                                             std::size_t max_unique,
+                                             std::size_t max_sample)
+{
+    axis_stats_t<T> out{};
+    out.is_discrete = true;
+    out.p5  = 0.0;
+    out.p95 = 0.0;
+
+    if (n == 0) {
+        out.min_val = T{};
+        out.max_val = T{};
+        return out;
+    }
+
+    // Track min/max over entire data
+    T min_v = x[0];
+    T max_v = x[0];
+
+    // Track unique values (up to max_unique+1)
+    std::vector<T> uniques;
+    uniques.reserve(max_unique + 1);
+
+    // Reservoir sample (in double) for approximate quantiles
+    const std::size_t sample_cap = std::min(max_sample, n);
+    std::vector<double> sample;
+    sample.reserve(sample_cap);
+
+    // Simple RNG for reservoir sampling
+    // (You can move this out / make it deterministic if needed)
+    static thread_local std::mt19937 rng{std::random_device{}()};
+
+    std::size_t seen = 0;
+
+    for (std::size_t i = 0; i < n; ++i) {
+        T v = x[i];
+
+        // min/max
+        if (v < min_v) min_v = v;
+        if (v > max_v) max_v = v;
+
+        // Unique tracking, only while we still might be discrete
+        if (out.is_discrete) {
+            bool found = false;
+            for (T u : uniques) {
+                if (v == u) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                uniques.push_back(v);
+                if (uniques.size() > max_unique) {
+                    out.is_discrete = false;
+                    uniques.clear();  // no longer needed
+                }
+            }
+        }
+
+        // Reservoir sampling for percentiles (if requested)
+        if (sample_cap > 0) {
+            const double dv = static_cast<double>(v);
+
+            if (seen < sample_cap) {
+                // Fill the reservoir
+                sample.push_back(dv);
+            } else {
+                // Replace elements with decreasing probability
+                std::uniform_int_distribution<std::size_t> dist(0, seen);
+                std::size_t j = dist(rng);
+                if (j < sample_cap) {
+                    sample[j] = dv;
+                }
+            }
+            ++seen;
+        }
+    }
+
+    out.min_val = min_v;
+    out.max_val = max_v;
+
+    // Discrete signal: only care about uniques/min/max; p5/p95 unused
+    if (out.is_discrete) {
+        out.uniques = std::move(uniques);
+        return out;
+    }
+
+    // Non-discrete: approximate 5th/95th percentiles from the reservoir sample
+    if (sample.empty()) {
+        out.p5 = out.p95 = 0.0;
+        return out;
+    }
+
+    const std::size_t m = sample.size();
+
+    auto q_index = [m](double q) -> std::size_t {
+        if (m == 1) return 0;
+        double idx = q * double(m - 1);
+        std::size_t k = static_cast<std::size_t>(idx);
+        if (k >= m) k = m - 1;
+        return k;
+    };
+
+    // 5th percentile
+    std::size_t k5 = q_index(0.05);
+    std::nth_element(sample.begin(), sample.begin() + k5, sample.end());
+    out.p5 = sample[k5];
+
+    // 95th percentile
+    std::size_t k95 = q_index(0.95);
+    std::nth_element(sample.begin(), sample.begin() + k95, sample.end());
+    out.p95 = sample[k95];
+
+    // Debug if needed:
+    // std::cout << "k5, k95 = " << k5 << " " << k95 << "\n";
+
+    return out;
+}
+
+
+// template<typename T>
+// axis_stats_t<T> segsrv_t::compute_axis_stats(const T* x,
+// 					     std::size_t n,
+// 					     std::size_t max_unique ,
+// 					     std::size_t max_sample )
+// {
+//   axis_stats_t<T> out{};
+//   out.is_discrete = true;
+//   out.p5 = 0.0;
+//   out.p95 = 0.0;
+
+//   if (n == 0) {
+//     // Nothing to do; min/max are left default-initialized
+//     out.min_val = T{};
+//     out.max_val = T{};
+//     return out;
+//   }
+  
+//   // Track min/max over entire data
+//   T min_v = x[0];
+//   T max_v = x[0];
+  
+//   // Track unique values (up to max_unique+1)
+//   std::vector<T> uniques;
+//   uniques.reserve(max_unique + 1);
+  
+//   // Build a sample (in double) for approximate quantiles
+//   const std::size_t sample_size = std::min(max_sample, n);
+//   std::vector<double> sample;
+//   sample.reserve(sample_size);
+  
+//   // If n <= sample_size, just take all; else stride
+//   std::size_t stride = (sample_size > 0 && sample_size < n)
+//     ? n / sample_size
+//     : 1;
+//   if (stride == 0) stride = 1;
+  
+//   std::size_t next_sample_idx = 0;
+  
+//   for (std::size_t i = 0; i < n; ++i) {
+//     T v = x[i];
+    
+//     // min/max
+//     if (v < min_v) min_v = v;
+//     if (v > max_v) max_v = v;
+    
+//     // Unique tracking, only while we still might be discrete
+//     if (out.is_discrete) {
+//       bool found = false;
+//       for (T u : uniques) {
+// 	if (v == u) {  // equality is fine for "discrete" signals
+// 	  found = true;
+// 	  break;
+// 	}
+//       }
+//       if (!found) {
+// 	uniques.push_back(v);
+// 	if (uniques.size() > max_unique) {
+// 	  out.is_discrete = false;
+// 	  uniques.clear();  // no longer needed
+// 	}
+//       }
+//     }
+    
+//     // Sampling for percentiles
+//     if (stride == 1) {
+//       // small vector: just take all
+//       sample.push_back(static_cast<double>(v));
+//     } else {
+//       if (i == next_sample_idx && sample.size() < sample_size) {
+// 	sample.push_back(static_cast<double>(v));
+// 	next_sample_idx += stride;
+//       }
+//     }
+//   }
+  
+//   out.min_val = min_v;
+//   out.max_val = max_v;
+  
+//   if (out.is_discrete) {
+//     // Discrete signal: we only care about uniques + min/max
+//     out.uniques = std::move(uniques);
+//     // p5/p95 left as 0.0 (unused in this case)
+//     return out;
+//   }
+  
+//   // Non-discrete: approximate 5th/95th percentiles from the sample
+//   if (sample.empty()) {
+//     out.p5 = out.p95 = 0.0;
+//     return out;
+//   }
+  
+//   std::size_t m = sample.size();
+//   auto q_index = [m](double q) -> std::size_t {
+//     if (m == 1) return 0;
+//     double idx = q * double(m - 1);
+//     std::size_t k = static_cast<std::size_t>(idx);
+//     if (k >= m) k = m - 1;
+//     return k;
+//   };
+  
+//   // 5th percentile
+//   std::size_t k5 = q_index(0.05);
+//   std::nth_element(sample.begin(), sample.begin() + k5, sample.end());
+//   out.p5 = sample[k5];
+  
+//   // 95th percentile
+//   std::size_t k95 = q_index(0.95);
+//   std::nth_element(sample.begin(), sample.begin() + k95, sample.end());
+//   out.p95 = sample[k95];
+
+//   std::cout << " k5, k95  = " << k5 << " " << k95 << "\n";
+//   return out;
+// }
+
+
+
+Eigen::VectorXf segsrv_t::envelope_timetrack( const Eigen::VectorXf & x , const int nx ) const
+{
+
+  // t1, t2, t3, ...                                (per original) 
+  // --> t1, t1, nan, t2, t2, nan, t3, t3, nan, ... (per n bin)
+
+  const int n0 = x.size();
+
+  Eigen::VectorXf x_center_out = Eigen::VectorXf::Constant(nx,
+							   std::numeric_limits<float>::quiet_NaN());
+  
+  if (n0  == 0 || nx <= 0)
+    return x_center_out;
+  
+  Eigen::VectorXf x_min = Eigen::VectorXf::Constant(nx,
+						    std::numeric_limits<float>::infinity());
+  Eigen::VectorXf x_max = Eigen::VectorXf::Constant(nx,
+						    -std::numeric_limits<float>::infinity());
+
+  // fill x_min/x_max
+  for (int i = 0; i < n0; ++i) {
+    int px = (int)((int64_t)i * nx / n0);
+    if (px < 0) px = 0;
+    if (px >= nx) px = nx - 1;
+    
+    double xi = x[i];
+    if (xi < x_min[px]) x_min[px] = xi;
+    if (xi > x_max[px]) x_max[px] = xi;
+  }
+  
+  // Convert to bin centers
+  for (int px = 0; px < nx; ++px) {
+    if (std::isfinite(x_min[px]) && std::isfinite(x_max[px])) {
+      x_center_out[px] = 0.5 * (x_min[px] + x_max[px]);
+    }
+  }
+
+  Eigen::VectorXf tt( 3 * nx );
+  int c = 0;
+  for (int i=0; i<nx; i++)
+    {
+      tt[c++] = x_center_out[i];
+      tt[c++] = x_center_out[i];
+      tt[c++] = std::numeric_limits<float>::quiet_NaN();
+    }
+  return tt;
+}
+
+
+
+
+Eigen::VectorXf segsrv_t::envelope_signal_iqr( const Eigen::VectorXf & y , const int nx ) const
+{
+
+  // nb. not actually IQR, but based on robust SD
+
+  const int n0 = y.size();
+  if (n0 == 0 || nx <= 0) {
+    return Eigen::VectorXf();  // empty
+  }
+  
+  // Per-bin accumulators
+  Eigen::VectorXf sum   = Eigen::VectorXf::Zero(nx);
+  Eigen::VectorXf sumsq = Eigen::VectorXf::Zero(nx);
+  Eigen::VectorXi count = Eigen::VectorXi::Zero(nx);
+  
+  // Bin samples
+  for (int i = 0; i < n0; ++i) {
+    int px = static_cast<int>((static_cast<long long>(i) * nx) / n0);
+    if (px < 0)      px = 0;
+    else if (px >= nx) px = nx - 1;
+    
+    const float v = y[i];
+    sum[px]   += v;
+    sumsq[px] += v * v;
+    count[px] += 1;
+  }
+  
+  Eigen::VectorXf out(3 * nx);
+  const float NaN = std::numeric_limits<float>::quiet_NaN();
+  // For Normal: Q1/Q3 = μ ± 0.67448975 σ
+  const float k = 0.67448975f;
+
+  float prior_q25, prior_q75;
+  
+  int c = 0;
+  for (int px = 0; px < nx; ++px) {
+
+    if (count[px] == 0) {
+      out[c++] = NaN;
+      out[c++] = NaN;
+      out[c++] = NaN;
+      continue;
+    }
+    
+    const float n    = static_cast<float>(count[px]);
+    const float mu   = sum[px] / n;
+    const float ex2  = sumsq[px] / n;
+    float var        = ex2 - mu * mu;
+    if (var < 0.0f) var = 0.0f;  // numeric guard
+    const float sd   = std::sqrt(var);
+    
+    float q25 = mu - k * sd;
+    float q75 = mu + k * sd;
+
+    // nudge so adjacent bars adjoin
+    if ( px != 0 )
+      {
+	if ( q25 > prior_q75 )
+	  q25 = prior_q75;
+	if ( q75 < prior_q25 )
+	  q75 = prior_q25;
+      }
+
+    prior_q25 = q25;
+    prior_q75 = q75;
+    
+    out[c++] = q25;
+    out[c++] = q75;
+    out[c++] = NaN;   // separator for pyqtgraph spikes
+  }
+  
+  return out;
+}
+ 
+
+Eigen::VectorXf segsrv_t::envelope_signal( const Eigen::VectorXf & y , const int nx ) const
+{
+  const int n0 = y.size();
+
+  const int spp = n0 / nx;
+  if ( spp > 100 )
+    return envelope_signal_iqr( y , nx );
+  
+  Eigen::VectorXf y_min_out = Eigen::VectorXf::Constant(nx,
+					std::numeric_limits<float>::infinity());
+  Eigen::VectorXf y_max_out = Eigen::VectorXf::Constant(nx,
+					-std::numeric_limits<float>::infinity());
+  
+  if (n0 == 0 || nx <= 0)
+    return Eigen::VectorXf::Constant(nx*3,std::numeric_limits<float>::quiet_NaN()) ;
+  
+  for (int i = 0; i < n0; ++i) {
+    int px = (int)((int64_t)i * nx / n0);
+    if (px < 0) px = 0;
+    if (px >= nx) px = nx - 1;
+
+    float yi = y[i];
+    if (yi < y_min_out[px]) y_min_out[px] = yi;
+    if (yi > y_max_out[px]) y_max_out[px] = yi;
+  }
+  
+  Eigen::VectorXf yy( 3 * nx );
+  int c = 0;
+  for (int i=0; i<nx; i++)
+    {
+      yy[c++] = y_min_out[i];
+      yy[c++] = y_max_out[i];
+      yy[c++] = std::numeric_limits<float>::quiet_NaN();
+    }
+  return yy;
+
+}
+
+float segsrv_t::min_skip_nan(const Eigen::VectorXf &v) {
+  float m = std::numeric_limits<float>::infinity();
+  for (int i = 0; i < v.size(); ++i) {
+    float x = v[i];
+    if (std::isfinite(x) && x < m)
+      m = x;
+  }
+  return m;
+}
+
+float segsrv_t::max_skip_nan(const Eigen::VectorXf &v) {
+  float m = -std::numeric_limits<float>::infinity();
+  for (int i = 0; i < v.size(); ++i) {
+    float x = v[i];
+    if (std::isfinite(x) && x > m)
+      m = x;
+  }
+  return m;
+}

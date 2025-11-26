@@ -36,6 +36,7 @@
 #include "dsp/resample.h"
 #include "dsp/mse.h"
 #include "dsp/lzw.h"
+#include "stats/catch22/catch22.h"
 
 #include "miscmath/miscmath.h"
 #include "fftw/fftwrap.h"
@@ -328,7 +329,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
     Helper::halt( "use CHEP-MASK to find channel/epoch outliers: SIGSTATS now only reports epoch-level/individual-level statistics" );
 
   // Hjorth parameters: H1, H2, H3
-  // Second-order Hjorth
+  // Catch22 stats
+  // Optional: Second-order Hjorth
   // Optional: RMS, % clipped signals
   // Optional: permutation entropy
   // Optional: fractal dimensions
@@ -340,13 +342,15 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   bool calc_rms = param.has( "rms" );
 
   bool calc_clipped = param.has( "clipped" );
-
+  
   bool calc_flat = param.has( "flat" );
 
   bool calc_maxxed = param.has( "max" );
 
   int required_sr = param.has( "sr-over" ) ? param.requires_int( "sr-over" ) : 0 ; 
 
+  bool calc_catch22 = param.has( "catch22" ) ? param.yesno( "catch22" ) : false;
+  
   bool calc_pfd = param.has( "pfd" ) ;
 
   bool calc_dynamics = param.has( "dynam" );
@@ -378,24 +382,6 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       logger << "  reporting max proportion, |X| > " << max_value << "\n";
     }
   
-  //
-  // Optionally calculate turning rate
-  //
-  
-  // bool turning_rate = param.has( "tr" )  || param.has( "tr-epoch" ) || param.has( "tr-d" ) || param.has( "tr-smooth" );
-
-  // double tr_epoch_sec = 1.0;
-  // int    tr_d = 4;
-  // int    tr_epoch_smooth = 30; // +1 is added afterwards
-  
-  // if ( turning_rate ) 
-  //   {
-  //     if ( param.has( "tr-epoch" ) ) tr_epoch_sec = param.requires_dbl( "tr-epoch" );
-  //     if ( param.has( "tr-d" ) ) tr_d = param.requires_int( "tr-d" );
-  //     if ( param.has( "tr-smooth" ) ) tr_epoch_smooth = param.requires_int( "tr-smooth" );
-  //     logger << " calculating turning rate: d="<< tr_d << " for " << tr_epoch_sec << "sec epochs, smoothed over " << tr_epoch_smooth << " epochs\n";
-  //   }
-
   
   //
   // Attach signals
@@ -434,7 +420,10 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   std::vector<double> mean_activity( ns , 0 );
   std::vector<double> mean_mobility( ns , 0 );
   std::vector<double> mean_complexity( ns , 0 );
-  //  std::vector<double> mean_turning_rate( ns , 0 ); // nb. this is based on turning-rate epoch size
+
+  std::vector<std::vector<double> > mean_catch22( 22 );
+  for (int i=0; i<22; i++)
+    mean_catch22[i].resize( ns , 0 );
 
   //
   // dynamics
@@ -542,8 +531,16 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  MiscMath::centre( d );
 	  
 	  double x = calc_rms ? MiscMath::rms( *d ) : 0 ;
-	  	  
 
+	  //
+	  // Catch22 stats
+	  //
+
+	  catch22_t c22;
+
+	  if ( calc_catch22 ) 
+	    c22.calc( d->data() , d->size() );
+	  
 	  //
 	  // Permutation entropy
 	  //
@@ -587,25 +584,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	    {
 	      MiscMath::hjorth2( d , &(hjorth2)[0] , hjorth2_win * sr , hjorth2_inc * sr );
 	    }		    
-
-
-	  //
-	  // Turning rate
-	  //
 	  
-	  // double turning_rate_mean = 0;
-
-	  // if ( turning_rate )
-	  //   {
-
-	  //     std::vector<double> subepoch_tr;
-	      
-	  //     turning_rate_mean = MiscMath::turning_rate( d , sr, tr_epoch_sec , tr_d , &subepoch_tr );
-	      
-	  //     for (int i=0;i<subepoch_tr.size();i++)
-	  // 	e_tr[s].push_back( subepoch_tr[i] );
-	  //   }
-
+	  
 	  //
 	  // Store for dynamics
 	  //
@@ -634,6 +614,12 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      writer.value( "H1" , activity );
 	      writer.value( "H2" , mobility );
 	      writer.value( "H3" , complexity );
+	      
+	      if ( calc_catch22 & c22.valid() )
+		{
+		  for (int i=0; i<22; i++)
+		    writer.value( c22.short_name(i) , c22.stat(i) );
+		}
 	      
 	      if ( calc_hjorth2 && sr >= 50 )
 		{
@@ -670,8 +656,6 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      if ( calc_maxxed )
 		writer.value( "MAX" , m );
 	      
-	      // if ( turning_rate ) 
-	      // 	writer.value( "TR" , turning_rate_mean );
 	    }
 
 
@@ -695,6 +679,12 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  mean_mobility[si] += mobility;
 	  mean_complexity[si] += complexity;
 
+	  if ( calc_catch22 )
+	    {
+	      for (int i=0; i<22; i++)
+		mean_catch22[i][si] += c22.stat(i);
+	    }
+	  
 	  n[si]   += 1;
 		  
 	  //
@@ -723,40 +713,6 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   if ( calc_dynamics )
     qd.proc_all();
 
-      
-  //
-  // Turning rate sub-epoch level reporting (including smoothing over sub-epochs)
-  //
-
-  // if ( turning_rate )
-  //   {
-  //     Helper::halt( "turning-rate not implemented" );
-  //     Helper::halt( "need to fix signal indexing, ns vs ns_all, si, as above");
-  //     // i.e. to skip annotation channels
-      
-  //     for (int s=0;s<ns;s++)
-  // 	{
-  // 	  int sr = edf.header.sampling_freq( signals( s ) );
-	  
-  // 	  // how many units (in # of sub-epoch units);  +1 means includes self
-  // 	  int winsize = 1 + tr_epoch_smooth / tr_epoch_sec ; 
-
-  // 	  //	  logger << "sz = " << e_tr[s].size() << " " << winsize << "\n";
-  // 	  e_tr[s] = MiscMath::moving_average( e_tr[s] , winsize );
-
-  // 	  // output
-  // 	  writer.level( signals.label(s) , globals::signal_strat );
-  // 	  for (int i=0;i<e_tr[s].size();i++)
-  // 	    {
-  // 	      writer.level( i+1 , "SUBEPOCH" );
-  // 	      writer.value( "TR" , e_tr[s][i] );
-  // 	    }
-  // 	  writer.unlevel( "SUBEPOCH" );
-  // 	}
-  //     writer.unlevel( globals::signal_strat );
-  //   }
-  
-
    
   //
   // Individual level summary
@@ -771,6 +727,10 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       writer.value( "H2"   , mean_mobility[si] / (double)n[si] );
       writer.value( "H3"   , mean_complexity[si] / (double)n[si] );
 
+      if ( calc_catch22 )
+	for (int i=0; i<22; i++)
+	  writer.value( catch22_t::short_name(i) , mean_catch22[i][si] / (double)n[si] );
+            
       if ( calc_clipped )
 	writer.value( "CLIP" , clipped[si] / (double)n[si] );
 

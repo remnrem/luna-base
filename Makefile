@@ -29,6 +29,7 @@ SRCS = globals.cpp eval.cpp param.cpp cmddefs.cpp optdefs.cpp dummy.cpp \
         $(wildcard fftw/*.cpp) \
         $(wildcard cwt/*.cpp) \
         $(wildcard stats/*.cpp) \
+        $(wildcard stats/catch22/*.cpp) \
         $(wildcard staging/*.cpp) \
         $(wildcard suds/*.cpp) \
         $(wildcard db/*.cpp) \
@@ -47,6 +48,7 @@ SRCS = globals.cpp eval.cpp param.cpp cmddefs.cpp optdefs.cpp dummy.cpp \
 
 CSRCS = $(wildcard db/*.c) \
         $(wildcard stats/*.c) \
+        $(wildcard stats/catch22/*.c) \
         $(wildcard dsp/*.c) \
         $(wildcard zlib-1.3/*.c) \
         $(wildcard dsp/libsamplerate/*.c)

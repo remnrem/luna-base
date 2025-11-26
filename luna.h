@@ -50,6 +50,7 @@
 #include "stats/cpt.h"
 #include "stats/nmf.h"
 #include "stats/gpa.h"
+#include "stats/catch22/catch22.h"
 
 #include "miscmath/miscmath.h"
 #include "miscmath/dynam.h"

@@ -26,21 +26,39 @@
 #include "luna.h"
 #include "stats/Eigen/Dense"
 
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <utility>
+#include <vector>
+#include <cstddef>
+#include <stdexcept>
+
 struct lunapi_inst_t;
+
 typedef std::shared_ptr<lunapi_inst_t> lunapi_inst_ptr;
 
+
+// --------------------------------------------------------------------------------
+// some helper structs
+
 struct evt_t {
-  evt_t( const interval_t & interval , const std::string & name )
-    : interval(interval) , name(name) { }
+  evt_t( const interval_t & interval ,
+	 const std::string & name ,
+	 const std::string & meta = "" )
+    : interval(interval) , name(name) , meta(meta) { }
   
   interval_t interval;
   std::string name;
-
+  std::string meta;
+  
   bool operator<( const evt_t & rhs ) const
   {
     if ( interval < rhs.interval ) return true;
     if ( interval > rhs.interval ) return false;
-    return name < rhs.name ; 
+    if ( name < rhs.name ) return true;
+    if ( name > rhs.name ) return false;    
+    return meta < rhs.meta ; 
   }
 };
 
@@ -66,13 +84,6 @@ fevt_t( const double start ,
 
 // ------------------------------------------------------------
 // interval-tree for search (nb. need to template/merge w/ annot)
-
-#include <algorithm>
-#include <cstdint>
-#include <limits>
-#include <utility>
-#include <vector>
-
 
 class evt_interval_tree_t {
   
@@ -222,6 +233,23 @@ private:
 };
 
 
+template<typename T>
+struct axis_stats_t {
+  bool is_discrete;          // true if <= max_unique unique values
+  std::vector<T> uniques;    // only filled (and meaningful) if is_discrete
+  T min_val;                 // min over all data
+  T max_val;                 // max over all data
+  double p5;                 // approximate 5th percentile (only if !is_discrete)
+  double p95;                // approximate 95th percentile (only if !is_discrete)
+};
+
+
+
+
+// --------------------------------------------------------------------------------
+// signal-modulation helper
+// 
+
 struct sigmod_segment_t {
   std::vector<Eigen::VectorXf> t;  // per-bin time with NaN separators
   std::vector<Eigen::VectorXf> x;  // per-bin values with NaN separators
@@ -232,25 +260,31 @@ struct segsrv_t;
 struct sigmod_t
 {
   
-  sigmod_t( segsrv_t * p ) { parent = p ; }
+  sigmod_t( segsrv_t * p ) { parent = p ; status = false;  }
   
-  // currently fixed N = 18 ( 20-degree ) bins
-
+  // currently fixed N = 18 ( e.h. 20-degree ) bins
+  
   const int nbins = 18;
-
-  bool status;
+  
+  void clear_mod( const std::string & mod_label );
   
   void make_mod( const std::string & mod_label ,
 		 const std::string & mod_ch ,
 		 const std::string & type ,
 		 const std::vector<double> & sos , 
-		 const bool ylim = false , const double ylwr = 0 , const double yupr = 0 );
+		 const bool ylim = false ,
+		 const double ylwr = 0 ,
+		 const double yupr = 0 );
   
   void apply_mod( const std::string & mod_label ,
-		  const std::string & ch , const int slot );
-		    
-  Eigen::VectorXf get_timetrack( const int bin ) const;
+		  const std::string & ch ,
+		  const int slot );
 
+  bool status; // set to F is apply_mod() fails, checked by get_timetrack() and get_scaled_signal()
+  
+  // queries the last modulated signal (i.e. apply_mod --> get_timetrack / get_scaled_signal() ) 
+  Eigen::VectorXf get_timetrack( const int bin ) const;
+  
   Eigen::VectorXf get_scaled_signal( const int bin ) const; 
 
   void clear()
@@ -269,52 +303,48 @@ private:
   std::map<std::string,Eigen::ArrayXi> mod_bins;
   std::map<std::string,Eigen::VectorXf> mod_tt; 
 
-
   // helper functions
   
-    // Map whole-night S-bin labels to the X timeline.
-    Eigen::ArrayXi bins_from_Sbins_at_X(const Eigen::VectorXf& tS,
-                                        const Eigen::ArrayXi&  bS,
-                                        const Eigen::VectorXf& tX);
-
-    // Build per-bin segments with NaN gaps from binned X.
-    sigmod_segment_t segments_from_bins_dual(const Eigen::VectorXf& tX,
-                                             const Eigen::VectorXf& X,
-                                             const Eigen::ArrayXi&  bX);
-
-    // End-to-end: t(S), bins(S) → per-bin (tX, X).
-    sigmod_segment_t bin_X_by_Sbins(const Eigen::VectorXf& tS,
-                                    const Eigen::ArrayXi&  bS,
-                                    const Eigen::VectorXf& tX,
-                                    const Eigen::VectorXf& X);
+  // Map whole-night S-bin labels to the X timeline.
+  Eigen::ArrayXi bins_from_Sbins_at_X(const Eigen::VectorXf& tS,
+				      const Eigen::ArrayXi&  bS,
+				      const Eigen::VectorXf& tX);
   
+  // Build per-bin segments with NaN gaps from binned X.
+  sigmod_segment_t segments_from_bins_dual(const Eigen::VectorXf& tX,
+					   const Eigen::VectorXf& X,
+					   const Eigen::ArrayXi&  bX);
+  
+  // End-to-end: t(S), bins(S) → per-bin (tX, X).
+  sigmod_segment_t bin_X_by_Sbins(const Eigen::VectorXf& tS,
+				  const Eigen::ArrayXi&  bS,
+				  const Eigen::VectorXf& tX,
+				  const Eigen::VectorXf& X);
   
   // altered flow
   //  1) on initial rendering: sigmod_t::make_mod( )
-  //    --> mod signal does not need to have same SR as target chs
+  //     (mod signal does not need to have same SR as target chs) 
   
   //  2) on viewing a window:
   //    a)  sigmod_t::apply_mod( mod_label, ch , slot )
   //    b)  get t values = sigmod_t::get_timetrack() returns nbins arrays
   //    c)  get x values = sigmod_t::get_scaled_signal() returns nbins arrays
-
+  
   // colors are tracked and applied by caller
-  // each vector is NaN-delimited, i.e. to draw interlaced segments w/ gaps
-    
-  // t = self.ss.get_timetrack( ch ) -->           segsrv_t::get_timetrack
-  // x = self.ss.get_scaled_signal( ch , idx ) --> segsrv_t::get_scaled_signal 
+  //   each vector is NaN-delimited, i.e. to draw interlaced segments w/ gaps
+  
+  // special case of handling min/max/SD bars? (already in (p1,p2,nan) encoding 
   
 };
 
 
 struct segsrv_t {
 
-
   friend struct sigmod_t;
   
 public:
 
-    static Eigen::VectorXf decimate( const Eigen::VectorXf & x0 , const int sr, const int q );
+  static Eigen::VectorXf decimate( const Eigen::VectorXf & x0 , const int sr, const int q );
   
   // set up
   segsrv_t( lunapi_inst_ptr ); 
@@ -338,9 +368,14 @@ public:
   // set window given gapped elapsed time (i.e. gapless display)
   bool set_window_ungapped( double a , double b );
   
+  void set_pixel_width( const int x ) { xpixels = x; } 
+
   // get signals
   Eigen::VectorXf get_signal( const std::string & ch ) const;
   
+  // get signals w/ on-the-fly bandpass prior to decimation
+  Eigen::VectorXf get_filtered_signal( const std::string & ch ) const;
+
   // set scaling params
   void set_scaling( const int nchs , const int nanns ,
 		    const double yscale , const double ygroup ,
@@ -351,7 +386,9 @@ public:
   // get scaled signals (0-1 give other annots  
   bool get_yscale_signal( const int n1 , double * lwr, double * upr ) const; // --> can make private
   Eigen::VectorXf get_scaled_signal( const std::string & ch , const int n1 );
-
+  float get_scaled_y( const std::string & ch , float val ) const; // to be called *after* get_scaled_signal()
+  
+  
   // and times
   Eigen::VectorXf get_timetrack( const std::string & ch ) const;
 
@@ -360,24 +397,20 @@ public:
   Eigen::VectorXf get_summary_timetrack( const std::string & ch ) const;
 
   // filtering
-  void apply_filter( const std::string & ch , const std::vector<double> & sos )
-  {    
-    filter_map[ ch ] = sos ;
-  }
+  void apply_filter( const std::string & ch , const std::vector<double> & sos );  
+  void clear_filter( const std::string & ch );  
+  void clear_filters();  
+  std::set<std::string> filtered;
   
-  void clear_filter( const std::string & ch )
-  {
-    filter_map.erase( ch );
-  } 
-  
-  void clear_filters()
-  {
-    filter_map.clear();
-  } 
-  
-  std::map<std::string,std::vector<double> > filter_map;
-  
-  
+  // envelope reductions
+  Eigen::VectorXf envelope_timetrack( const Eigen::VectorXf & x , const int n ) const;
+  Eigen::VectorXf envelope_signal( const Eigen::VectorXf & y , const int nx ) const;
+  Eigen::VectorXf envelope_signal_iqr( const Eigen::VectorXf & y , const int nx ) const;
+
+  // helpers;
+  float min_skip_nan(const Eigen::VectorXf &v);
+  float max_skip_nan(const Eigen::VectorXf &v);
+
   // also, a mask of gapped regions in a given time-window   
   // e.g. if 0 .. 300 is total window and gaps between 30-60 and 270 - 350
   //  --> (30,60) , (270,300) 
@@ -408,21 +441,16 @@ public:
   double get_window_left() const { return awin; }
   double get_window_right() const { return bwin; }
 
-  /* double get_ewindow_left() const { return aewin; } */
-  /* double get_ewindow_right() const { return bewin; } */
-
+  // time queries
+  clocktime_t edf_start;
   std::string get_window_left_hms() const; 
   std::string get_window_right_hms() const; 
   std::string get_hms( const double s ) const;
   std::map<double,std::string> get_clock_ticks(const int n) const;
   std::map<double,std::string> get_hour_ticks() const;
-  
-  clocktime_t edf_start;
-  
-  //double get_ungapped_total_sec() const { return cumul_sec; }
   double get_total_sec() const; 
   double get_total_sec_original() const; // not impacted by mask - for hypno viz etc
-
+  
   // initial decimation (on input when populating) if high SR
   int get_input_throttle() const { return max_samples_in; }
   void input_throttle( const int m ) { max_samples_in = m < 0 ? 0 : m; } 
@@ -433,7 +461,8 @@ public:
 
   // display summary statistics (mean, range, SD) if > minutes
   void summary_threshold_mins( const double s ) { summary_threshold_secs = 60 * s; } 
-  
+
+  // ranges and labels
   std::pair<double,double> get_window_phys_range( const std::string & ch ) const
   {
     std::map<std::string,std::pair<double,double> >::const_iterator ss = window_phys_range.find( ch );
@@ -448,7 +477,6 @@ public:
   
   bool serve_raw_signals() const { return bwin - awin > summary_threshold_secs ; } 
 
-
   // signal modulation
   sigmod_t sigmod;
 
@@ -461,9 +489,9 @@ public:
   auto sigmod_apply_mod(const std::string & mod_label ,
 			const std::string & ch , const int slot )
   { return sigmod.apply_mod( mod_label, ch, slot ); }
-
+  
   auto sigmod_get_timetrack(const int bin) const { return sigmod.get_timetrack(bin); }
-
+  
   auto sigmod_get_scaled_signal(const int bin) const { return sigmod.get_scaled_signal(bin); }
   
 private:
@@ -496,6 +524,8 @@ private:
   int max_samples_in; // decimate at input (populate/add_channel())
   int max_samples_out; // decimate when outputting data (get_signal())
   double summary_threshold_secs; // give summaries at output, instead of raw signals
+
+  int xpixels; // view width in pixels
   
   // current window in idx points (for a given SR)
   std::map<int,int> aidx, bidx; 
@@ -509,8 +539,17 @@ private:
   // signal data
   std::map<std::string,int> srmap;
   std::map<std::string,Eigen::VectorXf> sigmap;
+  std::map<std::string,Eigen::VectorXf> sigmap_f; // filtered version of the data
   std::map<int,Eigen::VectorXf> tmap;
 
+  // continuous/discrete
+  std::map<std::string,bool> discrete;
+  bool is_discrete( const std::string & ch ) const {
+    std::map<std::string,bool>::const_iterator cc = discrete.find( ch );
+    if ( cc == discrete.end() ) return false;
+    return cc->second;
+  }
+  
   // post input-decimation, track new implied SR
   std::map<int,double> decimated_srmap;
   
@@ -525,13 +564,20 @@ private:
   
   // physical scaling (for scaled_signal)
   std::map<std::string, std::pair<double,double> > phys_ranges;
-
+  
   // store the min/max per signal after a get_scaled_signal()
   std::map<std::string,std::pair<double,double> > window_phys_range;
 
+  // lookup for scaled value of particular y values, including y=0
+  // --> (set by get_scaled_signal(), used by subsequent get_scaled_y() ) 
+  std::map<std::string,float> track_ylwr, track_yupr, track_smin, track_smax;
+  
   // calc. robust reasonable ranges
-  void set_empirical_phys_ranges( const std::string & ch, const std::vector<double> * data, const double plwr , const double pupr );
+  template<typename T>
+  void set_empirical_phys_ranges( const std::string & ch, const T * data, const int n, const double plwr , const double pupr ,
+				  bool * is_discrete = NULL );
   std::map<std::string,std::pair<double,double> > empirical_phys_ranges;
+  std::map<std::string,std::pair<double,double> > empirical_phys_ranges_orig; // store orig, if filtering changes the above
 
   // cumulative seconds (length of data, w/out gaps)
   //  double cumul_sec;
@@ -589,6 +635,10 @@ public:
   
   // for selection window
   std::vector<std::string> fetch_all_evts( const std::vector<std::string> & , const bool hms = false ) const;
+
+  // for lunascope selection window
+  std::vector<std::vector<std::string> > fetch_all_evts_with_inst_ids( const std::vector<std::string> & ,
+								       const bool hms = false ) const;
   
 private:
 
@@ -612,14 +662,17 @@ private:
   std::map<std::string,std::vector<float> > compiled_annots_end_times;
   std::map<std::string,std::vector<float> > compiled_annots_end_stacks;
 
+  
+  template<typename T>
+  axis_stats_t<T> compute_axis_stats(const T* x,
+				     std::size_t n,
+				     std::size_t max_unique = 10,
+				     std::size_t max_sample = 2000);
+  
 };
 
 
-
-#include <vector>
-#include <cstddef>
-#include <stdexcept>
-
+// --------------------------------------------------------------------------------
 // second-order-sections (SOS) biquad cascade with Direct Form II Transposed
 
 struct biquad_t {
@@ -698,8 +751,8 @@ static inline void sos_filter_prime_with_reflection(sos_filter_t & f, const Eige
   f.reset();
   // run the mirrored prefix through to settle state
   for (int k = pad; k >= 1; --k) {
-    const int idx = (k < n ? k : n-1);          // clamp for short signals
-    double v = x[idx];                           // x[1], x[2], ...
+    const int idx = (k < n ? k : n-1);  // clamp for short signals
+    double v = x[idx];                  // x[1], x[2], ...
     for (auto& q : f.sec) v = q.step(v);
   }
 }
