@@ -11,9 +11,15 @@
 
 #include <stdio.h>
 
-extern "C" { 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern double SB_BinaryStats_diff_longstretch0(const double y[], const int size);
 extern double SB_BinaryStats_mean_longstretch1(const double y[], const int size);
-}
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif /* SB_BinaryStats_h */

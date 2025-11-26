@@ -5,16 +5,34 @@
 #include <stdio.h>
 #include "c22_stats.h"
 
+#if __cplusplus
+#   include <complex>
 typedef std::complex< double > cplx;
+#else
+#   include <complex.h>
+#if defined(__GNUC__) || defined(__GNUG__)
+typedef double complex cplx;
+#elif defined(_MSC_VER)
+typedef _Dcomplex cplx;
+#endif
+#endif
 
-extern "C" { 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern void linspace(double start, double end, int num_groups, double out[]);
 extern double quantile(const double y[], const int size, const double quant);
 extern void sort(double y[], int size);
 extern void binarize(const double a[], const int size, int b[], const char how[]);
 extern double f_entropy(const double a[], const int size);
 extern void subset(const int a[], int b[], const int start, const int end);
-}
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 
 extern cplx _Cminuscc(const cplx x, const cplx y);
 extern cplx _Caddcc(const cplx x, const cplx y);

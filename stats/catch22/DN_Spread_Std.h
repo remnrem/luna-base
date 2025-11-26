@@ -7,7 +7,14 @@
 
 #include <stdio.h>
 
-extern "C" { 
-extern double DN_Spread_Std(const double a[], const int size);
-}
+#ifdef __cplusplus
+extern "C" {
+#endif
+  
+  extern double DN_Spread_Std(const double a[], const int size);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 #endif /* DN_SPREADSTD */

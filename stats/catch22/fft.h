@@ -20,13 +20,19 @@ typedef _Dcomplex cplx;
 #define CMPLX(x, y) ((cplx)((double)(x) + _Complex_I * (double)(y)))
 #endif
 
+#ifdef __cplusplus
 extern "C" {
+#endif
+
   
 extern void twiddles(cplx a[], int size);
 // extern void _fft(cplx a[], cplx out[], int size, int step, cplx tw[]);
 extern void fft(cplx a[], int size, cplx tw[]);
 extern void ifft(cplx a[], int size, cplx tw[]);
 
-}
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 
 #endif

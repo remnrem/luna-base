@@ -13,7 +13,9 @@
 #include <float.h>
 #include <stdio.h>
 
+#ifdef __cplusplus
 extern "C" {
+#endif
   
 extern int num_bins_auto(const double y[], const int size);
 extern int histcounts(const double y[], const int size, int nBins, int ** binCounts, double ** binEdges);
@@ -21,6 +23,9 @@ extern int histcounts_preallocated(const double y[], const int size, int nBins, 
 extern int * histcount_edges(const double y[], const int size, const double binEdges[], const int nEdges);
 extern int * histbinassign(const double y[], const int size, const double binEdges[], const int nEdges);
 
-}
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 
 #endif /* histcounts_h */

@@ -4,7 +4,14 @@
 #include <string.h>
 #include "c22_stats.h"
 
-extern "C" { 
-extern double DN_HistogramMode_5(const double y[], const int size);
-}
+#ifdef __cplusplus
+extern "C" {
+#endif
+  
+  extern double DN_HistogramMode_5(const double y[], const int size);
+  
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 #endif

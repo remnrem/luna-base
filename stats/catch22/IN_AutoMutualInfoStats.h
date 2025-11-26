@@ -11,7 +11,14 @@
 
 #include <stdio.h>
 
-extern "C" { 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern double IN_AutoMutualInfoStats_40_gaussian_fmmi(const double y[], const int size);
-}
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 #endif /* IN_AutoMutualInfoStats_h */

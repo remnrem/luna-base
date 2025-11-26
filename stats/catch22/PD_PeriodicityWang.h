@@ -11,8 +11,15 @@
 
 #include <stdio.h>
 
-extern "C" { 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern int PD_PeriodicityWang_th0_01(const double * y, const int size);
-}
+  
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 
 #endif /* PD_PeriodicityWang_h */

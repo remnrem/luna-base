@@ -22,7 +22,9 @@ typedef _Dcomplex cplx;
 #include "histcounts.h"
 #include "helper_functions.h"
 
+#ifdef __cplusplus
 extern "C" {
+#endif
   
 extern int nextpow2(int n);
 extern void dot_multiply(cplx a[], cplx b[], int size);
@@ -36,6 +38,9 @@ extern double CO_trev_1_num(const double y[], const int size);
 extern double CO_f1ecac(const double y[], const int size);
 extern double CO_HistogramAMI_even_2_5(const double y[], const int size);
 
-}
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 
 #endif

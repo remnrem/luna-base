@@ -11,8 +11,15 @@
 
 #include <stdio.h>
 
-extern "C" { 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern int splinefit(const double *y, const int size, double *yOut);
-}
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 
 #endif /* splinefit_h */

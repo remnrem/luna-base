@@ -11,7 +11,14 @@
 
 #include <stdio.h>
 
-extern "C" { 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern double MD_hrv_classic_pnn40(const double y[], const int size);
-}
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 #endif /* MD_hrv_h */

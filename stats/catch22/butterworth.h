@@ -10,7 +10,15 @@
 
 #include <stdio.h>
 
-extern "C" { 
-extern void butterworthFilter(const double y[], const int size, const int nPoles, const double W, double out[]);
-}
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+  extern void butterworthFilter(const double y[], const int size, const int nPoles, const double W, double out[]);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 #endif /* butterworth_h */
