@@ -2754,9 +2754,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      if ( param.has( "catch22" ) ) 
 		for (int i=0; i<22; i++)
 		  {
-		    std::string n = "C22_" + catch22_t::short_name( i );
-		    writer.value( n , means[ n ] );
-		    writer.value( n + "_FLT" , means[ n + "_FLT" ] );
+		    std::string n = catch22_t::short_name( i );
+		    writer.value( "C22_" + n , means[ n ] );
+		    writer.value( "C22_" + n + "_FLT" , means[ n + "_FLT" ] );
 		  }
 	      
 	      writer.value( "SYMM" , means["SYMM"] );
@@ -4826,8 +4826,8 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
 
   for (int i=0; i<22; i++)
     {
-      results[ "C22" + catch22_t::short_name(i) ] = c22_raw[i] / (double)denom;
-      results[ "C22" + catch22_t::short_name(i) + "FLT" ] = c22_flt[i] / (double)denom;
+      results[ catch22_t::short_name(i) ] = c22_raw[i] / (double)denom;
+      results[ catch22_t::short_name(i) + "_FLT" ] = c22_flt[i] / (double)denom;
     }
  
 }
