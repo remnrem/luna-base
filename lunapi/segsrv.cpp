@@ -170,11 +170,7 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
 			     const bool do_band, const bool do_hjorth )
 {
 
-  std::cout << " about to summ\n";
-    
   if ( ! ( do_band || do_hjorth ) ) return ;
-
-  std::cout << " DOING SUMMS\n";
   
   // this is called per-epoch from populate() only 
   double fft_segment_size = 4;
@@ -613,7 +609,7 @@ bool segsrv_t::add_channel( const std::string & ch )
   // show whether channel is discrete or continuous (for downsampling treatment)
   discrete[ ch ] = is_discrete;
 
-  std::cout << " is dis = " << is_discrete << " " << ch << "\n";
+  //  std::cout << " is dis = " << is_discrete << " " << ch << "\n";
   
   // do means, min/max & SD, as well as spectral/hjorth summaries? (on original data)
   do_summaries( ch, sr, data , bands.find( ch ) != bands.end() , hjorth.find( ch ) != hjorth.end() );  
@@ -1003,7 +999,7 @@ void segsrv_t::set_empirical_phys_ranges( const std::string & ch , const T * dat
 					  bool * is_discrete )
 {
 
-  std::cout << " n = " << n << "\n";
+  //  std::cout << " n = " << n << "\n";
   // for (int i=0; i<n; i++)
   //   {
   //     double d = static_cast<double>(data[i]);  
@@ -1013,13 +1009,13 @@ void segsrv_t::set_empirical_phys_ranges( const std::string & ch , const T * dat
   // fixed at 9/95 for now 9i.e. this ignores plwr/pupr
   axis_stats_t stats = compute_axis_stats( data , n );
 
-  std::cout << " is_discrete = " << stats.is_discrete << "\n";
+  //  std::cout << " is_discrete = " << stats.is_discrete << "\n";
   
   // track back?
   if ( is_discrete != NULL )
     *is_discrete = stats.is_discrete;
 
-  std::cout << "stats.min_val, stats.max_val  = " << stats.min_val << " " <<  stats.max_val  << "\n";
+  //  std::cout << "stats.min_val, stats.max_val  = " << stats.min_val << " " <<  stats.max_val  << "\n";
 
   // for discrete signals, we want to keep the original values
   // treat as 'categorical' (e.g. 0/1 flag) if 10 or fewer discrete values
@@ -1032,7 +1028,7 @@ void segsrv_t::set_empirical_phys_ranges( const std::string & ch , const T * dat
   // else percentiles
   empirical_phys_ranges[ ch ] = std::pair<double,double>( stats.p5 , stats.p95 );
 
-  std::cout << " setting " <<  stats.p5 << " " << stats.p95 << "\n";
+  //  std::cout << " setting " <<  stats.p5 << " " << stats.p95 << "\n";
 
 }
 
