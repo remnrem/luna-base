@@ -50,7 +50,7 @@ CSRCS = $(wildcard db/*.c) \
         $(wildcard stats/*.c) \
         $(wildcard stats/catch22/*.c) \
         $(wildcard dsp/*.c) \
-        $(wildcard zlib-1.3/*.c) \
+        $(wildcard zlib-1.3.1/*.c) \
         $(wildcard dsp/libsamplerate/*.c)
 
 OBJS = $(SRCS:.cpp=.o) $(CSRCS:.c=.o) 
