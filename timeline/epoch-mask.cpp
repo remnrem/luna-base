@@ -788,7 +788,7 @@ void timeline_t::select_epoch_randomly( const std::set<std::string> & anns , int
 
   // similar implemention to MASK random above, but imposes additional 
   // constraint on which epochs to select from
-
+  
   mask_set = true;
     
   const int ne = epochs.size();
@@ -800,7 +800,7 @@ void timeline_t::select_epoch_randomly( const std::set<std::string> & anns , int
   while ( aa != anns.end() )
     {
       annot_t * annot = annotations->find( Helper::unquote( *aa ) );
-      if ( annot == NULL ) continue;
+      if ( annot == NULL ) { ++aa; continue; }
       
       for (int e=0;e<ne;e++)
 	{
@@ -831,7 +831,7 @@ void timeline_t::select_epoch_randomly( const std::set<std::string> & anns , int
   const int num_unmasked = unmasked.size();
   
   const int n_to_select = num_unmasked < n ? num_unmasked : n;
-
+  
   while ( s < n_to_select )
     {
       int rnd = CRandom::rand( num_unmasked );
@@ -843,7 +843,6 @@ void timeline_t::select_epoch_randomly( const std::set<std::string> & anns , int
 	  ++s;
 	}
     }
-  
   
   int cnt_mask_set = 0;
   int cnt_mask_unset = 0;
@@ -867,7 +866,7 @@ void timeline_t::select_epoch_randomly( const std::set<std::string> & anns , int
       if ( ! mask[e] ) ++cnt_now_unmasked;
     }
 
-  logger << "  randomly selected up to " << n << " epochs from [" << Helper::stringize( anns ) << "]; ";
+  logger << "  randomly selected up to " << n << " epochs (actual n="<< selected.size() << ") from [" << Helper::stringize( anns ) << "]; ";
 
   logger << cnt_mask_set << " newly masked " 
 	 << cnt_mask_unset << " unmasked and " 

@@ -153,7 +153,9 @@ void do_fft( const std::vector<double> * d , const int Fs , spindle_qc_t * q , b
 void do_fft( const std::vector<double> * d , const int Fs , const int np, spindle_qc_t * q , bool baseline );
   
 // helper to get spindle stats
-void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::string,double> & ) ;
+void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::string,double> & );
+		    
+		    
 
 // helper
 //void write_if_exists( const std::string & s , const std::map<std::string,double> & means ) ;

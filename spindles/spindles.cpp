@@ -282,6 +282,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   // spindle-level output
   const bool     show_spindle_level       = param.has( "per-spindle" );
   
+  // SDs for per-spindle metrics
+  const bool      show_per_spindle_sd     = param.has( "sd" );
   
   // verbose display of all CWT coefficients
   const bool     show_cwt_coeff           = param.has( "show-coef" );
@@ -2605,6 +2607,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      avg.chirp /= (double)sp_epoch ;
 		      avg.frq_h1 /= (double)sp_epoch ;
 		      avg.frq_h2 /= (double)sp_epoch ;
+
 		      avg.so_nearest /= (double)sp_epoch ;
 		      avg.norm_amp_max /= (double)sp_epoch ;
 		      avg.norm_amp_mean /= (double)sp_epoch ;
@@ -2737,32 +2740,57 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      writer.value( "MINS" , t_minutes );
 	      writer.value( "DENS" , spindles.size() / t_minutes );
-	      
-	      writer.value( "ISA_S" , means[ "ISA_PER_SPINDLE" ] );
 	      writer.value( "ISA_M" , means[ "ISA_TOTAL" ] / t_minutes );
 	      writer.value( "ISA_T" , means[ "ISA_TOTAL" ] );
-	      writer.value( "Q"     , means[ "Q" ] );
-
 	      
+	      // mean/(SD) spindle properties
+	      writer.value( "ISA_S" , means[ "ISA_PER_SPINDLE" ] );
+	      
+	      if ( show_per_spindle_sd ) {
+		
+		writer.value( "ISA_S_SD" , means[ "ISA_PER_SPINDLE_SD" ] );
+		writer.value( "Q_SD"     , means[ "Q_SD" ] );
+		writer.value( "AMP_SD" , means["AMP_SD"] );
+		writer.value( "DUR_SD" , means["DUR_SD"] );
+		writer.value( "FWHM_SD" , means["FWHM_SD"] );	      
+		writer.value( "NOSC_SD" , means["NOSC_SD"] );
+		writer.value( "SYMM_SD" , means["SYMM_SD"] );
+		writer.value( "SYMM2_SD" , means["SYMM2_SD"] );
+		writer.value( "SYMM_AMP_SD" , means["SYMM_AMP_SD"] );
+		writer.value( "SYMM_TROUGH_SD" , means["SYMM_TROUGH_SD"] );
+		writer.value( "FRQ_SD" , means["FRQ_SD"] );
+		writer.value( "FFT_SD" , means["FFT_SD"] );	      
+		writer.value( "CHIRP_SD" , means["CHIRP_SD"] );	      
+		writer.value( "FRNG2_SD" , means["FRNG2_SD"] ); // spindle freq range
+		writer.value( "FRQ1_SD" , means["FRQ1_SD"] );
+		writer.value( "FRQ2_SD" , means["FRQ2_SD"] );
+	      }
+
+	      writer.value( "Q"     , means[ "Q" ] );
 	      writer.value( "AMP" , means["AMP"] );
 	      writer.value( "ACT_MX" , means["ACT_MX"] );
 	      writer.value( "ACT_MN" , means["ACT_MN"] );
 	      writer.value( "DUR" , means["DUR"] );
 	      writer.value( "FWHM" , means["FWHM"] );
 	      writer.value( "NOSC" , means["NOSC"] );
-
+	      
 	      if ( param.has( "catch22" ) ) 
 		for (int i=0; i<22; i++)
 		  {
 		    std::string n = catch22_t::short_name( i );
 		    writer.value( "C22_" + n , means[ n ] );
 		    writer.value( "C22_" + n + "_FLT" , means[ n + "_FLT" ] );
+		    if ( show_per_spindle_sd ) { 
+		      writer.value( "C22_" + n + "_SD", means[ n + "_SD" ] );
+		      writer.value( "C22_" + n + "_FLT_SD" , means[ n + "_FLT_SD" ] );
+		    }
 		  }
 	      
 	      writer.value( "SYMM" , means["SYMM"] );
 	      writer.value( "SYMM2" , means["SYMM2"] );
 	      writer.value( "SYMM_AMP" , means["SYMM_AMP"] );
 	      writer.value( "SYMM_TROUGH" , means["SYMM_TROUGH"] );
+      
 	      writer.value( "SEC_P2P" , means["SEC_P2P"] );
 	      writer.value( "SEC_AMP" , means["SEC_AMP"] );
 	      writer.value( "SEC_TROUGH" , means["SEC_TROUGH"] );
@@ -2775,8 +2803,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      writer.value( "FRNG2" , means["FRNG2"] ); // spindle freq range
 	      writer.value( "FRQ1" , means["FRQ1"] );
 	      writer.value( "FRQ2" , means["FRQ2"] );
-	      
-	      
+      	      
 	      if ( globals::devel )
 		{
 		  
@@ -4650,36 +4677,65 @@ void spindle_qc_t::output( spindle_t * spindle , const int n )
 }
 
 
-void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::string,double> & results ) 
+void spindle_stats( const std::vector<spindle_t> & spindles , 
+		    std::map<std::string,double> & results ) 
 {
+  //
+  // Welford alg to get mean and SD
+  // 
+  
+  // form:
+  // double mean = 0.0;
+  // double M2   = 0.0;
+  // long n = 0;
 
+  // for (double x : data) {
+  //   n++;
+  //   double delta  = x - mean;
+  //   mean += delta / n;
+  //   double delta2 = x - mean;
+  //   M2 += delta * delta2;
+  // }
+  // double variance = M2 / (n - 1);     // sample variance
+  // double sd       = std::sqrt(variance);
+
+  // here, terms w/ _sq are the M2 terms
   double dur = 0 , fwhm = 0 , amp = 0 , nosc = 0 , isa = 0 , qual = 0 ;
+  double dur_sq = 0 , fwhm_sq = 0 , amp_sq = 0 , nosc_sq = 0 , isa_sq = 0 , qual_sq = 0 ;
 
+  double dur_tot = 0 , isa_tot = 0;
+  
+  // do not calc SDs
   double norm_amp_max = 0 , norm_amp_mean = 0;
 
+  // do not calc SDs
   double winsor1 = 0 , winsor2 = 0;
   
   // relative measures of spindle "peaks" (0..1)
   double symm = 0 , symm2 = 0, symm_amp = 0 , symm_max_trough = 0;
+  double symm_sq = 0 , symm2_sq = 0, symm_amp_sq = 0 , symm_max_trough_sq = 0;
   
-  // in seconds from start
-  double symm_sec = 0 , symm_amp_sec = 0 , symm_max_trough_sec = 0;
-
   // freq/chirp 
   double frq = 0 , fft = 0 , chirp = 0, frq1 = 0 , frq2 = 0 , frq_range = 0;
+  double frq_sq = 0 , fft_sq = 0 , chirp_sq = 0, frq1_sq = 0 , frq2_sq = 0 , frq_range_sq = 0;
 
-  // HWs
+
+  // in seconds from start (no SDs)
+  double symm_sec = 0 , symm_amp_sec = 0 , symm_max_trough_sec = 0;
+
+  // HWs (do not calc SDs)
   double negf = 0 , posf = 0 , allf = 0;
   double negb = 0 , posb = 0 , allb = 0;
   double negv = 0 , posv = 0 , allv = 0;
   double posisa = 0 , negisa = 0 , possp = 0 , negsp = 0;
   
-  // slopes
+  // slopes (do not calc SDs)
   double neg2f = 0 , pos2f = 0 ;
   double neg2b = 0 , pos2b = 0 ;
 
   // c22 stats
   std::vector<double> c22_raw(22,0), c22_flt(22,0);
+  std::vector<double> c22_raw_sq(22,0), c22_flt_sq(22,0);
   
   int denom = 0;
 
@@ -4692,33 +4748,155 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
       if ( ! ii->include ) { ++ii; continue; }
 
       ++denom; // a QC+ spindle
-      dur += ii->dur;
-      amp += ii->amp;
-      fwhm += ii->fwhm;
-      nosc += ii->nosc;
+      
+      double delta, delta2;
+
+      dur_tot += ii->dur;
+      isa_tot += ii->isa;
+
+      delta = ii->dur - dur;
+      dur += delta / denom;
+      delta2 = ii->dur - dur;
+      dur_sq += delta * delta2;
+
+      delta = ii->amp - amp;
+      amp += delta / denom;
+      delta2 = ii->amp - amp;
+      amp_sq += delta *delta2;
+
+      delta = ii->fwhm - fwhm;
+      fwhm += delta / denom;
+      delta2 = ii->fwhm - fwhm;
+      fwhm_sq += delta *delta2;
+
+
+      delta = ii->nosc - nosc;
+      nosc += delta / denom;
+      delta2 = ii->nosc - nosc;
+      nosc_sq += delta *delta2;
+
+      // dur += ii->dur;
+      // amp += ii->amp;
+      // fwhm += ii->fwhm;
+      // nosc += ii->nosc;
 
       // relative symmetry measures
-      symm += ii->symm;   // based on max peak-to-peak
-      symm2 += ii->symm2; // as above
-      symm_amp += ii->peak_amp_rel; 
-      symm_max_trough += ii->max_trough_rel;
+      // symm += ii->symm;   // based on max peak-to-peak
+      // symm2 += ii->symm2; // as above
+      // symm_amp += ii->peak_amp_rel; 
+      // symm_max_trough += ii->max_trough_rel;      
+
+      delta = ii->symm - symm;
+      symm += delta / denom;
+      delta2 = ii->symm - symm;
+      symm_sq += delta * delta2;
       
-      // in seconds
+      delta = ii->symm2 - symm2;
+      symm2 += delta / denom;
+      delta2 = ii->symm2 - symm2;
+      symm2_sq += delta * delta2;
+
+      delta = ii->peak_amp_rel - symm_amp;
+      symm_amp += delta / denom;
+      delta2 = ii->peak_amp_rel - symm_amp;
+      symm_amp_sq += delta * delta2;
+
+      delta = ii->max_trough_rel - symm_max_trough;
+      symm_max_trough += delta / denom;
+      delta2 = ii->max_trough_rel - symm_max_trough;
+      symm_max_trough_sq += delta * delta2;
+      
+      // freq
+      // frq += ii->frq;
+      // fft += ii->fft;
+      // chirp += ii->chirp;      
+      // frq1 += ii->frq_h1;
+      // frq2 += ii->frq_h2;
+      // frq_range += ii->frq_range;
+      // isa += ii->isa;
+      // qual += ii->qual;
+
+      delta = ii->frq - frq;
+      frq += delta / denom;
+      delta2 = ii->frq - frq;
+      frq_sq += delta * delta2;
+
+      delta = ii->fft - fft;
+      fft += delta / denom;
+      delta2 = ii->fft - fft;
+      fft_sq += delta * delta2;
+
+      delta = ii->chirp - chirp;
+      chirp += delta / denom;
+      delta2 = ii->chirp - chirp;
+      chirp_sq += delta * delta2;
+
+      delta = ii->frq_h1 - frq1;
+      frq1 += delta / denom;
+      delta2 = ii->frq_h1 - frq1;
+      frq1_sq += delta * delta2;
+
+      delta = ii->frq_h2 - frq2;
+      frq2 += delta / denom;
+      delta2 = ii->frq_h2 - frq2;
+      frq2_sq += delta * delta2;
+
+      delta = ii->frq_range - frq_range;
+      frq_range += delta / denom;
+      delta2 = ii->frq_range - frq_range;
+      frq_range_sq += delta * delta2;
+
+      delta = ii->isa - isa;
+      isa += delta / denom;
+      delta2 = ii->isa - isa;
+      isa_sq += delta * delta2;
+
+      delta = ii->qual - qual;
+      qual += delta / denom;
+      delta2 = ii->qual - qual;
+      qual_sq += delta * delta2;
+
+      // c22
+      if ( ii->c22_raw.size() == 22 )
+	{
+	  for (int i=0; i<22; i++)
+	    {
+	      // c22_raw[i] += ii->c22_raw[i];
+	      // c22_flt[i] += ii->c22_flt[i];	      
+
+	      delta = ii->c22_raw[i] - c22_raw[i];
+	      c22_raw[i] += delta / denom;
+	      delta2 = ii->c22_raw[i] - c22_raw[i];
+	      c22_raw_sq[i] += delta * delta2;
+
+	      delta = ii->c22_flt[i] - c22_flt[i];
+	      c22_flt[i] += delta / denom;
+	      delta2 = ii->c22_flt[i] - c22_flt[i];
+	      c22_flt_sq[i] += delta * delta2;
+
+	    }
+	}
+
+      //
+      // just take means 
+      //
+
+      // in seconds (no SDs)
       symm_sec += ii->symm * ii->dur ;
       symm_amp_sec += ii->peak_amp_rel * ii->dur;
       symm_max_trough_sec += ii->max_trough_rel * ii->dur;
 
+      // no SDs
+      posisa += ii->posisa;
+      negisa += ii->negisa;
+      norm_amp_max += ii->norm_amp_max;
+      norm_amp_mean += ii->norm_amp_mean;
+      possp += ii->possp;
+      negsp += ii->negsp;
+
       // winsorization
       winsor1 += ii->winsor > 0 ; // any clipping for this spindle?
       winsor2 += ii->winsor / (double)(ii->stop_sp - ii->start_sp + 1 );
-      
-      // freq
-      frq += ii->frq;
-      fft += ii->fft;
-      chirp += ii->chirp;      
-      frq1 += ii->frq_h1;
-      frq2 += ii->frq_h2;
-      frq_range += ii->frq_range;
 
       negf += ii->negf;
       posf += ii->posf;
@@ -4739,58 +4917,83 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
       neg2b += ii->neg2b;
       pos2b += ii->pos2b;
 
-      isa += ii->isa;
-      posisa += ii->posisa;
-      negisa += ii->negisa;
-
-      norm_amp_max += ii->norm_amp_max;
-      norm_amp_mean += ii->norm_amp_mean;
-      
-      possp += ii->possp;
-      negsp += ii->negsp;
-      
-      qual += ii->qual;
-
-      // c22
-      if ( ii->c22_raw.size() == 22 )
-	{
-	  for (int i=0; i<22; i++)
-	    {
-	      c22_raw[i] += ii->c22_raw[i];
-	      c22_flt[i] += ii->c22_flt[i];	      
-	    }
-	}
       
       ++ii;
     }
   
+  //
+  // Welford means/SDs
+  //
 
-  results[ "AMP" ]      = amp /(double)denom;
+  results[ "AMP" ]      = amp;
+  results[ "AMP_SD" ]   = std::sqrt( amp_sq /(double)(denom-1) );
+
+  results[ "DUR" ]      = dur;
+  results[ "DUR_SD" ]   = std::sqrt(dur_sq / (double)(denom-1) );
+
+  results[ "FWHM" ]     = fwhm;
+  results[ "FWHM_SD" ]  = std::sqrt(fwhm_sq / (double)(denom-1) );
+  
+  results[ "NOSC" ]     = nosc;
+  results[ "NOSC_SD" ]  = std::sqrt(nosc_sq / (double)(denom-1) );
+  
+  results[ "FRQ" ]      = frq;
+  results[ "FRQ_SD" ]   = std::sqrt( frq_sq / (double)(denom-1) );
+
+  results[ "FFT" ]      = fft;
+  results[ "FFT_SD" ]   = std::sqrt( fft_sq / (double)(denom-1) );
+
+  results[ "SYMM" ]     = symm;
+  results[ "SYMM_SD" ]  = std::sqrt( symm_sq / (double)(denom-1) );
+
+  results[ "SYMM2" ]    = symm2;
+  results[ "SYMM2_SD" ] = std::sqrt( symm2_sq / (double)(denom-1) );
+  
+  results[ "SYMM_AMP" ]    = symm_amp;
+  results[ "SYMM_AMP_SD" ] = std::sqrt( symm_amp_sq / (double)(denom-1) );
+
+  results[ "SYMM_TROUGH" ]      = symm_max_trough;
+  results[ "SYMM_TROUGH_SD" ]   = std::sqrt( symm_max_trough_sq / (double)(denom-1) );
+
+
+  results[ "CHIRP" ]     = chirp;
+  results[ "CHIRP_SD" ]  = std::sqrt( chirp_sq / (double)(denom-1) );
+
+  results[ "FRQ1" ]     = frq1;
+  results[ "FRQ1_SD" ]  = std::sqrt( frq1_sq / (double)(denom-1) );
+
+  results[ "FRQ2" ]    = frq2;
+  results[ "FRQ2_SD" ] = std::sqrt( frq2_sq / (double)(denom-1) );
+
+  results[ "FRNG2" ]     = frq_range;
+  results[ "FRNG2_SD" ]  = std::sqrt( frq_range_sq / (double)(denom-1) );
+
+  results[ "Q" ]     = qual;
+  results[ "Q_SD" ]  = std::sqrt( qual_sq / (double)(denom-1) );
+
+  for (int i=0; i<22; i++)
+    {
+      results[ catch22_t::short_name(i) ] = c22_raw[i];
+      results[ catch22_t::short_name(i) + "_FLT" ] = c22_flt[i];
+
+      results[ catch22_t::short_name(i) + "_SD" ] = std::sqrt( c22_raw_sq[i] / (double)(denom-1) );
+      results[ catch22_t::short_name(i) + "_FLT_SD" ] = std::sqrt( c22_flt_sq[i] / (double)(denom-1) );
+
+    }
+
+  results[ "ISA_PER_SPINDLE" ] = isa; 
+  results[ "ISA_PER_SPINDLE_SD" ] = std::sqrt( isa_sq / (double)(denom-1) );
+
+
+  //
+  // Other basic means (not Welford alg)
+  //
+
+  results[ "TOTDUR" ]   = dur_tot;
 
   results[ "ACT_MX" ]      = norm_amp_max /(double)denom;
-  results[ "ACT_MN" ]      = norm_amp_mean /(double)denom;
-
-  results[ "TOTDUR" ]   = dur;
-  results[ "DUR" ]      = dur / (double)denom;
-  results[ "FWHM" ]     = fwhm / (double)denom;
-  results[ "NOSC" ]     = nosc / (double)denom;
-  results[ "FRQ" ]      = frq / (double)denom;
-  results[ "FFT" ]      = fft / (double)denom;
-
-  results[ "SYMM" ]     = symm / (double)denom;
-  results[ "SYMM2" ]    = symm2 / (double)denom;
-  results[ "SYMM_AMP" ] = symm_amp / (double)denom;
-  results[ "SYMM_TROUGH" ]    = symm_max_trough / (double)denom;
-
-  results[ "SEC_P2P" ]    = symm_sec / (double)denom;
-  results[ "SEC_AMP" ]    = symm_amp_sec / (double)denom;
-  results[ "SEC_TROUGH" ] = symm_max_trough_sec / (double)denom;
-
-  results[ "CHIRP" ]   = chirp / (double)denom;
-  results[ "FRQ1" ]    = frq1 / (double)denom;
-  results[ "FRQ2" ]    = frq2 / (double)denom;
-  results[ "FVAR2" ]    = allv / (double)denom;
-  results[ "FRNG2" ]    = frq_range / (double)denom;
+  results[ "ACT_MN" ]      = norm_amp_mean /(double)denom;  
+  results[ "FVAR2" ]     = allv / (double)denom;
 
   results[ "FNEG" ]    = negf / (double)denom;
   results[ "FPOS" ]    = posf / (double)denom;
@@ -4811,12 +5014,11 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
   results[ "BSNEG" ]    = neg2b / (double)denom;
   results[ "BSPOS" ]    = pos2b / (double)denom;
 
-  results[ "Q" ]        = qual / (double)denom;
+
   results[ "W_ANY" ]    = winsor1 / (double)denom;
   results[ "W" ]        = winsor2 / (double)denom;
   
-  results[ "ISA_PER_SPINDLE" ] = isa / (double)denom;
-  results[ "ISA_TOTAL" ] = isa;
+  results[ "ISA_TOTAL" ] = isa_tot;
   
   results[ "POSISA_PER_SP" ] = posisa / (double)denom;
   results[ "POSSP" ] = possp / (double)denom;
@@ -4824,11 +5026,10 @@ void spindle_stats( const std::vector<spindle_t> & spindles , std::map<std::stri
   results[ "NEGISA_PER_SP" ] = negisa / (double)denom;
   results[ "NEGSP" ] = negsp / (double)denom;
 
-  for (int i=0; i<22; i++)
-    {
-      results[ catch22_t::short_name(i) ] = c22_raw[i] / (double)denom;
-      results[ catch22_t::short_name(i) + "_FLT" ] = c22_flt[i] / (double)denom;
-    }
+  results[ "SEC_P2P" ]    = symm_sec / (double)denom;
+  results[ "SEC_AMP" ]    = symm_amp_sec / (double)denom;
+  results[ "SEC_TROUGH" ] = symm_max_trough_sec / (double)denom;
+
  
 }
 
