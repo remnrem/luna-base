@@ -350,6 +350,12 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   int required_sr = param.has( "sr-over" ) ? param.requires_int( "sr-over" ) : 0 ; 
 
   bool calc_catch22 = param.has( "catch22" ) ? param.yesno( "catch22" ) : false;
+
+  bool calc_catch24 = param.has( "catch24" ) ? param.yesno( "catch24" ) : false;
+
+  if ( calc_catch24 ) calc_catch22 = true;
+
+  const int n22 = calc_catch24 ? 24 : 22 ; 
   
   bool calc_pfd = param.has( "pfd" ) ;
 
@@ -421,8 +427,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
   std::vector<double> mean_mobility( ns , 0 );
   std::vector<double> mean_complexity( ns , 0 );
 
-  std::vector<std::vector<double> > mean_catch22( 22 );
-  for (int i=0; i<22; i++)
+  std::vector<std::vector<double> > mean_catch22( n22 );
+  for (int i=0; i<n22; i++)
     mean_catch22[i].resize( ns , 0 );
 
   //
@@ -536,8 +542,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  // Catch22 stats
 	  //
 
-	  catch22_t c22;
-
+	  catch22_t c22( calc_catch24 );
+	  
 	  if ( calc_catch22 ) 
 	    c22.calc( d->data() , d->size() );
 	  
@@ -617,7 +623,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      
 	      if ( calc_catch22 & c22.valid() )
 		{
-		  for (int i=0; i<22; i++)
+		  for (int i=0; i < n22; i++)
 		    writer.value( c22.short_name(i) , c22.stat(i) );
 		}
 	      
@@ -681,7 +687,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
 	  if ( calc_catch22 )
 	    {
-	      for (int i=0; i<22; i++)
+	      for (int i=0; i< n22; i++)
 		mean_catch22[i][si] += c22.stat(i);
 	    }
 	  
@@ -728,7 +734,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       writer.value( "H3"   , mean_complexity[si] / (double)n[si] );
 
       if ( calc_catch22 )
-	for (int i=0; i<22; i++)
+	for (int i=0; i<n22; i++)
 	  writer.value( catch22_t::short_name(i) , mean_catch22[i][si] / (double)n[si] );
             
       if ( calc_clipped )
