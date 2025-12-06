@@ -1180,7 +1180,10 @@ void cmddefs_t::init()
   add_var( "OVERLAP" , "SEED,OTHER" , "D1_P" , "Empirical p-value for absolute distance to nearest" );
   add_var( "OVERLAP" , "SEED,OTHER" , "D1_Z" , "Z-score for absolute distance to nearest" );
   add_var1( "OVERLAP" , "SEED,OTHER" , "D2_EXP" , "Expected signed distance to nearest" );
-  add_var1( "OVERLAP" , "SEED,OTHER" , "D2_OBS" , "Observed signed distance to nearest" );
+  add_var1( "OVERLAP" , "SEED,OTHER" , "D2_OBS" , "Observed signed distance metric to nearest" );
+  add_var1( "OVERLAP" , "SEED,OTHER" , "D2_SEC" , "Observed signed distance (secs) to nearest" );
+  add_var1( "OVERLAP" , "SEED,OTHER" , "D2_LAG" , "Proportion of time seed lags" );
+  add_var1( "OVERLAP" , "SEED,OTHER" , "D2_LEAD" , "Proportion of times seed leads" );
   add_var1( "OVERLAP" , "SEED,OTHER" , "D2_P" , "Empirical p-value for signed distance to nearest" );
   add_var1( "OVERLAP" , "SEED,OTHER" , "D2_Z" , "Z-score for signed distance to nearest" );
   add_var( "OVERLAP" , "SEED,OTHER" , "D_N" , "Number of seeds for nearest stats" );

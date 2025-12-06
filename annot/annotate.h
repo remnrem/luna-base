@@ -87,6 +87,9 @@ struct annotate_stats_t {
     ns.clear();
     adist.clear();
     sdist.clear();
+    ssec.clear();
+    sleads.clear();
+    slags.clear();
     nadist.clear();
     nsdist.clear();
     s2a_mappings.clear();
@@ -110,7 +113,13 @@ struct annotate_stats_t {
 
   // seed-annot signed(dist)
   std::map<std::string,std::map<std::string,double> > sdist;
-
+  
+  // if sdist is +1/-1 scoring, still calc for output; otherwise
+  std::map<std::string,std::map<std::string,double> > ssec;
+  
+  // seed-annot lead/lag proportions
+  std::map<std::string,std::map<std::string,double> > sleads, slags;
+  
   // denominator for distance means (sep. for abs and signed)
   // for abs, we truncate at max win; for signed, we ignore (set to zero + do not include in denom) 
   std::map<std::string,std::map<std::string,double> > nadist;
@@ -431,6 +440,11 @@ struct annotate_t {
   std::map<std::string,std::map<std::string,double> > sgnd_pv;
   std::map<std::string,std::map<std::string,double> > sgnd_z;
 
+  // always seconds (not +1/-1 scoring of default sgnd_obs)
+  std::map<std::string,std::map<std::string,double> > sgnd_obs_sec;
+  std::map<std::string,std::map<std::string,double> > sgnd_leads;
+  std::map<std::string,std::map<std::string,double> > sgnd_lags;  
+  
   // number of events included in the nearest-neighbour calcs
   std::map<std::string,std::map<std::string,double> > dn_obs;
   std::map<std::string,std::map<std::string,double> > dn_exp;

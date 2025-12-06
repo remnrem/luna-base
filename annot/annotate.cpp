@@ -3122,8 +3122,7 @@ void annotate_t::output( const annotate_stats_t & s )
 	    {
 	      double mean = s2a_exp[ saa->first ][ pp->first ] / (double)nreps;
 	      double var = s2a_expsq[ saa->first ][ pp->first ] / (double)nreps - mean * mean;
-	      writer.value( "N_EXP" , mean );
-	      //std::cout << " var = " << var << " " << s2a_expsq[ saa->first ][ pp->first ]  << "\n";
+	      writer.value( "N_EXP" , mean );	      
 	      if ( var > 0 )
 		writer.value( "N_Z" , ( (double)s2a_obs[ saa->first ][ pp->first ] - mean ) / sqrt( var ) );
 	    }
@@ -3146,17 +3145,14 @@ void annotate_t::output( const annotate_stats_t & s )
   while ( sa != absd_obs.end() )
     {
 
-      //      std::cout << " sa obs2 " << sa->first << "\n";
-      
       writer.level( sa->first , "SEED" );
       
-
       const std::map<std::string,double> & p = sa->second;
       std::map<std::string,double>::const_iterator pp = p.begin();
       while ( pp != p.end() )
 	{
-	  writer.level( pp->first , "OTHER" );
 
+	  writer.level( pp->first , "OTHER" );
 
 	  //
 	  // write out name/channel details	  
@@ -3215,6 +3211,12 @@ void annotate_t::output( const annotate_stats_t & s )
 	      
 	    }
 
+	  writer.value( "D2_OBS" , sgnd_obs[ sa->first ][ pp->first ]  );
+	  if ( d2_signed )
+	    writer.value( "D2_SEC" , sgnd_obs_sec[ sa->first ][ pp->first ]  );
+	  writer.value( "D2_LEAD" , sgnd_leads[ sa->first ][ pp->first ]  );
+	  writer.value( "D2_LAG" , sgnd_lags[ sa->first ][ pp->first ]  );
+	  
 	  writer.value( "D2_OBS" , sgnd_obs[ sa->first ][ pp->first ]  );
 	  if ( nreps )
 	    {
@@ -3607,6 +3609,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 		      dist = - left_dist;
 		      closestb = bb;
 		    }
+
 		  // if ( debug_mode )
 		  //   {
 		  // std::cout << " back b is before, so dist = " << left_dist << "\n";
@@ -3624,9 +3627,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       // to track proprtion of seeds w/ at least one (non-seed) annot overlap
       if ( overlap && ! bseed )
 	{
-	  //	  std::cout << " found overlap : " << astr << " " << bstr << " = " << aa->as_string() << " by " << bb->as_string() << "\n";
  	  r->psa[ astr ].insert ( named_interval_t( offset, *aa , astr ) );
-	  //std::cout << "   size = " << r->psa[ astr ].size() << "\n";
 	}
       
       // truncate at window length?
@@ -3636,8 +3637,6 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       // ignores in calc of signed-dist
       double adist = truncate ? window_sec : fabs( dist ) ;
       
-      //      std::cout << "a, closest = " << aa->as_string() << "\t" << closestb->as_string() << "\t" << overlap << "\t" << dist << "\n";
-            
       // do we include complete overlap as "nearest"?
       if ( include_overlap_in_dist || ! overlap )
 	{
@@ -3661,6 +3660,15 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	    {
 	      if ( ! truncate )
 		{
+
+		  // for output, which variant is used below for test statistic
+		  
+		  r->ssec[ astr ][ bstr ] += seed_centric_dist ;
+		  if ( seed_centric_dist < 0 )
+		    r->sleads[ astr ][ bstr ]++;
+		  else if ( seed_centric_dist > 0 )
+		    r->slags[ astr ][ bstr ]++;
+			   
 		  if ( d2_signed )  // reduce to -1/+1
 		    r->sdist[ astr ][ bstr ] += seed_centric_dist > 0 ? +1 : -1 ;
 		  else
@@ -3697,9 +3705,6 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 
 	  std::set<interval_t>::const_iterator cc = closestb;
 	  
-	  // std::cout << "\n\n CHECKING " << astr << " " << bstr << "\n";
-	  // std::cout << " aa " << aa->as_string() << "\n";
-	  // std::cout << " cc " << cc->as_string() << "\n";
 	  
 	  // forwards:: events must span after
 	  while ( 1 )
@@ -3707,12 +3712,9 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	      // nothing left?
 	      if ( cc == b.end() ) break;	      
 	      
-	      //	      std::cout << "  checking -> cc " << cc->as_string() << "\n";
-	      
 	      // comes before, i.e. this cc does not extend after, then advance 
 	      if ( cc->stop <= aa->stop )
 		{
-		  //		  std::cout << " advancing...\n";
 		  ++cc;
 		  continue;
 		}
@@ -3733,8 +3735,6 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	      // end of overlap: we know cc ends after 
 	      uint64_t s2 = cc->stop - aa->stop;
 
-	      //  std::cout << " s12 " << s1 << " " << s2 << "\n";
-	      
 	      for (int fi=0; fi<n_flanking_offsets; fi++)
 		{
 		  const interval_t & win = flanking_overlap_intervals[fi];
@@ -3748,8 +3748,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 		  //		  std::cout << " win " << fi << " of " << n_flanking_offsets << " = " << win.as_string() << "\n";
 		  
 		  if ( s1 < win.stop && s2 > win.start ) 
-		    {
-		      //std::cout << "overlaps!\n";
+		    {		      
 		      r->nosa[ astr ][ bstr ][ fi + 1 ] += 1 ; // +1 based offset counts:
 		    }
 		}
@@ -3766,13 +3765,10 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	  while ( 1 )
 	    {
 
-	      //std::cout << " chking neg " << cc->as_string() << "\n";
-
 	      // starts after start?, i.e. this cc does not extend before?
 	      // then roll back (unless we are already at the start of the list) 
 	      if ( cc->start >= aa->start )
 		{
-		  //std::cout << "  cc starts after aa, roll back...\n";
 		  if ( cc == b.begin() ) break; 
 		  --cc;
 		  continue;
@@ -3785,7 +3781,6 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	      
 	      if ( aa->start >= cc->stop && aa->start - cc->stop > flanking_overlap_mx )
 		{
-		  //std::cout << " gone too far::: " << cc->stop << " " << aa->start << " " << aa->start - cc->stop << " " << flanking_overlap_mx << "\n";
 		  break;
 		}
 
@@ -3798,30 +3793,23 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	      // zero-bounded end of overlap (going back in time)
 	      uint64_t s1 = cc->stop < aa->start ? aa->start - cc->stop : 0LLU ;
 	      
-	      //std::cout << " s1 s2 " << s1 << " " << s2 << "\n";
-	      
 	      for (int fi=0; fi<n_flanking_offsets; fi++)
 		{
 		  const interval_t & win = flanking_overlap_intervals[fi];
 		  
-		  //std::cout << " win " << win.as_string() << "\n";
-		  
 		  // gone past , based on end of win: no point in looking here.
 		  if ( win.start >= s2 ) 
 		    {
-		      // std::cout << " huh, " << win.stop << "  " << s2 << "\n";
-		      // std::cout << "gone past?\n";
 		      break;		      
 		    }
 
 		  //     |aaaaaa|  [s1]------[s2]
 		  //            |   |   |   |   |   |   |   win[] interval_t
 		  // overlaps?
-		  //std::cout << " checking neg pos  " << -( fi + 1 ) << "\n";
+		  
 		  if ( s1 < win.stop && s2 > win.start ) 
 		    {
-		      r->nosa[ astr ][ bstr ][ -( fi + 1 ) ] += 1 ; // -ve +1 based offset counts:
-		      //std::cout << " FOUND ONE OH MY!\n";
+		      r->nosa[ astr ][ bstr ][ -( fi + 1 ) ] += 1 ; // -ve +1 based offset counts:		      
 		    }
 		  
 		}
@@ -3831,8 +3819,7 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	      --cc;
 
 	    }
-
-	  //std::cout << " done1\n";
+	  
 	}
       
       // are we tracking hits
@@ -4090,6 +4077,13 @@ void annotate_t::observed( const annotate_stats_t & s )
   
   // signed distance (from each seed to nearest annot) std::map<std::string,std::map<std::string,double> >
   sgnd_obs = s.sdist;
+
+  // always in seconds (not +1/-1 scoring): output only
+  sgnd_obs_sec = s.ssec;
+
+  // lead/lag counts
+  sgnd_leads = s.sleads;
+  sgnd_lags = s.slags;
   
   // get average distances (these may be < S-A count, because of window_sec threshold)
   // isa nsa[] keys, but check that nxdist is >0 
@@ -4147,9 +4141,19 @@ void annotate_t::observed( const annotate_stats_t & s )
 	    }
 
 	  if ( nsd > 0 )	    
-	    sgnd_obs[ dd->first ][ ee->first ] /= nsd;
+	    {
+	      sgnd_obs[ dd->first ][ ee->first ] /= nsd;
+	      sgnd_obs_sec[ dd->first ][ ee->first ] /= nsd;
+	      sgnd_leads[ dd->first ][ ee->first ] /= nsd;
+	      sgnd_lags[ dd->first ][ ee->first ] /= nsd;
+	    }
 	  else
-	    sgnd_obs[ dd->first ][ ee->first ] = 0; // null value 'not-defined'
+	    {
+	      sgnd_obs[ dd->first ][ ee->first ] = 0; // null value 'not-defined'
+	      sgnd_obs_sec[ dd->first ][ ee->first ] = 0;
+	      sgnd_leads[ dd->first ][ ee->first ] = 0;
+	      sgnd_lags[ dd->first ][ ee->first ] = 0;
+	    }
 	  
 	  ++ee;
 	}
@@ -4282,6 +4286,7 @@ void annotate_t::build_null( annotate_stats_t & s )
 	  
 	  // if not defined, ndist and sdist should be zero
 	  // otherwise, adist should be max window size (i.e. 'undefined')
+
 	  // Q/TODO: annot vs marker max value issue
 	  	  
 	  const double na = s.nadist[ sa->first ][ pp->first ];
@@ -4297,8 +4302,6 @@ void annotate_t::build_null( annotate_stats_t & s )
 	  
 	  if ( ns > 0 )
 	    s1 = s.sdist[ sa->first ][ pp->first ] / ns ; 		  
-	  
-	  //	  std::cout << "sgnd\t" << s1 << "\t" << a1 << "\t" << na << "\t" << ns  << "\t" << s.nsa[ sa->first ][ pp->first ]  << "\n";
 	  
 	  // expecteds: sums
 	  absd_exp[ sa->first ][ pp->first ] += a1;
@@ -4321,9 +4324,7 @@ void annotate_t::build_null( annotate_stats_t & s )
           ++pp;
         }
       ++sa;
-      //      std::cout << "s7\n";
     }
-  //  std::cout << "s-done\n";
 
 
   //
@@ -4349,7 +4350,6 @@ void annotate_t::build_null( annotate_stats_t & s )
       ++qq;
     }
 
-  //  std::cout << "done BN\n";  
 }
 
 
