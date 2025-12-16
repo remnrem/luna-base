@@ -295,6 +295,7 @@ void proc_drop_signals( edf_t & , param_t & );
 void proc_drop_annots( edf_t & , param_t & );
 void proc_rename( edf_t & , param_t & );
 void proc_enforce_signals( edf_t & , param_t & );
+void proc_make_bands( edf_t & , param_t & );
 void proc_copy_signal( edf_t & , param_t & );
 void proc_read_signal( edf_t & , param_t & );
 void proc_init_empty_signal( edf_t & , param_t & );

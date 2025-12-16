@@ -914,6 +914,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "DROP-ANNOTS" ) )  { fnd = true; proc_drop_annots( edf , param(c) ); }
       if ( (!fnd) && is( c, "RENAME" ) )       { fnd = true; proc_rename( edf, param(c) ); }
       if ( (!fnd) && is( c, "ENFORCE-SR" ) )   { fnd = true; proc_enforce_signals( edf , param(c) ); }
+      if ( (!fnd) && is( c, "BANDS" ) )        { fnd = true; proc_make_bands( edf , param(c) ); } 
       if ( (!fnd) && is( c, "COPY" ) )         { fnd = true; proc_copy_signal( edf , param(c) ); }
       if ( (!fnd) && is( c, "EMPTY" ) )        { fnd = true; proc_init_empty_signal( edf , param(c) ); } 
       if ( (!fnd) && is( c, "READ" ) )         { fnd = true; proc_read_signal( edf , param(c) ); }
@@ -3937,9 +3938,18 @@ void proc_init_empty_signal( edf_t & edf , param_t & param )
     }
 }
 
+
+// BANDS : make new signals that are band-filtered versions of the input(s)
+void proc_make_bands( edf_t & edf , param_t & param )
+{
+  dsptools::make_bands( edf , param );  
+}
+
 // COPY : mirror a signal
 void proc_copy_signal( edf_t & edf , param_t & param )
 {
+
+  const bool silent = param.has( "silent" );
   
   signal_list_t originals = edf.header.signal_list( param.requires( "sig" ) );
   
@@ -3964,10 +3974,11 @@ void proc_copy_signal( edf_t & edf , param_t & param )
 	  
 	  if ( ! edf.header.has_signal( new_label ) )
 	    {
-	      logger << "  copying " << originals.label(s) << " to " << new_label << "\n";
+	      if ( ! silent )
+		logger << "  copying " << originals.label(s) << " to " << new_label << "\n";
 	      edf.copy_signal( originals.label(s) , new_label );
 	    }
-	  else
+	  else 
 	    logger << "  *** " << new_label << " already exists, skipping copying operation\n";
 	}
     }

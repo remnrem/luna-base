@@ -566,6 +566,8 @@ std::vector<double> dsptools::apply_fir( const std::vector<double> & x ,
 void dsptools::apply_fir( edf_t & edf , param_t & param )
 {
 
+  const bool silent = param.has( "silent" ) ;
+  
   //
   // reading filter coefficients from an external file?
   //
@@ -693,8 +695,8 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
   
   const int ns = signals.size();
 
-
-  logger << "  filtering channel(s):";
+  if ( ! silent ) 
+    logger << "  filtering channel(s):";
   
   //
   // Process each signal
@@ -708,8 +710,9 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
       //
       
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
-      
-      logger << " " << signals.label(s);
+
+      if ( ! silent ) 
+	logger << " " << signals.label(s);
 
       if ( ngaus )
 	apply_ngaus( edf, signals(s) , ngaus_f, ngaus_fwhm );
@@ -721,7 +724,9 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
 		   use_fft , fir_file );
       
     }
-  logger << "\n";
+
+  if ( ! silent ) 
+    logger << "\n";
 }
 
 

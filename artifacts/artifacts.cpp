@@ -329,7 +329,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
     Helper::halt( "use CHEP-MASK to find channel/epoch outliers: SIGSTATS now only reports epoch-level/individual-level statistics" );
 
   // Hjorth parameters: H1, H2, H3
-  // Catch22 stats
+  // Catch22/24 stats
+  // Catch22 on epoch-level outputs
   // Optional: Second-order Hjorth
   // Optional: RMS, % clipped signals
   // Optional: permutation entropy
@@ -349,14 +350,21 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
   int required_sr = param.has( "sr-over" ) ? param.requires_int( "sr-over" ) : 0 ; 
 
-  bool calc_catch22 = param.has( "catch22" ) ? param.yesno( "catch22" ) : false;
+  bool calc_catch22 = param.has( "catch22" ) ? param.yesno( "catch22" ) : false;  
 
   bool calc_catch24 = param.has( "catch24" ) ? param.yesno( "catch24" ) : false;
-
+    
   if ( calc_catch24 ) calc_catch22 = true;
 
-  const int n22 = calc_catch24 ? 24 : 22 ; 
-  
+  const int n22 = calc_catch24 ? 24 : 22 ;
+
+  // c22 stats on epoch-by-epoch statistics
+  bool calc_epoch_catch22 = param.has( "epoch-catch22" );
+  bool calc_epoch_catch24 = param.has( "epoch-catch24" ) ? param.yesno( "epoch-catch24" ) : false;  
+  if ( calc_epoch_catch24 ) calc_epoch_catch22 = true;
+  const int ne22 = calc_epoch_catch24 ? 24 : 22 ; 
+
+  // other metrics
   bool calc_pfd = param.has( "pfd" ) ;
 
   bool calc_dynamics = param.has( "dynam" );
@@ -432,6 +440,17 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
     mean_catch22[i].resize( ns , 0 );
 
   //
+  // stores 
+  //
+
+  // ch -> metric -> epoch[]
+  std::map<int,std::map<std::string,std::vector<double> > > ec22;
+  
+  // track contig status for 2nd-level c22
+  std::vector<uint64_t> ec22_epoch_onset;
+  
+  
+  //
   // dynamics
   //
 
@@ -497,7 +516,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       //
     
       int sr = edf.header.sampling_freq( signals( s ) );
-      
+
       //
       // for each each epoch 
       //
@@ -538,14 +557,6 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	  
 	  double x = calc_rms ? MiscMath::rms( *d ) : 0 ;
 
-	  //
-	  // Catch22 stats
-	  //
-
-	  catch22_t c22( calc_catch24 );
-	  
-	  if ( calc_catch22 ) 
-	    c22.calc( d->data() , d->size() );
 	  
 	  //
 	  // Permutation entropy
@@ -591,6 +602,39 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      MiscMath::hjorth2( d , &(hjorth2)[0] , hjorth2_win * sr , hjorth2_inc * sr );
 	    }		    
 	  
+	  //
+	  // Catch22 stats
+	  //
+
+	  catch22_t c22( calc_catch24 );
+	  
+	  if ( calc_catch22 ) 
+	    c22.calc( d->data() , d->size() );
+	  
+	  // track?
+	  
+	  if ( calc_epoch_catch22 )
+	    {
+	      // always Hjorth
+	      ec22[ si ][ "H1" ].push_back( log1p( activity ) );
+	      ec22[ si ][ "H2" ].push_back( mobility );
+	      ec22[ si ][ "H3" ].push_back( complexity );
+
+	      // track timing for contig determination
+	      // (only needed from first signal) 
+	      if ( si == 0 ) 
+		ec22_epoch_onset.push_back( interval.start );
+	      
+	      if ( calc_catch22 ) 
+		for (int i=0; i < n22; i++)
+		  {
+		    std::string key = c22.short_name(i);
+		    double value = c22.valid() ? c22.stat(i) : 0 ;
+		    ec22[ si ][ key ].push_back( value );
+		    //ec22[ c22.short_name(i) ].push_back( c22.valid() ? c22.stat(i) : 0 ) ;
+		  }
+	    }
+	  
 	  
 	  //
 	  // Store for dynamics
@@ -621,7 +665,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 	      writer.value( "H2" , mobility );
 	      writer.value( "H3" , complexity );
 	      
-	      if ( calc_catch22 & c22.valid() )
+	      if ( calc_catch22 && c22.valid() )
 		{
 		  for (int i=0; i < n22; i++)
 		    writer.value( c22.short_name(i) , c22.stat(i) );
@@ -708,6 +752,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       
     }
 
+
   if ( verbose || calc_dynamics )
     writer.unlevel( globals::signal_strat );
 
@@ -732,11 +777,11 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
       writer.value( "H1"   , mean_activity[si] / (double)n[si] );
       writer.value( "H2"   , mean_mobility[si] / (double)n[si] );
       writer.value( "H3"   , mean_complexity[si] / (double)n[si] );
-
+      
       if ( calc_catch22 )
 	for (int i=0; i<n22; i++)
 	  writer.value( catch22_t::short_name(i) , mean_catch22[i][si] / (double)n[si] );
-            
+      
       if ( calc_clipped )
 	writer.value( "CLIP" , clipped[si] / (double)n[si] );
 
@@ -748,11 +793,135 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 
       if ( calc_rms )
 	writer.value( "RMS"   , rms[si] / (double)n[si] );
+
       
+      //
+      // epoch level catch22?
+      //
+
+      if ( calc_epoch_catch22 )
+       	{
+
+	  const int min_obs = 30;
+	  
+	  if ( ec22_epoch_onset.size() >= min_obs )
+	    {
+	      
+	      uint64_t mind = ec22_epoch_onset[1] - ec22_epoch_onset[0];
+
+	      for (int i=1; i<ec22_epoch_onset.size(); i++)
+		{		  
+		  if ( ec22_epoch_onset[i] <= ec22_epoch_onset[i-1] )
+		    Helper::halt( "invalid epoch structure for epoch-catch22" );		  
+		  if ( ec22_epoch_onset[i] - ec22_epoch_onset[i-1] < mind )
+		    mind = ec22_epoch_onset[i] - ec22_epoch_onset[i-1] ; 		    
+		}
+	      
+	      // determine contigs	      
+	      std::vector<int> blockend;
+	      blockend.push_back(0);
+	      for (int i=1; i<ec22_epoch_onset.size(); i++)
+		{		  
+		  if ( ec22_epoch_onset[i] - ec22_epoch_onset[i-1] > mind )
+		    blockend.push_back( i ); // one past end		      		  
+		}
+	      // at end
+	      blockend.push_back( ec22_epoch_onset.size() );
+
+	      // enough samples in each contig?
+	      std::vector<std::pair<int,int> > blocks;
+	      for (int i=1; i<blockend.size(); i++)
+		{
+		  // enough actual 'samples' (epochs) for c22?
+		  if ( blockend[i] - blockend[i-1] >= min_obs )
+		    blocks.push_back( std::pair<int,int>( blockend[i-1] , blockend[i] ) );		  
+		}
+	    
+	      const int nc = blocks.size(); 
+	      
+	      writer.value( "EC22_NC" , 0 );
+
+	      if ( nc >= 1 )
+		{
+		  // get mean EC22
+		  
+		  // key -> ec22 -> value
+		  std::map<std::string,std::map<std::string,double> > m; 
+
+		  // key -> valid
+		  std::map<std::string,int> n;
+
+		  // 'length'
+		  std::map<std::string,double> l;
+		  
+		  for (int c=0; c<nc; c++)
+		    {
+		      
+		      for ( const auto & [key, vec] : ec22[si] ) {
+
+			std::cout << " key = " << key << "\n";
+			
+			// extract for this particularl contig
+			int start = blocks[c].first;
+			int stop = blocks[c].second;
+			int len = stop - start;
+			
+			std::vector<double> contig( len );
+			int idx = 0;
+			for (int p = start; p < stop; p++)
+			  contig[ idx++ ] = vec[ p ];
+
+			std::cout << " contig " << start << " " << stop << "\n";
+			for (int i=0; i<contig.size(); i++) std::cout << "  " << contig[i] << "\n";
+			
+			// catch22
+			catch22_t c22( calc_epoch_catch24 );
+			c22.calc( contig.data() , contig.size() );
+			
+			// iterate over each c22 summary
+			// aggregating for means
+			if ( c22.valid() )
+			  {
+			    n[ key ]++;
+			    l[ key ] += len;
+			    
+			    for (int i=0; i<ne22; i++)
+			      m[ key ] [ catch22_t::short_name(i) ] += len * c22.stat(i) ;
+			  }
+		      }
+		    }
+		  
+		  // display outputs
+		  
+		  for ( const auto & [key, vec] : ec22[si] ) {
+
+		    writer.value( "EC22_NC" , n[key] );
+		    writer.value( "EC22_NE" , l[key] );
+		    
+		    for (int i=0; i<ne22; i++)
+		      {
+			std::string ename = catch22_t::short_name(i);
+			writer.level( ename , "EC22" );
+			double val = m[key][ename] / (double)l[key] ;			
+			writer.value( key , val );
+		      }
+		    writer.unlevel( "EC22" );
+		    
+		  }
+		  
+		}
+	      
+	    }
+	}
+
+      
+      //
+      // all done - next signal
+      //
+
     }
-
   writer.unlevel( globals::signal_strat );
-
+  
 }
 
 

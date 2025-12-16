@@ -29,6 +29,7 @@
 #include "dsp/hilbert.h"
 #include "fftw/fftwrap.h"
 #include "dynamics/qdynam.h"
+#include "defs/defs.h"
 
 #include "db/db.h"
 #include "helper/logger.h"
@@ -785,3 +786,186 @@ void dsptools::qdynam( edf_t & edf , param_t & param )
 }
 
 
+
+
+void dsptools::make_bands( edf_t & edf , param_t & param )
+{
+
+  // signals: as we are iteratively reading/adding channels, postpone
+  // creation of the sample list, then reading
+
+  std::vector<std::string> siglabels = param.strvector( "sig" );
+    
+  // new label (default {orig}"_"{band}
+  // for env:           {orig}"_"{band}_ht_mag
+
+  const std::string tag = param.has( "tag" ) ? param.value( "tag" ) : "_";
+  
+  // S --> S_1, S_2, S_3, ...
+  // default: S --> S_SLOW, S_DELTA, S_THETA , ... 
+  const bool numeric = param.has( "numeric" ) ; 
+
+  // envelopes
+  const bool flt = param.has( "filtered" ) ? param.yesno( "filtered" ) : true ;  
+  const bool env = param.has( "envelope" ) ? param.yesno( "envelope" ) : false ; 
+
+  // faster filter
+  const bool butterworth = param.has( "butterworth" );
+  const int  butterworth_order = butterworth && ! param.empty( "butterworth" ) ? param.requires_int( "butterworth" ) : 4 ; 
+												       
+  if ( ! ( flt || env ) ) return;
+  const int nx = flt + env;
+    
+  // bands
+  std::vector<freq_range_t> bands;
+  std::vector<std::string> labels;  
+  
+  if ( param.has( "bands" ) )
+    {
+      std::vector<std::string> tok = param.strvector( "bands" );
+      std::set<std::string> utok;
+
+      for (const auto &s : tok) {
+	std::string u = s;
+	std::transform(u.begin(), u.end(), u.begin(),
+		       [](unsigned char c){ return std::toupper(c); });
+	utok.insert(u);
+      }
+
+      if ( utok.find( "SLOW" ) != utok.end() ) { bands.push_back( globals::freq_band[ SLOW ] ); labels.push_back( "SLOW" ) ; }
+      if ( utok.find( "DELTA" ) != utok.end() ) { bands.push_back( globals::freq_band[ DELTA ] ); labels.push_back( "DELTA" ) ; }      
+      if ( utok.find( "THETA" ) != utok.end() ) { bands.push_back( globals::freq_band[ THETA ] ); labels.push_back( "THETA" ) ; }
+      if ( utok.find( "ALPHA" ) != utok.end() ) { bands.push_back( globals::freq_band[ ALPHA ] ); labels.push_back( "ALPHA" ) ; }
+      if ( utok.find( "SIGMA" ) != utok.end() ) { bands.push_back( globals::freq_band[ SIGMA ] ); labels.push_back( "SIGMA" ) ; }
+      if ( utok.find( "SLOW_SIGMA" ) != utok.end() ) { bands.push_back( globals::freq_band[ LOW_SIGMA ] ); labels.push_back( "SLOW_SIGMA" ) ; }
+      if ( utok.find( "FAST_SIGMA" ) != utok.end() ) { bands.push_back( globals::freq_band[ HIGH_SIGMA ] ); labels.push_back( "FAST_SIGMA" ) ; }
+      if ( utok.find( "BETA" ) != utok.end() ) { bands.push_back( globals::freq_band[ BETA ] ); labels.push_back( "BETA" ) ; }
+      if ( utok.find( "GAMMA" ) != utok.end() ) { bands.push_back( globals::freq_band[ GAMMA ] ); labels.push_back( "GAMMA" ) ; }
+    }
+  else if ( param.has( "freqs" ) )
+    {
+      // expect a-b,c-d,...
+      std::vector<std::string> tok = param.strvector( "freqs" );
+      
+      for (const auto& s : tok) {
+        std::stringstream ss(s);
+        double lwr, upr;
+        char dash;
+
+        if (!(ss >> lwr >> dash >> upr) || dash != '-' || !ss.eof()) {
+	  throw std::runtime_error("Invalid range format: " + s);
+        }
+	
+        if (lwr >= upr) {
+	  throw std::runtime_error("Invalid range (lwr >= upr): " + s);
+        }
+
+	std::string label = Helper::int2str( (int)(bands.size() + 1 ) );
+	labels.push_back( label );
+	bands.push_back( std::pair<double,double>( lwr, upr ) );
+      }
+    }
+  else // default
+    {
+
+      bands.push_back( globals::freq_band[ SLOW ] ); labels.push_back( "1_SLOW" ) ; 
+      bands.push_back( globals::freq_band[ DELTA ] ); labels.push_back( "2_DELTA" ) ; 
+      bands.push_back( globals::freq_band[ THETA ] ); labels.push_back( "3_THETA" ) ; 
+      bands.push_back( globals::freq_band[ ALPHA ] ); labels.push_back( "4_ALPHA" ) ;
+
+      bool split_sigma = param.has( "split-sigma" ) ? param.yesno( "split-sigma" ) : false;
+
+      if ( split_sigma )
+	{
+	  bands.push_back( globals::freq_band[ LOW_SIGMA ] ); labels.push_back( "5_SLOW_SIGMA" ) ; 
+	  bands.push_back( globals::freq_band[ HIGH_SIGMA ] ); labels.push_back( "6_FAST_SIGMA" ) ;
+	  bands.push_back( globals::freq_band[ BETA ] ); labels.push_back( "7_BETA" ) ; 
+	  bands.push_back( globals::freq_band[ GAMMA ] ); labels.push_back( "8_GAMMA" ) ; 
+	}
+      else	
+	{
+	  bands.push_back( globals::freq_band[ SIGMA ] ); labels.push_back( "5_SIGMA" ) ;
+	  bands.push_back( globals::freq_band[ BETA ] ); labels.push_back( "6_BETA" ) ; 
+	  bands.push_back( globals::freq_band[ GAMMA ] ); labels.push_back( "7_GAMMA" ) ; 
+	}
+            
+    }
+
+
+  
+  //
+  // now make the channels
+  //
+
+  const int ns = siglabels.size();
+
+  const bool NO_ANNOTS = true;
+
+  for (int s=0; s<ns; s++)
+    {
+
+      signal_list_t signals = edf.header.signal_list( siglabels[s] , NO_ANNOTS );    
+      
+      if ( signals.size() != 1 ) continue;
+     
+      std::string slab = signals.label(0);
+      
+      logger << "  " << slab << ":\n";
+
+      for (int i=0;i<labels.size(); i++)
+	{
+
+	  double lwr = bands[i].first;
+	  double upr = bands[i].second;
+	  std::string lu = Helper::dbl2str( lwr ) + "," + Helper::dbl2str( upr ); 
+	      
+	  // heuristic to get transition widths
+	  double tw_lwr = 0.25 > 0.20 * lwr ? 0.25 : 0.20 * lwr ;
+	  double tw_upr = 2    > 0.10 * upr ? 2    : 0.10 * upr ;
+	  std::string tw = Helper::dbl2str( tw_lwr ) + "," + Helper::dbl2str( tw_upr );
+	  
+	  std::string ripple = "0.001";	      
+	  std::string slab2 = tag + labels[i] ;
+
+	  logger << "  --> " << slab << slab2 << " ( " << bands[i].first << " - " << bands[i].second << " Hz)\n";
+	  
+	  // make copy
+	  param_t copy_param;
+	  copy_param.add( "sig" , slab );
+	  copy_param.add( "tag" , slab2 );
+	  copy_param.add( "silent" );
+	  proc_copy_signal( edf , copy_param );	  
+	  
+	  // apply filter (Kaiser IIR or Butterworth 4-th order IIR)
+	  param_t filter_param;
+	  filter_param.add( "sig" , slab + slab2 );	  
+	  filter_param.add( "silent" );
+	  filter_param.add( "bandpass" , lu );
+	  if ( butterworth ) {
+	    filter_param.add( "butterworth" , Helper::int2str( butterworth_order ) );
+	  }
+	  else {
+	    filter_param.add( "tw" , tw );
+	    filter_param.add( "ripple" , ripple );
+	  }
+	  proc_filter( edf , filter_param );
+	  
+	  // apply hilbert transform?
+	  if ( env )
+	    {
+	      param_t hilbert_param;
+	      hilbert_param.add( "sig" , slab + slab2 );	      
+	      dsptools::hilbert( edf , hilbert_param );
+	    }
+
+	  // clean up flt if we only want envelope
+	  if ( ! flt )
+	    {
+	      int s1 = edf.header.signal( slab + slab2 );
+	      if ( s1 != -1 ) 		
+		edf.drop_signal( s1 );
+	    }
+	}
+      logger << "\n";
+    }
+}

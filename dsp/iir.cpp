@@ -59,6 +59,7 @@ Eigen::MatrixXd dsptools::butterworth( const Eigen::MatrixXd & X , int order , i
 void dsptools::apply_iir( edf_t & edf , param_t & param )
 {
 
+  const bool silent = param.has( "silent" );
   
   if ( param.has( "butterworth" ) == param.has( "chebyshev" ) )
     Helper::halt( "IIR requires either butterworth or chebyshev" );
@@ -105,13 +106,17 @@ void dsptools::apply_iir( edf_t & edf , param_t & param )
 
   for (int s=0; s<ns; s++)
     {
-      logger << "  filtering " << signals.label(s) << " with " << order << "-order " << ( butterworth ? "Butterworth" : "Chebyshev" ) << " ";
-      if ( ! butterworth ) logger << "(eps=" << ceps << ") ";
-      if ( low_pass ) logger << "low-pass";
-      else if ( high_pass ) logger << "high-pass";
-      else if ( band_pass ) logger << "band-pass";
-      else logger << "band-stop" ;
-      logger << " IIR filter\n";
+
+
+      if ( ! silent ) { 
+	logger << "  filtering " << signals.label(s) << " with " << order << "-order " << ( butterworth ? "Butterworth" : "Chebyshev" ) << " ";
+	if ( ! butterworth ) logger << "(eps=" << ceps << ") ";
+	if ( low_pass ) logger << "low-pass";
+	else if ( high_pass ) logger << "high-pass";
+	else if ( band_pass ) logger << "band-pass";
+	else logger << "band-stop" ;
+	logger << " IIR filter\n";
+      }
       
       const int fs = edf.header.sampling_freq( signals(s) );
       

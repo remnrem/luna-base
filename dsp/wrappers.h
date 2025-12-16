@@ -34,6 +34,8 @@ struct param_t;
 
 namespace dsptools 
 {  
+
+  void make_bands( edf_t & , param_t & );
   
   void cwt( edf_t & , param_t & );
 
