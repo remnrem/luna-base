@@ -859,7 +859,7 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 		      
 		      for ( const auto & [key, vec] : ec22[si] ) {
 
-			std::cout << " key = " << key << "\n";
+			//std::cout << " key = " << key << "\n";
 			
 			// extract for this particularl contig
 			int start = blocks[c].first;
@@ -871,8 +871,8 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 			for (int p = start; p < stop; p++)
 			  contig[ idx++ ] = vec[ p ];
 
-			std::cout << " contig " << start << " " << stop << "\n";
-			for (int i=0; i<contig.size(); i++) std::cout << "  " << contig[i] << "\n";
+			// std::cout << " contig " << start << " " << stop << "\n";
+			// for (int i=0; i<contig.size(); i++) std::cout << "  " << contig[i] << "\n";
 			
 			// catch22
 			catch22_t c22( calc_epoch_catch24 );

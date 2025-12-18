@@ -3003,293 +3003,298 @@ void timeline_t::annot_crosstabs( const param_t & param )
   
   // time limit for match  ( neg means no window) 
   const double window = param.has( "w" ) ? param.requires_dbl( "w" ) : -1 ; 
+
+  // truncate to window (vs default, to exclude)  [ same behav as OVERLAP ] 
+  const bool truncate_to_window = param.has( "truncate" ) || param.has( "trunc" );
   
-  // count implied annotations 
-  if ( requested.size() == 0 )
-    Helper::halt( "no annotations" );
-  
-  //
-  // build up table of events
-  //
+   // count implied annotations 
+   if ( requested.size() == 0 )
+     Helper::halt( "no annotations" );
 
-  // ch -> annot -> interval lists
-  std::map<std::string,std::map<std::string,std::set<interval_t> > > events;
-  
-  // track annot instance ID (for match-instance) 
-  std::map<std::string,std::string> label2instance;
+   //
+   // build up table of events
+   //
 
+   // ch -> annot -> interval lists
+   std::map<std::string,std::map<std::string,std::set<interval_t> > > events;
 
-  //
-  // iterate over each annotation
-  //
-  
-  for (int a = 0 ; a < requested.size() ; a++ ) 
-    {
-      
-      annot_t * annot = annotations->find( requested[a] );
-      
-      if ( annot == NULL ) continue;
-      
-      const int num_events = annot->num_interval_events();
-      
-      logger << "  found " << num_events << " instances of " << requested[a] << "\n";
-      
-      //
-      // iterator over interval/event map
-      //
-            
-      const std::string label = requested[a];
-      
-      annot_map_t::const_iterator ii = annot->interval_events.begin();
-      while ( ii != annot->interval_events.end() )
-	{	  
-	  
-	  const instance_idx_t & instance_idx = ii->first;
-	  
-	  // add to the list
-
-	  const std::string ch_str = within_channel ? instance_idx.ch_str : "." ;
-	  const std::string label1  = label + ( by_instance ? "_" + instance_idx.id : "" ); 
-	  if ( match_instance ) label2instance[ label1 ] = instance_idx.id; 
-
-	  // record
-	  events[ ch_str ][ label1 ].insert( instance_idx.interval );
-	  
-	  ++ii;
-	}
-      
-    }
-
-  //
-  // Flatten all events first?
-  //  - if within channel, then flattening only happens w/in channels too
-  //
-
-  if ( flatten )
-    {
-      std::map<std::string,std::map<std::string,std::set<interval_t> > >::iterator aa = events.begin();
-      while ( aa != events.end() )
-	{
-	  std::map<std::string,std::set<interval_t> > & events1 = aa->second;
-	  std::map<std::string,std::set<interval_t> >::iterator ee = events1.begin();
-	  while ( ee != events1.end() )
-	    {	      
-	      int n1 = ee->second.size();
-	      ee->second = annotate_t::flatten( ee->second );
-	      int n2 = ee->second.size();
-	      if ( n2 < n1 ) logger << "  reduced " << ee->first << " from " << n1 << " to " << n2 << " events\n";
-	      ++ee;
-	    }
-	  ++aa;
-	}
-    }
-  
-  
-  //
-  // Over each channel
-  //
-
-  std::map<std::string,std::map<std::string,std::set<interval_t> > >::const_iterator ch = events.begin();
-  while ( ch != events.end() )
-    {
-      
-      // track channel?
-
-      if ( within_channel )
-	writer.level( ch->first , globals::signal_strat );
+   // track annot instance ID (for match-instance) 
+   std::map<std::string,std::string> label2instance;
 
 
-      //
-      // Pull out annotations (for this channel) 
-      //
-      
-      const std::map<std::string,std::set<interval_t> > & events1 = ch->second;
-      
-      //
-      // Nothing to do?
-      //
-      
-      if ( events1.size() < 2 )
-	{
-	  logger << "  *** nothing to do, fewer than two annotation classes found";
-	  if ( within_channel ) logger << " for channel " << ch->first ;
-	  logger << "\n";
-	}
-            
-      //
-      // Consider all pairs of events
-      //
+   //
+   // iterate over each annotation
+   //
 
-      std::map<std::string,std::set<interval_t> >::const_iterator bb = events1.begin();
-      while ( bb != events1.end() )
-	{
-	  
-	  writer.level( bb->first , globals::annot_strat );
+   for (int a = 0 ; a < requested.size() ; a++ ) 
+     {
 
-	  // we want to keep 'a' 'as is' (i.e. might be flattened, but might not be
-	  //  but for 'b', here we should flatten to make the looks easier., for the
-	  //  overlap analyses;  for the nearest analysis, keep the original set,
-	  //  and extract the anchor point here:
+       annot_t * annot = annotations->find( requested[a] );
 
-	  // for 'nearest' distance
-	  std::set<double> b1;
-	  std::set<interval_t>::const_iterator bb1 = bb->second.begin();
-	  while ( bb1 != bb->second.end() )
-	    {
-	      if      ( anchor == -1 ) b1.insert( bb1->start_sec() );	      
-	      else if ( anchor == +1 ) b1.insert( bb1->stop_sec() );
-	      else                     b1.insert( bb1->mid_sec() );
-	      ++bb1;
-	    }
+       if ( annot == NULL ) continue;
 
-	  // flatten remaining values
-	  const std::set<interval_t> b = annotate_t::flatten( bb->second );
-	  
-	  std::map<std::string,std::set<interval_t> >::const_iterator aa = events1.begin();
-	  while ( aa != events1.end() )
-	    {
-	      
-	      // does instance match?
-	      if ( match_instance ) 
-		{
-		  // skip if not
-		  if ( label2instance[ aa->first ] != label2instance[ bb->first ] )
-		    {
-		      ++aa;
-		      continue;
-		    }
-		}
-	      
-	      writer.level( aa->first , "SEED" );
-	      
-	      const std::set<interval_t> & a = aa->second;
+       const int num_events = annot->num_interval_events();
 
-	      // std::cout << "\n\n------------------------------"
-	      //  		<< aa->first << " .... " << bb->first << "\n";
-	      
-	      // to track outputs
-	      std::vector<double> sav_p, sav_t, sav_n, sav_a;
-	      
-	      // nearest (within w) [ will only contain instances that were within range ] 
-	      std::vector<double> sav_d, sav_dabs;
-	      
-	      // determine for lists a and b :
-	      //   total % of overlap per all 'a'
-	      //   mean % of overlap per 'a' event
-	      //   num_secs of 'b' given 'a'
-	      //   time from seed 'anchor' to nearest 'b' 'anchor' (signed + abs) 
-	      //   % of 'a' with at least some 'b' overlap
-	      
-	      int sidx = 0;
+       logger << "  found " << num_events << " instances of " << requested[a] << "\n";
 
-	      // for each 'seed' (i.e. conditioning event)
-	      std::set<interval_t>::const_iterator seed = a.begin();
-	      while ( seed != a.end() )
-		{
-		  
-		  ++sidx;
+       //
+       // iterator over interval/event map
+       //
 
-		  // skip zero-duration seeds here
-		  if ( fabs( seed->duration_sec() ) < 1e-8 )
-		    {
-		      ++seed;
-		      continue;
-		    }
-		  
-		  // which b events span this, if any?		  
-		  // find the first annot not before (at or after) the seed
+       const std::string label = requested[a];
 
-		  //
-		  // Find nearest distance (using the unflattened b1 list of anchor positions)
-		  //
+       annot_map_t::const_iterator ii = annot->interval_events.begin();
+       while ( ii != annot->interval_events.end() )
+	 {	  
 
-		  const double seed_sec = anchor == -1 ? seed->start_sec()
-		    : ( anchor == 1 ? seed->stop_sec() : seed->mid_sec() );
-		  
-		  std::set<double>::const_iterator cc = b1.upper_bound( seed_sec );
-		  
-		  std::set<double>::const_iterator closest = cc;
-		  
-		  std::vector<double> distances; 
-		  
-		  while ( 1 )
-		    {
-		      if ( closest == b1.end() ) break;
-		      if ( *closest > seed_sec ) break;
-		      ++closest;
-		    }
+	   const instance_idx_t & instance_idx = ii->first;
 
-		  // one past
-		  if ( closest != b1.end() )
-		    {
-		      //std::cout << " dst: back-track , considering " << *closest << "\n";  
-		      distances.push_back( *closest - seed_sec );
-		    }
-		  
-		  // now count back
-		  while ( 1 )
-		    {		      
-		      
-		      if ( closest == b1.begin() ) break;		  
-		      --closest;
-		      
-		      //std::cout << " dst: back-track , considering " << *closest << "\n";
-		      
-		      distances.push_back( *closest - seed_sec );
-		      
-		      if ( *closest < seed_sec )
-			{
-			  //std::cout << " dst: gone past , breakingh\n";
-			  break;
-			}
-		      
-		    }
+	   // add to the list
 
-		  // get min distance (Could have done above, but whatev)
+	   const std::string ch_str = within_channel ? instance_idx.ch_str : "." ;
+	   const std::string label1  = label + ( by_instance ? "_" + instance_idx.id : "" ); 
+	   if ( match_instance ) label2instance[ label1 ] = instance_idx.id; 
 
-		  if ( window > 0 && distances.size() > 0 ) 
-		    {
-		      
-		      //std::cout << sidx << "  DIST " << bb->first << " " << aa->first  << " "  << distances.size() << "\n ";
-		      
-		      double q1 = window + 10000;
-		      double q  = 0;
-		      int okay = 0;
-		      
-		      for (int i=0; i<distances.size(); i++)
-			{
+	   // record
+	   events[ ch_str ][ label1 ].insert( instance_idx.interval );
 
-			  const double d1 = fabs( distances[i] );
+	   ++ii;
+	 }
 
-			  //std::cout << " candidate = " << d1 << " " << distances[i] << "\n";
+     }
 
-			  if ( d1 < window )
-			    {
-			      ++okay;
+   //
+   // Flatten all events first?
+   //  - if within channel, then flattening only happens w/in channels too
+   //
 
-			      //std::cout << " con " << distances[i]  << " " << d1 << "\n";
-			      
-			      if ( d1 < q1 ) 
-				{
-				  q1 = d1;
-				  q = distances[i];
-				}
-			    }
-			}
+   if ( flatten )
+     {
+       std::map<std::string,std::map<std::string,std::set<interval_t> > >::iterator aa = events.begin();
+       while ( aa != events.end() )
+	 {
+	   std::map<std::string,std::set<interval_t> > & events1 = aa->second;
+	   std::map<std::string,std::set<interval_t> >::iterator ee = events1.begin();
+	   while ( ee != events1.end() )
+	     {	      
+	       int n1 = ee->second.size();
+	       ee->second = annotate_t::flatten( ee->second );
+	       int n2 = ee->second.size();
+	       if ( n2 < n1 ) logger << "  reduced " << ee->first << " from " << n1 << " to " << n2 << " events\n";
+	       ++ee;
+	     }
+	   ++aa;
+	 }
+     }
 
-		      // if ( okay ) 
-		      // 	std::cout << " dst: *** saving " << q << "\n";
-		      // else
-		      // 	std::cout << " dst:  no within-window match found...\n";
-		      
-		      // save signed closest annot		      
-		      if ( okay )
-			{
-			  sav_d.push_back( q );
-			  sav_dabs.push_back( fabs( q ) );
-			}
-		    }
-		  
+
+   //
+   // Over each channel
+   //
+
+   std::map<std::string,std::map<std::string,std::set<interval_t> > >::const_iterator ch = events.begin();
+   while ( ch != events.end() )
+     {
+
+       // track channel?
+
+       if ( within_channel )
+	 writer.level( ch->first , globals::signal_strat );
+
+
+       //
+       // Pull out annotations (for this channel) 
+       //
+
+       const std::map<std::string,std::set<interval_t> > & events1 = ch->second;
+
+       //
+       // Nothing to do?
+       //
+
+       if ( events1.size() < 2 )
+	 {
+	   logger << "  *** nothing to do, fewer than two annotation classes found";
+	   if ( within_channel ) logger << " for channel " << ch->first ;
+	   logger << "\n";
+	 }
+
+       //
+       // Consider all pairs of events
+       //
+
+       std::map<std::string,std::set<interval_t> >::const_iterator bb = events1.begin();
+       while ( bb != events1.end() )
+	 {
+
+	   writer.level( bb->first , globals::annot_strat );
+
+	   // we want to keep 'a' 'as is' (i.e. might be flattened, but might not be
+	   //  but for 'b', here we should flatten to make the looks easier., for the
+	   //  overlap analyses;  for the nearest analysis, keep the original set,
+	   //  and extract the anchor point here:
+
+	   // for 'nearest' distance
+	   std::set<double> b1;
+	   std::set<interval_t>::const_iterator bb1 = bb->second.begin();
+	   while ( bb1 != bb->second.end() )
+	     {
+	       if      ( anchor == -1 ) b1.insert( bb1->start_sec() );	      
+	       else if ( anchor == +1 ) b1.insert( bb1->stop_sec() );
+	       else                     b1.insert( bb1->mid_sec() );
+	       ++bb1;
+	     }
+
+	   // flatten remaining values
+	   const std::set<interval_t> b = annotate_t::flatten( bb->second );
+
+	   std::map<std::string,std::set<interval_t> >::const_iterator aa = events1.begin();
+	   while ( aa != events1.end() )
+	     {
+
+	       // does instance match?
+	       if ( match_instance ) 
+		 {
+		   // skip if not
+		   if ( label2instance[ aa->first ] != label2instance[ bb->first ] )
+		     {
+		       ++aa;
+		       continue;
+		     }
+		 }
+
+	       writer.level( aa->first , "SEED" );
+
+	       const std::set<interval_t> & a = aa->second;
+
+	       // std::cout << "\n\n------------------------------"
+	       //  		<< aa->first << " .... " << bb->first << "\n";
+
+	       // to track outputs
+	       std::vector<double> sav_p, sav_t, sav_n, sav_a;
+
+	       // nearest (within w) [ will only contain instances that were within range ] 
+	       std::vector<double> sav_d, sav_dabs;
+
+	       // determine for lists a and b :
+	       //   total % of overlap per all 'a'
+	       //   mean % of overlap per 'a' event
+	       //   num_secs of 'b' given 'a'
+	       //   time from seed 'anchor' to nearest 'b' 'anchor' (signed + abs) 
+	       //   % of 'a' with at least some 'b' overlap
+
+	       int sidx = 0;
+
+	       // for each 'seed' (i.e. conditioning event)
+	       std::set<interval_t>::const_iterator seed = a.begin();
+	       while ( seed != a.end() )
+		 {
+
+		   ++sidx;
+
+		   // skip zero-duration seeds here
+		   if ( fabs( seed->duration_sec() ) < 1e-8 )
+		     {
+		       ++seed;
+		       continue;
+		     }
+
+		   // which b events span this, if any?		  
+		   // find the first annot not before (at or after) the seed
+
+		   //
+		   // Find nearest distance (using the unflattened b1 list of anchor positions)
+		   //
+
+		   const double seed_sec = anchor == -1 ? seed->start_sec()
+		     : ( anchor == 1 ? seed->stop_sec() : seed->mid_sec() );
+
+		   std::set<double>::const_iterator cc = b1.upper_bound( seed_sec );
+
+		   std::set<double>::const_iterator closest = cc;
+
+		   std::vector<double> distances; 
+
+		   while ( 1 )
+		     {
+		       if ( closest == b1.end() ) break;
+		       if ( *closest > seed_sec ) break;
+		       ++closest;
+		     }
+
+		   // one past
+		   if ( closest != b1.end() )
+		     {
+		       //std::cout << " dst: back-track , considering " << *closest << "\n";  
+		       distances.push_back( *closest - seed_sec );
+		     }
+
+		   // now count back
+		   while ( 1 )
+		     {		      
+
+		       if ( closest == b1.begin() ) break;		  
+		       --closest;
+
+		       //std::cout << " dst: back-track , considering " << *closest << "\n";
+
+		       distances.push_back( *closest - seed_sec );
+
+		       if ( *closest < seed_sec )
+			 {
+			   //std::cout << " dst: gone past , breakingh\n";
+			   break;
+			 }
+
+		     }
+
+		   // get min distance (Could have done above, but whatev)
+
+		   if ( window > 0 && distances.size() > 0 ) 
+		     {
+
+		       //std::cout << sidx << "  DIST " << bb->first << " " << aa->first  << " "  << distances.size() << "\n ";
+
+		       double q1 = window + 10000;
+		       double q  = 0;
+		       int okay = 0;
+
+		       for (int i=0; i<distances.size(); i++)
+			 {
+
+			   const double d1 = fabs( distances[i] );
+
+			   //std::cout << " candidate = " << d1 << " " << distances[i] << "\n";
+			   
+			   const bool over = d1 > window;
+			   
+			   if ( truncate_to_window && over ) 
+			     {
+			       ++okay;
+			       q1 = window;
+			       q = ( distances[i] > 0 ? 1 : -1 ) * window;			       
+			     }
+			   else if ( ! over ) 
+			     {
+			       ++okay;
+			       q1 = d1;
+			       q = distances[i];
+			     }
+			 }
+
+		       // if ( okay ) 
+		       // 	std::cout << " dst: *** saving " << q << "\n";
+		       // else
+		       // 	std::cout << " dst:  no within-window match found...\n";
+		       
+		       // save signed closest annot		      
+		       if ( okay )
+			 {
+			   sav_d.push_back( q );
+			   sav_dabs.push_back( fabs( q ) );
+			 }
+		     }
+		   
 		  
 		  //
 		  // Find overlaps (using the flattened b)
