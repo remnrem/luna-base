@@ -6265,7 +6265,11 @@ void proc_requires( edf_t & edf , param_t & param )
       if ( has3 && ! Helper::str2int( tok[2] , &n3 ) )
 	Helper::halt( "invalid version code" );
 
-      if ( n1 > globals::major_version_number ||
+      // std::cout << " n1 " << n1 << " " << globals::major_version_number << "\n"
+      // 		<< " n2 " << n2 << " " << globals::minor_version_number << "\n"
+      // 		<< " n3 " << n3 << " " << globals::patch_version_number << "\n";
+      
+	if ( n1 > globals::major_version_number ||
 	   ( has2 && n2 > globals::minor_version_number ) ||
 	   ( has3 && n3 > globals::patch_version_number ) )
 	Helper::halt( "required version " + v + " but current Luna is " + globals::version );
