@@ -3368,23 +3368,31 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	      // Now summarize outputs
 	      //
 	      
-	      // mean (or median) per seed interval
+	      // mean per seed interval
+
+	      // average proportion of seed overlapped by other 
 	      writer.value( "P" , MiscMath::mean( sav_p ) );
 	      //writer.value( "P_MD" , MiscMath::median( sav_p ) );
-	      
+
+	      // mean time-of-overlap 
 	      writer.value( "T" , MiscMath::mean( sav_t ) );
 	      //writer.value( "T_MD" , MiscMath::median( sav_t ) );
-	      
+
+	      // mean number of other events that overlap the seed
 	      writer.value( "N" , MiscMath::mean( sav_n ) );
 	      //writer.value( "N_MD" , MiscMath::median( sav_n ) );
 	      
 	      if ( sav_d.size() > 0 )
 		{
+		  // mean closest distance (time in seconds) 
 		  writer.value( "D" , MiscMath::mean( sav_d ) );
+		  // mean absolute closest distance (time in seconds) 
 		  writer.value( "DABS" , MiscMath::mean( sav_dabs ) );
 		}
+	      // number of events within-range for distance calculation
 	      writer.value( "D_N", (int)sav_d.size() );
 
+	      // proportion of seeds with /any/ overlap by the other 
 	      writer.value( "A" , MiscMath::mean( sav_a ) );
 	      
 	      // grand totals

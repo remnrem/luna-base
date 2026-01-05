@@ -58,7 +58,9 @@ struct param_t
   
   // if ! has(X) return F
   // else return yesno(value(X))
-  bool yesno(const std::string & s ) const;
+  // default1 = returned if 's' not present
+  // default2 = returned if 's' if present, but not value specified (i.e. not s=F or s=T
+  bool yesno(const std::string & s , const bool default1 = false , const bool default2 = true ) const;
 
   std::string value( const std::string & s , const bool uppercase = false ) const;
  

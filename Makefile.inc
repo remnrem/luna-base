@@ -47,6 +47,8 @@ CXX = g++
 CC = gcc
 
 CXXFLAGS=-O2 -std=gnu++17 -MMD -MP -I. -I.. -Wno-psabi -Wno-unused-result
+# debug
+#CXXFLAGS=-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -MMD -MP -I. -I.. -std=gnu++17
 
 CXXFLAGS +=$(DEP_INCLUDES)
 
@@ -84,6 +86,8 @@ endif
 LD = g++
 
 LDFLAGS = -L. -L..
+# debug
+#LDFLAGS=-fsanitize=address,undefined -L. -L..
 
 # assuming mingw64 for windows build:
 
@@ -169,3 +173,6 @@ RANLIB= ranlib
 RM = rm -f
 ECHO = echo
 SHELL = /bin/sh
+
+
+

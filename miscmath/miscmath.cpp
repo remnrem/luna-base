@@ -1034,19 +1034,6 @@ void MiscMath::detrend( std::vector<double> * y , double * pa , double * pb )
   if ( pa ) *pa = m;
   if ( pb ) *pb = beta;
 
-  // OLD
-
-  // // 'x' is 0:(n-1)  
-  // double yfirst = (*y)[0];
-  // double ylast  = (*y)[ y->size() - 1 ];
-  // double b = ( yfirst - ylast ) / (double)( 0 - ( n - 1 ) );
-  // double a = yfirst ; // x[0] = 0 is intercept
-  // // adjust y
-  // for (int i=0;i<n;i++) (*y)[i] = (*y)[i] - ( a + b * i );   
-  // // return estimates
-  // if ( pa ) *pa = a;
-  // if ( pb ) *pb = b;
-
 }
 
 

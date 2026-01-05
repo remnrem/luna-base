@@ -423,6 +423,61 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
 
 }
 
+//
+// Welch
+//
+
+bool dsptools::welch( const std::vector<double> & x ,
+		      double fs,
+		      std::vector<double>& freqs_hz,
+		      std::vector<double>& psd,		      
+		      const double segment_sec ,
+		      const double overlap_sec ,
+		      double upr )		      
+{
+
+  // const double segment_sec  = 4.0;
+  // const double overlap_sec = 2.0;
+  const int total_points = x.size();
+  const int segment_points = segment_sec * fs;
+  const int noverlap_points  = overlap_sec * fs;
+
+  // too short
+  if ( total_points < fs * segment_sec ) return false;
+  
+  // return up to this Hz, or Nyquist if not defined
+  if ( upr < 0 ) upr = fs / 2.0;
+  
+  // implied number of segments
+  int noverlap_segments = floor( ( total_points - noverlap_points) 
+				 / (double)( segment_points - noverlap_points ) );
+  
+  // Welch uses mean (not median) over segments
+  const bool use_median = false; 
+  
+  window_function_t window_function = WINDOW_TUKEY50;
+
+  PWELCH pwelch( x , 
+		 fs , 
+		 segment_sec , 
+		 noverlap_segments , 
+		 window_function ,
+		 use_median ); 
+  
+  freqs_hz.clear();
+  psd.clear();
+  
+  for ( int i = 0 ; i < pwelch.freq.size(); i++) 
+    {
+      if ( pwelch.freq[i] > upr ) break;
+      freqs_hz.push_back( pwelch.freq[i] );
+      psd.push_back( pwelch.psd[i] );
+    }
+
+  return true;
+}
+
+
 
 //
 // FFT

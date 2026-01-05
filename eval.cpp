@@ -932,6 +932,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "ALIGN-EPOCHS" ) ) { fnd = true; proc_align_epochs( edf , param(c) ); }
       if ( (!fnd) && is( c, "ALIGN-ANNOTS" ) ) { fnd = true; proc_align_annots( edf , param(c) ); }
       if ( (!fnd) && is( c, "INSERT" ) )       { fnd = true; proc_insert( edf , param(c) ); }
+      if ( (!fnd) && is( c, "CTYPES" ) )       { fnd = true; proc_ctypes( edf, param(c) ); } 
       if ( (!fnd) && is( c, "SUDS" ) )         { fnd = true; proc_suds( edf , param(c) ); }
       if ( (!fnd) && is( c, "MAKE-SUDS" ) )    { fnd = true; proc_make_suds( edf , param(c) ); }
       if ( (!fnd) && is( c, "RUN-POPS" ) )     { fnd = true; proc_runpops( edf , param(c) ); } // wrapper
@@ -1320,6 +1321,12 @@ void proc_summaries( edf_t & edf , param_t & param )
 void proc_desc( edf_t & edf , param_t & param )
 {
   edf.description( param );
+}
+
+// CTYPES : predict channel type
+void proc_ctypes( edf_t & edf , param_t & param )
+{
+  ctypes_t ct( edf , param );
 }
 
 // TYPES : show channel mappings

@@ -97,6 +97,17 @@ namespace dsptools
   void cmdline_fft( param_t & );
   
   void run_fft( const std::vector<double> & x , const int Fs , const bool verbose );
+
+  // Welch
+  
+  bool welch( const std::vector<double> & x ,
+	      double fs,
+	      std::vector<double>& freqs_hz,
+	      std::vector<double>& psd,	      
+	      const double segment_sec = 4.0 ,
+	      const double overlap_sec = 2.0 ,
+	      double upr = -1 );
+    
   
   // Otsu 
   

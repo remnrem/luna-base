@@ -31,6 +31,8 @@
 void dsptools::standardize( edf_t & edf , param_t & param )
 {
 
+  const bool silent = param.yesno( "silent", false, true );
+  				   
   const bool by_epoch = param.has( "epoch" );
 
   // ( X - median ) / ( IQR ) 
@@ -53,12 +55,14 @@ void dsptools::standardize( edf_t & edf , param_t & param )
 
   if ( ! ( center || scale || winsor ) )
     {
-      logger << "  nothing to do, leavning standardization\n";
+      if ( ! silent ) 
+	logger << "  nothing to do, leavning standardization\n";
       return;
     }
 
-  if ( winsor && ! ( center || scale ) ) 
-    logger << "  only winsorizing signals, not performing initial standardization\n";
+  if ( winsor && ! ( center || scale ) )
+    if ( ! silent ) 
+      logger << "  only winsorizing signals, not performing initial standardization\n";
    
   // get signals
   signal_list_t signals = edf.header.signal_list( param.value( "sig" ) );
@@ -69,19 +73,20 @@ void dsptools::standardize( edf_t & edf , param_t & param )
   // do by epoch?
   if ( by_epoch ) edf.timeline.ensure_epoched();
 
-  if ( by_epoch ) logger << "  iterating over epochs\n";
-  else logger << "  correcting for entire signal\n";
-
-  if ( iqr_norm )
-    {
+  if ( ! silent ) {
+    
+    if ( by_epoch ) logger << "  iterating over epochs\n";
+    else logger << "  correcting for entire signal\n";
+    
+    if ( iqr_norm )
       logger << "  IQR-based standardization of " << ns << " signals\n";	    
-    }
-  else
-    {
-      logger << "  robust standardization of " << ns << " signals";
-      if ( winsor > 0 ) logger << ", winsorizing at " << wt;
-      logger << "\n";
-    }
+    else
+      {
+	logger << "  robust standardization of " << ns << " signals";
+	if ( winsor > 0 ) logger << ", winsorizing at " << wt;
+	logger << "\n";
+      }
+  }
   
   //
   // get data (whole signal) 

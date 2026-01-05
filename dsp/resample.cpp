@@ -59,6 +59,8 @@ std::vector<double> dsptools::resample( const std::vector<double> * d ,
 					double sr1 , double sr2 ,
 					int converter )
 {
+  // nothing to do 
+  if ( sr1 == sr2 ) return *d;
   
   int n = d->size();
   std::vector<float> f( n );

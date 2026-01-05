@@ -112,6 +112,15 @@ annotate_t::annotate_t( param_t & param )
   logger << "  expecting " << acnt << " annotation files from " << annots.size() << " individuals\n";
 
   //
+  // set instance ID to indiv ID ? 
+  //
+
+  const bool set_id = param.yesno( "set-id" , false , true );
+  const std::string set_id_key = param.has( "set-id-key" ) ? param.value( "set-id-key" ) : "ID";
+
+  const bool strip_metadata = param.yesno( "keep-metadata" , true , false);
+  
+  //
   // read in these annotations and make a super-individual annotation file
   //
 
@@ -205,13 +214,27 @@ annotate_t::annotate_t( param_t & param )
 	      stop += offset;
 
 	      // write out to mega-file
+
+	      std::string meta_data;
+	      if ( set_id )
+		{
+		  std::string idmeta = set_id_key + "=" + Helper::quote_spaced( Helper::quote_if( indiv ,
+												  globals::annot_meta_delim,
+												  globals::annot_meta_delim2 ,
+												  '=' ) );
+		  meta_data = strip_metadata ? idmeta : tok[5] + globals::annot_meta_delim + idmeta;
+		}
+	      else
+		meta_data = strip_metadata ? "." : tok[5] ;
+
+	      // write line out									    
 	      
 	      OUT1 << tok[0] << "\t"
-		   << tok[1] << "\t"
+		   << tok[1] << "\t" 
 		   << tok[2] << "\t"
 		   << Helper::dbl2str( start , globals::time_format_dp ) << "\t"
 		   << Helper::dbl2str( stop , globals::time_format_dp ) << "\t"
-		   << tok[5] << "\n";
+		   << meta_data << "\n";	      
 	      
 	    }
 	  IN1.close();

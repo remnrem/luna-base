@@ -155,9 +155,11 @@ bool param_t::empty(const std::string & s ) const
   return opt.find( s )->second == "__null__";
 }
 
-bool param_t::yesno(const std::string & s ) const
+
+bool param_t::yesno(const std::string & s , const bool default1, const bool default2 ) const
 {
-  if ( ! has( s ) ) return false;
+  if ( ! has( s ) ) return default1; // missing key
+  if ( opt.find( s )->second == "__null__" ) return default2; // empty value
   return Helper::yesno( opt.find( s )->second ) ; 
 }
 

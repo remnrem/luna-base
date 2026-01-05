@@ -4433,6 +4433,14 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
   bool hms = param.has( "hms" ) ? param.yesno( "hms" ) : false;  
   const bool dhms = param.has( "dhms" ) ? param.yesno( "dhms" ) : false; 
   if ( dhms ) hms = true;
+
+  //
+  // set meta-data tag ID=ID
+  //
+
+  const bool set_id = param.yesno( "set-id" , false , true );
+
+  const std::string set_id_key = param.has( "set-id-key" ) ? param.value( "set-id-key" ) : "ID"; 
   
   //
   // If from internal EDF+D, write w/ time-stamps for standard EDF
@@ -4750,12 +4758,18 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
 		{
 		  // var-name : dd->first
 		  // value : 
-		  
-		  O1 << " <Value name=\"" << dd->first << "\">" 
+
+		  O1 << " <Value name=\"" <<  dd->first << "\">" 
 		     << *dd->second 
 		     << "</Value>\n"; 
 		  ++dd;
 		}
+
+
+	      // add ID tag?
+	      if ( set_id )
+		O1 << " <Value name=\"" << set_id_key << "\">" << edf.id << "</Value>\n";
+	      
 	    }
 	  
 	  O1 << "</Instance>\n\n";
@@ -4942,6 +4956,17 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
 	    }
 
 	  //
+	  // adding ID
+	  //
+
+	  if ( set_id )
+	    {
+	      if ( mhdr.find( set_id_key ) != mhdr.end() )
+		Helper::halt( set_id_key + " already defined as a meta-data key: select a different value with set-id=<key>" );
+	      mhdr.insert( set_id_key );	      
+	    }
+	  
+	  //
 	  // now need to write out any meta keys
 	  //
 
@@ -4964,7 +4989,7 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
       // ensure 6+-col format for .annot output
 
       if ( add_specials )
-	{
+	{	  
 	  if ( start_hms != "." )  
 	    O1 << "start_hms\t" << start_hms << "\t.\t.\t.\t.\n";
 	  if ( duration_hms != "." )
@@ -5075,7 +5100,7 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
 	    O1 << instance_idx.id << "\t";
 	  else 
 	    O1 << ".\t";
-
+	  
 	  if ( instance_idx.ch_str != "." && instance_idx.ch_str != "" )
             O1 << instance_idx.ch_str << "\t";
           else
@@ -5140,19 +5165,42 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
 	  //
 	  // meta-data (col 6)
 	  //
-
+	  
+	  
+	  
 	  if ( inst->data.size() == 0 || ! write_meta ) 
-	    O1 << "\t.";
-	  else
+	    {
+	      // add ID as meta-data?
+
+	      if ( set_id )
+		O1 << "\t" << set_id_key << "="
+		   << Helper::quote_spaced( Helper::quote_if( edf.id ,
+							      globals::annot_meta_delim,
+							      globals::annot_meta_delim2 ,
+							      '=' ) );
+	      else
+		O1 << "\t.";
+	    }
+	  else 
 	    {
 	      O1 << "\t";
-
+	      
+	      // add ID as meta-data?
+	      if ( set_id )
+		O1 << set_id_key << "="
+		   << Helper::quote_spaced( Helper::quote_if( edf.id ,
+							      globals::annot_meta_delim,
+							      globals::annot_meta_delim2 ,
+							      '=' ) );
+	      
+	      // generic meta-data
+	      
 	      std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
 	      
 	      while ( dd != inst->data.end() )
 		{
 		  // semi-colon or pipe-delimiter
-		  if ( dd != inst->data.begin() ) O1 << globals::annot_meta_delim;
+		  if ( dd != inst->data.begin() || set_id ) O1 << globals::annot_meta_delim;
 		  
 		  // meta-data value, always key/value pairing
 		  // as there may be missing data
@@ -5170,7 +5218,7 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
 		  ++dd;
 		}
 	    }
-
+	  
 
 	  //
 	  // tabular meta?
@@ -5178,10 +5226,11 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
 
 	  if ( tabular_meta )
 	    {
-
+	      
 	      std::set<std::string>::const_iterator mm = mhdr.begin();
 	      while ( mm != mhdr.end() )
 		{
+		  
 		  std::map<std::string,avar_t*>::const_iterator dd = inst->data.find( *mm );
 		  if ( dd != inst->data.end() )
 		    {
@@ -5189,6 +5238,10 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
 		      ss << *dd->second;
 		      O1 << "\t"
 			 << ss.str();
+		    }
+		  else if ( set_id && *mm == set_id_key )
+		    {
+		      O1 << "\t" << edf.id;
 		    }
 		  else
 		    O1 << "\t.";
