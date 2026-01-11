@@ -1727,7 +1727,7 @@ void annotate_t::add_permuted_annots()
 		      interval_t pint( ii->start + offset , ii->stop + offset );
                       a->add( "." , pint , "." );		      
 		    }
-
+		  
 		  // std::cout << "region = " << rr->first << "\t"
 		  // 	    << "annot = " << *aa << "\t"
 		  // 	    << "interval = " << ii->as_string() << "\t"
@@ -1741,7 +1741,7 @@ void annotate_t::add_permuted_annots()
 	}
       ++rr;
     }
-
+  
   //  std::cout << "\n";
   
 }

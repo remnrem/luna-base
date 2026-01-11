@@ -64,7 +64,6 @@ enum ctypes_ch_t
     CTYPE_FLAT = 15 ,         // effectively empty channels    
     CTYPE_ARTIFACT = 0 ,      // generic high-artifact channel (non-physiologic signal)
 
-
     // special models; may be included, or may be from special models
 
     // generic EMG -> chin vs leg EMG
@@ -78,9 +77,8 @@ enum ctypes_ch_t
   };
 
 
-struct ctypes_pred_t {
-  bool valid;
-  std::map<ctypes_ch_t,double> posteriors;  
+struct ctypes_pred_t {  
+  Eigen::VectorXd posteriors;  
 };
 
 struct ctypes_specific_ftrs_t {
@@ -119,9 +117,14 @@ struct ctypes_ftrs_t {
 
   // overall features 
   double n_epochs;
-  double pct_rem;
+  double pct_n1;
+  double pct_n2;
   double pct_n3;
-
+  double pct_rem;
+  
+  double phys_median;
+  double phys_iqr;
+  
   // 1 Hz median 
   ctypes_specific_ftrs_t x1;         
   ctypes_specific_ftrs_t x1_p10;
@@ -193,10 +196,10 @@ struct ctypes_t {
   ctypes_specific_ftrs_t calc_specific_stats( const std::vector<double> & x , int Fs );
 
   void aggregate1( const std::vector<ctypes_ftrs_t> & aggr, ctypes_ftrs_t * ftr );
-
+  
   void aggregate128( const std::vector<ctypes_ftrs_t> & aggr, ctypes_ftrs_t * ftr );
-		    
-
+  
+  
   
 private:
   
@@ -204,10 +207,10 @@ private:
   //
   // feature map
   //
-
+  
   using member_ptr = double ctypes_specific_ftrs_t::*;
-
-  const std::map<std::string, member_ptr> feature_map = {
+  
+  inline static const std::map<std::string, member_ptr> feature_map = {
     { "flat", &ctypes_specific_ftrs_t::flatline_frac},
     { "clip", &ctypes_specific_ftrs_t::clip_frac}, 
     { "ufrac", &ctypes_specific_ftrs_t::unique_frac},  
@@ -235,16 +238,33 @@ private:
   };
   
   
+  static  bool ends_with(const std::string& s, const char* suf);
+  
+  static  bool contains(const std::string& s, const char* tok);
+  
+  static  const ctypes_specific_ftrs_t& select_block(
+							   const ctypes_ftrs_t& f,
+							   const std::string& hz,        // "1" or "128"
+							   const std::string& trans      // e.g. "RAW", "RAWLWR", "DIFFLWR", "DIFFUPR"
+							   );
+  
+  static  double get_feature_value(
+					 const ctypes_ftrs_t& ftrs,
+					 const std::string& root,   // e.g. "ZCR" or "spectral_entropy" etc.
+					 const std::string& hz,     // "1" or "128"
+					 const std::string& trans   // "RAW", "DIFFLWR", ...
+					 );
+  
   static double median_inplace(std::vector<double>& v);
   
-  static inline bool is_finite(double v) { return std::isfinite(v); } 
+  static  bool is_finite(double v) { return std::isfinite(v); } 
   
   
-  static inline bool is_nan(double x);
+  static  bool is_nan(double x);
 
   static double percentile_inplace(std::vector<double> & v, double p);
 
-  static inline void compute_p10_med_p90(std::vector<double> & vals,
+  static  void compute_p10_med_p90(std::vector<double> & vals,
 					 double & out_p10,
 					 double & out_med,
 					 double & out_p90);
@@ -320,6 +340,15 @@ private:
 
   static std::string lgbm_model_loaded;
 
+  static std::vector<std::string> varlist;
+  static std::vector<std::string> var_root; 
+  static std::vector<std::string> var_hz; 
+  static std::vector<std::string> var_trans;
+
+  static std::vector<std::string> clslist;
+  
+  static void attach_model( const std::string & ,  const std::string &  );
+			   
   static ctypes_pred_t predict( const ctypes_ftrs_t & );
 			       
 };

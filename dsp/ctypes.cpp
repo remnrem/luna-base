@@ -1,4 +1,7 @@
 
+// TODO
+//  --> |skew| for polarity invariant features / check all other features are polarity invariant
+//  --> added phys median & IQR (polarity invariant)
 
 //    --------------------------------------------------------------------
 //
@@ -45,8 +48,18 @@ extern writer_t writer;
 #include <algorithm>
 #include <limits>
 #include <algorithm>
-#include <unordered_map>
 #include <unordered_set>
+
+lgbm_t ctypes_t::lgbm;
+
+std::string ctypes_t::lgbm_model_loaded = "";
+
+std::vector<std::string> ctypes_t::varlist;
+std::vector<std::string> ctypes_t::var_root;
+std::vector<std::string> ctypes_t::var_hz;
+std::vector<std::string> ctypes_t::var_trans;
+std::vector<std::string> ctypes_t::clslist;
+
 
 
 // ---- helpers ----
@@ -622,6 +635,11 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
   const std::string model_lib  = param.has( "lib" ) ? param.value( "lib" ) : "ct1";
 
   const bool ignore_staging    = param.yesno( "ignore-staging" , false , true );
+
+
+  if ( make_predictions )
+    attach_model( model_path, model_lib );
+	
   
   //
   // signals  < 32 Hz --> resample to 1 Hz
@@ -659,6 +677,8 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
   //
 
   const bool epoch_output = param.yesno( "epoch" , false , true );
+
+  const bool output = param.yesno( "output" , false , true );
   
   //
   // attach LGBM model as needed
@@ -825,13 +845,18 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
 
   
   double num_epoch = ne;
-  double pct_rem = std::numeric_limits<double>::quiet_NaN();
+  double pct_n1 = std::numeric_limits<double>::quiet_NaN();
+  double pct_n2 = std::numeric_limits<double>::quiet_NaN();
   double pct_n3 = std::numeric_limits<double>::quiet_NaN();
+  double pct_rem = std::numeric_limits<double>::quiet_NaN();
+
   
   if ( stage.size() != 0 )
     {      
       num_epoch = 0; // N2+N3+R only
       pct_rem = 0; 
+      pct_n1 = 0;
+      pct_n2 = 0;
       pct_n3 = 0;
       int idx = 0;
       
@@ -844,16 +869,26 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
 		++pct_rem;
 	      else if ( stg == NREM3 || stg == NREM4 )
 		++pct_n3;
+	      else if ( stg == NREM1 )
+		++pct_n1;
+	      else if ( stg == NREM2 )
+		++pct_n2;
 	    }
 
 	  ++idx;
 	}
-      
-      pct_rem /= num_epoch;
+
+      double pct_s = pct_n1 + pct_n2 + pct_n3 + pct_n3;
+      pct_s /= num_epoch;
+      pct_rem /= num_epoch;      
+      pct_n1 /= num_epoch;
+      pct_n2 /= num_epoch;
       pct_n3 /= num_epoch;
+
       
-      logger << "  detected " << num_epoch
-	     << " sleep epochs (w/ proportion N3 = " << pct_n3 << ", REM = " << pct_rem << ")\n";
+      
+      logger << "  detected " << num_epoch << ", w/ prop = " << pct_s << " sleep epochs\n"
+	     << "  (N1 = " << pct_n1 << ", N2 = " << pct_n2 << ", N3 = " << pct_n3 << ", REM = " << pct_rem << ")\n";
       
     }
   
@@ -871,7 +906,7 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
       writer.level( signals.label(s) , globals::signal_strat );
 
       logger << " " << signals.label(s);
-      if ( s % 6 == 5 ) logger << "\n      ";
+      if ( s % 10 == 9 ) logger << "\n      ";
 
       // build primary feature vector
       
@@ -879,8 +914,10 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
       
       ftr.n_epochs = num_epoch;
       ftr.pct_rem = pct_rem;
+      ftr.pct_n1 = pct_n1;
+      ftr.pct_n2 = pct_n2;
       ftr.pct_n3 = pct_n3;
-
+           
       //
       // original signal
       //
@@ -888,6 +925,48 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
       interval_t interval = edf.timeline.wholetrace();
       slice_t slice( edf , signals(s) , interval );	  
       std::vector<double> * d = slice.nonconst_pdata();
+
+      //
+      // from original signal - physical scales
+      //
+      // take 'as is', w/ exception that if V will always express as uV
+
+      const std::string pdim = edf.header.phys_dimension[ signals(s) ];
+      
+      bool is_mV = Helper::imatch( pdim , "mV" );
+      bool is_V  = Helper::imatch( pdim , "V" );  
+
+      double fac = 1.0;
+      if ( is_mV ) fac = 1000;
+      else if ( is_V ) fac = 1000000;
+      
+      double q1 = std::numeric_limits<double>::quiet_NaN();
+      double q3 = std::numeric_limits<double>::quiet_NaN();      
+      {
+	std::vector<double> w = *d;
+	ftr.phys_median = fabs( fac * median_inplace( w ) ); // |median| for polarity invariance
+      }
+      {
+	std::vector<double> w = *d;
+	q1 = fac * percentile_inplace(w, 0.25);
+      }
+      {
+	std::vector<double> w = *d;
+	q3 = fac * percentile_inplace(w, 0.75);
+      }      
+      ftr.phys_iqr = fac * ( q3 - q1 ) ;
+      
+
+      if ( output )
+	{
+	  writer.value( "phys_median" , ftr.phys_median );
+	  writer.value( "phys_iqr" , ftr.phys_iqr );
+	  writer.value( "n_epochs" , ftr.n_epochs );
+	  writer.value( "pct_n1" , ftr.pct_n1 );
+	  writer.value( "pct_n2" , ftr.pct_n2 );
+	  writer.value( "pct_n3" , ftr.pct_n3 );	  
+	  writer.value( "pct_rem" , ftr.pct_rem ); 
+	}
       
       //
       // 1 Hz signal: get whole trace
@@ -897,31 +976,33 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
       calc_1Hz_stats( *d , Fs_orig[s] , epochs1, epoch2samples1, n1, &ftr , epoch_output );
       
       // output features
-      writer.level( 1 , "F" );
-      for (const auto& [key, ptr] : feature_map )
-        {
-	  writer.level( "RAW", "TRANS" );
-          writer.value( key , ftr.x1.*ptr );
-
-	  writer.level( "RAWLWR", "TRANS" );
-	  writer.value( key , ftr.x1_p10.*ptr );
-
-	  writer.level( "RAWUPR", "TRANS" );
-	  writer.value( key , ftr.x1_p90.*ptr );
-
-	  writer.level( "DIFF", "TRANS" );
-	  writer.value( key , ftr.x1_diff.*ptr );
-
-	  writer.level( "DIFFLWR", "TRANS" );
-          writer.value( key , ftr.x1_diff_p10.*ptr );
-
-	  writer.level( "DIFFUPR", "TRANS" );
-	  writer.value( key , ftr.x1_diff_p90.*ptr );
-
-        }
-      writer.unlevel( "TRANS" );
-      writer.unlevel( "F" );
-
+      if ( output )
+	{
+	  writer.level( 1 , "F" );
+	  for (const auto& [key, ptr] : feature_map )
+	    {
+	      writer.level( "RAW", "TRANS" );
+	      writer.value( key , ftr.x1.*ptr );
+	      
+	      writer.level( "RAWLWR", "TRANS" );
+	      writer.value( key , ftr.x1_p10.*ptr );
+	      
+	      writer.level( "RAWUPR", "TRANS" );
+	      writer.value( key , ftr.x1_p90.*ptr );
+	      
+	      writer.level( "DIFF", "TRANS" );
+	      writer.value( key , ftr.x1_diff.*ptr );
+	      
+	      writer.level( "DIFFLWR", "TRANS" );
+	      writer.value( key , ftr.x1_diff_p10.*ptr );
+	      
+	      writer.level( "DIFFUPR", "TRANS" );
+	      writer.value( key , ftr.x1_diff_p90.*ptr );
+	      
+	    }
+	  writer.unlevel( "TRANS" );
+	  writer.unlevel( "F" );
+	}
            
 
       //
@@ -931,48 +1012,52 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
       // calculate & aggregae epoch-wise features
       calc_128Hz_stats( *d , Fs_orig[s] , epochs128, epoch2samples128, n128, &ftr , epoch_output );
       
-      // output features                                                                                                                                  
-      writer.level( 128 , "F" );
-      for (const auto& [key, ptr] : feature_map )
-        {
-	  writer.level( "RAW", "TRANS" );
-          writer.value( key , ftr.x128.*ptr );
+      // output features
+      if ( output )
+	{
+	  writer.level( 128 , "F" );
+	  for (const auto& [key, ptr] : feature_map )
+	    {
+	      writer.level( "RAW", "TRANS" );
+	      writer.value( key , ftr.x128.*ptr );
+	      
+	      writer.level( "DIFF", "TRANS" );
+	      writer.value( key , ftr.x128_diff.*ptr );
+	      
+	      writer.level( "RAWLWR", "TRANS" );
+	      writer.value( key , ftr.x128_p10.*ptr );
+	      
+	      writer.level( "DIFFLWR", "TRANS" );
+	      writer.value( key , ftr.x128_diff_p10.*ptr );
+	      
+	      writer.level( "RAWUPR", "TRANS" );
+	      writer.value( key , ftr.x128_p90.*ptr );
+	      
+	      writer.level( "DIFFUPR", "TRANS" );
+	      writer.value( key , ftr.x128_diff_p90.*ptr );
+	      
+	    }
+	  writer.unlevel( "TRANS" );
+	  writer.unlevel( "F" );
+	}
 
-	  writer.level( "DIFF", "TRANS" );
-	  writer.value( key , ftr.x128_diff.*ptr );
-
-	  writer.level( "RAWLWR", "TRANS" );
-	  writer.value( key , ftr.x128_p10.*ptr );
-
-	  writer.level( "DIFFLWR", "TRANS" );
-          writer.value( key , ftr.x128_diff_p10.*ptr );
-
-	  writer.level( "RAWUPR", "TRANS" );
-	  writer.value( key , ftr.x128_p90.*ptr );
-
-	  writer.level( "DIFFUPR", "TRANS" );
-	  writer.value( key , ftr.x128_diff_p90.*ptr );
-
-        }
-      writer.unlevel( "TRANS" );
-      writer.unlevel( "F" );
-     
+      
       //
       // predict
       //
-      
-      ctypes_pred_t prediction = predict( ftr );
 
+      if ( make_predictions )
+	{
+	   
+	  ctypes_pred_t prediction = predict( ftr );
       
-      //
-      // outputs
-      //
-      
-      for (const auto& [key, value] : prediction.posteriors) {
-	writer.level( key , "CTYPE" );
-	writer.value( "PP" , value );
-      }
-      writer.unlevel( "CTYPE" );
+	  for (int i=0; i<clslist.size(); i++)
+	    {
+	      writer.level( clslist[i] , "CTYPE" );
+	      writer.value( "PP" , prediction.posteriors[i] );
+	    }
+	  writer.unlevel( "CTYPE" );
+	}
       
       // next signal
       continue;
@@ -983,14 +1068,166 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
 }
 
 
+void ctypes_t::attach_model( const std::string & model_path ,  const std::string & model_lib )
+{
+
+  const std::string s = Helper::expand( model_path ) + "/" + model_lib;
+  
+  // already loaded?
+  if ( lgbm_model_loaded == s ) 
+    return;
+
+  lgbm_model_loaded = s;
+  	      
+  const std::string f_mod = s + ".mod" ;
+  const std::string f_ftr = s + ".ftr" ;
+  const std::string f_cls = s + ".cls" ;
+
+  if ( ! Helper::fileExists( f_mod ) ) Helper::halt( f_mod + " can not be opened" );
+  if ( ! Helper::fileExists( f_ftr ) ) Helper::halt( f_ftr + " can not be opened" );
+  if ( ! Helper::fileExists( f_cls ) ) Helper::halt( f_cls + " can not be opened" );
+
+  // model
+  
+  lgbm.load_model( f_mod );
+
+  // ftrs
+  
+  std::ifstream I1( f_ftr, std::ios::out );  
+  varlist.clear();
+  int n;  
+  I1 >> n;
+  for (int i=0;i<n;i++)
+    {
+      std::string x;
+      I1 >> x;
+      varlist.push_back( x );
+    }
+  I1.close();
+
+  // cls
+  std::ifstream I2( f_cls, std::ios::out );  
+  clslist.clear();
+  I2 >> n;
+  for (int i=0;i<n;i++)
+    {
+      std::string x;
+      I2 >> x;
+      clslist.push_back( x );
+    }
+  I2.close();
+
+  // parse ftrs
+  var_root.clear();
+  var_hz.clear();
+  var_trans.clear();
+  for (int i=0; i<varlist.size(); i++)
+    {
+      // expected either 3 or 4 _ delim tokens
+      std::vector<std::string> tok = Helper::parse( varlist[i] , "_" );
+      if ( tok.size() == 3 )
+	{
+	  var_root.push_back( tok[0] );
+	  var_hz.push_back( tok[1] );
+	  var_trans.push_back( tok[2] );
+	}
+      else if ( tok.size() == 4 )
+	{
+	  var_root.push_back( tok[0] + "_" + tok[1] ); // some roots have a single _
+	  var_hz.push_back( tok[2] );
+	  var_trans.push_back( tok[3] );
+	}
+      else
+	Helper::halt( "bad format for " + f_ftr + " line " + varlist[i] );      
+    }
+  
+}
+
+
+// ---------- helpers ----------
+
+bool ctypes_t::ends_with(const std::string& s, const char* suf) {
+  const size_t n = s.size(), m = std::char_traits<char>::length(suf);
+  return n >= m && s.compare(n - m, m, suf) == 0;
+}
+
+bool ctypes_t::contains(const std::string& s, const char* tok) {
+  return s.find(tok) != std::string::npos;
+}
+
+const ctypes_specific_ftrs_t& ctypes_t::select_block(
+    const ctypes_ftrs_t& f,
+    const std::string& hz,        // "1" or "128"
+    const std::string& trans      // e.g. "RAW", "RAWLWR", "DIFFLWR", "DIFFUPR"
+						     ) {
+  const bool is128 = (hz == "128");
+  const bool isdiff = contains(trans, "DIFF");
+  const bool is_lwr = ends_with(trans, "LWR");
+  const bool is_upr = ends_with(trans, "UPR");
+  
+  // RAW vs DIFF
+  if (!is128 && !isdiff) {
+    if (is_lwr) return f.x1_p10;
+    if (is_upr) return f.x1_p90;
+    return f.x1;
+  }
+  if (!is128 && isdiff) {
+    if (is_lwr) return f.x1_diff_p10;
+    if (is_upr) return f.x1_diff_p90;
+    return f.x1_diff;
+  }
+  if (is128 && !isdiff) {
+    if (is_lwr) return f.x128_p10;
+    if (is_upr) return f.x128_p90;
+    return f.x128;
+  }
+  // is128 && isdiff
+  if (is_lwr) return f.x128_diff_p10;
+  if (is_upr) return f.x128_diff_p90;
+  return f.x128_diff;
+}
+
+double ctypes_t::get_feature_value(
+				   const ctypes_ftrs_t& ftrs,
+				   const std::string& root,   // e.g. "ZCR" or "spectral_entropy" etc.
+				   const std::string& hz,     // "1" or "128"
+				   const std::string& trans   // "RAW", "DIFFLWR", ...
+				   )
+{
+  auto it = feature_map.find(root);
+
+  if (it == feature_map.end())
+    Helper::halt( "Unknown root feature: " + root );
+
+  const ctypes_specific_ftrs_t& blk = select_block(ftrs, hz, trans);
+
+  return blk.*(it->second);
+}
+
+
 ctypes_pred_t ctypes_t::predict( const ctypes_ftrs_t & ftr ) {
 
   ctypes_pred_t p;
 
-  p.valid = false;
+  const int m = varlist.size();
+    
+  // build single row ftr vector
+  Eigen::VectorXd X = Eigen::VectorXd::Zero( m );
 
-  // use LGBM... 
+  for (int i=0; i<m; i++)
+    {
+      const std::string & root = var_root[i];
+      const std::string & hz = var_hz[i];
+      const std::string & trans = var_trans[i];
+      
+      // note: currently missing n_epochs, pct_rem, pct_n3 which do not have hz/trans attr.
+      X[i] = get_feature_value(ftr, root, hz, trans );
+      
+    }
   
+  // predict
+  p.posteriors = lgbm.predict1( X );
+
   return p;  
   
 }
@@ -1467,7 +1704,7 @@ ctypes_specific_ftrs_t ctypes_t::calc_specific_stats( const std::vector<double> 
   double mn = mean( x ) ;
   double sd = sd_sample( x ) ;
   
-  out.skewness = MiscMath::skewness( x , mn , sd );
+  out.skewness = fabs( MiscMath::skewness( x , mn , sd ) ); // |skew|
   out.kurtosis = MiscMath::kurtosis( x , mn );
 
   

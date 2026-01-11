@@ -132,6 +132,8 @@ struct lgbm_t {
   bool train(  );
   
   Eigen::MatrixXd predict( const Eigen::MatrixXd & X , const int final_iter = 0 );
+
+  Eigen::VectorXd predict1( const Eigen::VectorXd & X , const int final_iter = 0 );
   
   Eigen::MatrixXd SHAP_values( const Eigen::MatrixXd & X , const int final_iter = 0 );
 

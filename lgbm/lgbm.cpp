@@ -600,7 +600,7 @@ bool lgbm_t::save_model( const std::string & filename )
 Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_iter )
 {
   
-  // std::cout << "X dim = " << X.rows() << " " << X.cols() << "\n";
+  //  std::cout << "X dim = " << X.rows() << " " << X.cols() << "\n";
   
   // std::cout << X << "\n\n";
 
@@ -666,6 +666,13 @@ Eigen::MatrixXd lgbm_t::predict( const Eigen::MatrixXd & X , const int final_ite
   
   return R.transpose();
   
+}
+
+Eigen::VectorXd lgbm_t::predict1(const Eigen::VectorXd& x , const int final_iter  ) {
+  Eigen::MatrixXd X(1, x.size());
+  X.row(0) = x.transpose();
+  Eigen::MatrixXd P = predict(X, final_iter );
+  return P.row(0).transpose();   // Kx1 VectorXd
 }
 
 
