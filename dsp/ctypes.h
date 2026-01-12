@@ -116,11 +116,11 @@ struct ctypes_specific_ftrs_t {
 struct ctypes_ftrs_t {
 
   // overall features 
-  double n_epochs;
-  double pct_n1;
-  double pct_n2;
-  double pct_n3;
-  double pct_rem;
+  double num_n1;
+  double num_n2;
+  double num_n3;
+  double num_rem;
+  double num_any;
   
   double phys_median;
   double phys_iqr;
@@ -188,6 +188,7 @@ struct ctypes_t {
 			 ctypes_ftrs_t * , bool );
 
   void calc_128Hz_stats( const std::vector<double> & x , double,
+			 const std::set<int> & ,
 			 const std::vector<int> & , 
 			 const std::vector<std::pair<int,int>> & ,
 			 size_t , 
@@ -279,6 +280,15 @@ private:
   double edge95_th2;
   double edge95_prop2;
 
+
+  // epochs to keep 
+
+  std::set<int> s_n1, s_n2, s_n3, s_rem;
+
+  std::set<int> select( std::set<int> & , const int );
+  
+
+  
   // transformations
 
   void make_1s( const std::vector<double>& x, double sr ,

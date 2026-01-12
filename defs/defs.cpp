@@ -268,7 +268,7 @@ void globals::init_defs()
   patch_version_number = 4;
 
   // should always be 11 chars
-  date    = "18-Dec-2025";
+  date    = "12-Jan-2026";
 
   //
   // Return code

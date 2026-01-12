@@ -1,7 +1,8 @@
 
 // TODO
 //  --> |skew| for polarity invariant features / check all other features are polarity invariant
-//  --> added phys median & IQR (polarity invariant)
+//  --> added phys |median| & IQR (polarity invariant)
+//  --> select up to N of each epochs class only
 
 //    --------------------------------------------------------------------
 //
@@ -36,6 +37,8 @@
 
 #include "db/db.h"
 #include "param.h"
+
+#include <set>
 
 extern logger_t logger;
 extern writer_t writer;
@@ -636,7 +639,11 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
 
   const bool ignore_staging    = param.yesno( "ignore-staging" , false , true );
 
+  // 10 mins (20 epochs of each of four stagea stage )
+  // else total 40 mins
+  const int sel_num_epochs     = param.has( "num-epochs" ) ? param.requires_int( "num-epoch" ) : ( ignore_staging ? 80 : 20 ) ;
 
+  
   if ( make_predictions )
     attach_model( model_path, model_lib );
 	
@@ -797,13 +804,16 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
   // get staging
   //
 
+  s_n1.clear(); s_n2.clear(); s_n3.clear(); s_rem.clear();
+  
   // reset to 30-second epochs
   edf.timeline.set_epoch( e128dur , e128inc );
 
   edf.timeline.first_epoch();
-  
-  std::map<int,int> stage;
 
+  std::map<int,int> stage;
+  std::set<int> selected_epochs;
+  
   if ( ! ignore_staging )
     {
       
@@ -844,51 +854,67 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
     }
 
   
-  double num_epoch = ne;
-  double pct_n1 = std::numeric_limits<double>::quiet_NaN();
-  double pct_n2 = std::numeric_limits<double>::quiet_NaN();
-  double pct_n3 = std::numeric_limits<double>::quiet_NaN();
-  double pct_rem = std::numeric_limits<double>::quiet_NaN();
+  double num_n1 = std::numeric_limits<double>::quiet_NaN();
+  double num_n2 = std::numeric_limits<double>::quiet_NaN();
+  double num_n3 = std::numeric_limits<double>::quiet_NaN();
+  double num_rem = std::numeric_limits<double>::quiet_NaN();
 
-  
   if ( stage.size() != 0 )
-    {      
-      num_epoch = 0; // N2+N3+R only
-      pct_rem = 0; 
-      pct_n1 = 0;
-      pct_n2 = 0;
-      pct_n3 = 0;
+    {            
+      
+      num_rem = 0; 
+      num_n1 = 0;
+      num_n2 = 0;
+      num_n3 = 0;
+
+      int num_epoch = 0;
+      
       int idx = 0;
       
       for (const auto& [e, stg] : stage )
 	{
 	  if ( stg == NREM1 || stg == NREM2 || stg == NREM3 || stg == NREM4 || stg == REM )
 	    {	      
+	      const int e1 = edf.timeline.display_epoch( e ); // to matches epochs[] in calc()
+	      
 	      ++num_epoch;
 	      if ( stg == REM )
-		++pct_rem;
+		s_rem.insert( e1 );
 	      else if ( stg == NREM3 || stg == NREM4 )
-		++pct_n3;
+		s_n3.insert( e1 );
 	      else if ( stg == NREM1 )
-		++pct_n1;
+		s_n1.insert( e1 ) ;
 	      else if ( stg == NREM2 )
-		++pct_n2;
+		s_n2.insert( e1 );
 	    }
-
+	  
 	  ++idx;
 	}
-
-      double pct_s = pct_n1 + pct_n2 + pct_n3 + pct_n3;
-      pct_s /= num_epoch;
-      pct_rem /= num_epoch;      
-      pct_n1 /= num_epoch;
-      pct_n2 /= num_epoch;
-      pct_n3 /= num_epoch;
-
       
+      // get up to K of each stage
+      s_rem = select( s_rem , sel_num_epochs );
+      s_n1 = select( s_n1 , sel_num_epochs );
+      s_n2 = select( s_n2 , sel_num_epochs );
+      s_n3 = select( s_n3, sel_num_epochs );
+
+      int num_s_all = num_n1 + num_n2 + num_n3 + num_rem;
+
+      num_n1 = s_n1.size();
+      num_n2 = s_n2.size();
+      num_n3 = s_n3.size();
+      num_rem  = s_rem.size();
+
+      int num_s_sel = num_n1 + num_n2 + num_n3 + num_rem;
       
-      logger << "  detected " << num_epoch << ", w/ prop = " << pct_s << " sleep epochs\n"
-	     << "  (N1 = " << pct_n1 << ", N2 = " << pct_n2 << ", N3 = " << pct_n3 << ", REM = " << pct_rem << ")\n";
+      selected_epochs.clear();
+      for (const auto& e : s_n1 ) selected_epochs.insert( e );
+      for (const auto& e : s_n2 ) selected_epochs.insert( e );
+      for (const auto& e : s_n3 ) selected_epochs.insert( e );
+      for (const auto& e : s_rem ) selected_epochs.insert( e );
+            
+      // summary 
+      logger << "  detected " << num_epoch << " epochs, w/ " << num_s_sel << " of " << num_s_all << " sleep epochs selected\n"
+	     << "  (N1 = " << num_n1 << ", N2 = " << num_n2 << ", N3 = " << num_n3 << ", REM = " << num_rem << " selected)\n";
       
     }
   
@@ -912,11 +938,11 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
       
       ctypes_ftrs_t ftr;
       
-      ftr.n_epochs = num_epoch;
-      ftr.pct_rem = pct_rem;
-      ftr.pct_n1 = pct_n1;
-      ftr.pct_n2 = pct_n2;
-      ftr.pct_n3 = pct_n3;
+      ftr.num_rem = num_rem;
+      ftr.num_n1 = num_n1;
+      ftr.num_n2 = num_n2;
+      ftr.num_n3 = num_n3;
+      ftr.num_any = std::numeric_limits<double>::quiet_NaN();
            
       //
       // original signal
@@ -961,11 +987,11 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
 	{
 	  writer.value( "phys_median" , ftr.phys_median );
 	  writer.value( "phys_iqr" , ftr.phys_iqr );
-	  writer.value( "n_epochs" , ftr.n_epochs );
-	  writer.value( "pct_n1" , ftr.pct_n1 );
-	  writer.value( "pct_n2" , ftr.pct_n2 );
-	  writer.value( "pct_n3" , ftr.pct_n3 );	  
-	  writer.value( "pct_rem" , ftr.pct_rem ); 
+	  writer.value( "num_any" , ftr.num_any );
+	  writer.value( "num_n1" , ftr.num_n1 );
+	  writer.value( "num_n2" , ftr.num_n2 );
+	  writer.value( "num_n3" , ftr.num_n3 );	  
+	  writer.value( "num_rem" , ftr.num_rem ); 
 	}
       
       //
@@ -973,8 +999,9 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
       //
 
       // calculate features
-      calc_1Hz_stats( *d , Fs_orig[s] , epochs1, epoch2samples1, n1, &ftr , epoch_output );
       
+      calc_1Hz_stats( *d , Fs_orig[s] , epochs1, epoch2samples1, n1, &ftr , epoch_output );
+            
       // output features
       if ( output )
 	{
@@ -1010,7 +1037,9 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
       //
 
       // calculate & aggregae epoch-wise features
-      calc_128Hz_stats( *d , Fs_orig[s] , epochs128, epoch2samples128, n128, &ftr , epoch_output );
+      
+      calc_128Hz_stats( *d , Fs_orig[s] , selected_epochs , epochs128, epoch2samples128, n128, &ftr , epoch_output );
+      
       
       // output features
       if ( output )
@@ -1220,7 +1249,7 @@ ctypes_pred_t ctypes_t::predict( const ctypes_ftrs_t & ftr ) {
       const std::string & hz = var_hz[i];
       const std::string & trans = var_trans[i];
       
-      // note: currently missing n_epochs, pct_rem, pct_n3 which do not have hz/trans attr.
+      // note: currently missing n_epochs, num_rem, num_n3 etc which do not have hz/trans attr.
       X[i] = get_feature_value(ftr, root, hz, trans );
       
     }
@@ -1337,6 +1366,7 @@ void ctypes_t::calc_1Hz_stats( const std::vector<double> & x , const double Fs_o
 
 
 void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs_orig,
+				 const std::set<int> & selected_epochs ,
 				 const std::vector<int> & epochs , 				 
 				 const std::vector<std::pair<int,int> > & epoch2samples,
 				 const size_t n128, 
@@ -1348,7 +1378,9 @@ void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs
   // *** 128 Hz stats are done on *epoch-wise* - only on N2, N3 and REM epochs
   
   // resample to 128 Hz
-  
+
+  std::cout << "  build\n";
+
   const int Fs = 128;
   
   std::vector<double> x128;
@@ -1369,6 +1401,9 @@ void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs
   // normalize
   //
 
+
+  std::cout << "  norm\n";
+
   const double win = 0.01;
 
   normalize( &x128 );
@@ -1382,6 +1417,8 @@ void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs
   // compute features epoch-wise
   //
 
+  std::cout << "  iter-E\n";
+    
   std::vector<ctypes_ftrs_t> aggr;
 
   if ( epoch_output )
@@ -1390,26 +1427,29 @@ void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs
   for (int e=0; e<epoch2samples.size(); e++)
     {
 
+      // process this epoch?
+      if ( selected_epochs.find( epochs[e] ) == selected_epochs.end() )
+	continue;
+
+      
       const int s1 = epoch2samples[e].first;
+
       const int s2 = epoch2samples[e].second;
       
       std::vector<double> ex128( s2 - s1 );
       std::vector<double> ed128( s2 - s1 );
-      //      std::vector<double> ec128( s2 - s1 + 1 );
       
       for (int p=s1; p<s2; p++)
 	{
 	  const int idx = p - s1;   // 0..len-1
 	  ex128[idx] = x128[p];
-	  ed128[idx] = d128[p];
-	  //	  ec128[idx] = c128[p];
+	  ed128[idx] = d128[p];	  
 	}
       
       ctypes_ftrs_t f;
  
       f.x128      = calc_specific_stats( ex128 , 128 );
       f.x128_diff = calc_specific_stats( ed128 , 128 );
-      //      f.x128_corr = calc_specific_stats( ec128 , 128 );
 
       // store
       aggr.push_back( f );
@@ -1425,14 +1465,12 @@ void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs
 
 	      writer.level( "DIFF", "TRANS" );
 	      writer.value( key , f.x128_diff.*ptr );
-
-	      // writer.level( "CORR", "TRANS" );
-	      // writer.value( key , f.x128_corr.*ptr );	    
 	    }
 	  writer.unlevel( "TRANS" );
 	}
     }
 
+  std::cout << " aggr\n";
   
   if ( epoch_output )
     {
@@ -1446,6 +1484,7 @@ void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs
 
   aggregate128( aggr , ftr );
 
+  std::cout << " done all\n";
 }
 
 
@@ -1912,6 +1951,12 @@ void ctypes_t::normalize( std::vector<double> * x )
   }
 }
 
+
+std::set<int> ctypes_t::select( std::set<int> & s , const int n )
+{
+  // TODO
+  return s;
+}
 
 #endif // LGBM
 
