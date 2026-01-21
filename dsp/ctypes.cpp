@@ -39,6 +39,7 @@
 #include "param.h"
 
 #include <set>
+#include <random>
 
 extern logger_t logger;
 extern writer_t writer;
@@ -641,7 +642,7 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
 
   // 10 mins (20 epochs of each of four stagea stage )
   // else total 40 mins
-  const int sel_num_epochs     = param.has( "num-epochs" ) ? param.requires_int( "num-epoch" ) : ( ignore_staging ? 80 : 20 ) ;
+  const int sel_num_epochs     = param.has( "num-epoch" ) ? param.requires_int( "num-epoch" ) : ( ignore_staging ? 80 : 20 ) ;
 
   
   if ( make_predictions )
@@ -685,7 +686,8 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
 
   const bool epoch_output = param.yesno( "epoch" , false , true );
 
-  const bool output = param.yesno( "output" , false , true );
+  // if not in predict mode, then we want CH-level output by default
+  const bool output = param.yesno( "output" , make_predictions ? false : true , true );
   
   //
   // attach LGBM model as needed
@@ -866,7 +868,7 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
       num_n1 = 0;
       num_n2 = 0;
       num_n3 = 0;
-
+      
       int num_epoch = 0;
       
       int idx = 0;
@@ -891,18 +893,23 @@ void ctypes_t::proc( edf_t & edf , param_t & param )
 	  ++idx;
 	}
       
+      num_n1 = s_n1.size();
+      num_n2 = s_n2.size();
+      num_n3 = s_n3.size();
+      num_rem  = s_rem.size();
+      
+      int num_s_all = num_n1 + num_n2 + num_n3 + num_rem;
+
       // get up to K of each stage
       s_rem = select( s_rem , sel_num_epochs );
       s_n1 = select( s_n1 , sel_num_epochs );
       s_n2 = select( s_n2 , sel_num_epochs );
       s_n3 = select( s_n3, sel_num_epochs );
 
-      int num_s_all = num_n1 + num_n2 + num_n3 + num_rem;
-
       num_n1 = s_n1.size();
       num_n2 = s_n2.size();
       num_n3 = s_n3.size();
-      num_rem  = s_rem.size();
+      num_rem = s_rem.size();
 
       int num_s_sel = num_n1 + num_n2 + num_n3 + num_rem;
       
@@ -1379,8 +1386,6 @@ void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs
   
   // resample to 128 Hz
 
-  std::cout << "  build\n";
-
   const int Fs = 128;
   
   std::vector<double> x128;
@@ -1401,9 +1406,6 @@ void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs
   // normalize
   //
 
-
-  std::cout << "  norm\n";
-
   const double win = 0.01;
 
   normalize( &x128 );
@@ -1416,8 +1418,6 @@ void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs
   //
   // compute features epoch-wise
   //
-
-  std::cout << "  iter-E\n";
     
   std::vector<ctypes_ftrs_t> aggr;
 
@@ -1430,7 +1430,6 @@ void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs
       // process this epoch?
       if ( selected_epochs.find( epochs[e] ) == selected_epochs.end() )
 	continue;
-
       
       const int s1 = epoch2samples[e].first;
 
@@ -1469,8 +1468,6 @@ void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs
 	  writer.unlevel( "TRANS" );
 	}
     }
-
-  std::cout << " aggr\n";
   
   if ( epoch_output )
     {
@@ -1484,7 +1481,6 @@ void ctypes_t::calc_128Hz_stats( const std::vector<double> & x , const double Fs
 
   aggregate128( aggr , ftr );
 
-  std::cout << " done all\n";
 }
 
 
@@ -1954,8 +1950,20 @@ void ctypes_t::normalize( std::vector<double> * x )
 
 std::set<int> ctypes_t::select( std::set<int> & s , const int n )
 {
-  // TODO
-  return s;
+  if (n <= 0 || s.empty()) return {};
+  if (n >= static_cast<int>(s.size())) return s;
+
+  // Copy set into vector for indexing/shuffling
+  std::vector<int> v(s.begin(), s.end());
+
+  // Random engine (seed once per call; acceptable here)
+  static std::mt19937 rng{std::random_device{}()};
+
+  // Shuffle and take first n
+  std::shuffle(v.begin(), v.end(), rng);
+
+  return std::set<int>(v.begin(), v.begin() + n);
+
 }
 
 #endif // LGBM

@@ -1832,7 +1832,8 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   //
   // note - this may be called in '--eval-stages' context, in which case there is no
   // atatched EDF.  This only matters for clocktime (hms) outputs below.  But, this
-  // is why we need to test for pedf being NULL or not. 
+  // is why we need to test for pedf being NULL or not.   But we also need to look at for 
+  // missing/unknown datapoints here
   //
   
   std::map<int,double> dur_obs, dur_obs_orig, dur_predf, dur_pred1;
@@ -1843,7 +1844,7 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   //
   // Update 'ne' (as may be on combined set); it should track w/ E, S and P
   //
-
+  
   ne = E.size();
 
 
@@ -1876,14 +1877,15 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   for (int epoch=0; epoch<ne_total; epoch++)
     {
       
-      const bool skipped = e2e.find( epoch ) == e2e.end();
+      bool skipped = e2e.find( epoch ) == e2e.end();      
       
-      //std::cout << " epoch " << epoch << " " << skipped << "\n";
+      //std::cout << " epoch " << epoch << " " << skipped << " of " << ne_total << "\n";
       
       writer.epoch( epoch + 1 );
 
       if ( hms )
 	{
+
 	  interval_t interval = pedf->timeline.epoch( epoch );
 	  
 	  double tp1_sec =  interval.start / (double)globals::tp_1sec;
@@ -1901,7 +1903,6 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
            writer.value( "STOP"   , present2.as_string(':') +  Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp ).substr(1) );
 	}
 
-      
       if ( skipped )
 	{
 	  writer.value( "FLAG" , -1 );		    
@@ -1911,10 +1912,18 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       // this is in range of only 'valid' epochs 
       // i.e. 'e' will align w/ P(), etc
       const int e = e2e[ epoch ] ;
-      
+
       // predicted stage
       int predx = -1;
-      
+            
+      // null-predicted? (i.e. non N*/R/W from file in EVAL mode)       
+      //      std::cout << " PS[e] == POPS_UNKNOWN " << PS[e] << " " <<  POPS_UNKNOWN << "\n";
+      if ( PS[e] == POPS_UNKNOWN ) 
+	{
+	  writer.value( "FLAG" , -1 );
+          continue;
+	}
+
       // format always: W R N1 N2 N3
       if ( ! pops_opt_t::eval_mode )
 	{
@@ -1985,7 +1994,7 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
 	  writer.value( "FLAG" , flag );
 	 
 	}
-      
+
       // slp/rem latency
       if ( has_staging ) 
 	{
