@@ -105,10 +105,10 @@ pops_indiv_t::pops_indiv_t( param_t & param ,
   if ( ne_both != ne ) logger << "  *** only analysing the first " << ne_both << " epochs (assuming similar starts)\n";
   
   E.clear();
-  PS.resize( ne , UNKNOWN );
-  S.resize( ne , UNKNOWN );
+  PS.resize( ne , POPS_UNKNOWN );
+  S.resize( ne , POPS_UNKNOWN );
   
-  for (int e=0; e<ne2; e++)
+  for (int e=0; e<ne_both; e++)
     {
 
       E.push_back( e );
@@ -182,18 +182,20 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
   
   const int ne_both = ne < ne2 ? ne : ne2 ; 
   
-  if ( ne != ne2 ) logger << "  *** warning -- found a different number of epochs in " << file1 << "\n";
-
+  if ( ne != ne2 ) logger << "  *** warning -- found a different number of epochs in " << file1 
+			  << " (" << ne << " versus " << ne2 << ")\n";  
+			  
   if ( ne_both != ne ) logger << "  *** only analysing the first " << ne_both << " epochs (assuming similar starts)\n";
   
-  PS.resize( ne , UNKNOWN );
-  for (int e=0; e<ne2; e++)
+  PS.resize( ne , POPS_UNKNOWN );
+  for (int e=0; e<ne_both; e++)
     {
-      if      ( exss[e] == "W" ) PS[e] = 0;
+      if      ( exss[e] == "W" ) PS[e] = 0; // POPS stage encoding
       else if ( exss[e] == "R" ) PS[e] = 1;
       else if ( exss[e] == "N1" ) PS[e] = 2;
       else if ( exss[e] == "N2" ) PS[e] = 3;
       else if ( exss[e] == "N3" ) PS[e] = 4;
+      else PS[e] = POPS_UNKNOWN; // 9
     }
   
   eval_stages();
