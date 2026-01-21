@@ -640,6 +640,8 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
   //
   // convert 
   //
+
+  int n_epochs_scored = 0;
   
   for (int ss=0; ss < ne; ss++ )
     {
@@ -654,23 +656,46 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
 	S[ss] = POPS_UNKNOWN;
       
       else if ( edf.timeline.hypnogram.stages[ ss ] == WAKE )
-	S[ss] = POPS_WAKE;
+	{
+	  S[ss] = POPS_WAKE;
+	  ++n_epochs_scored;
+	}
       
       else if ( edf.timeline.hypnogram.stages[ ss ] == NREM1 )
-	S[ss] = pops_opt_t::n_stages == 3 ? POPS_N1 : POPS_N1;
-      
+	{
+	  S[ss] = pops_opt_t::n_stages == 3 ? POPS_N1 : POPS_N1;
+	  ++n_epochs_scored;
+	}
       else if ( edf.timeline.hypnogram.stages[ ss ] == NREM2 )
-	S[ss] = pops_opt_t::n_stages == 3 ? POPS_N1 : POPS_N2;
-      
+	{
+	  S[ss] = pops_opt_t::n_stages == 3 ? POPS_N1 : POPS_N2;
+	  ++n_epochs_scored;
+	}
       else if ( edf.timeline.hypnogram.stages[ ss ] == NREM3
 		|| edf.timeline.hypnogram.stages[ ss ] == NREM4 )
-	S[ss] = pops_opt_t::n_stages == 3 ? POPS_N1 : POPS_N3;
-      
+	{
+	  S[ss] = pops_opt_t::n_stages == 3 ? POPS_N1 : POPS_N3;
+	  ++n_epochs_scored;
+	}
       else if ( edf.timeline.hypnogram.stages[ ss ] == REM )
-	S[ss] = POPS_REM;
-
+	{
+	  S[ss] = POPS_REM;
+	  ++n_epochs_scored;
+	}
+      
           
     } // next epoch 
+
+
+  logger << "  found " << n_epochs_scored << " epochs with valid wake/sleep staging\n";
+
+  // need at least ten mins - e.g. staging may be all ?
+  if ( n_epochs_scored < 20 )
+    {
+      logger << "  ignoring existing staging - not enough valid epochs\n";
+      has_staging = false;
+    }
+
 
   //
   // clear up dummy staging
@@ -678,6 +703,7 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
 
   if ( ! has_staging ) 
     edf.annotations->clear_sleep_stage();
+
   
   
   //
@@ -757,6 +783,7 @@ bool pops_indiv_t::staging( edf_t & edf , param_t & param )
 	  
     } // end of wake trimming option
 
+  
   return true;
 }
 
@@ -1170,7 +1197,8 @@ void pops_indiv_t::level1( edf_t & edf )
 		  if ( bin.bfb[i] > pops_opt_t::upr ) break;
 		  if ( bin.bspec[i] <= 0 && bin.bfa[i] >= pops_opt_t::lwr ) 
 		    {
-		      bad_epoch  = true;		       
+		      bad_epoch  = true;
+		      std::cout << " flat " <<  bin.bfb[i] << " " << bin.bspec[i] << "\n";
 		      bin.bspec[i] = 1e-4 ; // set to -40dB as a fudge		   
 		    }
 		}
@@ -1249,7 +1277,7 @@ void pops_indiv_t::level1( edf_t & edf )
 		    {
 		      bad_epoch = true;
 		      norm = 1e-8;
-		      //std::cout << " resetting norm 1e-8\n";
+		      std::cout << " resetting norm 1e-8\n";
 		    }
 		  
 		  int b = 0;				   
