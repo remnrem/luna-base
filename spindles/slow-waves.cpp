@@ -123,8 +123,8 @@ slow_wave_param_t::slow_wave_param_t( const param_t & param )
     }
   
   // default FIR settings for filter-Hilbert
-  fir_ripple = param.has( "sw-ripple" ) ? param.requires_dbl( "sw-ripple" ) : 0.01 ;
-  fir_tw = param.has( "sw-tw" ) ? param.requires_dbl( "sw-tw" ) : 0.5 ; 
+  fir_ripple = param.has( "so-ripple" ) ? param.requires_dbl( "so-ripple" ) : 0.01 ;
+  fir_tw = param.has( "so-tw" ) ? param.requires_dbl( "so-tw" ) : 0.5 ; 
   
   // legacy/ignored
   pos2neg_zc = ! param.has( "neg2pos" ) ;
@@ -137,11 +137,13 @@ slow_wave_param_t::slow_wave_param_t( const param_t & param )
   
   // annotations -- first check so-annot then annot (i.e. if called from SPINDLES)
   astr = ".";
-  
+  output_halfwave_annots = false;
+
   if ( param.has( "so-annot" ) )
-    astr = param.value( "so-annot" );
-  /* else if ( param.has( "annot" ) ) */
-  /*   astr = param.value( "annot" ); */
+    {
+      astr = param.value( "so-annot" );
+      output_halfwave_annots = param.yesno( "so-annot-halfwaves" , false , true );
+    }
   
   // do not skip SO detection
   skip = false;
@@ -476,8 +478,9 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
   if ( astr != "" && astr != "." )
     {
       
-      logger << "  writing SO annotations to " << astr 
-	     << " (also half-waves: " << astr << "_pos and " << astr << "_neg) ";
+      logger << "  writing SO annotations to " << astr ;
+      if ( output_halfwave_annots )
+	logger << " (also half-waves: " << astr << "_pos and " << astr << "_neg) ";	  
       logger << " for " << ch << "\n";
       
       annot_t * a = edf->annotations->add( astr );
@@ -818,6 +821,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 
   // annotations
   astr = par.astr;
+  output_halfwave_annots = par.output_halfwave_annots;
   ch = par.ch;
   output_halfwave_annots = false; // can allow a param to set this
   
@@ -1081,7 +1085,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
       
     } // next putative SW
   
-
+  //  std::cerr << " waves sz = " << waves.size() << "\n";
   // no remaining SWs?
 
   if ( cnt == 0 ) return 0;
@@ -1175,7 +1179,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
       slow_wave_t & w = waves[i];
       
       bool accepted = true;
-
+      
       // std::cout << "thr " << w.down_amplitude  << " " << th_x << " " << par.uV_neg << " "
       // 		<< w.down_amplitude  << " " << par.uV_p2p << " " << w.up_amplitude - w.down_amplitude << "\n";
 
@@ -1258,7 +1262,6 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 	    }
 	  
 	}
-
 
       // save this wave?
       if ( accepted ) 

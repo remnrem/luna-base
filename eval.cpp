@@ -868,6 +868,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "FLIP" ) )         { fnd = true; proc_flip( edf , param(c) ); }
       if ( (!fnd) && is( c, "RAI" ) )          { fnd = true; proc_rai( edf, param(c) ); }
       if ( (!fnd) && is( c, "RECTIFY" ) )      { fnd = true; proc_rectify( edf , param(c) ); }
+      if ( (!fnd) && is( c, "LOG" ) )          { fnd = true; proc_log( edf , param(c) ); }
       if ( (!fnd) && is( c, "CLIP" ) )         { fnd = true; proc_clip( edf, param(c) ); } 
       if ( (!fnd) && is( c, "REVERSE" ) )      { fnd = true; proc_reverse( edf , param(c) ); }
       if ( (!fnd) && is( c, "CANONICAL" ) )    { fnd = true; proc_canonical( edf , param(c) ); }
@@ -960,6 +961,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "HB" ) )           { fnd = true; proc_hypoxic_burden( edf, param(c) ); }
       if ( (!fnd) && is( c, "FILTER" ) )       { fnd = true; proc_filter( edf, param(c) ); }
       if ( (!fnd) && is( c, "FILTER-DESIGN" )) { fnd = true; proc_filter_design( edf, param(c) ); }
+      if ( (!fnd) && is( c, "MEDIAN-FILTER" ) ) { fnd = true; proc_median_filter( edf , param(c) ) ; } 
       if ( (!fnd) && is( c, "MOVING-AVERAGE" )) { fnd = true; proc_moving_average( edf, param(c) ); }
       if ( (!fnd) && is( c, "CWT-DESIGN" ) )   { fnd = true; proc_cwt_design( edf , param(c) ); }
       if ( (!fnd) && is( c, "CWT" ) )          { fnd = true; proc_cwt( edf , param(c) ); }
@@ -1981,6 +1983,12 @@ void proc_artifacts( edf_t & edf , param_t & param )
   annot_t * a = buckelmuller_artifact_detection( edf , param , signal );  
 }
 
+// MEDIAN-FILTER
+void proc_median_filter( edf_t & edf , param_t & param )
+{
+  dsptools::median_filter( edf , param );
+}
+
 // MOVING-AVERAGE
 void proc_moving_average( edf_t & edf , param_t & param )
 {
@@ -2921,6 +2929,39 @@ void proc_epoch( edf_t & edf , param_t & param )
       return;
     }
 
+  //
+  // segment-based (contig) based epochs
+  //
+
+  if ( param.has( "contig" ) )
+    {
+      
+      int ne = edf.timeline.calc_epochs_contig();
+      
+      logger << "  set " << ne
+	     << " generic epochs, based on contiguous segments\n";
+      
+      edf.timeline.output_epoch_info( param.has( "verbose" ) );
+      
+      const bool opt_req   = param.has( "require" );
+      
+      if ( opt_req ) 
+	{
+	  int r = param.requires_int( "require" );
+	  if ( edf.timeline.num_epochs() < r )
+	    {
+	      logger << " ** warning for "
+		     << edf.id << " when setting EPOCH: "
+		     << "required=" << r << "\t"
+		     << "but observed=" << edf.timeline.num_epochs()  << "\n";
+	      
+	      globals::empty = true; // used to set problem, but this better as allows THAW
+	    }	  
+	}
+      // all done for contig-based epoch detection
+      return;
+    }
+  
   
   //
   // otherwise, define standard epochs 
@@ -4635,6 +4676,12 @@ void proc_clip( edf_t & edf, param_t & param )
 void proc_rectify( edf_t & edf , param_t & param  )
 {
   dsptools::rectify( edf , param );
+}
+
+// LOG
+void proc_log( edf_t & edf , param_t & param  )
+{
+  dsptools::log_transform( edf , param );
 }
 
 // FLIP : change polarity of signal

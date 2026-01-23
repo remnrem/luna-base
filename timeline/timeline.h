@@ -258,7 +258,10 @@ struct timeline_t
 
   // initial setting: generic (annot/cache-based epochs)
   int calc_epochs_generic_from_annots( param_t & param ); 
-
+  
+  // initial setting: contigs
+  int calc_epochs_contig();
+  
   // called after RE to remap epochs
   int reset_epochs(); 
   

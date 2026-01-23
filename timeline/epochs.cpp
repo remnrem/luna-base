@@ -1127,7 +1127,63 @@ void timeline_t::set_epoch_mapping()
     }
   
 }
+
+int timeline_t::calc_epochs_contig()
+{
+  // clear everything first
+  unepoch();
+
+  // first time this is called, from EPOCH command
+  standard_epochs = false;
+  gap_spanning_epochs = false;
+
+  // get segments
+  std::set<interval_t> contigs = segments();
   
+  // add as epochs
+  std::set<interval_t>::const_iterator ii = contigs.begin();
+  while ( ii != contigs.end() )
+    {
+      
+      const interval_t & interval = *ii ; 
+      
+      // check that the epoch is valid - i.e. does not span gaps
+      // (should never fail here, but test in case)
+      uint64_t vtp = valid_tps( interval );
+      if ( vtp != interval.duration() )
+	Helper::halt( "internal error: contig-based epoch spanned gaps" );
+      
+      // 0-based epoch index
+      const int e = epochs.size();
+      
+      epochs.push_back( interval );
+      
+      epoch_labels.push_back( "contig_" + Helper::int2str( e ) );
+
+      // get the records in this epoch      
+      std::set<int> records = records_in_interval( interval );
+
+      std::set<int>::const_iterator rr = records.begin();
+      while ( rr != records.end() )
+	{
+	  epoch2rec[ e ].insert( *rr );
+	  rec2epoch[ *rr ].insert( e );	  
+	  ++rr;
+	}
+      
+      ++ii;
+    }
+
+  // reset counter
+  current_epoch = -1;
+  mask.clear();
+  mask.resize( epochs.size() , false );
+  mask_set = false;
+  mask_mode = 0; 
+
+  return epochs.size();
+  
+}
 
 
 int timeline_t::calc_epochs_generic_from_annots( param_t & param )

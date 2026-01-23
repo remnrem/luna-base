@@ -110,6 +110,7 @@ struct slow_wave_param_t {
 
   // annotations
   std::string astr;
+  bool output_halfwave_annots;
   
   // current channel
   std::string ch;

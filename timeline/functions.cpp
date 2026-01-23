@@ -507,12 +507,15 @@ void timeline_t::signal2annot( const param_t & param )
 	  uint64_t start = (*tp)[0];
 	  
 	  int cnt = 0;
-	  
+
+	  //	  std::cout << " n = " << n << "\n";
+
 	  for (int i=0; i<n; i++)
 	    {
+
 	      // did we just cross a gap, or is this the last data-point?
 	      bool gap = span_disc ? false : ( i != 0 ? discontinuity( *tp , sr , i-1 , i ) : false ) ; 
-
+	      
 	      // if ( gap )
 	      // 	std::cout << " GAP " << i << " of " << n << "\n";
 	      
@@ -528,17 +531,17 @@ void timeline_t::signal2annot( const param_t & param )
 	      // end of an interval? 
 	      if ( in && ( gap || end || ! in1 ) ) 
 		{	      
-
+		  
 		  // 1-past-end encoding
 		  uint64_t stop = end ? last_time_point_tp + 1LLU : (*tp)[i] ;
-
+		  
 		  // but adjust for gap (i.e. one sample point from prior point) 
 		  if ( gap )
 		    {
 		      stop = (*tp)[i-1] + dt;
 		      //std::cout << "adjusting " << start << " --> " << (*tp)[i] << " becomes " << stop << "\n";
 		    }
-
+		  
 		  a->add( inst_label , interval_t( start , stop ) , ch_label );
 		  
 		  // update status (i.e. may still be a new interval after a gap)
@@ -552,40 +555,41 @@ void timeline_t::signal2annot( const param_t & param )
 			{
 			  a->add( inst_label , 
 				  interval_t( start , last_time_point_tp + 1LLU ) ,
-				  ch_label ); 			  
+				  ch_label );
+			  ++cnt;
 			}
-		    }
-	      ++cnt;
-	    }
-	  else if ( in1 && ! in ) // ... or start a new interval
-	    {
-	      start = (*tp)[i];
-	      in = true;
-	      if ( i == n - 1 ) // single point interval?
-		{
-		  a->add( inst_label ,
-			  interval_t( start , last_time_point_tp + 1LLU ) ,
-			  ch_label );
+		    }		  
+		  ++cnt;
+		  //std::cout << " added " << cnt << "\n";
 		}
-	    }	      
-       }
+	      else if ( in1 && ! in ) // ... or start a new interval
+		{
+		  start = (*tp)[i];
+		  in = true;
+		  if ( i == n - 1 ) // single point interval?
+		    {
+		      a->add( inst_label ,
+			      interval_t( start , last_time_point_tp + 1LLU ) ,
+			      ch_label );
+		    }
+		}	      
+	    }
 	  
+	  logger << "  added " << cnt
+		 << " intervals for " << class_label << "/" << inst_label ;
 	  
-      logger << "  added " << cnt
-	     << " intervals for " << class_label << "/" << inst_label ;
-
-      if ( etop || etopp )
-	logger << " based on " 
-	       << ch_label << " >= " << ex << "\n";
-      else if ( ebot || ebotp )
-	logger << " based on " 
-	       << ch_label << " <= " << ex << "\n";
-      else
-	logger << " based on " << ex
-	       << " <= " << ch_label << " <= " << ey << "\n";
-      
-      // next label
-      ++ee;
+	  if ( etop || etopp )
+	    logger << " based on " 
+		   << ch_label << " >= " << ex << "\n";
+	  else if ( ebot || ebotp )
+	    logger << " based on " 
+		   << ch_label << " <= " << ex << "\n";
+	  else
+	    logger << " based on " << ex
+		   << " <= " << ch_label << " <= " << ey << "\n";
+	  
+	  // next label
+	  ++ee;
 	}
       
       // next signal
@@ -1020,6 +1024,8 @@ void timeline_t::signal2annot_cuts( const param_t & param )
       //
       
       std::set<interval_t>::const_iterator aa = fwaves.begin();
+
+      int final_cnt = 0;
       
       while ( aa != fwaves.end() )
 	{
@@ -1116,12 +1122,13 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	      continue;
 	    }
 	  
-	  
-	  
+
 	  //
 	  // add annotations 
 	  //
-	      
+
+	  ++final_cnt;
+	  
 	  a_full->add( add_ch_inst_label ? sig_label : "FULL" , 
 		       tinterval , 
 		       sig_label );
@@ -1192,10 +1199,9 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	  
 	  ++aa;
 	}
+            
       
-      
-      
-      logger << "  added " << fwaves.size()
+      logger << "  added " << final_cnt
 	     << " waves for " << sig_label << "\n";
       
       //
@@ -1206,7 +1212,7 @@ void timeline_t::signal2annot_cuts( const param_t & param )
       writer.value( "EXC2_MONO" , mono_cnt );
       writer.value( "EXC3_MAG"  , mag_cnt );
       writer.value( "EXC4_PDUR"  , dur_phbin_cnt );
-      writer.value( "N" , (int)fwaves.size() );
+      writer.value( "N" , final_cnt );
       writer.value( "N0" , all_cnt );
       
                 
