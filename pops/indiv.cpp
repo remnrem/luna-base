@@ -1277,7 +1277,7 @@ void pops_indiv_t::level1( edf_t & edf )
 		    {
 		      bad_epoch = true;
 		      norm = 1e-8;
-		      std::cout << " resetting norm 1e-8\n";
+		      //std::cout << " resetting norm 1e-8\n";
 		    }
 		  
 		  int b = 0;				   

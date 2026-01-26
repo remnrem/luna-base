@@ -490,10 +490,33 @@ void cmddefs_t::init()
   add_var( "SIGSTATS" , "CH" , "CNT_CMP" , "Number of epochs flagged based on H3 [mask]" );
   add_var( "SIGSTATS" , "CH" , "CNT_CLP" , "Number of epochs flagged based on clipping metric" );
   add_var( "SIGSTATS" , "CH" , "CNT_RMS" , "Number of epochs flagged based on RMS" );
-
+  
   add_var( "SIGSTATS" , "CH" , "FLAGGED_EPOCHS" , "Number of epochs flagged as outliers [mask]" );
   add_var( "SIGSTATS" , "CH" , "ALTERED_EPOCHS" , "Number of epochs whose mask was altered [mask]" );
   add_var( "SIGSTATS" , "CH" , "TOTAL_EPOCHS" , "Total number of masked epochs [mask]" );
+
+  add_var( "SIGSTATS" , "CH" , "acf_first_min" , "" );
+  add_var( "SIGSTATS" , "CH" , "acf_timescale" , "" );
+  add_var( "SIGSTATS" , "CH" , "ami2" , "" );
+  add_var( "SIGSTATS" , "CH" , "ami_timescale" , "" );
+  add_var( "SIGSTATS" , "CH" , "centroid_freq" , "" );
+  add_var( "SIGSTATS" , "CH" , "dfa" , "" );
+  add_var( "SIGSTATS" , "CH" , "embedding_dist" , "" );
+  add_var( "SIGSTATS" , "CH" , "entropy_pairs" , "" );
+  add_var( "SIGSTATS" , "CH" , "forecast_error" , "" );
+  add_var( "SIGSTATS" , "CH" , "high_fluctuation" , "" );
+  add_var( "SIGSTATS" , "CH" , "low_freq_power" , "" );
+  add_var( "SIGSTATS" , "CH" , "mode_10" , "" );
+  add_var( "SIGSTATS" , "CH" , "mode_5" , "" );
+  add_var( "SIGSTATS" , "CH" , "outlier_timing_neg" , "" );
+  add_var( "SIGSTATS" , "CH" , "outlier_timing_pos" , "" );
+  add_var( "SIGSTATS" , "CH" , "periodicity" , "" );
+  add_var( "SIGSTATS" , "CH" , "rs_range" , "" );
+  add_var( "SIGSTATS" , "CH" , "stretch_decreasing" , "" );
+  add_var( "SIGSTATS" , "CH" , "stretch_high" , "" );
+  add_var( "SIGSTATS" , "CH" , "transition_matrix" , "" );
+  add_var( "SIGSTATS" , "CH" , "trev" , "" );
+  add_var( "SIGSTATS" , "CH" , "whiten_timescale" , "" );
 
   add_table( "SIGSTATS" , "CH,E" , "Per-channel per-epoch statistics [epoch]" );
   add_var( "SIGSTATS" , "CH,E" , "H1" , "First Hjorth parameter (activity)" );
