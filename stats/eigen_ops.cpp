@@ -179,6 +179,10 @@ bool eigen_ops::IQR_norm( Eigen::Ref<Eigen::MatrixXd> m  )
 bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center , bool normalize , double w , bool second_rescale ,
 			      const bool ignore_invariants , std::vector<int> * zeros )
 {
+
+  // 0) nothing to do...
+  if ( m.rows() == 0 ) return true;
+  
   // 1) winsorize at +/- w 
   
   const int rows = m.rows();

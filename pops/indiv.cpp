@@ -285,11 +285,11 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  //
 	  // build level 1 & 2 features
 	  //
-
+	  
 	  level1( edf );
-	  
+
 	  level2( pops_opt_t::verbose && eq1 == 1 ? false : true ); // set to quiet mode, if repeating or non-verbose
-	  
+	  	  
 	  logger << "  feature matrix: " << X1.rows() << " rows (epochs) and " << X1.cols() << " columns (features)\n";
 
 	  //
@@ -1734,7 +1734,6 @@ void pops_indiv_t::level2( const bool quiet_mode )
   pops.level2( false , quiet_mode ); // false --> not training sample
   pops.copy_back( this );
 
-
 }
 
 
@@ -2570,10 +2569,12 @@ void pops_indiv_t::apply_ranges( double th, double prop )
       total += outlier;
      
     }
- 
-  double bad = total / (double)( ne * nv );
-  logger << "  set " << total << " ( prop = " << bad << ") data points to missing\n"; 
-  
+
+  if ( ne * nv > 0 )
+    {
+      double bad = total / (double)( ne * nv ) ;
+      logger << "  set " << total << " ( prop = " << bad << ") data points to missing\n"; 
+    }
 }
 
 

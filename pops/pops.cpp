@@ -392,6 +392,7 @@ void pops_t::level2( const bool training , const bool quiet )
   
   for (int s=0; s<pops_t::specs.specs.size(); s++)
     {
+
       pops_spec_t spec = pops_t::specs.specs[s];
 
       std::string l2ftr = pops_t::specs.ftr2lab[ spec.ftr ];
@@ -429,7 +430,7 @@ void pops_t::level2( const bool training , const bool quiet )
       const int nto   = to_cols.size();
       const int ne    = X1.rows();     
       const int ni    = Istart.size();
-      
+
       //
       // SMOOTH
       //
@@ -561,14 +562,13 @@ void pops_t::level2( const bool training , const bool quiet )
 	    }	  
         }
 
-
       //
       // NORM (within person)
       //
             
       if ( spec.ftr == POPS_NORM )
 	{
-
+	  
 	  const double win = spec.narg( "winsor" );
 	  if ( win < 0 || win > 0.5 )
 	    Helper::halt( "winsor should be between 0 and 0.5" );
@@ -585,11 +585,10 @@ void pops_t::level2( const bool training , const bool quiet )
                 {
                   int fromi = Istart[i];
                   int sz    = Iend[i] - Istart[i] + 1;
-		  eigen_ops::robust_scale( D.segment( fromi , sz ) , true , true , win , true );
+		  eigen_ops::robust_scale( D.segment( fromi , sz ) , true , true , win , true );		  
                 }
               X1.col( to_cols[j] ) = D;
-            }
-
+            }	  
         }
       
 
@@ -731,7 +730,6 @@ void pops_t::level2( const bool training , const bool quiet )
 	    }
 	}
       
-      
       //
       // TIME 
       //
@@ -741,7 +739,8 @@ void pops_t::level2( const bool training , const bool quiet )
 	  
           const int order = spec.narg( "order" );
 
-          // need to go person-by-person                                                                                                                                                    
+          // need to go person-by-person
+
 	  for (int i=0; i<ni; i++)
 	    {
 	      int fromi = Istart[i];
@@ -755,9 +754,7 @@ void pops_t::level2( const bool training , const bool quiet )
 
     }
   
-  
-
-  
+    
   //
   // Select FINAL feature set  (pops_t::specs.nf)
   //
@@ -1158,7 +1155,7 @@ std::map<int,std::map<int,int> > pops_t::tabulate( const std::vector<int> & a ,
 
 Eigen::MatrixXd pops_t::add_time_track( const int nr , const int tt )
 {
-  if ( nr <= 0 || tt <= 0 ) Helper::halt( "internal error in add_time_track()" );
+  if ( nr < 0 || tt <= 0 ) Helper::halt( "internal error in add_time_track()" );
   
   Eigen::MatrixXd T = Eigen::MatrixXd::Zero( nr , tt );
   
@@ -1822,7 +1819,7 @@ void pops_t::stage_association()
       // pull out data for this trainer only
       int fromi = Istart[i];
       int sz    = Iend[i] - Istart[i] + 1;
-
+      
       std::cout << " fromi sz = " << fromi << "\t" << sz << "\n";
 
       Eigen::MatrixXd XI = X1.block( fromi , 0 , sz, ncol );
