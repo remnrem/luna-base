@@ -24,6 +24,7 @@
 #define __DSP_H__
 
 #include "ctypes.h"
+#include "ipc.h"
 #include "clip.h"
 #include "qc.h"
 #include "arousals.h"

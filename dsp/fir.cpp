@@ -65,7 +65,7 @@ void dsptools::design_fir( param_t & param )
   // assume this is called only by --fir option, and so we need to set this
   
   int fs = param.requires_int( "fs" );
-
+  
   bool use_kaiser = param.has( "tw" ) && param.has( "ripple" );
 
   // ntaps = order + 1
@@ -73,7 +73,16 @@ void dsptools::design_fir( param_t & param )
   bool fixed_order = param.has( "order" );
   bool from_file = param.has( "file" );
 
+  //
+  // adjust upper frequency given Nyquist  
+  //
 
+  const double nyquist_fix = param.has( "fix-nyquist" ) ? param.requires_dbl( "fix-nyquist" ) : 0 ; 
+
+  const double nyquist = fs / (double)2.0;
+
+  if ( nyquist_fix > nyquist ) Helper::halt( "fix-nyquist cannot be greater than actual Nyquist" );
+  
   //
   // read filter coefficients from a file, and analyse
   //
@@ -135,6 +144,10 @@ void dsptools::design_fir( param_t & param )
       f1 = f[0];
       f2 = f[1];
 
+      // clamp upper frequency
+      if ( f2 > nyquist - nyquist_fix )
+	f2 = nyquist - nyquist_fix;
+      
       if ( use_kaiser )
 	{
 
@@ -169,6 +182,10 @@ void dsptools::design_fir( param_t & param )
       f1 = f[0];
       f2 = f[1];
 
+      // clamp upper frequency                                                                                                     
+      if ( f2 > nyquist - nyquist_fix )
+        f2 = nyquist - nyquist_fix;
+      
       if ( use_kaiser )
 	{
 	  logger << " designing bandstop filter, " << f1 << "-" << f2 << "Hz, ripple=" << ripple[0] << ", tw=" << tw[0] << ", fs=" << fs << "\n"; 
@@ -187,6 +204,11 @@ void dsptools::design_fir( param_t & param )
   if ( param.has( "lowpass" ) )
     {
       f1 = param.requires_dbl( "lowpass" );
+
+      // clamp upper frequency                                                                                                     
+      if ( f1 > nyquist - nyquist_fix )
+        f1 = nyquist - nyquist_fix;
+      
       if ( use_kaiser )
 	{
 	  logger << " designing lowpass filter, " << f1 << "Hz, ripple=" << ripple[0] << ", tw=" << tw[0] << ", fs=" << fs << "\n"; 
@@ -205,6 +227,11 @@ void dsptools::design_fir( param_t & param )
   if ( param.has( "highpass" ) )
     {
       f1 = param.requires_dbl( "highpass" );
+
+      // clamp upper frequency                                                                                                     
+      if ( f1 > nyquist - nyquist_fix )
+        f1 = nyquist - nyquist_fix;
+
       if ( use_kaiser )
 	{
 	  logger << " designing highpass filter, " << f1 << "Hz, ripple=" << ripple[0] << ", tw=" << tw[0] << ", fs=" << fs << "\n"; 
@@ -682,6 +709,8 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
     Helper::halt( "need to specify FIR type as bandpass, bandstop, lowpass, highpass (or file or ngaus)" );
 
 
+  const double nyquist_fix = param.has( "fix-nyquist" ) ? param.requires_dbl( "fix-nyquist" ) : 0 ; 
+
   
   //
   // Signals
@@ -713,13 +742,33 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
 
       if ( ! silent ) 
 	logger << " " << signals.label(s);
+      
+      // clamp frequencies at/under Nyquist?
+      double af1 = f1;
+      double af2 = f2;
+
+      const double nyquist = Fs[s] / (double)2.0;      
+      if ( nyquist_fix > nyquist )
+	Helper::halt( "fix-nyquist cannot be greater than actual Nyquist" );
+      
+      if ( f1 > nyquist - nyquist_fix )
+	{
+	  logger << "  *** adjusting transition frequencies for Nyquist: " << f1 << " -> " << nyquist - nyquist_fix << " Hz\n";
+	  af1 = nyquist - nyquist_fix;
+	}
+      
+      if ( f2 > nyquist - nyquist_fix )
+	{
+	  logger << "  *** adjusting transition frequencies for Nyquist: " << f2 << " -> " << nyquist - nyquist_fix << " Hz\n";
+	  af2 = nyquist - nyquist_fix;
+	}
 
       if ( ngaus )
 	apply_ngaus( edf, signals(s) , ngaus_f, ngaus_fwhm );
       else	
 	apply_fir( edf , signals(s) , ftype , use_kaiser ? 1 : 2 ,
 		   ripple, tw ,
-		   f1 , f2 ,
+		   af1 , af2 ,
 		   order , window , 
 		   use_fft , fir_file );
       
