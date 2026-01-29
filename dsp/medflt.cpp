@@ -176,7 +176,7 @@ inline std::vector<double> median_filter_fast(
     int window,
     double drop_top_frac = 0.0 ,
     EdgePadding padding = EdgePadding::Replicate,
-    WindowTooLarge too_large = WindowTooLarge::Strict )    
+    WindowTooLarge too_large = WindowTooLarge::Shrink )
 {
   using namespace median_filter_detail;
 

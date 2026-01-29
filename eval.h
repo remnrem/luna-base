@@ -445,6 +445,7 @@ void proc_surface_laplacian( edf_t & , param_t & );
 void proc_leave_one_out( edf_t & , param_t & );
 void proc_chep_based_interpolation( edf_t & , param_t & );
 void proc_correl( edf_t & , param_t & );
+void proc_ipc( edf_t & , param_t & );
 void proc_coh( edf_t & , param_t & );
 void proc_elec_distance( edf_t & , param_t & );
 void proc_acf( edf_t & , param_t & );
