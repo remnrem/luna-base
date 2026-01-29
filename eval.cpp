@@ -989,6 +989,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "SEDF" ) )         { fnd = true; proc_sedf( edf , param(c) ); }
       if ( (!fnd) && is( c, "FIP" ) )          { fnd = true; proc_fiplot( edf , param(c) ); }
       if ( (!fnd) && is( c, "COH" ) )          { fnd = true; proc_coh( edf , param(c) ); }
+      if ( (!fnd) && is( c, "IPC" ) )          { fnd = true; proc_ipc( edf , param(c) ); }
       if ( (!fnd) && is( c, "CC" ) )           { fnd = true; proc_conncoupl( edf , param(c) ); }
       if ( (!fnd) && is( c, "CORREL" ) )       { fnd = true; proc_correl( edf , param(c) ); }
       if ( (!fnd) && is( c, "PSI" ) )          { fnd = true; proc_psi( edf , param(c) ); }
@@ -3678,6 +3679,12 @@ void proc_ica( edf_t & edf , param_t & param )
 void proc_svd( edf_t & edf , param_t & param )
 {
   dsptools::svd_wrapper( edf , param );
+}
+
+// IPC: instantaneous phase coherence
+void proc_ipc( edf_t & edf , param_t & param )
+{
+  dsptools::ipc( edf , param );
 }
 
 // COH : calculate cross spectral coherence, using new/default code

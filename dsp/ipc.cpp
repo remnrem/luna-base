@@ -37,7 +37,7 @@ void dsptools::ipc( edf_t & edf , param_t & param )
 {
 
   const std::string hilbert_mag_prefix = "_ht_mag";
-  const std::string hilbert_phase_prefix = "_ht_phase";
+  const std::string hilbert_phase_prefix = "_ht_ph";
   
   
   // signals
@@ -90,20 +90,49 @@ void dsptools::ipc( edf_t & edf , param_t & param )
 	Helper::halt( "requires uniform sampling rate across signals" );      
     }
 
+
+  // 
+  std::vector<int> slots2_mag, slots2_phase;
+  
   for (int s=0; s<ns2; s++)
     {
       std::string s_mag   = signals2.label(s) + hilbert_mag_prefix;
       std::string s_phase = signals2.label(s) + hilbert_phase_prefix;      
       if ( ! edf.header.has_signal( s_mag ) ) Helper::halt( "could not find " + s_mag );
       if ( ! edf.header.has_signal( s_phase ) ) Helper::halt( "could not find " + s_phase );
-      int slot = edf.header.signal( s_mag );
-      if ( sr == 0 )
-	sr = edf.header.sampling_freq( slot );
-      else if (  edf.header.sampling_freq( slot ) != sr )
-	Helper::halt( "requires uniform sampling rate across signals" );      
-    }
-  
 
+      int slot_mag = edf.header.signal( s_mag );
+      int slot_phase = edf.header.signal( s_phase );
+
+      // add
+      slots2_mag.push_back( slot_mag );
+      slots2_phase.push_back( slot_phase );
+      
+      if ( sr == 0 )
+	sr = edf.header.sampling_freq( slot_mag );
+      else if (  edf.header.sampling_freq( slot_mag ) != sr )
+	Helper::halt( "requires uniform sampling rate across signals" );
+      else if (  edf.header.sampling_freq( slot_phase ) != sr )
+	Helper::halt( "requires uniform sampling rate across signals" );
+      
+    }
+
+  //
+  // IPC params
+  //
+  
+  ipc_param_t ipc_param;
+
+  // channel(s) to add
+  const bool add_channels = param.has( "add-channels" );
+  const bool add_combined_channels = add_channels && param.value( "add-channels" ) == "seed" ;
+  ipc_derived_mode_t ctype = ipc_derived_mode_t::NO_IPC;
+  if ( add_channels ) ctype = add_combined_channels ?
+			ipc_derived_mode_t::PER_SEED_MEAN_IPCW :
+			ipc_derived_mode_t::PER_PAIR_IPCW ; 
+  
+  const std::string ch_prefix = param.has( "prefix" ) ?
+    param.value( "prefix" ) : "IPC_" ; 
   
   //
   // for each seed signal
@@ -113,40 +142,186 @@ void dsptools::ipc( edf_t & edf , param_t & param )
   //   -- accumulate channel
   //   -- add channel
   //   -- report mean of per-epoch stats
-  
-
+  //
+    
   for (int s=0; s<ns1; s++)
     {
-      std::string s_mag   = signals1.label(s) + hilbert_mag_prefix;
-      std::string s_phase = signals1.label(s) + hilbert_phase_prefix;
+      const std::string s_mag   = signals1.label(s) + hilbert_mag_prefix;
+      const std::string s_phase = signals1.label(s) + hilbert_phase_prefix;
 
-        const int ne = edf.timeline.calc_epochs_contig();
-	logger << "  iterating over " << ne << " contig-basad epochs\n";
+      const int seed_mag   = edf.header.signal( s_mag );
+      const int seed_phase = edf.header.signal( s_phase );
+            
+      const int ne = edf.timeline.calc_epochs_contig();
+      logger << "  iterating over " << ne << " contig-basad epochs\n";
 
-	
+      // track results (over epochs)
+      std::vector<ipc_batch_result_t> results;
+      
+      // iterate over epochs      
+      while ( 1 ) 
+	{
+	  
+	  int epoch = edf.timeline.next_epoch();
+	  if ( epoch == -1 ) break;	  
+	  interval_t interval = edf.timeline.epoch( epoch );
+	  
+	  // seed channel
+	  slice_t slice_seed_mag( edf , seed_mag , interval );
+	  slice_t slice_seed_phase( edf , seed_phase , interval );	    
+
+	  std::vector<ipc_phaseamp_t> dat( 1 + ns2 );
+	  ipc_phaseamp_t seed;
+	  seed.amp   = *slice_seed_mag.nonconst_pdata();
+	  seed.phase = *slice_seed_phase.nonconst_pdata();	  
+	  dat[0] = seed;
+			
+	  // compile comparison channels
+	  for (int s2=0; s2<ns2; s2++)
+	    {
+	      slice_t slice_mag( edf , slots2_mag[s2] , interval );
+ 	      slice_t slice_phase( edf , slots2_phase[s2] , interval );
+
+	      ipc_phaseamp_t d;
+	      d.amp   = *slice_mag.nonconst_pdata();
+	      d.phase = *slice_phase.nonconst_pdata();
+	      dat[1 + s2 ] = d;
+	    }
+	  
+	  // IPC
+	  ipc_t ipc;
+	  
+	  std::vector<int> idx1 = { 0 } ;
+	  std::vector<int> idx2( ns2 );
+	  for (int i=1; i<=ns2; i++) idx2.push_back( i ); 
+	  
+	  ipc_batch_result_t res = ipc.compute_ipc_seed_to_set( dat , idx1, idx2 , sr, 
+								ipc_param , ctype );
+	  
+	  results.push_back( res );
+	  
+	  // next epoch
+	}
+
       
       
+      //
+      // summarize output, iterating over pairs of channels
+      //
+      
+      writer.level( signals1.label(s) , globals::signal1_strat );	  
+      
+      const std::vector<ipc_pair_summary_row_t> & p = results[0].summaries;
+      
+      for (int j=0; j<p.size(); j++)
+	{
+
+	  int seed_idx = p[j].seed_idx;
+	  int tgt_idx = p[j].tgt_idx;
+
+	  // ignore seed-self stats
+	  //	  if ( signals2( tgt_idx - 1 ) == signals1( s ) ) continue;
+	  
+	  // output stratified by CH2; note, as seed is slot 0, we need to -1 to align
+	  // with signals2
+	  writer.level( signals2.label( tgt_idx - 1 ) , globals::signal2_strat );
+	  
+	  // get average over epochs
+	  ipc_stats_t stats;
+	  stats.plv = stats.mean_ipc = stats.mean_ipc_weighted = stats.frac_inphase = 0.0;
+	  std::vector<double> phases;
+	  const int n1 = results.size();
+	  for (int i=0; i < n1; i++)
+	    {
+	      ipc_stats_t & stat1 = results[i].summaries[j].summary;
+	      stats.n_total += stat1.n_total;
+	      stats.n_used += stat1.n_used;
+	      stats.mean_ipc += stat1.mean_ipc;
+	      stats.mean_ipc_weighted += stat1.mean_ipc_weighted;
+	      stats.plv += stat1.plv;
+	      stats.frac_inphase += stat1.frac_inphase;
+	      phases.push_back( stat1.mean_phase );
+	    }
+
+	  // means
+	  stats.mean_ipc /= (double)n1;
+	  stats.mean_ipc_weighted /= (double)n1;
+	  stats.plv /= (double)n1;	  
+	  stats.frac_inphase /= (double)n1;
+
+	  // special case: circular mean for phases
+	  ipc_t::circ_stats_t cs = ipc_t::circular_mean( phases );
+	  stats.mean_phase = cs.mean_phase;
+
+	  // n.b. circ_stats_t::R not that meaningful if only averaging over a small number
+	  // of epochs
+
+	  writer.value( "N_TOT" , (int)stats.n_total );
+	  writer.value( "N_USED" , (int)stats.n_used );
+	  writer.value( "IPC" , stats.mean_ipc );
+	  writer.value( "WIPC" , stats.mean_ipc_weighted );
+	  writer.value( "PLV" , stats.plv );
+	  writer.value( "PHASE" , cs.mean_phase );
+	  writer.value( "P_INPHASE" , stats.frac_inphase );	  	  
+	  
+	}
+
+      writer.unlevel( globals::signal2_strat );
+      
+      
+      //
+      // add channel?
+      //
+      
+      if ( add_channels )
+	{
+	  // if add_combined_channels expect 1 channel per seed
+	  // if not, expected 'ns2' channels per seed
+
+	  int nch = results[0].derived.size();
+	  int np = 0;
+	  for (int j=0; j<results.size(); j++)
+	    np += results[j].derived[0].size();
+	      
+	  for (int j=0; j<nch; j++)
+	    {
+	      std::string label = ch_prefix + signals1.label(s);
+	      if ( ! add_combined_channels )
+		label += "_" + signals2.label( j );
+
+	      if ( signals1.label(s) == signals2.label( j ) )
+		continue;
+	      
+	      std::vector<double> xx(np);
+	      int idx = 0; 
+	      for (int i=0; i<results.size(); i++)
+		{
+		  const std::vector<double> & xx1 = results[i].derived[j];
+		  for (int k=0; k<xx1.size(); k++)
+		    xx[idx++] = xx1[k];
+		}
+	      
+	      logger << "  adding " << label << "\n";
+	      // add channel	      
+	      edf.add_signal( label , sr , xx );
+	    }
+	}
+      
+      
+      // next seed
     }
-  
-  
-  //
-  // Pre-compute 
-  //
-  
-  ipc_t ipc;
-
-  
+    
 }
 
 
 // Key IPC computations (generic sampling rate), assuming you already have:
 //  - bandpass_filter(x, sr, f_lo, f_hi, ...)
 //  - analytic_signal(x_filtered) -> phase(t), amp(t)  [Hilbert-based]
-// This code only shows the core IPC math + summaries.
+
 //
 // IPC definition (samplewise):
 //   dphi(t) = wrap_to_pi( phi_seed(t) - phi_tgt(t) )
-//   IPC(t)  = cos(dphi(t))                 // signed instantaneous phase coherence
+//   IPC(t)  = cos(dphi(t))   // signed instantaneous phase coherence
 //
 // Optional amplitude weighting + gating:
 //   w0(t) = min(amp_seed(t), amp_tgt(t))
@@ -159,17 +334,13 @@ void dsptools::ipc( edf_t & edf , param_t & param )
 //   plv               = |sum(w(t)*exp(i*dphi(t)))| / sum(w(t))   (weighted PLV)
 //   mean_phase        = arg( sum(w(t)*exp(i*dphi(t))) )          (circular mean lag)
 //   frac_inphase      = fraction(|dphi(t)| < pi/6) among used samples
-//
-// Notes:
-// - sr is arbitrary. Filtering band edges are in Hz.
-// - dooes filtering/Hilbert on-the-fly per channel
+
 
 #include <vector>
 #include <cmath>
 #include <complex>
 #include <limits>
 #include <algorithm>
-
 
 
 // ------------------------------ IPC core ------------------------------
@@ -269,7 +440,6 @@ ipc_output_t ipc_t::compute_ipc(const ipc_phaseamp_t & seed ,
   if (n_used > 0) {
     out.summary.mean_ipc = sum_ipc / (double)n_used;
     out.summary.frac_inphase = (double)n_inphase / (double)n_used;
-    
     // PLV and mean phase lag from sum_e
     if (P.amplitude_weighting) {
       if (sum_w > 0.0) {
@@ -377,3 +547,26 @@ double ipc_t::quantile(std::vector<double> v, double q) {
   return v[lo] * (1.0 - frac) + v[hi] * frac;
 }
 
+ipc_t::circ_stats_t ipc_t::circular_mean(const std::vector<double>& theta)
+{
+  double s = 0.0;
+  double c = 0.0;
+  const size_t n = theta.size();
+  
+  if (n == 0)
+    return { NAN, NAN };
+
+  for (double x : theta) {
+    s += std::sin(x);
+    c += std::cos(x);
+  }
+
+  s /= n;
+  c /= n;
+
+  circ_stats_t out;
+  out.mean_phase = std::atan2(s, c);
+  out.R = std::sqrt(s*s + c*c);
+
+  return out;
+}

@@ -160,7 +160,7 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
 
   std::string fir_file = use_file ? param.value( "file" ) : "";
   
-  bool return_phase = param.has( "phase" ) || param.has( "angle" );
+  bool return_phase = param.has( "phase" );
 
   bool return_angle = param.has( "angle" );
 
@@ -182,31 +182,31 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
 
       const std::vector<double> * d = slice.pdata();
       
-      std::vector<double> mag , phase, ifrq;
+      std::vector<double> mag , phase, angle, ifrq;
 
       if ( use_kaiser ) 
 	run_hilbert( *d , Fs , frqs[0] , frqs[1] , ripple , tw ,
 		     &mag ,
 		     return_phase ? &phase : NULL ,
-		     return_angle ? &phase : NULL ,
+		     return_angle ? &angle : NULL ,
 		     return_ifrq ? &ifrq : NULL );
       else if ( use_fixed )
 	run_hilbert( *d , Fs , frqs[0] , frqs[1] , order , window ,
 		     &mag ,
 		     return_phase ? &phase : NULL ,
-		     return_angle ? &phase : NULL ,
+		     return_angle ? &angle : NULL ,
 		     return_ifrq ? &ifrq : NULL );
       else if ( use_file )
 	run_hilbert( *d , Fs , fir_file , 
 		     &mag ,
 		     return_phase ? &phase : NULL ,
-		     return_angle ? &phase : NULL ,
+		     return_angle ? &angle : NULL ,
 		     return_ifrq ? &ifrq : NULL );
       else
 	run_hilbert( *d , Fs , 
 		     &mag ,
 		     return_phase ? &phase : NULL ,
-		     return_angle ? &phase : NULL ,
+		     return_angle ? &angle : NULL ,
 		     return_ifrq ? &ifrq : NULL );
 
       //
@@ -220,24 +220,24 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
 
       logger << " Hilbert transform for " << signals.label(s) << " --> " << new_mag_label ;      
 
-      if ( return_phase && ! return_angle ) 
+      if ( return_phase )
 	logger << ", " << new_phase_label ;
       
       if ( return_angle )
 	logger << ", " << new_angle_label ;
-
-     if ( return_ifrq ) 
+      
+      if ( return_ifrq ) 
 	logger << ", " << new_ifrq_label ;
 
       logger << "\n";
-
+      
       edf.add_signal( new_mag_label , Fs , mag );
       
-      if ( return_phase && ! return_angle ) 
+      if ( return_phase )
 	edf.add_signal( new_phase_label , Fs , phase );
       
       if ( return_angle )
-	edf.add_signal( new_angle_label , Fs , phase );
+	edf.add_signal( new_angle_label , Fs , angle );
 
       if ( return_ifrq ) 
 	{

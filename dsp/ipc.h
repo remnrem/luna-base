@@ -71,13 +71,10 @@ struct ipc_param_t {
 
 
 struct ipc_stats_t {
-
   size_t n_total = 0;
-  size_t n_used = 0;
-  
+  size_t n_used = 0;  
   double mean_ipc = std::numeric_limits<double>::quiet_NaN();
-  double mean_ipc_weighted = std::numeric_limits<double>::quiet_NaN();
-  
+  double mean_ipc_weighted = std::numeric_limits<double>::quiet_NaN();  
   double plv = std::numeric_limits<double>::quiet_NaN();         // weighted
   double mean_phase = std::numeric_limits<double>::quiet_NaN();  // [-pi,pi]
   double frac_inphase = std::numeric_limits<double>::quiet_NaN();// |dphi|<pi/6
@@ -103,9 +100,9 @@ struct ipc_batch_result_t {
 
 struct ipc_output_t {
   std::vector<double> ipc;    // cos(dphi)
-  std::vector<double> ipcw;   // w*cos(dphi) (0 if gated)
+  std::vector<double> ipcw;   // w*cos(dphi) (0 if gated)  <- output
   std::vector<double> dphi;   // wrapped phase diff
-  std::vector<double> w;      // weights used (0 if gated)
+  std::vector<double> w;      // weights used (0 if gated) <- output
   ipc_stats_t summary;
 };
 
@@ -137,6 +134,13 @@ struct ipc_t
   static double wrap_to_pi(double x);
   static bool finite(double x);
   static double quantile(std::vector<double> v, double q);
+
+  struct circ_stats_t {
+    double mean_phase;  // in (-pi, pi]
+    double R;           // mean resultant length [0, 1]
+  };
+  
+  static circ_stats_t circular_mean(const std::vector<double>& theta);
 };
 
 
