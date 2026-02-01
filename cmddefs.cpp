@@ -471,9 +471,9 @@ void cmddefs_t::init()
   add_var( "SIGSTATS" , "CH" , "CLIP" , "Proportion of clipped sample points" );
   add_var( "SIGSTATS" , "CH" , "FLAT" , "Proportion of flat sample points" );
   add_var( "SIGSTATS" , "CH" , "MAX" , "Proportion of max sample points" );
-  add_var( "SIGSTATS" , "CH" , "H1" , "First Hjorth parameter (activity)" );
-  add_var( "SIGSTATS" , "CH" , "H2" , "Second Hjorth parameter (mobility)" );
-  add_var( "SIGSTATS" , "CH" , "H3" , "Third Hjorth parameter (complexity)" );
+  add_var1( "SIGSTATS" , "CH" , "H1" , "First Hjorth parameter (activity)" );
+  add_var1( "SIGSTATS" , "CH" , "H2" , "Second Hjorth parameter (mobility)" );
+  add_var1( "SIGSTATS" , "CH" , "H3" , "Third Hjorth parameter (complexity)" );
   add_var( "SIGSTATS" , "CH" , "RMS" , "Signal root mean square" );
 
   add_var( "SIGSTATS" , "CH" , "P_H1" , "Proportion flagged epochs for H1 [cstats]" );
@@ -3611,7 +3611,31 @@ void cmddefs_t::init()
   //
   /////////////////////////////////////////////////////////////////////////////////
 
+
+  //
+  // IPC
+  //
   
+  add_cmd( "topo" , "IPC" , "Instantaneous phase coherence" );
+  add_url( "IPC" , "cc/#ipc" );
+
+  add_param( "IPC" , "sig" , "C3,C4,F3,F4" , "Optionally specify channels (defaults to all)" );
+  add_param( "IPC" , "sig1" , "C3" , "Alternatively specify seed channels" );
+  add_param( "IPC" , "sig2" , "C4,F3,F4" , "Alternatively specify non-seed channels" );
+
+  add_param( "IPC" , "add-channels" , "" , "Add channels (default pairwise, unless set to = 'seed'" );
+  add_param( "IPC" , "prefix" , "" , "Label for new channels, defaults to IPC_" );
+  
+  add_table( "IPC" , "CH1,CH2" , "Primary IPC output" );
+  add_var( "IPC" , "CH1,CH2" , "N_TOT" , "" );
+  add_var( "IPC" , "CH1,CH2" , "N_USED" , "" );
+  add_var( "IPC" , "CH1,CH2" , "IPC" , "" );
+  add_var( "IPC" , "CH1,CH2" , "WIPC" , "" );
+  add_var( "IPC" , "CH1,CH2" , "PLV" , "" );
+  add_var( "IPC" , "CH1,CH2" , "PHASE" , "" );
+  add_var( "IPC" , "CH1,CH2" , "P_INPHASE" , "" );
+
+
   //
   // CC
   //

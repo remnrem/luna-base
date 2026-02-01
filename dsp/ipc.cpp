@@ -153,11 +153,13 @@ void dsptools::ipc( edf_t & edf , param_t & param )
       const int seed_phase = edf.header.signal( s_phase );
             
       const int ne = edf.timeline.calc_epochs_contig();
-      logger << "  iterating over " << ne << " contig-basad epochs\n";
-
+      logger << "  iterating over " << ne << " contig-based epochs\n";
+      
       // track results (over epochs)
       std::vector<ipc_batch_result_t> results;
       
+      edf.timeline.first_epoch();
+
       // iterate over epochs      
       while ( 1 ) 
 	{
@@ -212,13 +214,13 @@ void dsptools::ipc( edf_t & edf , param_t & param )
       writer.level( signals1.label(s) , globals::signal1_strat );	  
       
       const std::vector<ipc_pair_summary_row_t> & p = results[0].summaries;
-      
+
       for (int j=0; j<p.size(); j++)
 	{
 
 	  int seed_idx = p[j].seed_idx;
 	  int tgt_idx = p[j].tgt_idx;
-
+	  
 	  // ignore seed-self stats
 	  //	  if ( signals2( tgt_idx - 1 ) == signals1( s ) ) continue;
 	  
@@ -231,6 +233,7 @@ void dsptools::ipc( edf_t & edf , param_t & param )
 	  stats.plv = stats.mean_ipc = stats.mean_ipc_weighted = stats.frac_inphase = 0.0;
 	  std::vector<double> phases;
 	  const int n1 = results.size();
+
 	  for (int i=0; i < n1; i++)
 	    {
 	      ipc_stats_t & stat1 = results[i].summaries[j].summary;
@@ -310,7 +313,7 @@ void dsptools::ipc( edf_t & edf , param_t & param )
       
       // next seed
     }
-    
+  writer.unlevel( globals::signal1_strat );
 }
 
 
