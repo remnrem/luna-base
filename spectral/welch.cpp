@@ -1349,11 +1349,14 @@ annot_t * spectral_power( edf_t & edf ,
 		  
 		  
 		  // log scale?
-		  if ( dB )
-		    for (int i=0; i<vec.size(); i++)
-		      vec[i] = vec[i] > 0 ? 10 * log10( vec[i] ) : -999;
-
-		
+		  // if ( dB )
+		  //   for (int i=0; i<vec.size(); i++)
+		  //     vec[i] = vec[i] > 0 ? 10 * log10( vec[i] ) : -999;
+		  const double eps = 1e-12; 
+		  if (dB)
+		    for (double &v : vec)
+		      v = 10.0 * std::log10(std::max(v, eps));
+ 		
 		  // use relpow?
 		  if ( new_sigs_relpow )
 		    {

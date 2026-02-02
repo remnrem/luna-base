@@ -321,7 +321,7 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
 			    std::vector<double> * angle ,
 			    std::vector<double> * ifrq )
 {
-  
+
   // straight Hilbert , no filter
   hilbert_t hilbert( data );
   
@@ -350,23 +350,24 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
 			    std::vector<double> * angle ,
 			    std::vector<double> * ifrq )
 {
-  
+
   // filter-Hilbert 
   hilbert_t hilbert( data , Fs , flwr , fupr , ripple , tw );
 
   if ( mag != NULL ) *mag = *(hilbert.magnitude());
 
   if ( phase != NULL ) *phase = *(hilbert.phase());
-  
+
   if ( angle != NULL )
     {
-      *angle = *phase;
+      *angle = *(hilbert.phase());
       // convert to degrees with 0 as pos-to-neg crossing
       for (int i=0;i<angle->size();i++) (*angle)[i] = MiscMath::as_angle_0_pos2neg( (*angle)[i] );	  
     }
   
-  if ( ifrq != NULL )  *ifrq = hilbert.instantaneous_frequency( Fs );    
-
+  if ( ifrq != NULL )
+    *ifrq = hilbert.instantaneous_frequency( Fs );    
+  
 }
 
 // filter-Hilbert, from file
