@@ -1299,11 +1299,11 @@ uint64_t s2a2_t::phase_to_time4pt_mono(
   // PCHIP endpoint slopes
   m[0] = ((2.0L * h0 + h1) * d0 - h0 * d1) / (h0 + h1);
   if (!same_sign(m[0], d0)) m[0] = 0.0L;
-  else if (!same_sign(d0, d1) && std::fabsl(m[0]) > std::fabsl(3.0L * d0)) m[0] = 3.0L * d0;
+  else if (!same_sign(d0, d1) && std::fabs(m[0]) > std::fabs(3.0L * d0)) m[0] = 3.0L * d0;
 
   m[3] = ((2.0L * h2 + h1) * d2 - h2 * d1) / (h2 + h1);
   if (!same_sign(m[3], d2)) m[3] = 0.0L;
-  else if (!same_sign(d2, d1) && std::fabsl(m[3]) > std::fabsl(3.0L * d2)) m[3] = 3.0L * d2;
+  else if (!same_sign(d2, d1) && std::fabs(m[3]) > std::fabs(3.0L * d2)) m[3] = 3.0L * d2;
 
   // PCHIP interior slopes (weighted harmonic mean)
   if (d0 * d1 <= 0.0L) {
