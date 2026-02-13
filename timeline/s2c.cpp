@@ -544,13 +544,13 @@ void timeline_t::signal2cycle( const param_t & param )
   //
   
   std::string signal_label = param.requires( "sig" );
-  std::string segnal_label = param.has( "seg" ) ? param.value( "seg" ) : signal_label;
+  std::string segnal_label = param.has( "seed" ) ? param.value( "seed" ) : signal_label;
   
   signal_list_t signals = edf->header.signal_list(signal_label);
   signal_list_t segnals = edf->header.signal_list(segnal_label);
 
   logger << "  generating S2A2 annotations for signal(s) ["
-	 << signal_label << "] and segmenting signal(s) ["
+	 << signal_label << "] and segmenting seed-signal(s) ["
 	 << segnal_label << "]\n";
   
     
@@ -584,7 +584,7 @@ void timeline_t::signal2cycle( const param_t & param )
 
   // log parameters once per run (grouped)
   logger << "  S2C params\n";
-  logger << "    signals   : sig_is_seg=" << (par.sig_is_seg ? "T" : "F") << "\n";
+  logger << "    signals   : sig_is_seed=" << (par.sig_is_seg ? "T" : "F") << "\n";
   logger << "    annots    : waves=" << (par.add_waves ? par.wave_label : ".")
          << " add-channel-inst-label=" << (par.add_ch_inst_label ? "T" : "F")
          << " add-channel-class-label=" << (par.add_ch_class_label ? "T" : "F")
@@ -625,7 +625,7 @@ void timeline_t::signal2cycle( const param_t & param )
   for (int s = 0; s < nseg; ++s) {
     const std::string seed_label = segnals.label(s);
     int seed_idx = allsigs.find(seed_label);
-    if (seed_idx == -1) Helper::halt("internal error, cannot index seg " + seed_label);
+    if (seed_idx == -1) Helper::halt("internal error, cannot index seed " + seed_label);
     
     // get all other signals to be compared w.r.t. this segmenting signal
     std::vector<int> chs_idx;
