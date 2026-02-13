@@ -1138,146 +1138,191 @@ double fir_t::modZeroBessel(double x)
 }
 
 
-int fir_t::outputFFT(const std::string & label, const std::vector<double> & window, double sampFreq)
-{	
-  
+ int fir_t::outputFFT(const std::string & label, const std::vector<double> & window, double sampFreq)
+ {	
 
-  writer.level( label , "FIR" );
+   writer.level( label , "FIR" );
+  
+   //
+   // Filter coefficients
+   //
 
-  
-  
-  //
-  // Filter coefficients
-  //
-  
-  for (int i=0;i<window.size();i++)
-    {
-      writer.level( i , "TAP" );
-      writer.value( "W" , window[i] );
-    }
-  writer.unlevel( "TAP" );
-  
-  //
-  // Impulse response
-  //
+   for (int i=0;i<window.size();i++)
+     {
+       writer.level( i , "TAP" );
+       writer.value( "W" , window[i] );
+     }
+   writer.unlevel( "TAP" );
 
-  // 2 window second around filter size
-  const double padding_sec = 2; // default = 2 
-  double sz = window.size() / (double)sampFreq + padding_sec ;
-  fir_impl_t fir_impl ( window );
-  std::vector<double> xx0( sampFreq * sz );
-  xx0[sampFreq*(sz/2.0)-1] = 1;
-  std::vector<double> xx = fir_impl.filter( &xx0 ); 
-  double idx0 = sampFreq*(sz/2.0)-1;
-  
-  //
-  // Step response
-  //
+   // pad based on filter length
+   int L = window.size();
+   int N = 5 * L;
+   if ((N % 2) == 0) ++N;   // force odd length
+   int idx0 = N/2;
+   
+   // Impulse response
+   std::vector<double> xx0(N, 0.0);   
+   xx0[idx0] = 1.0;   
+   fir_impl_t fir_impl ( window );
+   std::vector<double> xx = fir_impl.filter( &xx0 ); 
 
-  // same 2 window second around filter size
-  fir_impl_t fir_impl2 ( window );
-  std::vector<double> xx1( sampFreq * sz , 1 );
-  for (int i=sampFreq*(sz/2.0)-1;i<sampFreq * sz;i++) xx1[i] = 0;
-  std::vector<double> ss = fir_impl2.filter( &xx1 ); 
-  double idx1 = sampFreq*(sz/2.0)-1;
+   // Step response (matched to impulse geometry)
+   // build long step: 0 before idx0, 1 after
+   std::vector<double> xx1(N, 0.0);
+   for (int i = idx0; i < N; ++i)
+     xx1[i] = 1.0;
+   fir_impl_t fir_impl2(window);
+   std::vector<double> ss = fir_impl2.filter(&xx1);
 
-  //
-  // Output IR and SR
-  //
-  
-  // SR
-  double integ = xx[0];
-  
-  for (int xi=0;xi<xx.size();xi++)
-    {
-      double tp = 1.0/sampFreq * (xi - idx1 ); 
-      writer.level( Helper::dbl2str(tp) , "SEC" );
-      writer.value( "IR" , xx[xi] );
+   
+   //
+   // Output IR and SR
+   //
 
-      writer.value( "SR" , integ );
-      integ += xx[xi];
-      
-      // writer.value( "SR2" , ss[xi] ); 
-    }
-  writer.unlevel( "SEC" );
+   // policy
+   const double p = 0.9999;      // energy fraction (raise this vs 0.999)
+   const double aFrac = 0.005;   // amplitude fraction of peak to keep (0.5%)
+   const double minSec = 2.0;
+   const double maxSec = 180.0;
+   
+   int minHalfWin = (int)std::llround(minSec * (double)sampFreq);
+   int maxHalfWin = (int)std::llround(maxSec * (double)sampFreq);
+   
+   // --- energy-based w_energy ---
+   double Etot = 0.0;
+   for (double v : xx) Etot += v * v;
+   double target = p * Etot;
+   
+   double Eacc = xx[idx0] * xx[idx0];
+   int w_energy = 0;
+   
+   while (Eacc < target &&
+	  w_energy < maxHalfWin &&
+	  (idx0 - (w_energy+1)) >= 0 &&
+	  (idx0 + (w_energy+1)) < N)
+     {
+       ++w_energy;
+       double a = xx[idx0 - w_energy];
+       double b = xx[idx0 + w_energy];
+       Eacc += a*a + b*b;
+     }
+   
+   // --- amplitude-based w_amp ---
+   double peak = 0.0;
+   for (double v : xx) {
+     double av = std::fabs(v);
+     if (av > peak) peak = av;
+   }
+   double thr = aFrac * peak;
 
-  
-  //
-  // Frequency response
-  //
-  
-  const int windowLength = window.size();
-
-
-  writer.value( "FS" , sampFreq );
-  writer.value( "NTAPS" , windowLength );
-
-
-  double *in;
-  fftw_complex *out;
-  fftw_plan plan;
-  int result = 0;
-  
-  // If the window length is short, zero padding will be used
-  int fftSize = (windowLength < 2048) ? 2048 : windowLength;
-  
-  // Calculate size of result data
-  int resultSize = (fftSize / 2) + 1;
-  
-  // Allocate memory to hold input and output data
-  in = (double *) fftw_malloc(fftSize * sizeof(double));
-  out = (fftw_complex *) fftw_malloc(resultSize * sizeof(fftw_complex));
-  if (in == NULL || out == NULL) {
-    result = 1;
-    Helper::halt( "fir_t: could not allocate input/output data");
-    goto finalise;
-  }
-
-  // Create the plan and check for success
-  plan = fftw_plan_dft_r2c_1d(fftSize, in, out, FFTW_MEASURE); 
-  if (plan == NULL) {
-    result = 1;
-    Helper::halt( "fir_t: could not create plan" );
-    goto finalise;
-  }
-  
-  // Copy window and add zero padding (if required)
-  int i;
-  for (i=0 ; i<windowLength ; i++) in[i] = window[i];
-  for ( ; i<fftSize ; i++) in[i] = 0;
-  
-  // Perform fft
-  fftw_execute(plan);
-  
-  // Output result
-  for (i=0 ; i<resultSize ; i++)
-    {
-      double freq = sampFreq * i / fftSize;
-      double mag = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
-      double magdB = 20 * log10(mag);
-      double phase = atan2(out[i][1], out[i][0]);
-
-      writer.level( freq , globals::freq_strat );
-      writer.value( "MAG" , mag );
-      writer.value( "MAG_DB" , magdB );
-      writer.value( "PHASE" , phase );
-      
-    }
-  
-  writer.unlevel( globals::freq_strat );
-
-  // Perform any cleaning up
- finalise:
-  if (plan != NULL) fftw_destroy_plan(plan);
-  if (in != NULL) fftw_free(in);
-  if (out != NULL) fftw_free(out);
-
-  writer.unlevel( "FIR" );
-  
-  return result;
+   int w_amp = 0;
+   for (int i = 0; i < N; ++i) {
+     if (std::fabs(xx[i]) >= thr) {
+       int d = std::abs(i - idx0);
+    if (d > w_amp) w_amp = d;
+     }
+   }
+   
+   // choose window
+   int w = std::max(w_energy, w_amp);
+   
+   // enforce min/max
+   if (w < minHalfWin) w = minHalfWin;
+   if (w > maxHalfWin) w = maxHalfWin;
+   
+   // symmetric output region
+   int left  = idx0 - w;
+   int right = idx0 + w;
+   if (left < 0) left = 0;
+   if (right >= N) right = N - 1;
  
+   if (xx.size() != ss.size())
+     Helper::halt("SR/IR not aligned, internal error");
+   
+   for (int xi = left; xi <= right; ++xi) {
+     double tp = (xi - idx0) / (double)sampFreq;
+     writer.level(Helper::dbl2str(tp), "SEC");
+     writer.value("IR", xx[xi]);
+     writer.value("SR", ss[xi]);
+   }
+   writer.unlevel("SEC");
+   
+   
+   //
+   // Frequency response
+   //
 
-}
+   const int windowLength = window.size();
+
+   writer.value( "FS" , sampFreq );
+   writer.value( "NTAPS" , windowLength );
+
+   double *in;
+   fftw_complex *out;
+   fftw_plan plan;
+   int result = 0;
+
+   // If the window length is short, zero padding will be used
+   int fftSize = (windowLength < 2048) ? 2048 : windowLength;
+
+   // Calculate size of result data
+   int resultSize = (fftSize / 2) + 1;
+
+   // Allocate memory to hold input and output data
+   in = (double *) fftw_malloc(fftSize * sizeof(double));
+   out = (fftw_complex *) fftw_malloc(resultSize * sizeof(fftw_complex));
+   if (in == NULL || out == NULL) {
+     result = 1;
+     Helper::halt( "fir_t: could not allocate input/output data");
+     goto finalise;
+   }
+
+   // Create the plan and check for success
+   plan = fftw_plan_dft_r2c_1d(fftSize, in, out, FFTW_MEASURE); 
+   if (plan == NULL) {
+     result = 1;
+     Helper::halt( "fir_t: could not create plan" );
+     goto finalise;
+   }
+
+   // Copy window and add zero padding (if required)
+   int i;
+   for (i=0 ; i<windowLength ; i++) in[i] = window[i];
+   for ( ; i<fftSize ; i++) in[i] = 0;
+
+   // Perform fft
+   fftw_execute(plan);
+
+   // Output result
+   for (i=0 ; i<resultSize ; i++)
+     {
+       double freq = sampFreq * i / fftSize;
+       double mag = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
+       double magdB = 20 * log10(mag);
+       double phase = atan2(out[i][1], out[i][0]);
+
+       writer.level( freq , globals::freq_strat );
+       writer.value( "MAG" , mag );
+       writer.value( "MAG_DB" , magdB );
+       writer.value( "PHASE" , phase );
+    
+     }
+
+   writer.unlevel( globals::freq_strat );
+
+   // Perform any cleaning up
+  finalise:
+   if (plan != NULL) fftw_destroy_plan(plan);
+   if (in != NULL) fftw_free(in);
+   if (out != NULL) fftw_free(out);
+
+   writer.unlevel( "FIR" );
+   
+   return result;
+   
+ }
+
+
 
 
 

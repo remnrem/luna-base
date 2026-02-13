@@ -39,6 +39,11 @@ bool timeline_t::generic_epochs() const
   return ! standard_epochs ; 
 }
 
+bool timeline_t::contig_epochs() const
+{
+  return contigs ; 
+}
+
 bool timeline_t::fixed_epoch_length() const
 {
   return fixed_size_epochs;
@@ -55,8 +60,15 @@ bool timeline_t::check( const std::string & cmd ) const
   //       present    xlist == 1   requires standard and non-overlapping epochs
   //       present    xlist == 2   requires fixed duration epochs (i.e. no can overlapping or from epochs)
 
+
+  // hack: special case (to add more fully later) - we have EPOCH contig now, which
+  //       will be safe for some commands - e.g. ROBUST-NORM, that update the signal
+  //       as we're assured all points will be covered
+
+  if ( cmd == "ROBUST-NORM" && contigs ) return true;
+  
   // may want to update this w/ some commands that assume uniform AND contiguous epochs
-  // e.g. IRASE, MOVING-AVERAGE, etc
+  // e.g. IRASA, MOVING-AVERAGE, etc
   std::map<std::string,int> xlist;
     
   xlist[ "HYPNO" ] = 1; 
@@ -99,6 +111,7 @@ int timeline_t::calc_epochs()
   // wipe any generic epoch params
   standard_epochs = true;
   fixed_size_epochs = true;
+  contigs = false;
   epoch_generic_param_annots.clear();
   epoch_generic_param_w1 = epoch_generic_param_w2 = 0;
   epoch_generic_param_set_point = 0;
@@ -696,7 +709,7 @@ int timeline_t::ensure_epoched()
 bool timeline_t::epoched() const
 {
   //  std::cout << " standard = " << standard_epochs << "\t" << epoch_length_tp << "\n";
-  return (!standard_epochs) || epoch_length_tp != 0;
+  return (!standard_epochs) || epoch_length_tp != 0 || contigs ; 
 } 
 
 
@@ -718,7 +731,8 @@ void timeline_t::unepoch()
   standard_epochs = true;
   fixed_size_epochs = true;
   gap_spanning_epochs = false;
-
+  contigs = false;
+  
   // Masks
   clear_epoch_mask();
   mask_mode = 0; // default (0=mask; 1=unmask; 2=force)
@@ -853,6 +867,7 @@ int timeline_t::set_epoch(const double s, const double o , const uint64_t offset
   epoch_inc_tp = o * globals::tp_1sec;
   standard_epochs = true;
   fixed_size_epochs = true;
+  contigs = false;
   
   // pass offset as uint64_t
   epoch_offset_tp = offset ; // * globals::tp_1sec;
@@ -1136,7 +1151,8 @@ int timeline_t::calc_epochs_contig()
   // first time this is called, from EPOCH command
   standard_epochs = false;
   gap_spanning_epochs = false;
-
+  contigs = true;
+  
   // get segments
   std::set<interval_t> contigs = segments();
   
@@ -1195,6 +1211,7 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   // first time this is called, from EPOCH command
   standard_epochs = false;
   gap_spanning_epochs = false;
+  contigs = false;
   
   // option must specify the fixed duration of these (from annot start)
   fixed_size_epochs = param.has( "fixed" );
@@ -1768,6 +1785,7 @@ void timeline_t::output_epoch_info( const bool verbose , const bool show_masked 
     }
   writer.value( "GENERIC" , (int)(!standard_epochs) );
   writer.value( "FIXED_DUR" , (int)(epoch_length() ) );
+  writer.value( "CONTIG" , (int)contigs );
 
   // total duration of recording
   //  a) spanned by an epoch  

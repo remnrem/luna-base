@@ -35,14 +35,17 @@ void dsptools::standardize( edf_t & edf , param_t & param )
   				   
   const bool by_epoch = param.has( "epoch" );
 
+  // only do simple de-meaning? (perhaps per epoch)
+  const bool simple_demean = param.has( "simple-demean" ); 
+  
   // ( X - median ) / ( IQR ) 
   const bool iqr_norm = param.has( "IQR" );
   
   // center (based on median in first round)
-  const bool center = param.has( "center" ) ? param.yesno( "center" ) : true ; 
+  const bool center = param.has( "center" ) ? param.yesno( "center" ) : ( ! simple_demean ) ;
   
   // scale (based on IQR robust estimate of SD)
-  const bool scale = param.has( "scale" ) ? param.yesno( "scale" ) : true ; 
+  const bool scale = param.has( "scale" ) ? param.yesno( "scale" ) : ( ! simple_demean )  ; 
   
   // also winsorize? (default= no)
   const bool winsor = param.has( "winsor" );
@@ -50,17 +53,19 @@ void dsptools::standardize( edf_t & edf , param_t & param )
   
   // after Winsorization, (non-robust) norm a second time (i.e. to ensure mean of 0, SD of 1)
   // default = no
-  const bool second_norm = param.has( "second-norm" ) ? param.yesno( "second-norm" ) : false ; 
+  const bool second_norm = param.has( "second-norm" ) ? param.yesno( "second-norm" ) : false ;
 
-
-  if ( ! ( center || scale || winsor ) )
+  if ( ! ( center || scale || winsor || simple_demean ) )
     {
       if ( ! silent ) 
 	logger << "  nothing to do, leavning standardization\n";
       return;
     }
 
-  if ( winsor && ! ( center || scale ) )
+  if ( simple_demean && ( center || scale || second_norm || winsor || iqr_norm ) )
+    Helper::halt( "cannot combine simple-demean with center or scale or second-norm or winsor or IQR" );
+  
+  if ( winsor && ! ( center || scale || simple_demean ) )
     if ( ! silent ) 
       logger << "  only winsorizing signals, not performing initial standardization\n";
    
@@ -126,7 +131,9 @@ void dsptools::standardize( edf_t & edf , param_t & param )
       Eigen::MatrixXd & T = mslice.nonconst_data_ref();      
 
       // process
-      if ( iqr_norm )
+      if ( simple_demean )	
+	eigen_ops::scale( T , true , false ); 
+      else if ( iqr_norm )
 	eigen_ops::IQR_norm( T );
       else
 	eigen_ops::robust_scale( T , center , scale , wt , second_norm );

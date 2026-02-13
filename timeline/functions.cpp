@@ -30,6 +30,177 @@
 #include "annot/annotate.h"  // for root_match()
 #include "dsp/spline.h"
 
+
+
+// ----------------------------------------------------------------------------
+//
+// S2A diagnostics...
+
+
+// struct PhaseBinStats {
+//   int64_t cycles = 0;
+//   double tot[12] = {0};   // total seconds per bin across all cycles
+// };
+
+// static inline double wrap360(double x) {
+//   x = fmod(x, 360.0);
+//   if (x < 0) x += 360.0;
+//   return x;
+// }
+
+// static inline int bin_index_30(double deg0_360) {
+//   int b = int(floor(deg0_360 / 30.0)); // 0..11
+//   if (b < 0) b = 0;
+//   if (b > 11) b = 11;
+//   return b;
+// }
+
+
+// // Diagnostic binning by integrating time along unwrapped phase.
+// PhaseBinStats diag_bin_by_unwrapped_phase(const std::vector<double>& ph_deg_0_360,
+//                                           const std::vector<uint64_t>& tp,
+//                                           double tp_duration_sec) // globals::tp_duration
+// {
+//   PhaseBinStats st;
+//   const int n = (int)ph_deg_0_360.size();
+//   if (n < 2 || tp.size() != ph_deg_0_360.size()) return st;
+
+//   // Build a simple unwrap in degrees: add 360 whenever wrapped.
+//   std::vector<double> u(n);
+//   u[0] = ph_deg_0_360[0];
+//   double add = 0.0;
+//   for (int i = 1; i < n; ++i) {
+//     double cur = ph_deg_0_360[i];
+//     double prev_wrapped = ph_deg_0_360[i-1];
+//     if (cur < prev_wrapped) add += 360.0;   // wrap
+//     u[i] = cur + add;
+//   }
+
+//   // Count cycles by change in floor(u/360)
+//   auto cyc_index = [&](double uu) -> int64_t { return (int64_t)floor(uu / 360.0); };
+
+//   for (int i = 1; i < n; ++i) {
+//     double u0 = u[i-1];
+//     double u1 = u[i];
+//     if (u1 <= u0) continue;
+
+//     const double dt = double(tp[i] - tp[i-1]) * tp_duration_sec;
+//     if (dt <= 0) continue;
+
+//     // Track cycles crossed in this interval (usually 0)
+//     int64_t c0 = cyc_index(u0);
+//     int64_t c1 = cyc_index(u1);
+//     if (c1 > c0) st.cycles += (c1 - c0);
+
+//     // Split dt across bins crossed between u0 and u1.
+//     double t_rem = dt;
+//     double a = u0;
+//     double b = u1;
+
+//     while (a < b) {
+//       // current bin edge geometry on the unwrapped axis
+//       double w = wrap360(a);
+//       int bi = bin_index_30(w);
+
+//       // next bin edge in wrapped coordinates (30,60,...,360)
+//       double next_edge_w = 30.0 * (bi + 1);
+//       // distance in degrees to next edge along the *unwrapped* axis
+//       double deg_to_edge = next_edge_w - w;
+//       if (deg_to_edge <= 0) deg_to_edge += 360.0; // should not happen, but safe
+
+//       double a_edge = a + deg_to_edge; // unwrapped degree where bin ends
+//       double seg_end = (a_edge < b) ? a_edge : b;
+
+//       // allocate time proportionally to phase distance
+//       double frac = (seg_end - a) / (u1 - u0);
+//       double dt_seg = frac * dt;
+
+//       st.tot[bi] += dt_seg;
+//       a = seg_end;
+//     }
+//   }
+
+//   return st;
+// }
+
+// // convenience printer
+// void print_diag_bins(const PhaseBinStats& st) {
+//   std::cout << "diag cycles = " << st.cycles << "\n";
+//   for (int b = 0; b < 12; ++b) {
+//     double mean = (st.cycles > 0) ? (st.tot[b] / double(st.cycles)) : 0.0;
+//     std::cout << "B" << (b+1 < 10 ? "0" : "") << (b+1) << "\t" << mean << "\n";
+//   }
+// }
+
+
+
+// struct BinAcc {
+//   int64_t waves = 0;
+//   double tot[12] = {0};   // total seconds in each bin across waves
+// };
+
+
+// // Integrate time-in-bin over samples [start, stop] (inclusive indices into ph/tp).
+// // Assumes ph is wrapped 0..360. Locally unwraps within the wave.
+// static void accumulate_bins_over_wave(const std::vector<double>& ph,
+//                                       const std::vector<uint64_t>& tp,
+//                                       int start, int stop,
+//                                       double tp_duration_sec,
+//                                       BinAcc* acc)
+// {
+//   if (!acc) return;
+//   if (stop <= start) return;
+//   if (start < 0 || stop >= (int)ph.size()) return;
+
+//   // local unwrap u[k] for k=0..m-1
+//   const int m = stop - start + 1;
+//   std::vector<double> u(m);
+//   u[0] = ph[start];
+//   double add = 0.0;
+//   for (int k = 1; k < m; ++k) {
+//     double cur = ph[start + k];
+//     double prev = ph[start + k - 1];
+//     if (cur < prev) add += 360.0;
+//     u[k] = cur + add;
+//   }
+
+//   // integrate each sample interval
+//   for (int k = 1; k < m; ++k) {
+//     double u0 = u[k-1];
+//     double u1 = u[k];
+//     if (u1 <= u0) continue;
+
+//     double dt = double(tp[start + k] - tp[start + k - 1]) * tp_duration_sec;
+//     if (dt <= 0) continue;
+
+//     double a = u0;
+//     double b = u1;
+
+//     while (a < b) {
+//       double w = wrap360(a);
+//       int bi = bin_index_30(w);
+
+//       double next_edge_w = 30.0 * (bi + 1);    // 30,60,...,360
+//       double deg_to_edge = next_edge_w - w;
+//       if (deg_to_edge <= 0) deg_to_edge += 360.0;
+
+//       double a_edge = a + deg_to_edge;
+//       double seg_end = (a_edge < b) ? a_edge : b;
+
+//       double frac = (seg_end - a) / (u1 - u0);
+//       double dt_seg = frac * dt;
+
+//       acc->tot[bi] += dt_seg;
+//       a = seg_end;
+//     }
+//   }
+
+//   acc->waves += 1;
+// }
+
+//-----------------------------------------
+
+
 extern writer_t writer;
 extern logger_t logger;
 
@@ -600,12 +771,11 @@ void timeline_t::signal2annot( const param_t & param )
 
 void timeline_t::signal2annot_cuts( const param_t & param )
 {
-  
-  // as signal2annot_cuts() is getting messy, split off cuts
-  // functionality here; i.e. expecting angular values, e.g. 0 .. 360
-  // , and so a 'cut' of 0 means whenever we 'cross' 0 to start/stop
-  // an annotation
-  
+
+  //
+  // here, expecting angular values, e.g. 0 .. 360
+  // --> a 'cut' of 0 means whenever we 'cross' 0 to start/stop an annotation
+  //
   
   //
   // labels (always adds signal label X)
@@ -652,15 +822,17 @@ void timeline_t::signal2annot_cuts( const param_t & param )
   // norm values and only take is above th_magz
   const bool sel_magz = param.has( "mag-z" );
   const double th_magz = sel_magz ? param.requires_dbl( "mag-z" ) : 0 ;
-
   const bool use_mag = sel_mag || sel_magz ;
 
+  // enforce monotonicity of phase bins
   const bool use_mono = param.has( "monotonic" );
 
+  // other outputs
   const bool add_slope = param.has( "slope" ); // SLOPE
   const bool add_state = param.has( "state" ); // STATE
   const bool add_bins  = param.has( "bins" );  // BIN (x12 fixed)
-
+  const bool add_bin_vec = param.value( "bins" ) == "class";
+  
   if ( ( add_slope || add_state || add_bins ) && ! use_mono )
     Helper::halt( "requires 'monotonic' flag if using slope, state or bins" );
 
@@ -672,8 +844,9 @@ void timeline_t::signal2annot_cuts( const param_t & param )
   // signal(s) to use: assume phase-angles in main signal
   //
   
-  //   X --> X_ht_ang   (for defining waves)
-  //     --> X_ht_mag   (for any amplitude stuff)
+  //   X --> X_ht_ang 
+  //     -->   use X for amplitude (RMS) [ optionally ]
+  //     -->   ise X_ht_anh to define cycles
   
   std::string signal_label = param.requires( "sig" );
     
@@ -683,13 +856,12 @@ void timeline_t::signal2annot_cuts( const param_t & param )
     Helper::halt( "could not find any signals: " + signal_label );
 
   const int ns = signals.size();
-
   
-  // allow alternative signal names (if not using HILBERT) 
+  // allow alternative signal names (e.g. if not using HILBERT) 
   
   const std::string ph_ext = param.has( "phase-ext" ) ? param.value( "phase-ext" ) : "_ht_ang";
 
-  const std::string mag_ext = param.has( "mag-ext" ) ? param.value( "mag-ext" ) : "_ht_mag";
+  const std::string mag_ext = param.has( "mag-sig" ) ? param.value( "mag-sig" ) : "";
   
   //
   // For each signal
@@ -700,7 +872,6 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 
       int okay_cnt =0;
 	  
-
       const std::string sig_label = signals.label(s);
 
       const std::string phase_label = sig_label + ph_ext; 
@@ -778,6 +949,7 @@ void timeline_t::signal2annot_cuts( const param_t & param )
       else
 	ph = *slice.nonconst_pdata();  
 
+      
       const std::vector<uint64_t> * tp = slice.ptimepoints();
       
       const int sr = edf->header.sampling_freq( phase_slot );
@@ -787,84 +959,220 @@ void timeline_t::signal2annot_cuts( const param_t & param )
       const int n = ph.size();
 
       if ( n == 0 ) continue;
+      
 
+      // Build unwrapped phase per-sample (deg), resetting unwrap across discontinuities.
+      
+      std::vector<double> uph(ph.size());
+
+      uph[0] = ph[0];
+      
+      double add_unwrap = 0.0;
+      
+      for (int i = 1; i < n; ++i)
+	{
+	  const bool gap = discontinuity(*tp, sr, i-1, i);
+	  if (gap)
+	    {
+	      // reset unwrap across gaps; start a new local unwrap segment
+	      add_unwrap = 0.0;
+	      uph[i] = ph[i];
+	      continue;
+	    }
+	  
+	  const double d = ph[i] - ph[i-1];
+	  if (d < -180.0) add_unwrap += 360.0;   // wrapped seam: 359 -> 1
+	  
+	  uph[i] = ph[i] + add_unwrap;
+	}
+      
+     
+
+      //
+      // detect putative waves
+      //
+            
       // always start not in wave (i.e. have to cross the 0/180/360 points
       // first
 
-      int start = -1 , stop = -1;
+      // int start = -1 , stop = -1;
       
+      // // iterate over signal
+      // // nb. starting at point i=1
+      // for (int i=1; i<n; i++)
+      // 	{	  
+      // 	  // did we just cross a gap? if so, cancel any putative wave
+      // 	  bool gap = i != 0 ? discontinuity( *tp , sr , i-1 , i ) : false ; 
+	  
+      // 	  if ( gap )
+      // 	    {	      
+      // 	      start = -1;
+      // 	      stop = -1;
+      // 	      continue;
+      // 	    }
+	  
+      // 	  // did we just cross the key point: because of wrapping
+      // 	  //   cross '0-deg'      -->   goes from > 180 to < 180 
+	  
+      // 	  const bool crosses = (ph[i] - ph[i-1]) < -180.0;
+      // 	  if ( crosses ) 
+      // 	    {	      
+      // 	      // close an existing wave:
+      // 	      if ( start != -1 )
+      // 		{
+      // 		  stop = i; // +1 ending
+		  
+      // 		  // duration criterion?
+      // 		  bool okay = true;		  		  
+      // 		  if ( sel_tmin || sel_tmax )
+      // 		    {
+      // 		      const uint64_t start_tp = (*tp)[start];
+      // 		      const uint64_t stop_tp  = (*tp)[stop];		      
+      // 		      const double dur = ( stop_tp - start_tp ) * globals::tp_duration;
+      // 		      if ( sel_tmin && dur < th_tmin ) okay = false;
+      // 		      if ( sel_tmax && dur > th_tmax ) okay = false;
+      // 		    }
+
+      // 		  if ( okay ) 
+      // 		    fwaves.insert( interval_t( (uint64_t)start , (uint64_t)stop ) );
+      // 		  else
+      // 		    ++dur_cnt; // QC checks
+		  
+      // 		  ++all_cnt; // all putative waves
+
+      // 		}
+	      
+      // 	      // and start a new one at same place
+      // 	      start = i;
+      // 	      stop = -1;
+      // 	    }
+	  
+      // 	} // go to next sample
+      
+
       //
-      // iterate over signal
+      // detect putatative waves
       //
 
-      // nb. starting at point i=1
-      for (int i=1; i<n; i++)
+      // build cycles from unwrapped-phase 360-crossings (with interpolated seam times)
+      // produces:
+      //   fwaves: set<interval_t> with sample-index intervals [start_i, stop_i)
+      //   wave_tp: map interval_t -> {start_tp, stop_tp} seam endpoints (timepoints)
+      // ---------------------------------------------------------------------
+
+      std::map<interval_t, std::pair<uint64_t,uint64_t>> wave_tp;
+
+      // State for unwrapping and detecting k*360 crossings
+      bool have_prev = false;
+      double add = 0.0;          // +360 accumulator
+      double u_prev = 0.0;       // previous unwrapped phase (deg)
+      int64_t k_prev = 0;        // floor(u_prev / 360)
+      
+      // State for current cycle start
+      int start_i = -1;          // sample index where we begin scanning this cycle (after seam)
+      uint64_t start_tp = 0;     // interpolated seam timepoint for cycle start
+      
+      // iterate over signal (start at i=1)
+      for (int i = 1; i < n; ++i)
 	{
-	  
-	  // did we just cross a gap? if so, cancel any putative wave
-	  bool gap = i != 0 ? discontinuity( *tp , sr , i-1 , i ) : false ; 
-	  
-	  if ( gap )
-	    {	      
-	      start = -1;
-	      stop = -1;
+	  // gap handling: cancel any putative wave + reset unwrap state
+	  bool gap = discontinuity(*tp, sr, i-1, i);
+	  if (gap)
+	    {
+	      start_i = -1;
+	      start_tp = 0;
+	      have_prev = false;
+	      add = 0.0;
 	      continue;
 	    }
-
 	  
-	  // did we just cross the key point: because of wrapping
-	  //   cross '0-deg'      -->   goes from > 180 to < 180 
-
-	  const bool crosses = ph[i-1] >  180 && ph[i] <  180 ;
-	    	  
-	  if ( crosses ) 
+	  // initialize unwrap state at first non-gap step
+	  if (!have_prev)
 	    {
+	      // set previous from i-1
+	      u_prev = uph[i-1];
+	      k_prev = (int64_t)floor(u_prev / 360.0);
+	      have_prev = true;
+	      start_i = -1;
+	      start_tp = 0;
+  	    }
+	  
+	  const double u_i = uph[i];
+	  
+	  const int64_t k_i = (int64_t)floor(u_i / 360.0);
+	  
+	  // detect crossing into the next 360-bin
+	  if (k_i > k_prev)
+	    {
+	      // interpolate time when unwrapped phase hits (k_prev+1)*360
+	      const double target = double(k_prev + 1) * 360.0;
+	      const double a = u_prev;
+	      const double b = u_i;
 	      
-	      // close an existing wave:
-
-	      if ( start != -1 )
+	      if (b != a)
 		{
+		  double p = (target - a) / (b - a);
+		  if (p < 0.0) p = 0.0;
+		  else if (p > 1.0) p = 1.0;
 		  
-		  stop = i; // +1 ending
+		  const double t0 = double((*tp)[i-1]);
+		  const double t1 = double((*tp)[i]);
+		  const uint64_t t_cross = (uint64_t) llround(t0 + p * (t1 - t0));
 		  
-		  //
-		  // duration criterion?
-		  //
-		  
-		  bool okay = true;		  
-		  
-		  if ( sel_tmin || sel_tmax )
+		  // If we already have a previous seam, we can close a full cycle
+		  if (start_i != -1)
 		    {
-		      const uint64_t start_tp = (*tp)[start];
-		      const uint64_t stop_tp  = (*tp)[stop];		      
-		      const double dur = ( stop_tp - start_tp ) * globals::tp_duration;
-		      if ( sel_tmin && dur < th_tmin ) okay = false;
-		      if ( sel_tmax && dur > th_tmax ) okay = false;
+		      const int stop_i = i;                 // keep half-open [start_i, i)
+		      const uint64_t stop_tp = t_cross;
+		      
+		      // Duration criterion in seconds based on seam endpoints
+		      bool okay = true;
+		      if (sel_tmin || sel_tmax)
+			{
+			  const double dur = (stop_tp - start_tp) * globals::tp_duration;
+			  if (sel_tmin && dur < th_tmin) okay = false;
+			  if (sel_tmax && dur > th_tmax) okay = false;
+			}
+		      
+		      if (okay)
+			{
+			  interval_t iv((uint64_t)start_i, (uint64_t)stop_i);
+			  fwaves.insert(iv);
+			  wave_tp[iv] = std::make_pair(start_tp, stop_tp);
+			}
+		      else
+			++dur_cnt;
+		      
+		      ++all_cnt;
 		    }
-
-		  if ( okay ) 
-		    fwaves.insert( interval_t( (uint64_t)start , (uint64_t)stop ) );
-		  else
-		    ++dur_cnt; // QC checks
-
 		  
-		  ++all_cnt; // all putative waves
-
+		  // Start next cycle from this seam:
+		  // - For sample scanning, begin at i (first sample after seam bracketing interval)
+		  // - For accurate timing, use interpolated seam time
+		  start_i = i;
+		  start_tp = t_cross;
+		  
+		  // If we jumped multiple 360s in one step (rare), advance k_prev fully
+		  k_prev = k_i;
 		}
-
-	      // and start a new one at same place
-	      start = i;
-	      stop = -1;
+	    }
+	  else
+	    {
+	      // no seam crossing
 	    }
 	  
-	} // go to next sample
-
+	  u_prev = u_i;
+	  // k_prev already updated on crossing; otherwise keep it
+	}
+      // ---------------------------------------------------------------------
+      
+      
       
       //
       // Require monotonic? Also that starts/stops in <30 and >330
       //
 
-      if ( use_mono )
+      if ( 0 && use_mono )
 	{
 	  
 	  // select waves
@@ -876,17 +1184,17 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	    {
 	      int start = aa->start;
 	      int stop  = aa->stop;
-
-	      bool okay = true;
 	      
-	      for (int p=start+1;p<stop; p++)
-		if ( ph[p] <= ph[p-1] )
-		  okay = false;
+	      bool okay = true;
+
+	      // for (int p=start+1;p<stop; p++)
+	      //  	if ( uph[p] <= uph[p-1] )
+	      //  	  okay = false;
 	      
 	      // also flag if not fully spanning the wave-form
 	      // i.e. so we can be sure to find all 12 phase bins 
-	      if ( ph[start] >= 30 || ph[stop-1] <= 330 )
-		okay = false;
+	      // if ( ph[start] >= 30 || ph[stop-1] <= 330 )
+	      // 	okay = false;
 	      
 	      if ( okay )
 		fwaves.insert( *aa );
@@ -905,15 +1213,17 @@ void timeline_t::signal2annot_cuts( const param_t & param )
       
       if ( use_mag )
 	{
+
 	  slice_t mag_slice( *edf , mag_slot , wholetrace() );
 	  
 	  std::vector<double> * dm = slice.nonconst_pdata();
 
 	  if ( dm->size() != ph.size() )
 	    Helper::halt( "phase and magnitude signals must have the same sample rates" );
-
+	  
 	  std::vector<double> v;
-
+	  v.reserve(fwaves.size());
+	  
 	  // get average
 	  std::set<interval_t>::const_iterator aa = fwaves.begin();
 	  while ( aa != fwaves.end() )
@@ -921,18 +1231,21 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	      int start = aa->start;
 	      int stop  = aa->stop;
 
-	      if ( stop - start == 0 )
-		v.push_back( 0 );
-	      else
+	      if (stop <= start) { v.push_back(0.0); ++aa; continue; }
+
+	      double ss = 0.0;
+	      for (int p = start; p < stop; ++p)
 		{
-		  double x = 0;
-		  for (int p=start; p<stop; p++)
-		    x += (*dm)[p] ;
-		  v.push_back( x / double( stop - start ) );		  
-		}	     
+		  const double xp = (*dm)[p];
+		  ss += xp * xp;
+		}
+	      
+	      const double mean_sq = ss / double(stop - start);
+	      const double rms = sqrt(mean_sq);	      
+	      v.push_back(rms);
 	      ++aa;
 	    }
-
+	  
 	  // normalize, if needed
 	  if ( sel_magz )
 	    v = MiscMath::Z( v );
@@ -988,6 +1301,8 @@ void timeline_t::signal2annot_cuts( const param_t & param )
       annot_t * a_rise = NULL;
       annot_t * a_fall = NULL;
       annot_t * a_bins = NULL;
+
+      std::vector<annot_t*> avec_bins( 12 , NULL );
       
       if ( add_state )
 	{	      
@@ -1013,13 +1328,24 @@ void timeline_t::signal2annot_cuts( const param_t & param )
       
       if ( add_bins )
 	{	      
-	  a_bins = add_ch_class_label ?
-	    edf->annotations->add( wave_label + "_BIN_" + sig_label ) :
-	    edf->annotations->add( wave_label + "_BIN" ) ;
+	  if ( add_bin_vec )
+	    {
+	      for (int b=0; b<12; b++)
+		{
+		  const std::string b_label = ( b+1>9 ? "B" : "B0" ) + Helper::int2str( b+1 );
+		  avec_bins[b] = add_ch_class_label ?
+		    edf->annotations->add( wave_label + "_BIN_" + b_label + "_" + sig_label ) :
+		    edf->annotations->add( wave_label + "_BIN_" + b_label ) ;
+		}	      
+	    }
+	  else
+	    a_bins = add_ch_class_label ?
+	      edf->annotations->add( wave_label + "_BIN_" + sig_label ) :
+	      edf->annotations->add( wave_label + "_BIN" ) ;
 	}
       
-      
-      //
+
+       //
       // iterate over events, adding if meets criteria
       //
       
@@ -1032,11 +1358,23 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	  
 	  int start = aa->start;
 	  int stop  = aa->stop;
-	  
+
+	  const int wstart = start;
+	  const int wstop = stop;
+
+	  // Unwrapped base for this cycle: the 0° seam at the start of the wave in unwrapped coordinates
+	  const double base = 360.0 * floor(uph[wstart] / 360.0);
+
 	  // get adjusted points (interpolate between samples for more
 	  // accurate annotation durations)
-	  const uint64_t start_tp = s2a_interp( &ph, tp, start, 0 ); 
-	  const uint64_t stop_tp  = s2a_interp( &ph, tp, stop, 0 ); 
+	  // const uint64_t start_tp = s2a_interp( &ph, tp, start, 0 ); 
+	  // const uint64_t stop_tp  = s2a_interp( &ph, tp, stop, 0 ); 
+	  // --> now previously computed (above)
+	  interval_t key((uint64_t)start, (uint64_t)stop);
+	  auto it = wave_tp.find(key);
+	  if (it == wave_tp.end()) Helper::halt("missing wave_tp seam endpoints");
+	  const uint64_t start_tp = it->second.first;
+	  const uint64_t stop_tp  = it->second.second;
 	  
 	  interval_t tinterval = interval_t( start_tp , stop_tp );
 	  
@@ -1051,21 +1389,28 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	  // so we are guaranteed to see all 12 phase bins; but check anyway
 	  
 	  int bcnt = 0; // should be populating 
-	  
+
+	  // std::cout << " new wave = " << tinterval.start << " ... " << tinterval.stop << "\n";
+	  // std::cout << "  --> start/stop = " << start << " " << stop << "\n";
+	  // std::cout << "  --> start_tp / stop_tp = " << start_tp << " " << stop_tp << "\n";
+
 	  for (int b=1; b<12; b++)
 	    {
 	      
-	      const double phase_angle = b * 30.0;		  
-	      
+	      const double phase_angle = base + b * 30.0;
+
+	      //std::cout << " finding phase bin " << b << " " << phase_angle << "\n";
+
 	      for (int p=start;p<stop; p++)
 		{
 		  
-		  if ( ph[p] >= phase_angle )
+		  if ( uph[p] >= phase_angle )
 		    {
 		      
-		      // get closest to 'phage_angle' (between p and p-1)
-		      
-		      bs[ b ] = s2a_interp( &ph, tp, p, phase_angle );   
+		      // get closest to 'phage_angle' (between p and p-1)		      
+		      bs[ b ] = s2a_interp(&uph, tp, p, phase_angle);
+			
+		      // std::cout << " got bs[ b ] = " << bs[ b ] << "\n";
 		      
 		      // update start to avoid minor retracing of steps
 		      // but allow for case where we have a zero-gap (i.e.
@@ -1092,7 +1437,7 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	  //
 	  
 	  bool okay = bcnt == 11 ;
-	  
+	
 	  // additional phase-bin duration criteria?
 	  if ( okay && ( sel_phbin_tmin || sel_phbin_tmax ) )
 	    {
@@ -1101,6 +1446,8 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 		{
 		  const uint64_t tp1 = bs[ b-1 ] ;
 		  const uint64_t tp2 = bs[ b ] ;
+
+		  //		  std::cout << " wd " << final_cnt << " " << b << " " << tp1 << " " << tp2 << " " << ( tp2 - tp1 ) * globals::tp_duration << "\n";
 		  
 		  const uint64_t tp = tp2 > tp1 ? tp2 - tp1 : 0LLU ; 
 		  const double t = tp * globals::tp_duration ;
@@ -1122,7 +1469,10 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 	      continue;
 	    }
 	  
-
+	  
+	  // tmp
+	  //accumulate_bins_over_wave(ph, *tp, wstart, wstop-1, globals::tp_duration, &alt_acc);
+	  
 	  //
 	  // add annotations 
 	  //
@@ -1148,8 +1498,16 @@ void timeline_t::signal2annot_cuts( const param_t & param )
 		  
 		  if ( tp2 > tp1 )
 		    {
-		      const std::string ph_label = ( b>9 ? "B" : "B0" ) + Helper::int2str( b );
-		      a_bins->add( ph_label , interval_t( tp1 , tp2 ) , sig_label );
+		      if ( add_bin_vec )
+			{
+			  avec_bins[b-1]->add( "." , interval_t( tp1 , tp2 ) , sig_label );
+			}
+		      else
+			{
+			  const std::string ph_label = ( b>9 ? "B" : "B0" ) + Helper::int2str( b );
+			  a_bins->add( ph_label , interval_t( tp1 , tp2 ) , sig_label );
+			}
+		      
 		    }
 		}
 	    }
@@ -1215,7 +1573,14 @@ void timeline_t::signal2annot_cuts( const param_t & param )
       writer.value( "N" , final_cnt );
       writer.value( "N0" , all_cnt );
       
-                
+
+      // writer.value("ALT_WAVES", (int)alt_acc.waves);
+      // for (int b=0; b<12; ++b) {
+      // 	double mean = alt_acc.waves > 0 ? alt_acc.tot[b] / double(alt_acc.waves) : 0.0;
+      // 	const std::string lab = std::string("ALT_B") + (b+1 < 10 ? "0" : "") + Helper::int2str(b+1);
+      // 	writer.value(lab, mean);
+      // }
+      
       
       // next signal
     }
@@ -3422,51 +3787,73 @@ void timeline_t::annot_crosstabs( const param_t & param )
 
 
 
-uint64_t s2a_interp( const std::vector<double> * d ,     // angles (0-360)
-		     const std::vector<uint64_t> * tp ,  // time-points
-		     const int i ,  // first point *after* target T
-		     const double t ) // target
+// uint64_t s2a_interp( const std::vector<double> * d ,     // angles (0-360)
+// 		     const std::vector<uint64_t> * tp ,  // time-points
+// 		     const int i ,  // first point *after* target T
+// 		     const double t ) // target
+// {
+
+//   // typically: e.g. if t = 90
+//   //     i-1   89.7
+//   //     T     90.0
+//   //     i     90.2
+//   // i.e. this spans the range
+  
+//   // however,
+
+//   // scenario1: possible at 0 we wrapped around phase: (e.g. T = 0)
+//   //   i-1    359.8
+//   //   T        0.0
+//   //   i        0.2
+  
+//   // scenario2: unlikely, but possible target is high
+//   //   i-1    349.8
+//   //   T      350.0
+//   //   i      2.1
+
+//   // so, test whether 
+//   const bool scenario1 = (*d)[i-1] > t ;
+//   const bool scenario2 = (*d)[i] < t ; 
+  
+//   // scenario1 : reduce first by 360
+//   // scenario2 : increase second by 360
+
+//   if ( scenario1 && scenario2 ) // should not happen
+//     Helper::halt( "internal logic error in s2a_interp()" );
+  
+//   const double first  = scenario1 ? (*d)[i-1] - 360.0 : (*d)[i-1] ;
+//   const double second = scenario2 ? (*d)[i] + 360.0 : (*d)[i] ;
+
+//   if ( first > t || first > second || t > second )
+//     Helper::halt( "internal logic error in s2a_interp()" );
+
+//   // get proportional scaling
+//   const double p = ( t - first ) / ( second - first );
+
+//   // return an adjusted tp (i.e. no longer aligned with a sample point per se)
+//   const uint64_t d1 = (*tp)[i] - (*tp)[i-1];
+//   const uint64_t retval = (*tp)[i-1] + p * d1;
+//   return retval;
+// }
+
+
+uint64_t s2a_interp(const std::vector<double>* d,
+                    const std::vector<uint64_t>* tp,
+                    int i,
+                    double t)
 {
+  const double a = (*d)[i-1];
+  const double b = (*d)[i];
 
-  // typically: e.g. if t = 90
-  //     i-1   89.7
-  //     T     90.0
-  //     i     90.2
-  // i.e. this spans the range
-  
-  // however,
+  // with unwrapped phases, we expect local monotonic increase.
+  if (!(a <= t && t <= b) || b == a)
+    Helper::halt("internal logic error in s2a_interp()");
 
-  // scenario1: possible at 0 we wrapped around phase: (e.g. T = 0)
-  //   i-1    359.8
-  //   T        0.0
-  //   i        0.2
-  
-  // scenario2: unlikely, but possible target is high
-  //   i-1    349.8
-  //   T      350.0
-  //   i      2.1
+  const double p = (t - a) / (b - a);
 
-  // so, test whether 
-  const bool scenario1 = (*d)[i-1] > t ;
-  const bool scenario2 = (*d)[i] < t ; 
-  
-  // scenario1 : reduce first by 360
-  // scenario2 : increase second by 360
+  const double dt = double((*tp)[i] - (*tp)[i-1]);
+  const double out = double((*tp)[i-1]) + p * dt;
 
-  if ( scenario1 && scenario2 ) // should not happen
-    Helper::halt( "internal logic error in s2a_interp()" );
-  
-  const double first  = scenario1 ? (*d)[i-1] - 360.0 : (*d)[i-1] ;
-  const double second = scenario2 ? (*d)[i] + 360.0 : (*d)[i] ;
-
-  if ( first > t || first > second || t > second )
-    Helper::halt( "internal logic error in s2a_interp()" );
-
-  // get proportional scaling
-  const double p = ( t - first ) / ( second - first );
-
-  // return an adjusted tp (i.e. no longer aligned with a sample point per se)
-  const uint64_t d1 = (*tp)[i] - (*tp)[i-1];
-  const uint64_t retval = (*tp)[i-1] + p * d1;
-  return retval;
+  return (uint64_t) llround(out);
 }
+

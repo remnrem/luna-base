@@ -179,7 +179,6 @@ void dsptools::psi_wrapper( edf_t & edf , param_t & param )
       
       psi.calc();
 
-
       psi.output_settings( double_entry , verbose );
       
       psi.report( signals , by_epoch );

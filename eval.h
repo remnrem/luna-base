@@ -348,6 +348,7 @@ void proc_hypoxic_burden( edf_t & , param_t & );
 void proc_annotate( edf_t & , param_t & );
 void proc_annot2signal( edf_t & , param_t & );
 void proc_signal2annot( edf_t & , param_t & );
+void proc_signal2cycle( edf_t & , param_t & );
 void proc_annot_crosstabs( edf_t & , param_t & );
 void proc_sig_annot_mean( edf_t & , param_t & );
 void proc_annot2cache( edf_t & , param_t & );

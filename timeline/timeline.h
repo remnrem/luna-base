@@ -181,7 +181,9 @@ struct timeline_t
   
   void signal2annot( const param_t & param );
 
-  void signal2annot_cuts( const param_t & param );
+  void signal2annot_cuts( const param_t & param ); // redundant 
+
+  void signal2cycle( const param_t & param ); // new version
 
   void annot2cache( const param_t & param );
 
@@ -233,6 +235,8 @@ struct timeline_t
 
   bool generic_epochs() const;
 
+  bool contig_epochs() const;
+  
   bool fixed_epoch_length() const;
   
   double epoch_length() const;
@@ -627,6 +631,9 @@ struct timeline_t
   // generic (nonstandard) but still fixed-size epochs?
   bool fixed_size_epochs;
 
+  // contigs
+  bool contigs;
+  
   // T if gap-spanning / cumulative epochs
   bool gap_spanning_epochs;
   

@@ -82,11 +82,13 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
   
 
   //
-  // slow phases
+  // make narrowband filtered on-the-fly?
   //
 
-  const double phase_lwr = param.requires_dbl( "lwr" );
-  const double phase_upr = param.requires_dbl( "upr" );
+  const bool narrowband_input = param.has( "narrowband" );
+  
+  const double phase_lwr = (!narrowband_input) ? param.requires_dbl( "lwr" ) : 0;
+  const double phase_upr = (!narrowband_input) ? param.requires_dbl( "upr" ) : 0;
   const double fir_ripple = param.has( "ripple" ) ? param.requires_dbl( "ripple" ) : 0.01 ;
   const double fir_tw = param.has( "tw" ) ? param.requires_dbl( "tw" ) : 0.5 ;
   
@@ -116,10 +118,18 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
       const std::vector<uint64_t> * tps = slice.ptimepoints();
       
       // filter-Hilbert
-      hilbert_t hilbert( *slow , Fs[s] , phase_lwr , phase_upr , fir_ripple , fir_tw );
-      
-      logger << "  done filter-Hilbert...\n";
+      hilbert_t * p_hilbert;
 
+      if ( narrowband_input )
+	{
+	  p_hilbert = new hilbert_t( *slow );
+	  logger << "  done Hilbert...\n";
+	}
+      else
+	{
+	  p_hilbert = new hilbert_t( *slow , Fs[s] , phase_lwr , phase_upr , fir_ripple , fir_tw );
+	  logger << "  done filter-Hilbert...\n";
+	}
 
       //
       // verbose output?
@@ -227,13 +237,13 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
 	  // coupling analysis
 	  //
 
-	  itpc_t itpc = hilbert.phase_events( evt_sp , 
-					      NULL , // no mask
-					      nreps ,
-					      Fs[s] ,
-					      epoch_sec ,  // opt: within-epoch shuffle
-					      true         // stratify by slow signal phase bin
-					      );
+	  itpc_t itpc = p_hilbert->phase_events( evt_sp , 
+						 NULL , // no mask
+						 nreps ,
+						 Fs[s] ,
+						 epoch_sec ,  // opt: within-epoch shuffle
+						 true         // stratify by slow signal phase bin
+						 );
 	  
 	  
 	  //
@@ -286,7 +296,11 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
 	} // next annotation					  
       
       writer.unlevel( globals::annot_strat );
-      
+
+      // free hilbert
+      delete p_hilbert;
+      p_hilbert = NULL;
+	
     } // next signal
   
   writer.unlevel( globals::signal_strat );

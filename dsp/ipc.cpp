@@ -265,7 +265,7 @@ void dsptools::ipc( edf_t & edf , param_t & param )
 	  writer.value( "WIPC" , stats.mean_ipc_weighted );
 	  writer.value( "PLV" , stats.plv );
 	  writer.value( "PHASE" , cs.mean_phase );
-	  writer.value( "P_INPHASE" , stats.frac_inphase );	  	  
+	  writer.value( "P_INPHASE" , stats.frac_inphase );
 	  
 	}
 

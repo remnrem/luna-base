@@ -701,9 +701,7 @@ itpc_t hilbert_t::phase_events( const std::vector<int> & e ,
 
 void hilbert_t::unwrap( std::vector<double> * p )
 {
-  
   // http://homepages.cae.wisc.edu/~brodskye/mr/phaseunwrap/unwrap.c
-
   const int n = p->size();
   
   std::vector<double> dp( n );
@@ -711,13 +709,12 @@ void hilbert_t::unwrap( std::vector<double> * p )
   std::vector<double> dp_corr( n );
   std::vector<double> cumsum( n );
 
-  // default tol in matlab
   double cutoff = M_PI;   
   
   // incremental phase variation 
   // MATLAB: dp = diff(p, 1, 1);
   for (int j = 0; j < n-1; j++)
-    dp[j] = (*p)[j+1] - (*p)[j];
+    dp[j] = (*p)[j+1] - (*p)[j];  
   
   // equivalent phase variation in [-pi, pi]
   // MATLAB: dps = mod(dp+dp,2*pi) - pi;
@@ -729,18 +726,18 @@ void hilbert_t::unwrap( std::vector<double> * p )
   for (int j = 0; j < n-1; j++)
     if ((dps[j] == -M_PI) && (dp[j] > 0))
       dps[j] = M_PI;
-
+  
   // incremental phase correction
   // MATLAB: dp_corr = dps - dp;
   for (int j = 0; j < n-1; j++)
     dp_corr[j] = dps[j] - dp[j];
-      
+  
   // Ignore correction when incremental variation is smaller than cutoff
   // MATLAB: dp_corr(abs(dp)<cutoff,:) = 0;
   for (int j = 0; j < n-1; j++)
     if (fabs(dp[j]) < cutoff)
       dp_corr[j] = 0;
-
+  
   // Find cumulative sum of deltas
   // MATLAB: cumsum = cumsum(dp_corr, 1);
   cumsum[0] = dp_corr[0];
@@ -752,3 +749,15 @@ void hilbert_t::unwrap( std::vector<double> * p )
   for (int j = 1; j < n; j++)
     (*p)[j] += cumsum[j-1];
 }
+
+// --> classic unwrap - probably can replace the above fn()
+// void unwrap(std::vector<double>& p) {
+//   if (p.size() < 2) return;
+//   double offset = 0.0;
+//   for (size_t i = 1; i < p.size(); ++i) {
+//     double dp = p[i] - p[i-1];
+//     if (dp >  M_PI) offset -= 2*M_PI;
+//     if (dp < -M_PI) offset += 2*M_PI;
+//     p[i] += offset;
+//   }
+// }

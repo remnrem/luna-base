@@ -202,13 +202,14 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
 		     return_phase ? &phase : NULL ,
 		     return_angle ? &angle : NULL ,
 		     return_ifrq ? &ifrq : NULL );
-      else
+      else // assume signal is already narrow band
 	run_hilbert( *d , Fs , 
 		     &mag ,
 		     return_phase ? &phase : NULL ,
 		     return_angle ? &angle : NULL ,
 		     return_ifrq ? &ifrq : NULL );
 
+      
       //
       // labels for new EDF channel(s)
       //
@@ -331,7 +332,7 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
   
   if ( angle != NULL )
     {
-      *angle = *phase;
+      *angle = *(hilbert.phase());
       // convert to degrees with 0 as pos-to-neg crossing
       for (int i=0;i<angle->size();i++) (*angle)[i] = MiscMath::as_angle_0_pos2neg( (*angle)[i] );	  
     }
@@ -387,7 +388,7 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
   
   if ( angle != NULL )
     {
-      *angle = *phase;
+      *angle = *(hilbert.phase());
       // convert to degrees with 0 as pos-to-neg crossing
       for (int i=0;i<angle->size();i++) (*angle)[i] = MiscMath::as_angle_0_pos2neg( (*angle)[i] );	  
     }
@@ -415,7 +416,7 @@ void dsptools::run_hilbert( const std::vector<double> & data , const int Fs ,
   
   if ( angle != NULL )
     {
-      *angle = *phase;
+      *angle = *(hilbert.phase());      
       // convert to degrees with 0 as pos-to-neg crossing
       for (int i=0;i<angle->size();i++) (*angle)[i] = MiscMath::as_angle_0_pos2neg( (*angle)[i] );	  
     }

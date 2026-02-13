@@ -31,7 +31,6 @@ extern writer_t writer;
 
 extern freezer_t freezer;
 
-
 //
 // cmd_t
 //
@@ -903,6 +902,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "AXA") )           { fnd = true; proc_annot_crosstabs( edf, param(c) ); }
       if ( (!fnd) && is( c, "A2S" ) )          { fnd = true; proc_annot2signal( edf, param(c) ); }
       if ( (!fnd) && is( c, "S2A" ) )          { fnd = true; proc_signal2annot( edf, param(c) ); }
+      if ( (!fnd) && is( c, "S2C" ) )          { fnd = true; proc_signal2cycle( edf, param(c) ); }
       if ( (!fnd) && is( c, "A2C" ) )          { fnd = true; proc_annot2cache( edf , param(c) ); }
       if ( (!fnd) && is( c, "C2A" ) )          { fnd = true; proc_cache2annot( edf , param(c) ); }
       if ( (!fnd) && is( c, "SPANNING" ) )     { fnd = true; proc_list_spanning_annots( edf, param(c) ); }
@@ -1129,7 +1129,7 @@ void proc_set_ivar( edf_t & edf , param_t & param )
 
   tok.bind( inputs , &out );
 
-  const bool verbose = true;
+  const bool verbose = false ;
   
   bool is_valid = tok.evaluate( verbose );
   
@@ -1137,10 +1137,10 @@ void proc_set_ivar( edf_t & edf , param_t & param )
   
   if ( ! tok.value( retval ) ) is_valid = false;
 
-  std::cout << "parsed as a valid expression : " << ( is_valid ? "yes" : "no" ) << "\n";
-  std::cout << "return value                 : " << tok.result() << "\n";
-  std::cout << "return value (as T/F)        : " << ( retval ? "true" : "false" ) << "\n";
-  std::cout << "assigned meta-data           : " << out.print() << "\n";  
+  // std::cout << "parsed as a valid expression : " << ( is_valid ? "yes" : "no" ) << "\n";
+  // std::cout << "return value                 : " << tok.result() << "\n";
+  // std::cout << "return value (as T/F)        : " << ( retval ? "true" : "false" ) << "\n";
+  // std::cout << "assigned meta-data           : " << out.print() << "\n";  
 
   // and set (as string value)
   if ( is_valid ) 
@@ -3444,6 +3444,12 @@ void proc_annot2signal( edf_t & edf , param_t & param )
 void proc_signal2annot( edf_t & edf , param_t & param )
 {
   edf.timeline.signal2annot( param );
+}
+
+// S2C : make cycles ( & annots) from a signal
+void proc_signal2cycle( edf_t & edf , param_t & param )
+{
+  edf.timeline.signal2cycle( param );  
 }
 
 

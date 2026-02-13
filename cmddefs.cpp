@@ -59,7 +59,7 @@ void cmddefs_t::init()
   // base URL
   //
 
-  url_root = "http://zzz.bwh.harvard.edu/luna/ref/";
+  url_root = "https://zzz.nyspi.org/luna/ref/";
 
 
   //
@@ -566,6 +566,7 @@ void cmddefs_t::init()
   // ESPAN          Epoch-based annotation coverage
   // A2S            Add a 0/1 signal based on an annotation
   // S2A            Add an annotation based on ranged values of a signal
+  // S2C            Add cycles (and annotations) from a signal
   // AXA
   // DROP-ANNOTS
   
@@ -579,6 +580,119 @@ void cmddefs_t::init()
   add_var( "S2A" , "CH" , "EXC2_MONO" , "Number of exclusions due to monotonic phase constraint" );
   add_var( "S2A" , "CH" , "EXC3_MAG" , "Number of exclusions due to magnitude criteria" );
   add_var( "S2A" , "CH" , "EXC4_PDUR"  , "Number of exclusions due to phase-bin duration criteria" );
+
+  add_cmd( "annot" , "S2C" , "Signal-to-cycle conversion" );
+  add_url( "S2C" , "annotations/#s2c" );
+
+  add_table( "S2C" , "SEED" , "Seed-level summary statistics" );
+  add_var( "S2C" , "SEED" , "N_PRE" , "Number of detected cycles before magnitude filtering" );
+  add_var( "S2C" , "SEED" , "N_POST" , "Number of detected cycles after magnitude filtering" );
+  add_var( "S2C" , "SEED" , "DUR_RATIO" , "Mean ratio of pos/neg half-wave duration" );
+  add_var( "S2C" , "SEED" , "DUR_RATIO_MD" , "Median ratio of pos/neg half-wave duration" );
+  add_var( "S2C" , "SEED" , "DUR_RATIO_MAD" , "MAD of pos/neg half-wave duration ratio [emit-mad]" );
+  add_var( "S2C" , "SEED" , "AMP_ASYM" , "Mean amplitude asymmetry" );
+  add_var( "S2C" , "SEED" , "AMP_ASYM_MD" , "Median amplitude asymmetry" );
+  add_var( "S2C" , "SEED" , "AMP_ASYM_MAD" , "MAD of amplitude asymmetry [emit-mad]" );
+  add_var( "S2C" , "SEED" , "SLOPE_ASYM" , "Mean slope asymmetry" );
+  add_var( "S2C" , "SEED" , "SLOPE_ASYM_MD" , "Median slope asymmetry" );
+  add_var( "S2C" , "SEED" , "SLOPE_ASYM_MAD" , "MAD of slope asymmetry [emit-mad]" );
+  add_var( "S2C" , "SEED" , "SHARP_ASYM" , "Mean sharpness asymmetry" );
+  add_var( "S2C" , "SEED" , "SHARP_ASYM_MD" , "Median sharpness asymmetry" );
+  add_var( "S2C" , "SEED" , "SHARP_ASYM_MAD" , "MAD of sharpness asymmetry [emit-mad]" );
+  add_var( "S2C" , "SEED" , "PCT_POS" , "Mean proportion of samples above baseline" );
+  add_var( "S2C" , "SEED" , "PCT_POS_MD" , "Median proportion of samples above baseline" );
+  add_var( "S2C" , "SEED" , "PCT_POS_MAD" , "MAD of proportion above baseline [emit-mad]" );
+  add_var( "S2C" , "SEED" , "REL_DIFF" , "Mean relative difference of pos/neg peak timing" );
+  add_var( "S2C" , "SEED" , "REL_DIFF_MD" , "Median relative difference of pos/neg peak timing" );
+  add_var( "S2C" , "SEED" , "REL_DIFF_MAD" , "MAD of relative difference [emit-mad]" );
+
+  add_var( "S2C" , "SEED" , "DUR_POS" , "Mean positive half-wave duration (seconds)" );
+  add_var( "S2C" , "SEED" , "DUR_POS_MD" , "Median positive half-wave duration (seconds)" );
+  add_var( "S2C" , "SEED" , "DUR_POS_MAD" , "MAD of positive half-wave duration (seconds) [emit-mad]" );
+  add_var( "S2C" , "SEED" , "DUR_NEG" , "Mean negative half-wave duration (seconds)" );
+  add_var( "S2C" , "SEED" , "DUR_NEG_MD" , "Median negative half-wave duration (seconds)" );
+  add_var( "S2C" , "SEED" , "DUR_NEG_MAD" , "MAD of negative half-wave duration (seconds) [emit-mad]" );
+  add_var( "S2C" , "SEED" , "DUR" , "Mean total cycle duration (seconds)" );
+  add_var( "S2C" , "SEED" , "DUR_MD" , "Median total cycle duration (seconds)" );
+  add_var( "S2C" , "SEED" , "DUR_MAD" , "MAD of total cycle duration (seconds) [emit-mad]" );
+
+  add_table( "S2C" , "SEED,BIN" , "12-bin cycle-locked seed summary (B01..B12)" );
+  add_var( "S2C" , "SEED,BIN" , "MEAN" , "Mean seed value in cycle bin" );
+  add_var( "S2C" , "SEED,BIN" , "DUR" , "Mean cycle-bin duration (seconds)" );
+
+  add_table( "S2C" , "SEED,CYCLE" , "Per-cycle metrics (optional)" );
+  add_var( "S2C" , "SEED,CYCLE" , "T0_S" , "Cycle start time (seconds)" );
+  add_var( "S2C" , "SEED,CYCLE" , "T1_S" , "Cycle end time (seconds)" );
+  add_var( "S2C" , "SEED,CYCLE" , "DUR_RATIO" , "Ratio of pos/neg half-wave duration" );
+  add_var( "S2C" , "SEED,CYCLE" , "AMP_ASYM" , "Amplitude asymmetry" );
+  add_var( "S2C" , "SEED,CYCLE" , "SLOPE_ASYM" , "Slope asymmetry" );
+  add_var( "S2C" , "SEED,CYCLE" , "SHARP_ASYM" , "Sharpness asymmetry" );
+  add_var( "S2C" , "SEED,CYCLE" , "PCT_POS" , "Proportion of samples above baseline" );
+  add_var( "S2C" , "SEED,CYCLE" , "REL_DIFF" , "Relative difference of pos/neg peak timing" );
+
+  add_table( "S2C" , "SEED,CYCLE" , "Per-cycle durations (optional)" );
+  add_var( "S2C" , "SEED,CYCLE" , "DUR_POS" , "Positive half-wave duration (seconds)" );
+  add_var( "S2C" , "SEED,CYCLE" , "DUR_NEG" , "Negative half-wave duration (seconds)" );
+
+  add_table( "S2C" , "SEED,SIG" , "Seed-by-signal summary statistics" );
+  add_var( "S2C" , "SEED,SIG" , "D" , "Mean waveform peak-to-peak amplitude" );
+  add_var( "S2C" , "SEED,SIG" , "TAU_MAX_DEG" , "Phase (deg) of peak in mean waveform" );
+  add_var( "S2C" , "SEED,SIG" , "CIRC_DISP" , "Circular dispersion of per-cycle peak phases" );
+  add_var( "S2C" , "SEED,SIG" , "M" , "Sine/cosine fit amplitude of mean waveform" );
+  add_var( "S2C" , "SEED,SIG" , "M_OVER_D" , "Ratio of M to D" );
+  add_var( "S2C" , "SEED,SIG" , "D_SD" , "SD of per-cycle peak-to-peak amplitude" );
+  add_var( "S2C" , "SEED,SIG" , "M_SD" , "SD of per-cycle sin/cos amplitude" );
+  add_var( "S2C" , "SEED,SIG" , "CIRC_MEAN_DEG" , "Circular mean phase of per-cycle peaks (deg)" );
+  add_var( "S2C" , "SEED,SIG" , "R" , "Resultant vector length of per-cycle peak phases" );
+  add_var( "S2C" , "SEED,SIG" , "CC_LAG" , "Cross-correlation lag (seconds)" );
+  add_var( "S2C" , "SEED,SIG" , "CC_R" , "Cross-correlation at lag" );
+  add_var( "S2C" , "SEED,SIG" , "TD_TOTAL" , "Total cycles considered for time-domain windows" );
+  add_var( "S2C" , "SEED,SIG" , "TD_USED" , "Cycles included in time-domain windows" );
+  add_var( "S2C" , "SEED,SIG" , "TD_SKIPPED" , "Cycles skipped for time-domain windows" );
+  add_var( "S2C" , "SEED,SIG" , "TD_USED_PCT" , "Proportion of cycles used in time-domain windows" );
+
+  add_var( "S2C" , "SEED,SIG" , "DT" , "Mean lag to nearest local extremum (seconds)" );
+  add_var( "S2C" , "SEED,SIG" , "DT_MD" , "Median lag to nearest local extremum (seconds)" );
+  add_var( "S2C" , "SEED,SIG" , "DT_MAD" , "MAD of lag to nearest local extremum [emit-mad]" );
+  add_var( "S2C" , "SEED,SIG" , "DT_NEG" , "Count of negative lag values" );
+  add_var( "S2C" , "SEED,SIG" , "DT_ZERO" , "Count of zero lag values" );
+  add_var( "S2C" , "SEED,SIG" , "DT_POS" , "Count of positive lag values" );
+  add_var( "S2C" , "SEED,SIG" , "TD_RMS" , "Mean window RMS (time-domain)" );
+  add_var( "S2C" , "SEED,SIG" , "TD_RMS_MD" , "Median window RMS (time-domain)" );
+  add_var( "S2C" , "SEED,SIG" , "TD_RMS_MAD" , "MAD of window RMS [emit-mad]" );
+  add_var( "S2C" , "SEED,SIG" , "TD_P2P" , "Mean window peak-to-peak amplitude" );
+  add_var( "S2C" , "SEED,SIG" , "TD_P2P_MD" , "Median window peak-to-peak amplitude" );
+  add_var( "S2C" , "SEED,SIG" , "TD_P2P_MAD" , "MAD of window peak-to-peak amplitude [emit-mad]" );
+  add_var( "S2C" , "SEED,SIG" , "TD_PCT_POS" , "Mean proportion above baseline in window" );
+  add_var( "S2C" , "SEED,SIG" , "TD_PCT_POS_MD" , "Median proportion above baseline in window" );
+  add_var( "S2C" , "SEED,SIG" , "TD_PCT_POS_MAD" , "MAD of proportion above baseline [emit-mad]" );
+  add_var( "S2C" , "SEED,SIG" , "TD_SLOPE" , "Mean max slope in window" );
+  add_var( "S2C" , "SEED,SIG" , "TD_SLOPE_MD" , "Median max slope in window" );
+  add_var( "S2C" , "SEED,SIG" , "TD_SLOPE_MAD" , "MAD of max slope in window [emit-mad]" );
+
+  add_table( "S2C" , "SEED,SIG,BIN" , "12-bin cycle-locked means (B01..B12)" );
+  add_var( "S2C" , "SEED,SIG,BIN" , "MEAN" , "Mean signal value in cycle bin" );
+
+  add_table( "S2C" , "SEED,SIG,HW" , "Cycle-locked half-wave means (POS/NEG)" );
+  add_var( "S2C" , "SEED,SIG,HW" , "MEAN" , "Mean signal value in half-wave" );
+
+  add_table( "S2C" , "SEED,SIG,PH" , "Phase-bin mean waveform" );
+  add_var( "S2C" , "SEED,SIG,PH" , "MEAN" , "Mean amplitude in phase bin" );
+  add_var( "S2C" , "SEED,SIG,PH" , "SE" , "Bootstrap SE of mean [emit-se]" );
+  add_var( "S2C" , "SEED,SIG,PH" , "CI_LO" , "Bootstrap CI lower bound" );
+  add_var( "S2C" , "SEED,SIG,PH" , "CI_HI" , "Bootstrap CI upper bound" );
+
+  add_table( "S2C" , "SEED,SIG,PH,AMP" , "Phase-by-amplitude density" );
+  add_var( "S2C" , "SEED,SIG,PH,AMP" , "DENS" , "Density in phase/amplitude bin" );
+
+  add_table( "S2C" , "SEED,SIG,SEC" , "Time-domain grid (time-locked)" );
+  add_var( "S2C" , "SEED,SIG,SEC" , "MEAN" , "Mean amplitude at time bin" );
+  add_var( "S2C" , "SEED,SIG,SEC" , "SE" , "Bootstrap SE of mean [emit-se]" );
+  add_var( "S2C" , "SEED,SIG,SEC" , "CI_LO" , "Bootstrap CI lower bound" );
+  add_var( "S2C" , "SEED,SIG,SEC" , "CI_HI" , "Bootstrap CI upper bound" );
+
+  add_table( "S2C" , "SEED,SIG,SEC,AMP" , "Time-by-amplitude density" );
+  add_var( "S2C" , "SEED,SIG,SEC,AMP" , "DENS" , "Density in time/amplitude bin" );
 
   //
   // DROP-ANNOTS
@@ -742,6 +856,62 @@ void cmddefs_t::init()
   // S2A
   //
   
+  //
+  // S2C
+  //
+
+  add_param( "S2C" , "sig" , "C3,C4" , "Signal(s) to analyze" );
+  add_param( "S2C" , "seg" , "C3" , "Segmenting signal(s); defaults to sig" );
+  add_param( "S2C" , "all-by-all" , "" , "Compare all sig channels against all seg channels" );
+
+  add_param( "S2C" , "waves" , "waves" , "Base label for created cycle annotations" );
+  add_param( "S2C" , "add-channel-inst-label" , "" , "Add channel names to instance IDs" );
+  add_param( "S2C" , "add-channel-class-label" , "" , "Add channel names to class labels" );
+  add_param( "S2C" , "half-waves" , "" , "Also annotate POS/NEG half-waves; optional value sets base label, e.g. half-waves=HW" );
+  add_param( "S2C" , "peak-points" , "PEAK" , "Add 0-duration POS/NEG peak-point annotations with this base label" );
+  add_param( "S2C" , "waves-bins" , "bins" , "Annotate 12 phase bins (B01..B12) using the cycle warp" );
+
+  add_param( "S2C" , "pos2neg" , "" , "Segment on POS->NEG zero-crossings (default POS->NEG)" );
+
+  add_param( "S2C" , "t-min" , "2.0" , "Minimum cycle duration (seconds)" );
+  add_param( "S2C" , "t-max" , "20.0" , "Maximum cycle duration (seconds)" );
+  add_param( "S2C" , "t-min-neg" , "1.0" , "Minimum negative half-wave duration (seconds)" );
+  add_param( "S2C" , "t-max-neg" , "10.0" , "Maximum negative half-wave duration (seconds)" );
+  add_param( "S2C" , "t-min-pos" , "1.0" , "Minimum positive half-wave duration (seconds)" );
+  add_param( "S2C" , "t-max-pos" , "10.0" , "Maximum positive half-wave duration (seconds)" );
+  add_param( "S2C" , "no-halfwave-t" , "" , "Disable automatic half-wave duration defaults" );
+
+  add_param( "S2C" , "mag-percentile" , "0.8" , "Minimum percentile of cycle magnitude (0-1)" );
+  add_param( "S2C" , "mag-z" , "0.5" , "Minimum z-score of cycle magnitude" );
+
+  add_param( "S2C" , "bootstrap" , "" , "Enable bootstrap SE/CI for mean grids" );
+  add_param( "S2C" , "bootstrap-n" , "1000" , "Number of bootstrap resamples" );
+  add_param( "S2C" , "bootstrap-ci" , "0.95" , "Bootstrap CI level" );
+
+  add_param( "S2C" , "lag-window" , "0" , "Lag window half-width in seconds (0=full cycle)" );
+  add_param( "S2C" , "lag-abs" , "" , "Use absolute value for lag peak search" );
+
+  add_param( "S2C" , "emit-per-cycle" , "" , "Emit per-cycle metrics" );
+
+  add_param( "S2C" , "amp-bins" , "10" , "Number of amplitude bins for density matrices" );
+
+  add_param( "S2C" , "time-domain" , "" , "Emit time-domain grid and window metrics" );
+  add_param( "S2C" , "time-window" , "100" , "Time-window width in seconds" );
+  add_param( "S2C" , "time-bin" , "1" , "Time bin size in seconds" );
+  add_param( "S2C" , "time-min-n" , "1" , "Minimum N per time bin" );
+  add_param( "S2C" , "time-lock" , "pos" , "Time-lock anchor: pos or neg" );
+  add_param( "S2C" , "emit-td-grid" , "" , "Emit time-domain SEC and SECxAMP grids" );
+  add_param( "S2C" , "emit-td-summary" , "" , "Emit time-domain TD_* summary metrics" );
+
+  add_param( "S2C" , "emit-ph-grid" , "" , "Emit phase-bin (PH) mean waveform" );
+  add_param( "S2C" , "emit-ph-amp" , "" , "Emit phase-by-amplitude density matrix" );
+
+  add_param( "S2C" , "emit-seed" , "" , "Emit SEED-level summary statistics" );
+  add_param( "S2C" , "emit-sig" , "" , "Emit SEEDxSIG summary statistics" );
+
+  add_param( "S2C" , "emit-se" , "" , "Emit SE variables in bootstrap outputs" );
+  add_param( "S2C" , "emit-mad" , "" , "Emit MAD variables" );
+
   // ALIGN-ANNOTS
 
   
@@ -4701,6 +4871,3 @@ std::string cmddefs_t::fetch_desc_var( const std::string & cmd, const std::strin
 
 
 //#pragma GCC pop_options
-
-
-

@@ -225,7 +225,7 @@ void dsptools::dupes( edf_t & edf , param_t & param )
 	  for (int s2=s+1; s2<ns; s2++)
 	    {
 	      
-	      std::cout << "  CONSIDER " << signals.label(s) << " x " << signals.label(s2) << "\n";
+	      //	      std::cout << "  CONSIDER " << signals.label(s) << " x " << signals.label(s2) << "\n";
 
 	      // skip if an invalid signal
 	      
@@ -237,7 +237,7 @@ void dsptools::dupes( edf_t & edf , param_t & param )
 	      
 	      if ( test_divergent )
 		{
-		  std::cout << " testing " << signals.label(s) << " x " << signals.label(s2) << "\n";
+		  //std::cout << " testing " << signals.label(s) << " x " << signals.label(s2) << "\n";
 		  
 		  slice_t slice2( edf , signals(s2) , interval , 1 , ! physical_check );
 		  
