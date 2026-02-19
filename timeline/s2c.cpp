@@ -2153,6 +2153,9 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
 
   step3_derive_metrics(seed, *tp, par_work, zero, h, cycles);
 
+  // Keep pre-magnitude-filter cycles for seed-level summaries so SEED and SEED,BIN are consistent.
+  const std::vector<cycle_bound_t> cycles_seed = cycles;
+
   {
     std::vector<double> v_tpos_tneg;
     std::vector<double> v_tpos;
@@ -2320,7 +2323,7 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
                                       std::numeric_limits<double>::quiet_NaN());
   std::vector<double> seed_ph12_dur(static_cast<size_t>(phase_bins12),
                                      std::numeric_limits<double>::quiet_NaN());
-  if (par_work.emit_seed_summary && !cycles.empty()) {
+  if (par_work.emit_seed_summary && !cycles_seed.empty()) {
     auto seed_interval_mean = [&](uint64_t t_lo, uint64_t t_hi) -> double {
       if (t_hi <= t_lo || tp->empty() || seed.empty()) {
         return std::numeric_limits<double>::quiet_NaN();
@@ -2348,7 +2351,7 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
     std::vector<double> ph12_dur_sum(static_cast<size_t>(phase_bins12), 0.0);
     std::vector<size_t> ph12_dur_n(static_cast<size_t>(phase_bins12), 0);
 
-    for (const auto& cyc : cycles) {
+    for (const auto& cyc : cycles_seed) {
       uint64_t t0 = cyc.t0;
       uint64_t t1 = cyc.t1;
       uint64_t t_mid1 = 0;
