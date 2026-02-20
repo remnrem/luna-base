@@ -27,7 +27,6 @@
 #include "edf/slice.h"
 #include "db/db.h"
 #include "helper/logger.h"
-#include "dsp/spline.h"
 #include "miscmath/miscmath.h"
 
 #include <vector>
@@ -192,7 +191,12 @@ public:
     use_mag = sel_mag || sel_magz;
 
     // bootstrap settings for mean bins
-    do_bootstrap = param.has("bootstrap") || param.has("bootstrap-n");
+    // Respect explicit bootstrap=0/F; otherwise allow bootstrap-n/ci to imply bootstrap.
+    if (param.has("bootstrap")) {
+      do_bootstrap = param.yesno("bootstrap", true, true);
+    } else {
+      do_bootstrap = param.has("bootstrap-n") || param.has("bootstrap-ci");
+    }
     bootstrap_n = param.has("bootstrap-n") ? param.requires_int("bootstrap-n") : 1000;
     if (bootstrap_n < 1) bootstrap_n = 1;
     bootstrap_ci = param.has("bootstrap-ci") ? param.requires_dbl("bootstrap-ci") : 0.95;
@@ -235,6 +239,11 @@ public:
     // optional outputs
     emit_se = param.has("emit-se") ? param.yesno("emit-se", false, true) : false;
     emit_mad = param.has("emit-mad") ? param.yesno("emit-mad", false, true) : false;
+    std::string emit_asym_key = "emit-asym";
+    if (param.has("emit-asymm")) emit_asym_key = "emit-asymm";
+    else if (param.has("emit-asymmetry")) emit_asym_key = "emit-asymmetry";
+    emit_asym_metrics = param.has(emit_asym_key) ?
+      param.yesno(emit_asym_key, false, true) : false;
 
     emit_seed_summary = param.has("emit-seed") ? param.yesno("emit-seed", true, true) : true;
     emit_sig_summary = param.has("emit-sig") ? param.yesno("emit-sig", true, true) : true;
@@ -297,6 +306,7 @@ public:
   bool emit_td_summary = true;
   bool emit_se = false;
   bool emit_mad = false;
+  bool emit_asym_metrics = false;
 
   // summary output controls
   bool emit_seed_summary = true;
@@ -446,11 +456,6 @@ static s2a2_out_t s2a2_proc(
                                    uint64_t t_mid2,
                                    uint64_t t_end,
                                    long double ph);
-  static uint64_t phase_to_time4pt_mono(uint64_t t_start,
-                                        uint64_t t_mid1,
-                                        uint64_t t_mid2,
-                                        uint64_t t_end,
-                                        long double ph);
  private:
   static std::vector<std::vector<std::vector<double>>> step4_piecewise_bins(
     const Eigen::MatrixXd& X,
@@ -612,7 +617,8 @@ void timeline_t::signal2cycle( const param_t & param )
          << " emit-ph-amp=" << (par.emit_ph_amp ? "T" : "F")
          << " amp-bins=" << par.amp_bins
          << " emit-se=" << (par.emit_se ? "T" : "F")
-         << " emit-mad=" << (par.emit_mad ? "T" : "F") << "\n";
+         << " emit-mad=" << (par.emit_mad ? "T" : "F")
+         << " emit-asym=" << (par.emit_asym_metrics ? "T" : "F") << "\n";
   logger << "    time-dom  : time-domain=" << (par.emit_time_domain ? "T" : "F")
          << " time-window=" << Helper::dbl2str(par.time_window_s)
          << " time-bin=" << Helper::dbl2str(par.time_bin_s)
@@ -749,8 +755,8 @@ void timeline_t::signal2cycle( const param_t & param )
           for (int b = 0; b < 12; ++b) {
             long double f0 = static_cast<long double>(b) / 12.0L;
             long double f1 = static_cast<long double>(b + 1) / 12.0L;
-            uint64_t tb0 = s2a2_t::phase_to_time4pt_mono(t0, t_mid1, t_mid2, t1, f0);
-            uint64_t tb1 = (b == 11) ? t1 : s2a2_t::phase_to_time4pt_mono(t0, t_mid1, t_mid2, t1, f1);
+            uint64_t tb0 = s2a2_t::phase_to_time4pt(t0, t_mid1, t_mid2, t1, f0);
+            uint64_t tb1 = (b == 11) ? t1 : s2a2_t::phase_to_time4pt(t0, t_mid1, t_mid2, t1, f1);
             if (tb1 <= tb0) continue;
             interval_t bin_iv(tb0, tb1);
             char lab[4];
@@ -1252,107 +1258,6 @@ uint64_t s2a2_t::phase_to_time4pt(
   if (t < 0) t = 0;
   if (t > (long double)std::numeric_limits<uint64_t>::max())
     t = (long double)std::numeric_limits<uint64_t>::max();
-  return static_cast<uint64_t>(llround(static_cast<double>(t)));
-}
-
-uint64_t s2a2_t::phase_to_time4pt_mono(
-  uint64_t t_start,
-  uint64_t t_mid1,
-  uint64_t t_mid2,
-  uint64_t t_end,
-  long double ph
-)
-{
-  if (!(t_start < t_mid1 && t_mid1 < t_mid2 && t_mid2 < t_end)) return t_start;
-  if (ph < 0.0L) ph = 0.0L;
-  if (ph > 1.0L) ph = 1.0L;
-
-  const long double x[4] = {0.0L, 0.25L, 0.75L, 1.0L};
-  const long double y[4] = {
-    static_cast<long double>(t_start),
-    static_cast<long double>(t_mid1),
-    static_cast<long double>(t_mid2),
-    static_cast<long double>(t_end)
-  };
-
-  const long double h0 = x[1] - x[0];
-  const long double h1 = x[2] - x[1];
-  const long double h2 = x[3] - x[2];
-  if (!(h0 > 0.0L && h1 > 0.0L && h2 > 0.0L)) {
-    return phase_to_time4pt(t_start, t_mid1, t_mid2, t_end, ph);
-  }
-
-  const long double d0 = (y[1] - y[0]) / h0;
-  const long double d1 = (y[2] - y[1]) / h1;
-  const long double d2 = (y[3] - y[2]) / h2;
-
-  if (!(d0 > 0.0L && d1 > 0.0L && d2 > 0.0L)) {
-    return phase_to_time4pt(t_start, t_mid1, t_mid2, t_end, ph);
-  }
-
-  auto same_sign = [](long double a, long double b) {
-    return (a > 0.0L && b > 0.0L) || (a < 0.0L && b < 0.0L);
-  };
-
-  long double m[4] = {0.0L, 0.0L, 0.0L, 0.0L};
-
-  // PCHIP endpoint slopes
-  m[0] = ((2.0L * h0 + h1) * d0 - h0 * d1) / (h0 + h1);
-  if (!same_sign(m[0], d0)) m[0] = 0.0L;
-  else if (!same_sign(d0, d1) && std::fabs(m[0]) > std::fabs(3.0L * d0)) m[0] = 3.0L * d0;
-
-  m[3] = ((2.0L * h2 + h1) * d2 - h2 * d1) / (h2 + h1);
-  if (!same_sign(m[3], d2)) m[3] = 0.0L;
-  else if (!same_sign(d2, d1) && std::fabs(m[3]) > std::fabs(3.0L * d2)) m[3] = 3.0L * d2;
-
-  // PCHIP interior slopes (weighted harmonic mean)
-  if (d0 * d1 <= 0.0L) {
-    m[1] = 0.0L;
-  } else {
-    const long double w1 = 2.0L * h1 + h0;
-    const long double w2 = h1 + 2.0L * h0;
-    m[1] = (w1 + w2) / (w1 / d0 + w2 / d1);
-  }
-
-  if (d1 * d2 <= 0.0L) {
-    m[2] = 0.0L;
-  } else {
-    const long double w1 = 2.0L * h2 + h1;
-    const long double w2 = h2 + 2.0L * h1;
-    m[2] = (w1 + w2) / (w1 / d1 + w2 / d2);
-  }
-
-  int k = 0;
-  if (ph <= x[1]) k = 0;
-  else if (ph <= x[2]) k = 1;
-  else k = 2;
-
-  const long double hk = x[k + 1] - x[k];
-  long double s = (ph - x[k]) / hk;
-  if (s < 0.0L) s = 0.0L;
-  if (s > 1.0L) s = 1.0L;
-  const long double s2 = s * s;
-  const long double s3 = s2 * s;
-
-  const long double h00 = 2.0L * s3 - 3.0L * s2 + 1.0L;
-  const long double h10 = s3 - 2.0L * s2 + s;
-  const long double h01 = -2.0L * s3 + 3.0L * s2;
-  const long double h11 = s3 - s2;
-
-  long double t =
-    h00 * y[k] +
-    h10 * hk * m[k] +
-    h01 * y[k + 1] +
-    h11 * hk * m[k + 1];
-
-  // Numerical guard: preserve monotonic segment bounds.
-  if (t < y[k]) t = y[k];
-  if (t > y[k + 1]) t = y[k + 1];
-
-  if (t < 0.0L) t = 0.0L;
-  if (t > static_cast<long double>(std::numeric_limits<uint64_t>::max())) {
-    t = static_cast<long double>(std::numeric_limits<uint64_t>::max());
-  }
   return static_cast<uint64_t>(llround(static_cast<double>(t)));
 }
 
@@ -2161,11 +2066,20 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
     std::vector<double> v_tpos;
     std::vector<double> v_tneg;
     std::vector<double> v_ttot;
+    std::vector<double> v_zc_neg;
+    std::vector<double> v_neg_zc;
+    std::vector<double> v_zc_pos;
+    std::vector<double> v_pos_zc;
+    std::vector<double> v_amp_pos;
+    std::vector<double> v_amp_neg;
+    std::vector<double> v_amp_p2p;
+    std::vector<double> v_slope_pos;
+    std::vector<double> v_slope_neg;
+    std::vector<double> v_sharp_pos;
+    std::vector<double> v_sharp_neg;
     std::vector<double> v_amp_asym;
     std::vector<double> v_slope_asym;
     std::vector<double> v_sharp_asym;
-    std::vector<double> v_duty;
-    std::vector<double> v_rel_diff;
     const bool emit_cycle = par_work.emit_cycle_metrics;
 
     for (size_t ci = 0; ci < cycles.size(); ++ci) {
@@ -2189,9 +2103,44 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
       double ratio = std::numeric_limits<double>::quiet_NaN();
       if (finite(Tpos) && finite(Tneg) && Tneg > 0.0) ratio = Tpos / Tneg;
 
+      double zc_neg = std::numeric_limits<double>::quiet_NaN();
+      double neg_zc = std::numeric_limits<double>::quiet_NaN();
+      double zc_pos = std::numeric_limits<double>::quiet_NaN();
+      double pos_zc = std::numeric_limits<double>::quiet_NaN();
+      if (par_work.dir == s2a2_param_t::cross_dir_t::POS2NEG) {
+        if (c.t_neg > c.t0) zc_neg = (c.t_neg - c.t0) * globals::tp_duration;
+        if (t_mid > c.t_neg) neg_zc = (t_mid - c.t_neg) * globals::tp_duration;
+        if (c.t_pos > t_mid) zc_pos = (c.t_pos - t_mid) * globals::tp_duration;
+        if (c.t1 > c.t_pos) pos_zc = (c.t1 - c.t_pos) * globals::tp_duration;
+      } else {
+        if (c.t_pos > c.t0) zc_pos = (c.t_pos - c.t0) * globals::tp_duration;
+        if (t_mid > c.t_pos) pos_zc = (t_mid - c.t_pos) * globals::tp_duration;
+        if (c.t_neg > t_mid) zc_neg = (c.t_neg - t_mid) * globals::tp_duration;
+        if (c.t1 > c.t_neg) neg_zc = (c.t1 - c.t_neg) * globals::tp_duration;
+      }
+
       double Apos = c.v_pos - zero;
       double Aneg = c.v_neg - zero;
       double absAneg = std::fabs(Aneg);
+      double Ap2p = std::numeric_limits<double>::quiet_NaN();
+      if (finite(c.v_pos) && finite(c.v_neg)) Ap2p = c.v_pos - c.v_neg;
+
+      double slope_pos = std::numeric_limits<double>::quiet_NaN();
+      if (finite(c.pos_slope)) slope_pos = std::fabs(c.pos_slope);
+      double slope_neg = std::numeric_limits<double>::quiet_NaN();
+      if (finite(c.neg_slope)) slope_neg = std::fabs(c.neg_slope);
+
+      double sharp_pos = std::numeric_limits<double>::quiet_NaN();
+      double sharp_neg = std::numeric_limits<double>::quiet_NaN();
+      if (c.i_pos >= 0 && c.i_neg >= 0) {
+        double level_pos = zero + 0.5 * (c.v_pos - zero);
+        double level_neg = zero + 0.5 * (c.v_neg - zero);
+        double wpos = half_width_s(seed, *tp, c.i0, c.i1, c.i_pos, level_pos);
+        double wneg = half_width_s(seed, *tp, c.i0, c.i1, c.i_neg, level_neg);
+        if (finite(wpos) && wpos > 0.0) sharp_pos = std::fabs(c.v_pos - zero) / wpos;
+        if (finite(wneg) && wneg > 0.0) sharp_neg = std::fabs(c.v_neg - zero) / wneg;
+      }
+
       double amp_asym = std::numeric_limits<double>::quiet_NaN();
       if (finite(Apos) && finite(absAneg)) {
         double denom = Apos + absAneg;
@@ -2199,99 +2148,122 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
       }
 
       double slope_asym = std::numeric_limits<double>::quiet_NaN();
-      if (finite(c.pos_slope) && finite(c.neg_slope) && std::fabs(c.neg_slope) > 0.0) {
-        slope_asym = c.pos_slope / std::fabs(c.neg_slope);
+      if (finite(slope_pos) && finite(slope_neg) && slope_neg > 0.0) {
+        slope_asym = slope_pos / slope_neg;
       }
 
       double sharp_asym = std::numeric_limits<double>::quiet_NaN();
-      if (c.i_pos >= 0 && c.i_neg >= 0) {
-        double level_pos = zero + 0.5 * (c.v_pos - zero);
-        double level_neg = zero + 0.5 * (c.v_neg - zero);
-        double wpos = half_width_s(seed, *tp, c.i0, c.i1, c.i_pos, level_pos);
-        double wneg = half_width_s(seed, *tp, c.i0, c.i1, c.i_neg, level_neg);
-        if (finite(wpos) && finite(wneg) && wpos > 0.0 && wneg > 0.0) {
-          double spos = std::fabs(c.v_pos - zero) / wpos;
-          double sneg = std::fabs(c.v_neg - zero) / wneg;
-          double denom = spos + sneg;
-          if (denom != 0.0) sharp_asym = (spos - sneg) / denom;
-        }
+      if (finite(sharp_pos) && finite(sharp_neg)) {
+        double denom = sharp_pos + sharp_neg;
+        if (denom != 0.0) sharp_asym = (sharp_pos - sharp_neg) / denom;
       }
-
-      size_t n = 0;
-      size_t npos = 0;
-      for (int i = c.i0; i <= c.i1; ++i) {
-        double v = seed[static_cast<size_t>(i)];
-        if (!finite(v)) continue;
-        ++n;
-        if (v > zero) ++npos;
-      }
-      double duty = std::numeric_limits<double>::quiet_NaN();
-      if (n > 0) duty = static_cast<double>(npos) / static_cast<double>(n);
-
-      double rel_diff = std::numeric_limits<double>::quiet_NaN();
-      if (finite(c.rel_pos) && finite(c.rel_neg)) rel_diff = c.rel_pos - c.rel_neg;
 
       v_tpos_tneg.push_back(ratio);
       v_tpos.push_back(Tpos);
       v_tneg.push_back(Tneg);
       if (finite(Tpos) && finite(Tneg)) v_ttot.push_back(Tpos + Tneg);
+      v_zc_neg.push_back(zc_neg);
+      v_neg_zc.push_back(neg_zc);
+      v_zc_pos.push_back(zc_pos);
+      v_pos_zc.push_back(pos_zc);
+      v_amp_pos.push_back(Apos);
+      v_amp_neg.push_back(absAneg);
+      v_amp_p2p.push_back(Ap2p);
+      v_slope_pos.push_back(slope_pos);
+      v_slope_neg.push_back(slope_neg);
+      v_sharp_pos.push_back(sharp_pos);
+      v_sharp_neg.push_back(sharp_neg);
       v_amp_asym.push_back(amp_asym);
       v_slope_asym.push_back(slope_asym);
       v_sharp_asym.push_back(sharp_asym);
-      v_duty.push_back(duty);
-      v_rel_diff.push_back(rel_diff);
 
       if (emit_cycle) {
-
-	
         writer.level( static_cast<int>(ci), globals::count_strat );
-
-	writer.value("T0_S", c.t0 * globals::tp_duration);
+        writer.value("T0_S", c.t0 * globals::tp_duration);
         writer.value("T1_S", c.t1 * globals::tp_duration);
-        writer.value("DUR_RATIO", ratio);
-        writer.value("AMP_ASYM", amp_asym);
-        writer.value("SLOPE_ASYM", slope_asym);
-        writer.value("SHARP_ASYM", sharp_asym);
-        writer.value("PCT_POS", duty);
-        writer.value("REL_DIFF", rel_diff);
-
         writer.value("DUR_POS", Tpos);
         writer.value("DUR_NEG", Tneg);
+        writer.value("DUR_ZC_NEG", zc_neg);
+        writer.value("DUR_NEG_ZC", neg_zc);
+        writer.value("DUR_ZC_POS", zc_pos);
+        writer.value("DUR_POS_ZC", pos_zc);
+        writer.value("AMP_POS", Apos);
+        writer.value("AMP_NEG", absAneg);
+        writer.value("AMP_P2P", Ap2p);
+        writer.value("SLOPE_POS", slope_pos);
+        writer.value("SLOPE_NEG", slope_neg);
+        writer.value("SHARP_POS", sharp_pos);
+        writer.value("SHARP_NEG", sharp_neg);
+        if (par_work.emit_asym_metrics) {
+          writer.value("DUR_RATIO", ratio);
+          writer.value("AMP_ASYM", amp_asym);
+          writer.value("SLOPE_ASYM", slope_asym);
+          writer.value("SHARP_ASYM", sharp_asym);
+        }
         writer.unlevel( globals::count_strat );
       }
     }
-    
+
     if (par_work.emit_seed_summary) {
-      writer.value("DUR_RATIO", mean_dbl(v_tpos_tneg));
-      writer.value("DUR_RATIO_MD", median_dbl(v_tpos_tneg));
-      writer.value("AMP_ASYM", mean_dbl(v_amp_asym));
-      writer.value("AMP_ASYM_MD", median_dbl(v_amp_asym));
-      writer.value("SLOPE_ASYM", mean_dbl(v_slope_asym));
-      writer.value("SLOPE_ASYM_MD", median_dbl(v_slope_asym));
-      writer.value("SHARP_ASYM", mean_dbl(v_sharp_asym));
-      writer.value("SHARP_ASYM_MD", median_dbl(v_sharp_asym));
-      writer.value("PCT_POS", mean_dbl(v_duty));
-      writer.value("PCT_POS_MD", median_dbl(v_duty));
-      writer.value("REL_DIFF", mean_dbl(v_rel_diff));
-      writer.value("REL_DIFF_MD", median_dbl(v_rel_diff));
-      if (par_work.emit_mad) {
-        writer.value("DUR_RATIO_MAD", mad_dbl(v_tpos_tneg, median_dbl(v_tpos_tneg)));
-        writer.value("AMP_ASYM_MAD", mad_dbl(v_amp_asym, median_dbl(v_amp_asym)));
-        writer.value("SLOPE_ASYM_MAD", mad_dbl(v_slope_asym, median_dbl(v_slope_asym)));
-        writer.value("SHARP_ASYM_MAD", mad_dbl(v_sharp_asym, median_dbl(v_sharp_asym)));
-        writer.value("PCT_POS_MAD", mad_dbl(v_duty, median_dbl(v_duty)));
-        writer.value("REL_DIFF_MAD", mad_dbl(v_rel_diff, median_dbl(v_rel_diff)));
-      }
       writer.value("DUR_POS", mean_dbl(v_tpos));
       writer.value("DUR_POS_MD", median_dbl(v_tpos));
       writer.value("DUR_NEG", mean_dbl(v_tneg));
       writer.value("DUR_NEG_MD", median_dbl(v_tneg));
       writer.value("DUR", mean_dbl(v_ttot));
       writer.value("DUR_MD", median_dbl(v_ttot));
+      writer.value("DUR_ZC_NEG", mean_dbl(v_zc_neg));
+      writer.value("DUR_ZC_NEG_MD", median_dbl(v_zc_neg));
+      writer.value("DUR_NEG_ZC", mean_dbl(v_neg_zc));
+      writer.value("DUR_NEG_ZC_MD", median_dbl(v_neg_zc));
+      writer.value("DUR_ZC_POS", mean_dbl(v_zc_pos));
+      writer.value("DUR_ZC_POS_MD", median_dbl(v_zc_pos));
+      writer.value("DUR_POS_ZC", mean_dbl(v_pos_zc));
+      writer.value("DUR_POS_ZC_MD", median_dbl(v_pos_zc));
+      writer.value("AMP_POS", mean_dbl(v_amp_pos));
+      writer.value("AMP_POS_MD", median_dbl(v_amp_pos));
+      writer.value("AMP_NEG", mean_dbl(v_amp_neg));
+      writer.value("AMP_NEG_MD", median_dbl(v_amp_neg));
+      writer.value("AMP_P2P", mean_dbl(v_amp_p2p));
+      writer.value("AMP_P2P_MD", median_dbl(v_amp_p2p));
+      writer.value("SLOPE_POS", mean_dbl(v_slope_pos));
+      writer.value("SLOPE_POS_MD", median_dbl(v_slope_pos));
+      writer.value("SLOPE_NEG", mean_dbl(v_slope_neg));
+      writer.value("SLOPE_NEG_MD", median_dbl(v_slope_neg));
+      writer.value("SHARP_POS", mean_dbl(v_sharp_pos));
+      writer.value("SHARP_POS_MD", median_dbl(v_sharp_pos));
+      writer.value("SHARP_NEG", mean_dbl(v_sharp_neg));
+      writer.value("SHARP_NEG_MD", median_dbl(v_sharp_neg));
+      if (par_work.emit_asym_metrics) {
+        writer.value("DUR_RATIO", mean_dbl(v_tpos_tneg));
+        writer.value("DUR_RATIO_MD", median_dbl(v_tpos_tneg));
+        writer.value("AMP_ASYM", mean_dbl(v_amp_asym));
+        writer.value("AMP_ASYM_MD", median_dbl(v_amp_asym));
+        writer.value("SLOPE_ASYM", mean_dbl(v_slope_asym));
+        writer.value("SLOPE_ASYM_MD", median_dbl(v_slope_asym));
+        writer.value("SHARP_ASYM", mean_dbl(v_sharp_asym));
+        writer.value("SHARP_ASYM_MD", median_dbl(v_sharp_asym));
+      }
       if (par_work.emit_mad) {
         writer.value("DUR_POS_MAD", mad_dbl(v_tpos, median_dbl(v_tpos)));
         writer.value("DUR_NEG_MAD", mad_dbl(v_tneg, median_dbl(v_tneg)));
         writer.value("DUR_MAD", mad_dbl(v_ttot, median_dbl(v_ttot)));
+        writer.value("DUR_ZC_NEG_MAD", mad_dbl(v_zc_neg, median_dbl(v_zc_neg)));
+        writer.value("DUR_NEG_ZC_MAD", mad_dbl(v_neg_zc, median_dbl(v_neg_zc)));
+        writer.value("DUR_ZC_POS_MAD", mad_dbl(v_zc_pos, median_dbl(v_zc_pos)));
+        writer.value("DUR_POS_ZC_MAD", mad_dbl(v_pos_zc, median_dbl(v_pos_zc)));
+        writer.value("AMP_POS_MAD", mad_dbl(v_amp_pos, median_dbl(v_amp_pos)));
+        writer.value("AMP_NEG_MAD", mad_dbl(v_amp_neg, median_dbl(v_amp_neg)));
+        writer.value("AMP_P2P_MAD", mad_dbl(v_amp_p2p, median_dbl(v_amp_p2p)));
+        writer.value("SLOPE_POS_MAD", mad_dbl(v_slope_pos, median_dbl(v_slope_pos)));
+        writer.value("SLOPE_NEG_MAD", mad_dbl(v_slope_neg, median_dbl(v_slope_neg)));
+        writer.value("SHARP_POS_MAD", mad_dbl(v_sharp_pos, median_dbl(v_sharp_pos)));
+        writer.value("SHARP_NEG_MAD", mad_dbl(v_sharp_neg, median_dbl(v_sharp_neg)));
+        if (par_work.emit_asym_metrics) {
+          writer.value("DUR_RATIO_MAD", mad_dbl(v_tpos_tneg, median_dbl(v_tpos_tneg)));
+          writer.value("AMP_ASYM_MAD", mad_dbl(v_amp_asym, median_dbl(v_amp_asym)));
+          writer.value("SLOPE_ASYM_MAD", mad_dbl(v_slope_asym, median_dbl(v_slope_asym)));
+          writer.value("SHARP_ASYM_MAD", mad_dbl(v_sharp_asym, median_dbl(v_sharp_asym)));
+        }
       }
     }
 
@@ -2321,8 +2293,6 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
   const int phase_bins12 = 12;
   std::vector<double> seed_ph12_mean(static_cast<size_t>(phase_bins12),
                                       std::numeric_limits<double>::quiet_NaN());
-  std::vector<double> seed_ph12_dur(static_cast<size_t>(phase_bins12),
-                                     std::numeric_limits<double>::quiet_NaN());
   if (par_work.emit_seed_summary && !cycles_seed.empty()) {
     auto seed_interval_mean = [&](uint64_t t_lo, uint64_t t_hi) -> double {
       if (t_hi <= t_lo || tp->empty() || seed.empty()) {
@@ -2348,8 +2318,6 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
 
     std::vector<double> ph12_sum(static_cast<size_t>(phase_bins12), 0.0);
     std::vector<size_t> ph12_n(static_cast<size_t>(phase_bins12), 0);
-    std::vector<double> ph12_dur_sum(static_cast<size_t>(phase_bins12), 0.0);
-    std::vector<size_t> ph12_dur_n(static_cast<size_t>(phase_bins12), 0);
 
     for (const auto& cyc : cycles_seed) {
       uint64_t t0 = cyc.t0;
@@ -2368,15 +2336,11 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
       for (int b = 0; b < phase_bins12; ++b) {
         long double f0 = static_cast<long double>(b) / 12.0L;
         long double f1 = static_cast<long double>(b + 1) / 12.0L;
-        uint64_t tb0 = phase_to_time4pt_mono(t0, t_mid1, t_mid2, t1, f0);
+        uint64_t tb0 = phase_to_time4pt(t0, t_mid1, t_mid2, t1, f0);
         uint64_t tb1 = (b == phase_bins12 - 1)
           ? t1
-          : phase_to_time4pt_mono(t0, t_mid1, t_mid2, t1, f1);
+          : phase_to_time4pt(t0, t_mid1, t_mid2, t1, f1);
         if (tb1 <= tb0) continue;
-
-        ph12_dur_sum[static_cast<size_t>(b)] +=
-          (static_cast<double>(tb1) - static_cast<double>(tb0)) * globals::tp_duration;
-        ph12_dur_n[static_cast<size_t>(b)] += 1;
 
         double p = seed_interval_mean(tb0, tb1);
         if (!finite(p)) continue;
@@ -2391,11 +2355,6 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
           ph12_sum[static_cast<size_t>(b)] /
           static_cast<double>(ph12_n[static_cast<size_t>(b)]);
       }
-      if (ph12_dur_n[static_cast<size_t>(b)] > 0) {
-        seed_ph12_dur[static_cast<size_t>(b)] =
-          ph12_dur_sum[static_cast<size_t>(b)] /
-          static_cast<double>(ph12_dur_n[static_cast<size_t>(b)]);
-      }
     }
 
     for (int b = 0; b < phase_bins12; ++b) {
@@ -2403,7 +2362,6 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
         std::string("B") + (b < 9 ? "0" : "") + Helper::int2str(b + 1);
       writer.level(bin_label, "BIN");
       writer.value("MEAN", seed_ph12_mean[static_cast<size_t>(b)]);
-      writer.value("DUR", seed_ph12_dur[static_cast<size_t>(b)]);
       writer.unlevel("BIN");
     }
   }
@@ -2478,13 +2436,11 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
 
       double M = fit_sincos_amplitude(mean);
 
-      // per-cycle variability for D, tau_max, M
+      // per-cycle variability for D and tau_max
       std::vector<double> Dk;
       std::vector<double> tauk_deg;
-      std::vector<double> Mk;
       Dk.reserve(res.bins[c].size());
       tauk_deg.reserve(res.bins[c].size());
-      Mk.reserve(res.bins[c].size());
 
       for (const auto& cyc : res.bins[c]) {
         if (static_cast<int>(cyc.size()) != res.nbins) continue;
@@ -2503,14 +2459,9 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
                            static_cast<double>(res.nbins - 1);
           tauk_deg.push_back(tau_deg);
         }
-
-        double mk = fit_sincos_amplitude(cyc);
-        if (finite(mk)) Mk.push_back(mk);
       }
 
       double D_sd = sd_dbl(Dk);
-      double tau_sd = sd_dbl(tauk_deg);
-      double M_sd = sd_dbl(Mk);
 
       // circular dispersion from per-cycle tau max
       double circ_disp = std::numeric_limits<double>::quiet_NaN();
@@ -2537,15 +2488,8 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
       // per-cycle absolute-time lag to seed peaks
       std::vector<double> dt_pos_s;
       std::vector<double> dt_neg_s;
-      std::vector<double> td_pos_rms;
       std::vector<double> td_pos_p2p;
-      std::vector<double> td_pos_duty;
-      std::vector<double> td_pos_slope;
-      std::vector<double> td_neg_rms;
       std::vector<double> td_neg_p2p;
-      std::vector<double> td_neg_duty;
-      std::vector<double> td_neg_slope;
-      size_t td_cycles_used = 0;
       std::vector<const cycle_bound_t*> td_cycles;
       std::vector<double> sig;
       bool has_sig = false;
@@ -2594,14 +2538,10 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
               uint64_t t_lo = (tpos > half_ticks) ? (tpos - half_ticks) : 0;
               uint64_t t_hi = tpos + half_ticks;
               if (window_range_ok(*tp, static_cast<int>(par_work.sr_hz), t_lo, t_hi, nullptr, nullptr)) {
-                ++td_cycles_used;
                 td_cycles.push_back(&cyc);
                 window_metrics_t wm = window_metrics(sig, *tp, tpos, par_work.time_window_s, zero,
                                                     static_cast<int>(par_work.sr_hz));
-              if (finite(wm.rms)) td_pos_rms.push_back(wm.rms);
               if (finite(wm.p2p)) td_pos_p2p.push_back(wm.p2p);
-              if (finite(wm.duty)) td_pos_duty.push_back(wm.duty);
-              if (finite(wm.max_slope)) td_pos_slope.push_back(wm.max_slope);
               }
             }
 
@@ -2623,14 +2563,10 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
               uint64_t t_lo = (tneg > half_ticks) ? (tneg - half_ticks) : 0;
               uint64_t t_hi = tneg + half_ticks;
               if (window_range_ok(*tp, static_cast<int>(par_work.sr_hz), t_lo, t_hi, nullptr, nullptr)) {
-                ++td_cycles_used;
                 td_cycles.push_back(&cyc);
                 window_metrics_t wm = window_metrics(sig, *tp, tneg, par_work.time_window_s, zero,
                                                     static_cast<int>(par_work.sr_hz));
-              if (finite(wm.rms)) td_neg_rms.push_back(wm.rms);
               if (finite(wm.p2p)) td_neg_p2p.push_back(wm.p2p);
-              if (finite(wm.duty)) td_neg_duty.push_back(wm.duty);
-              if (finite(wm.max_slope)) td_neg_slope.push_back(wm.max_slope);
               }
             }
           }
@@ -2639,9 +2575,6 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
 
       std::vector<double> ph12_mean(static_cast<size_t>(phase_bins12),
                                      std::numeric_limits<double>::quiet_NaN());
-      std::vector<size_t> ph12_n(static_cast<size_t>(phase_bins12), 0);
-      double pos_hw_mean = std::numeric_limits<double>::quiet_NaN();
-      double neg_hw_mean = std::numeric_limits<double>::quiet_NaN();
       if (has_sig && !cycles.empty()) {
         auto interval_mean = [&](uint64_t t_lo, uint64_t t_hi) -> double {
           if (t_hi <= t_lo || tp->empty() || sig.empty()) {
@@ -2666,11 +2599,7 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
         };
 
         std::vector<double> ph12_sum(static_cast<size_t>(phase_bins12), 0.0);
-        double pos_sum = 0.0;
-        size_t pos_n = 0;
-        double neg_sum = 0.0;
-        size_t neg_n = 0;
-        const bool neg_first = (par_work.dir == s2a2_param_t::cross_dir_t::POS2NEG);
+        std::vector<size_t> ph12_n(static_cast<size_t>(phase_bins12), 0);
         for (const auto& cyc : cycles) {
           uint64_t t0 = cyc.t0;
           uint64_t t1 = cyc.t1;
@@ -2685,30 +2614,13 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
           }
           if (!(t1 > t0 && t0 < t_mid1 && t_mid1 < t_mid2 && t_mid2 < t1)) continue;
 
-          if (cyc.has_mid && cyc.t_mid > t0 && cyc.t_mid < t1) {
-            uint64_t pos_lo = neg_first ? cyc.t_mid : t0;
-            uint64_t pos_hi = neg_first ? t1 : cyc.t_mid;
-            uint64_t neg_lo = neg_first ? t0 : cyc.t_mid;
-            uint64_t neg_hi = neg_first ? cyc.t_mid : t1;
-            double pos_v = interval_mean(pos_lo, pos_hi);
-            if (finite(pos_v)) {
-              pos_sum += pos_v;
-              ++pos_n;
-            }
-            double neg_v = interval_mean(neg_lo, neg_hi);
-            if (finite(neg_v)) {
-              neg_sum += neg_v;
-              ++neg_n;
-            }
-          }
-
           for (int b = 0; b < phase_bins12; ++b) {
             long double f0 = static_cast<long double>(b) / 12.0L;
             long double f1 = static_cast<long double>(b + 1) / 12.0L;
-            uint64_t tb0 = phase_to_time4pt_mono(t0, t_mid1, t_mid2, t1, f0);
+            uint64_t tb0 = phase_to_time4pt(t0, t_mid1, t_mid2, t1, f0);
             uint64_t tb1 = (b == phase_bins12 - 1)
               ? t1
-              : phase_to_time4pt_mono(t0, t_mid1, t_mid2, t1, f1);
+              : phase_to_time4pt(t0, t_mid1, t_mid2, t1, f1);
             if (tb1 <= tb0) continue;
 
             double p = interval_mean(tb0, tb1);
@@ -2724,8 +2636,6 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
               static_cast<double>(ph12_n[static_cast<size_t>(b)]);
           }
         }
-        if (pos_n > 0) pos_hw_mean = pos_sum / static_cast<double>(pos_n);
-        if (neg_n > 0) neg_hw_mean = neg_sum / static_cast<double>(neg_n);
       }
 
       double dt_pos_med = median_dbl(dt_pos_s);
@@ -2734,52 +2644,16 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
       double dt_neg_med = median_dbl(dt_neg_s);
       double dt_neg_mad = mad_dbl(dt_neg_s, dt_neg_med);
       double dt_neg_mean = mean_dbl(dt_neg_s);
-      size_t dt_pos_neg = 0;
-      size_t dt_pos_zero = 0;
-      size_t dt_pos_pos = 0;
-      for (double v : dt_pos_s) {
-        if (!finite(v)) continue;
-        if (v < 0) ++dt_pos_neg;
-        else if (v > 0) ++dt_pos_pos;
-        else ++dt_pos_zero;
-      }
-      size_t dt_neg_neg = 0;
-      size_t dt_neg_zero = 0;
-      size_t dt_neg_pos = 0;
-      for (double v : dt_neg_s) {
-        if (!finite(v)) continue;
-        if (v < 0) ++dt_neg_neg;
-        else if (v > 0) ++dt_neg_pos;
-        else ++dt_neg_zero;
-      }
       const bool use_pos = true;
       const bool use_neg = true;
       const bool td_pos = par_work.emit_time_domain && (par_work.time_lock == "pos");
       const bool td_neg = par_work.emit_time_domain && (par_work.time_lock == "neg");
-      double td_pos_rms_mean = mean_dbl(td_pos_rms);
-      double td_pos_rms_med = median_dbl(td_pos_rms);
-      double td_pos_rms_mad = mad_dbl(td_pos_rms, td_pos_rms_med);
       double td_pos_p2p_mean = mean_dbl(td_pos_p2p);
       double td_pos_p2p_med = median_dbl(td_pos_p2p);
       double td_pos_p2p_mad = mad_dbl(td_pos_p2p, td_pos_p2p_med);
-      double td_pos_duty_mean = mean_dbl(td_pos_duty);
-      double td_pos_duty_med = median_dbl(td_pos_duty);
-      double td_pos_duty_mad = mad_dbl(td_pos_duty, td_pos_duty_med);
-      double td_pos_slope_mean = mean_dbl(td_pos_slope);
-      double td_pos_slope_med = median_dbl(td_pos_slope);
-      double td_pos_slope_mad = mad_dbl(td_pos_slope, td_pos_slope_med);
-      double td_neg_rms_mean = mean_dbl(td_neg_rms);
-      double td_neg_rms_med = median_dbl(td_neg_rms);
-      double td_neg_rms_mad = mad_dbl(td_neg_rms, td_neg_rms_med);
       double td_neg_p2p_mean = mean_dbl(td_neg_p2p);
       double td_neg_p2p_med = median_dbl(td_neg_p2p);
       double td_neg_p2p_mad = mad_dbl(td_neg_p2p, td_neg_p2p_med);
-      double td_neg_duty_mean = mean_dbl(td_neg_duty);
-      double td_neg_duty_med = median_dbl(td_neg_duty);
-      double td_neg_duty_mad = mad_dbl(td_neg_duty, td_neg_duty_med);
-      double td_neg_slope_mean = mean_dbl(td_neg_slope);
-      double td_neg_slope_med = median_dbl(td_neg_slope);
-      double td_neg_slope_mad = mad_dbl(td_neg_slope, td_neg_slope_med);
 
       const std::string seg_lab = seg_label.empty() ? "." : seg_label;
       const std::string sig_lab =
@@ -2811,17 +2685,49 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
         writer.level(sig_lab, "SIG");
         writer.value("D", D);
         writer.value("TAU_MAX_DEG", tau_max_deg);
-        writer.value("CIRC_DISP", circ_disp);
-        writer.value("M", M);
         double M_over_D = std::numeric_limits<double>::quiet_NaN();
         if (finite(D) && D != 0.0 && finite(M)) M_over_D = M / D;
-        writer.value("M_OVER_D", M_over_D);
+        writer.value("SINFIT_OVER_P2P", M_over_D);
         writer.value("D_SD", D_sd);
-        writer.value("M_SD", M_sd);
         writer.value("CIRC_MEAN_DEG", circ_mean_deg);
         writer.value("R", circ_R);
         writer.value("CC_LAG", cc_lag_s);
         writer.value("CC_R", cc_r);
+
+        if (par_work.emit_time_domain && par_work.time_window_s > 0.0 && par_work.emit_td_summary) {
+          const size_t td_cycles_total = cycles.size();
+          const size_t td_cycles_used = td_cycles.size();
+          const double td_cycles_used_pct = (td_cycles_total > 0)
+            ? static_cast<double>(td_cycles_used) / static_cast<double>(td_cycles_total)
+            : std::numeric_limits<double>::quiet_NaN();
+          writer.value("TD_USED_PCT", td_cycles_used_pct);
+        }
+
+        if (use_pos || use_neg) {
+          const bool use_pos_metrics = (par_work.time_lock == "pos");
+          const double dt_mean = use_pos_metrics ? dt_pos_mean : dt_neg_mean;
+          const double dt_md = use_pos_metrics ? dt_pos_med : dt_neg_med;
+          const double dt_mad = use_pos_metrics ? dt_pos_mad : dt_neg_mad;
+
+          writer.value("DT", dt_mean);
+          writer.value("DT_MD", dt_md);
+          if (par_work.emit_mad) {
+            writer.value("DT_MAD", dt_mad);
+          }
+
+          if (par_work.emit_td_summary && ((use_pos_metrics && td_pos) || (!use_pos_metrics && td_neg))) {
+            const double td_p2p_mean = use_pos_metrics ? td_pos_p2p_mean : td_neg_p2p_mean;
+            const double td_p2p_md = use_pos_metrics ? td_pos_p2p_med : td_neg_p2p_med;
+            const double td_p2p_mad = use_pos_metrics ? td_pos_p2p_mad : td_neg_p2p_mad;
+
+            writer.value("TD_P2P", td_p2p_mean);
+            writer.value("TD_P2P_MD", td_p2p_md);
+            if (par_work.emit_mad) {
+              writer.value("TD_P2P_MAD", td_p2p_mad);
+            }
+          }
+        }
+
         for (int b = 0; b < phase_bins12; ++b) {
           const std::string bin_label =
             std::string("B") + (b < 9 ? "0" : "") + Helper::int2str(b + 1);
@@ -2830,80 +2736,6 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
           writer.unlevel("BIN");
         }
 
-        writer.level("POS", "HW");
-        writer.value("MEAN", pos_hw_mean);
-
-	writer.level("NEG", "HW");
-        writer.value("MEAN", neg_hw_mean);
-        writer.unlevel("HW");
-
-	if (par_work.emit_time_domain && par_work.time_window_s > 0.0 && par_work.emit_td_summary) {
-          size_t td_cycles_total = cycles.size();
-          size_t td_cycles_skipped = (td_cycles_total >= td_cycles_used)
-            ? (td_cycles_total - td_cycles_used)
-            : 0;
-          double td_cycles_used_pct = (td_cycles_total > 0)
-            ? static_cast<double>(td_cycles_used) / static_cast<double>(td_cycles_total)
-            : std::numeric_limits<double>::quiet_NaN();
-          writer.value("TD_TOTAL", static_cast<int>(td_cycles_total));
-          writer.value("TD_USED", static_cast<int>(td_cycles_used));
-          writer.value("TD_SKIPPED", static_cast<int>(td_cycles_skipped));
-          writer.value("TD_USED_PCT", td_cycles_used_pct);
-        }
-        if (use_pos || use_neg) {
-          const bool use_pos_metrics = (par_work.time_lock == "pos");
-          const double dt_mean = use_pos_metrics ? dt_pos_mean : dt_neg_mean;
-          const double dt_md = use_pos_metrics ? dt_pos_med : dt_neg_med;
-          const double dt_mad = use_pos_metrics ? dt_pos_mad : dt_neg_mad;
-          const size_t dt_neg = use_pos_metrics ? dt_pos_neg : dt_neg_neg;
-          const size_t dt_zero = use_pos_metrics ? dt_pos_zero : dt_neg_zero;
-          const size_t dt_pos = use_pos_metrics ? dt_pos_pos : dt_neg_pos;
-
-          writer.value("DT", dt_mean);
-          writer.value("DT_MD", dt_md);
-          if (par_work.emit_mad) {
-            writer.value("DT_MAD", dt_mad);
-          }
-          writer.value("DT_NEG", static_cast<int>(dt_neg));
-          writer.value("DT_ZERO", static_cast<int>(dt_zero));
-          writer.value("DT_POS", static_cast<int>(dt_pos));
-
-          if (par_work.emit_td_summary && ((use_pos_metrics && td_pos) || (!use_pos_metrics && td_neg))) {
-            const double td_rms_mean = use_pos_metrics ? td_pos_rms_mean : td_neg_rms_mean;
-            const double td_rms_md = use_pos_metrics ? td_pos_rms_med : td_neg_rms_med;
-            const double td_rms_mad = use_pos_metrics ? td_pos_rms_mad : td_neg_rms_mad;
-            const double td_p2p_mean = use_pos_metrics ? td_pos_p2p_mean : td_neg_p2p_mean;
-            const double td_p2p_md = use_pos_metrics ? td_pos_p2p_med : td_neg_p2p_med;
-            const double td_p2p_mad = use_pos_metrics ? td_pos_p2p_mad : td_neg_p2p_mad;
-            const double td_duty_mean = use_pos_metrics ? td_pos_duty_mean : td_neg_duty_mean;
-            const double td_duty_md = use_pos_metrics ? td_pos_duty_med : td_neg_duty_med;
-            const double td_duty_mad = use_pos_metrics ? td_pos_duty_mad : td_neg_duty_mad;
-            const double td_slope_mean = use_pos_metrics ? td_pos_slope_mean : td_neg_slope_mean;
-            const double td_slope_md = use_pos_metrics ? td_pos_slope_med : td_neg_slope_med;
-            const double td_slope_mad = use_pos_metrics ? td_pos_slope_mad : td_neg_slope_mad;
-
-            writer.value("TD_RMS", td_rms_mean);
-            writer.value("TD_RMS_MD", td_rms_md);
-            if (par_work.emit_mad) {
-              writer.value("TD_RMS_MAD", td_rms_mad);
-            }
-            writer.value("TD_P2P", td_p2p_mean);
-            writer.value("TD_P2P_MD", td_p2p_md);
-            if (par_work.emit_mad) {
-              writer.value("TD_P2P_MAD", td_p2p_mad);
-            }
-            writer.value("TD_PCT_POS", td_duty_mean);
-            writer.value("TD_PCT_POS_MD", td_duty_md);
-            if (par_work.emit_mad) {
-              writer.value("TD_PCT_POS_MAD", td_duty_mad);
-            }
-            writer.value("TD_SLOPE", td_slope_mean);
-            writer.value("TD_SLOPE_MD", td_slope_md);
-            if (par_work.emit_mad) {
-              writer.value("TD_SLOPE_MAD", td_slope_mad);
-            }
-          }
-        }
         writer.unlevel("SIG");
       }
 
