@@ -41,8 +41,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${HOME}/LightGBM
-            ${HOME}/native-deps/windows-fftw
+            ~/LightGBM
+            ~/native-deps/windows-fftw
           key: native-deps-${{ runner.os }}-${{ runner.arch }}-mingw-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}
       - name: Prepare FFTW bundle
         if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
@@ -88,8 +88,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${HOME}/LightGBM
-            ${HOME}/fftw-${{ env.FFTW_VERSION }}
+            ~/LightGBM
+            ~/fftw-${{ env.FFTW_VERSION }}
           key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-omp-on
       - name: Resolve Homebrew cmake tap conflict
         run: |
@@ -153,8 +153,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${HOME}/LightGBM
-            ${HOME}/fftw-${{ env.FFTW_VERSION }}
+            ~/LightGBM
+            ~/fftw-${{ env.FFTW_VERSION }}
           key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-omp-off
 
       - name: Resolve Homebrew cmake tap conflict
@@ -218,8 +218,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ${HOME}/LightGBM
-            ${HOME}/fftw-${{ env.FFTW_VERSION }}
+            ~/LightGBM
+            ~/fftw-${{ env.FFTW_VERSION }}
           key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}
       - name: Install fftw
         if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
