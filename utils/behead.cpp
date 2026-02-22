@@ -4,22 +4,16 @@
 
 #include <vector>
 #include <cstring>
-#include <sstream>
-
-#include <unistd.h>
-#include <getopt.h>
-#include <cstdlib>
-
-const int MAXBUF = 50000;
+#include <string>
 
 std::vector<std::string> char_split( const std::string & s , const char c , bool empty = true )
 {
 
   std::vector<std::string> strs;  
   if ( s.size() == 0 ) return strs;
-  int p=0;
+  std::string::size_type p = 0;
 
-  for (int j=0; j<s.size(); j++)
+  for ( std::string::size_type j = 0 ; j < s.size() ; ++j )
     {	        
       if ( s[j] == c ) 
 	{ 	      
@@ -45,13 +39,10 @@ std::vector<std::string> char_split( const std::string & s , const char c , bool
 }
 
 
-bool tokenize( std::vector<std::string> & data , const int n )
+bool tokenize( std::vector<std::string> & data , const std::string & line , const int n )
 {  
-  char line[MAXBUF];
-  std::cin.getline( line, MAXBUF, '\n' );  
-  std::string sline = line;  
-  data = char_split( sline , '\t' );  
-  return data.size() == n; 
+  data = char_split( line , '\t' );  
+  return static_cast<int>( data.size() ) == n; 
 }
 
 int main(int argc , char ** argv )
@@ -76,55 +67,47 @@ int main(int argc , char ** argv )
 
   std::vector<std::string> headers;
   std::vector<std::string> data;
+  std::string line;
 
-  while ( ! std::cin.eof() ) 
+  if ( ! std::getline( std::cin , line ) ) return 0;
+
+  headers = char_split( line , '\t' );
+  col = headers.size();
+  data.resize( col );
+
+  while ( std::getline( std::cin , line ) ) 
     {
-      // parse a line?
-      if ( col ) 
+      
+      if ( ! tokenize( data , line , col ) ) 
 	{
+	  if ( data.size() > 0 ) std::cerr << "read bad line...\n";
+	  continue;
+	}
 	  
-	  if ( ! tokenize( data , col ) ) 
-	    {
-	      if ( data.size() > 0 ) std::cout << "read bad line...\n";
-	      continue;
-	    }
+      ++row;
 	  
-	  ++row;
-	  
-	  for (int i=0; i<col; i++ ) 
-	    {
+      for (int i=0; i<col; i++ ) 
+	{
 
-	      if ( print_nums ) 
-		{
-		  if ( tab_sep  )
-		    std::cout << row << "\t" << i+1 << "\t";
-		  else 
-		    std::cout << std::setw(6) << row << std::setw(6) << i+1 ;
-		}
-	      
-	      if ( tab_sep )
-		std::cout << headers[i] << "\t" << data[i] << "\n";
-	      else
-		std::cout << std::right << std::setw(25) << headers[i] 
-			  << "   "
-			  << std::left << std::setw(20)  << data[i] << "\n";
+	  if ( print_nums ) 
+	    {
+	      if ( tab_sep  )
+		std::cout << row << "\t" << i+1 << "\t";
+	      else 
+		std::cout << std::setw(6) << row << std::setw(6) << i+1 ;
 	    }
+	      
+	  if ( tab_sep )
+	    std::cout << headers[i] << "\t" << data[i] << "\n";
+	  else
+	    std::cout << std::right << std::setw(25) << headers[i] 
+		      << "   "
+		      << std::left << std::setw(20)  << data[i] << "\n";
+	}
 	  
-	  // space between each individual
-	  std::cout << "\n";
-	}
-      else // this is first row -- read as headers
-	{
-	  char line[MAXBUF];
-	  std::cin.getline( line, MAXBUF, '\n' );
-	  std::string buf;
-	  std::string sline = line;
-	  headers = char_split( sline , '\t' );
-	  col = headers.size();
-	  data.resize( col );
-	}
+      // space between each individual
+      std::cout << "\n";
 	
     }
   exit(0);
 }
-

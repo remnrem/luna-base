@@ -7,6 +7,21 @@ on:
   pull_request:
     branches: master
     tags: v*
+  workflow_dispatch:
+    inputs:
+      native_deps_mode:
+        description: "Native dependency mode: all=rebuild, luna=use cache"
+        required: false
+        default: "luna"
+        type: choice
+        options:
+          - luna
+          - all
+
+env:
+  FFTW_VERSION: 3.3.10
+  LIGHTGBM_REF: v4.6.0
+  NATIVE_DEPS_MODE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_deps_mode || 'luna' }}
 
 jobs:
   windows-build:
@@ -21,23 +36,43 @@ jobs:
           msystem: MINGW64
           update: true
           install: zip mingw-w64-x86_64-cmake git gcc mingw-w64-x86_64-toolchain mingw-w64-x86_64-zlib mingw-w64-x86_64-fftw
-      - run: |
+      - name: Cache native deps (luna mode)
+        if: env.NATIVE_DEPS_MODE == 'luna'
+        id: cache-native
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${HOME}/LightGBM
+            ${HOME}/native-deps/windows-fftw
+          key: native-deps-${{ runner.os }}-${{ runner.arch }}-mingw-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}
+      - name: Prepare FFTW bundle
+        if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ${HOME}/native-deps/windows-fftw/include
+          mkdir -p ${HOME}/native-deps/windows-fftw/lib
+          mkdir -p ${HOME}/native-deps/windows-fftw/bin
+          cp /mingw64/include/fftw3.h ${HOME}/native-deps/windows-fftw/include/
+          cp /mingw64/lib/libfftw3.dll.a ${HOME}/native-deps/windows-fftw/lib/libfftw3.a
+          cp /mingw64/bin/libfftw3-3.dll ${HOME}/native-deps/windows-fftw/bin/
+      - name: Build LightGBM
+        if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
+        run: |
           cd ${HOME}
-          git clone --recursive https://github.com/microsoft/LightGBM
+          rm -rf LightGBM
+          git clone --recursive --branch ${LIGHTGBM_REF} --depth 1 https://github.com/microsoft/LightGBM
           cd LightGBM
           mkdir build
           cd build
           /mingw64/bin/cmake.exe -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release ..
           mingw32-make.exe -j4
-          cp ${HOME}/LightGBM/lib_lightgbm.dll /mingw64/bin/
       - uses: actions/checkout@v4
       - run: |
-          mingw32-make.exe ARCH=WINDOWS LGBM=1 LGBM_PATH=${HOME}/LightGBM
+          mingw32-make.exe ARCH=WINDOWS LGBM=1 LGBM_PATH=${HOME}/LightGBM FFTW=${HOME}/native-deps/windows-fftw
           ref='refs/tags/v'
           if [[ ${{ github.ref }} == *${ref}* ]]; then
             v=$(echo ${{ github.ref }} | cut -d'/' -f3)
             mkdir luna-${v}
-            cp *.exe /mingw64/bin/libfftw3-3.dll /mingw64/bin/lib_lightgbm.dll /mingw64/bin/libgcc_s_seh-1.dll /mingw64/bin/libgomp-1.dll /mingw64/bin/libwinpthread-1.dll luna-${v}/
+            cp *.exe ${HOME}/native-deps/windows-fftw/bin/libfftw3-3.dll ${HOME}/LightGBM/lib_lightgbm.dll /mingw64/bin/libgcc_s_seh-1.dll /mingw64/bin/libgomp-1.dll /mingw64/bin/libwinpthread-1.dll luna-${v}/
             zip -r win-luna.zip luna-${v}
           fi
       - uses: actions/upload-artifact@v4
@@ -49,6 +84,15 @@ jobs:
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
+      - name: Cache native deps (luna mode)
+        if: env.NATIVE_DEPS_MODE == 'luna'
+        id: cache-native
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${HOME}/LightGBM
+            ${HOME}/fftw-${{ env.FFTW_VERSION }}
+          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-omp-on
       - name: Resolve Homebrew cmake tap conflict
         run: |
           brew list --versions cmake && brew uninstall --ignore-dependencies --force cmake || true
@@ -57,28 +101,33 @@ jobs:
           brew install homebrew/core/cmake
           brew install libomp
       - name: Install LightGBM
+        if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
         run: |
           cd ${HOME}
-          git clone --recursive https://github.com/microsoft/LightGBM 
+          rm -rf LightGBM
+          git clone --recursive --branch ${LIGHTGBM_REF} --depth 1 https://github.com/microsoft/LightGBM 
           cd LightGBM
           mkdir -p build && cd build
           cmake -DCMAKE_BUILD_TYPE=Release ..
           make -j4
       - name: Install fftw
+        if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
         run: |
           cd $HOME
-          curl -L -o fftw-3.3.10.tar.gz http://www.fftw.org/fftw-3.3.10.tar.gz	  
-          tar -xzvf fftw-3.3.10.tar.gz
-          cd fftw-3.3.10
-          ./configure --prefix=${HOME}/fftw-3.3.10/
+          rm -rf fftw-${FFTW_VERSION}
+          rm -rf fftw-${FFTW_VERSION}.tar.gz
+          curl -L -o fftw-${FFTW_VERSION}.tar.gz http://www.fftw.org/fftw-${FFTW_VERSION}.tar.gz
+          tar -xzvf fftw-${FFTW_VERSION}.tar.gz
+          cd fftw-${FFTW_VERSION}
+          ./configure --prefix=${HOME}/fftw-${FFTW_VERSION}/
           make
           make install
           cd ${GITHUB_WORKSPACE}
       - name: Make
         run: |
-          [[ -e ${HOME}/LightGBM/lib_lightgbm.so ]] && cp ${HOME}/LightGBM/lib_lightgbm.dylib .
+          [[ -e ${HOME}/LightGBM/lib_lightgbm.so ]] && cp ${HOME}/LightGBM/lib_lightgbm.so .
           [[ -e ${HOME}/LightGBM/lib_lightgbm.dylib ]] && cp ${HOME}/LightGBM/lib_lightgbm.dylib .
-          make ARCH=MAC FFTW=${HOME}/fftw-3.3.10 LGBM=1 LGBM_PATH=${HOME}/LightGBM
+          make ARCH=MAC FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_PATH=${HOME}/LightGBM
           ref='refs/tags/v'
           if [[ ${{ github.ref }} == *${ref}* ]]; then
             v=$(echo ${{ github.ref }} | cut -d'/' -f3)
@@ -102,6 +151,15 @@ jobs:
       runs-on: macos-14              
       steps:
       - uses: actions/checkout@v4 
+      - name: Cache native deps (luna mode)
+        if: env.NATIVE_DEPS_MODE == 'luna'
+        id: cache-native
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${HOME}/LightGBM
+            ${HOME}/fftw-${{ env.FFTW_VERSION }}
+          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-omp-off
 
       - name: Resolve Homebrew cmake tap conflict
         run: |
@@ -112,27 +170,32 @@ jobs:
           brew install gcc boost
 
       - name: Clone and build LightGBM
+        if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
         run: |
           cd ${HOME}
-          git clone --recursive https://github.com/microsoft/LightGBM
+          rm -rf LightGBM
+          git clone --recursive --branch ${LIGHTGBM_REF} --depth 1 https://github.com/microsoft/LightGBM
           cd LightGBM
           mkdir -p build && cd build
           cmake -DUSE_OPENMP=OFF -DBUILD_STATIC_LIB=ON -DCMAKE_BUILD_TYPE=Release ..
           make -j4
           
       - name: Build FFTW
+        if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
         run: |
           cd ${HOME}
-          curl -L -o fftw-3.3.10.tar.gz http://www.fftw.org/fftw-3.3.10.tar.gz          
-          tar -xzvf fftw-3.3.10.tar.gz
-          cd fftw-3.3.10
-          ./configure --prefix=$HOME/fftw-3.3.10 CFLAGS="-arch arm64"
+          rm -rf fftw-${FFTW_VERSION}
+          rm -rf fftw-${FFTW_VERSION}.tar.gz
+          curl -L -o fftw-${FFTW_VERSION}.tar.gz http://www.fftw.org/fftw-${FFTW_VERSION}.tar.gz
+          tar -xzvf fftw-${FFTW_VERSION}.tar.gz
+          cd fftw-${FFTW_VERSION}
+          ./configure --prefix=$HOME/fftw-${FFTW_VERSION} CFLAGS="-arch arm64"
           make
           make install
     
       - name: Final Build
         run: |
-          make ARCH=MAC LGBM=1 LGBM_PATH=${HOME}/LightGBM/ FFTW=$HOME/fftw-3.3.10
+          make ARCH=MAC LGBM=1 LGBM_PATH=${HOME}/LightGBM/ FFTW=$HOME/fftw-${FFTW_VERSION}
           ref='refs/tags/v'
           if [[ ${{ github.ref }} == *${ref}* ]]; then
             v=$(echo ${{ github.ref }} | cut -d'/' -f3)
@@ -154,19 +217,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Cache native deps (luna mode)
+        if: env.NATIVE_DEPS_MODE == 'luna'
+        id: cache-native
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${HOME}/LightGBM
+            ${HOME}/fftw-${{ env.FFTW_VERSION }}
+          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}
       - name: Install fftw
+        if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
         run: |
           cd ${HOME}
-          wget http://www.fftw.org/fftw-3.3.10.tar.gz
-          tar -xzvf fftw-3.3.10.tar.gz
-          cd fftw-3.3.10
-          ./configure --enable-shared --prefix=${HOME}/fftw-3.3.10/
+          rm -rf fftw-${FFTW_VERSION}
+          rm -rf fftw-${FFTW_VERSION}.tar.gz
+          wget http://www.fftw.org/fftw-${FFTW_VERSION}.tar.gz
+          tar -xzvf fftw-${FFTW_VERSION}.tar.gz
+          cd fftw-${FFTW_VERSION}
+          ./configure --enable-shared --prefix=${HOME}/fftw-${FFTW_VERSION}/
           make
           make install
       - name: Install LightGBM
+        if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
         run: |
           cd ${HOME}
-          git clone --recursive https://github.com/microsoft/LightGBM
+          rm -rf LightGBM
+          git clone --recursive --branch ${LIGHTGBM_REF} --depth 1 https://github.com/microsoft/LightGBM
           cd LightGBM
           mkdir build
           cd build
@@ -175,7 +252,7 @@ jobs:
           cd ${GITHUB_WORKSPACE}
       - name: make
         run: |
-          make FFTW=${HOME}/fftw-3.3.10 LGBM=1 LGBM_PATH=${HOME}/LightGBM
+          make FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_PATH=${HOME}/LightGBM
   release:
     runs-on: ubuntu-latest
     needs: [linux-build, macos-build, windows-build, macos-arm64-build]

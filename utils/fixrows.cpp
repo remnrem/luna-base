@@ -80,6 +80,17 @@ bool tokenize( std::vector<std::string> & data , const int n )
 }
 
 
+bool is_missing( const std::string & s )
+{
+  return s == "NA" || s == "." || s == "";
+}
+
+void usage()
+{
+  std::cerr << "usage: fixrows [--keep-all-missing|-k] KEY_COL [KEY_COL ...]\n";
+}
+
+
 struct row_t { 
   row_t( const std::vector<std::string> & h ,
 	 const std::vector<std::string> & d ,
@@ -99,7 +110,7 @@ struct row_t {
   
   bool operator<( const row_t & rhs ) const { 
     if ( faclvl.size() < rhs.faclvl.size() ) return true;
-    if ( faclvl.size() > rhs.faclvl.size() ) return true;
+    if ( faclvl.size() > rhs.faclvl.size() ) return false;
     std::map<std::string,std::string>::const_iterator ii = faclvl.begin();
     std::map<std::string,std::string>::const_iterator jj = rhs.faclvl.begin();
     while ( ii != faclvl.end() )
@@ -126,14 +137,14 @@ void addin( std::map<std::string,std::string> * m , const std::map<std::string,s
 	{
 	  (*m)[ nn->first ] = nn->second;
 	}
-      else // otherwise, only add a) if not 'NA' (but check for conflict)
+      else // otherwise, only add non-missing values (but check for conflict)
 	{
 
 	  // if N missing, then ignore
-	  if ( nn->second == "NA" || nn->second == "." || nn->second == "" ) { ++nn; continue; }
+	  if ( is_missing( nn->second ) ) { ++nn; continue; }
 
 	  // if M missing, then add
-	  if ( (*m)[ nn->first ] == "NA" )
+	  if ( is_missing( (*m)[ nn->first ] ) )
 	    (*m)[ nn->first ] = nn->second;	    
 	  else
 	    {
@@ -164,10 +175,33 @@ int main(int argc , char ** argv )
   // datastore:
   // id --> variable --> value 
   std::map<row_t,std::map<std::string,std::string> > store;
+
+  // default: drop non-key columns that are entirely missing post-merge
+  bool drop_all_missing = true;
+  static struct option long_options[] =
+    {
+      {"keep-all-missing", no_argument, 0, 'k'},
+      {0, 0, 0, 0}
+    };
+
+  while ( true )
+    {
+      int option_index = 0;
+      int c = getopt_long( argc, argv, "k", long_options, &option_index );
+      if ( c == -1 ) break;
+      if ( c == 'k' )
+        drop_all_missing = false;
+      else
+        {
+          std::cerr << "fixrows: unrecognized option\n";
+          usage();
+          std::exit(1);
+        }
+    }
   
   // which factors to uniqify
   std::set<std::string> facs;
-  for (int i=0;i<argc;i++)
+  for (int i=optind;i<argc;i++)
     {
       std::string a = argv[i];
       facs.insert( a ); 
@@ -227,8 +261,39 @@ int main(int argc , char ** argv )
   // output header
   //
 
+  std::vector<int> keep_cols;
+  keep_cols.reserve( col );
+
   for (int i=0; i<col; i++)
-    std::cout << ( i!= 0 ? "\t" : "" ) << headers[i] ;
+    {
+      const std::string & h = headers[i];
+      bool keep = true;
+
+      if ( drop_all_missing && facs.find( h ) == facs.end() )
+        {
+          keep = false;
+          std::map<row_t,std::map<std::string,std::string> >::const_iterator tt = store.begin();
+          while ( tt != store.end() )
+            {
+              std::map<std::string,std::string>::const_iterator vv = tt->second.find( h );
+              const std::string value = vv == tt->second.end() ? "" : vv->second;
+              if ( ! is_missing( value ) )
+                {
+                  keep = true;
+                  break;
+                }
+              ++tt;
+            }
+        }
+
+      if ( keep ) keep_cols.push_back( i );
+    }
+
+  for (int j=0; j<keep_cols.size(); j++)
+    {
+      const int i = keep_cols[j];
+      std::cout << ( j != 0 ? "\t" : "" ) << headers[i] ;
+    }
   std::cout << "\n";
 
   //
@@ -240,11 +305,12 @@ int main(int argc , char ** argv )
     {
       const std::map<std::string,std::string> & vars = ss->second;
       
-      for (int i=0; i<col; i++)
+      for (int j=0; j<keep_cols.size(); j++)
 	{
+	  const int i = keep_cols[j];
 	  const std::string & v = headers[i];
 
-	  if ( i != 0 ) std::cout << "\t";
+	  if ( j != 0 ) std::cout << "\t";
 	  
 	  if ( vars.find( v ) != vars.end() ) 
 	    std::cout << vars.find( v )->second;
@@ -264,4 +330,3 @@ int main(int argc , char ** argv )
     }
   exit(0);
 }
-
