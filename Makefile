@@ -1,4 +1,8 @@
+
+# make -j12 CC="ccache gcc" CXX="ccache g++" LGBM=1 LGBM_PATH=/opt/homebrew/
+
 include Makefile.inc
+
 ifeq ($(ARCH),WINDOWS)
   TARGETS = luna destrat behead
 else

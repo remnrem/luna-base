@@ -36,8 +36,7 @@ jobs:
           msystem: MINGW64
           update: true
           install: zip mingw-w64-x86_64-cmake git gcc mingw-w64-x86_64-toolchain mingw-w64-x86_64-zlib mingw-w64-x86_64-fftw
-      - name: Cache native deps (luna mode)
-        if: env.NATIVE_DEPS_MODE == 'luna'
+      - name: Cache native deps
         id: cache-native
         uses: actions/cache@v4
         with:
@@ -84,8 +83,7 @@ jobs:
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
-      - name: Cache native deps (luna mode)
-        if: env.NATIVE_DEPS_MODE == 'luna'
+      - name: Cache native deps
         id: cache-native
         uses: actions/cache@v4
         with:
@@ -95,10 +93,9 @@ jobs:
           key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-omp-on
       - name: Resolve Homebrew cmake tap conflict
         run: |
-          brew list --versions cmake && brew uninstall --ignore-dependencies --force cmake || true
-          brew tap-unpin local/pinned || true
-          brew tap-unpin homebrew/core || true
-          brew install homebrew/core/cmake
+          brew uninstall --ignore-dependencies --force cmake || true
+          brew update
+          brew install cmake
           brew install libomp
       - name: Install LightGBM
         if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
@@ -151,8 +148,7 @@ jobs:
       runs-on: macos-14              
       steps:
       - uses: actions/checkout@v4 
-      - name: Cache native deps (luna mode)
-        if: env.NATIVE_DEPS_MODE == 'luna'
+      - name: Cache native deps
         id: cache-native
         uses: actions/cache@v4
         with:
@@ -163,11 +159,11 @@ jobs:
 
       - name: Resolve Homebrew cmake tap conflict
         run: |
-          brew list --versions cmake && brew uninstall --ignore-dependencies --force cmake || true
-          brew tap-unpin local/pinned || true
-          brew tap-unpin homebrew/core || true
-          brew install homebrew/core/cmake
-          brew install gcc boost
+          brew uninstall --ignore-dependencies --force cmake || true
+          brew update
+          brew list --versions cmake >/dev/null 2>&1 || brew install cmake
+          brew list --versions gcc >/dev/null 2>&1 || brew install gcc
+          brew list --versions boost >/dev/null 2>&1 || brew install boost
 
       - name: Clone and build LightGBM
         if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
@@ -217,8 +213,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Cache native deps (luna mode)
-        if: env.NATIVE_DEPS_MODE == 'luna'
+      - name: Cache native deps
         id: cache-native
         uses: actions/cache@v4
         with:
