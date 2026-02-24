@@ -2294,8 +2294,9 @@ std::vector<int> MiscMath::smoothedZ( const std::vector<double> & x ,
       // track direction, ercord in s[] and update filtered measure [y] 
       if ( value > threshold ) 
 	{
-	  s[i] = x[i] > avg ? +1 : -1; 
-	  y[i] = influence * x[i] + (1 - influence) * y[i-1] ;
+	  s[i] = x[i] > avg ? +1 : -1;	  
+	  const double y_prev = (i == 0) ? y[i] : y[i-1];
+	  y[i] = influence * x[i] + (1 - influence) * y_prev;	
 	}
       
       // update sums (respecting that first window 0..lag-1 will be using lag..2lag-1 rather than i - lag 

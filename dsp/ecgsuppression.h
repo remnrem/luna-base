@@ -59,8 +59,16 @@ struct rpeaks_t
 struct hrv_opt_t;
 
 struct hrv_res_t {
-	     	    
-  double IMPUTED; // propirtion of intervals imputed (out-of-range)
+
+  hrv_res_t()
+    : IMPUTED(0.0), P_INV(0.0), INV(0.0), NP(0.0), NP_TOT(0.0),
+      RR(0.0), HR(0.0),
+      SDNN(0.0), SDNN_R(0.0), RMSSD(0.0), RMSSD_R(0.0), pNN50(0.0),
+      LF(0.0), LF_N(0.0), LF_PK(0.0), HF(0.0), HF_N(0.0), HF_PK(0.0),
+      LF2HF(0.0) {}
+  
+  
+  double IMPUTED; // proportion of intervals imputed (out-of-range)
   double P_INV;   // proportion of intervals inverted
   double INV;     // is it inverted? Y/N
   double NP;      // # of RR intervals

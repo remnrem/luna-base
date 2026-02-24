@@ -586,7 +586,7 @@ rpeaks_t dsptools::mpeakdetect2( const std::vector<double> * d ,
     {
 
       int p1 = regions[i].start;
-      int p2 = regions[i].stop;
+      int p2 = regions[i].stop - 1 ; // --> to closed [p1,p2]
       
       double mx = bpf[p1];
       int mxi = p1;
@@ -797,7 +797,7 @@ rpeaks_t dsptools::mpeakdetect( const edf_t & edf ,
   for (int i=0;i<minloc.size();i++)
     if ( minloc[ i ] < maxloc[ i ] ) ++inv1;
   const double p_inverted = inv1 / (double)minloc.size();  
-  const bool inverted = p_inverted ; 
+  const bool inverted = p_inverted > 0.5 ; 
   
   // Or, swap in user-forced value (option not for general use...)
   //  if ( force != NULL ) inverted = *force;
@@ -1477,14 +1477,15 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
   
   if ( opt.median_filter_width != 0 ) 
     rr = MiscMath::median_filter( rr , opt.median_filter_width );
-  
+
+
   //
-  // Add R-R intervals as annotation?  : nb. anchored on 
+  // Add R-R intervals as annotation?  
   //
 
   if ( opt.annot != NULL )
     {
-      for (int i=0; i<np; i++)
+      for (int i=0; i<np-1; i++)
 	{
 	  uint64_t rr1 = ( rr[i] / 1000.0 ) * globals::tp_1sec;
 	  uint64_t tp2 = tp[i];
@@ -1620,7 +1621,7 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
       // [ to swap w/ triangulation in any case.]
       std::vector<double> vlf_fd, lf_fd, hf_fd;
       
-      for ( int i = 0 ; i < bin.bfa.size() ; i++ )
+      for ( int i = 1 ; i < bin.bfa.size() ; i++ )
 	{
 	  
 	  // if ( bin.bfa[i] >= 0.0033 && bin.bfa[i] < 0.04 )
@@ -1654,8 +1655,10 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
 	}
 
       //vlf *= MiscMath::mean( vlf_fd );
-      lf *= MiscMath::mean( lf_fd );
-      hf *= MiscMath::mean( hf_fd );
+      if ( lf_fd.size() > 0 ) 
+	lf *= MiscMath::mean( lf_fd );
+      if ( hf_fd.size() > 0 ) 
+	hf *= MiscMath::mean( hf_fd );
 
 
       // store
