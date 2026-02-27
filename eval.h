@@ -32,6 +32,7 @@
 struct edf_t;
 
 struct param_t;
+#include "param.h"
 
 //
 // Helper to parse command syntax
