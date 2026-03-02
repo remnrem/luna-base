@@ -30,11 +30,74 @@
 #include "edf/edf.h"
 #include "edf/slice.h"
 
+#include <cmath>
+
 extern logger_t logger;
 extern writer_t writer;
 
 // Direct implementation of Fourier domain DFA
 // Nolte et al (2019) Scientific Reports
+
+namespace {
+
+bool dfa_linear_fit( const std::vector<double> & t ,
+                     const std::vector<double> & fluctuations ,
+                     const double t_lwr ,
+                     const double t_upr ,
+                     double * alpha ,
+                     double * r2 )
+{
+  std::vector<double> x, y;
+
+  for (int i = 0; i < t.size(); ++i)
+    {
+      if ( t[i] <= 0 || fluctuations[i] <= 0 ) continue;
+      if ( t[i] < t_lwr || t[i] > t_upr ) continue;
+      x.push_back( std::log( t[i] ) );
+      y.push_back( std::log( fluctuations[i] ) );
+    }
+
+  const int n = x.size();
+  if ( n < 2 ) return false;
+
+  double mx = 0 , my = 0;
+  for (int i = 0; i < n; ++i)
+    {
+      mx += x[i];
+      my += y[i];
+    }
+  mx /= n;
+  my /= n;
+
+  double sxx = 0 , sxy = 0 , syy = 0;
+  for (int i = 0; i < n; ++i)
+    {
+      const double dx = x[i] - mx;
+      const double dy = y[i] - my;
+      sxx += dx * dx;
+      sxy += dx * dy;
+      syy += dy * dy;
+    }
+
+  if ( sxx <= 0 ) return false;
+
+  const double b = sxy / sxx;
+  const double a = my - b * mx;
+
+  double sse = 0;
+  for (int i = 0; i < n; ++i)
+    {
+      const double yhat = a + b * x[i];
+      const double err = y[i] - yhat;
+      sse += err * err;
+    }
+
+  *alpha = b;
+  *r2 = syy > 0 ? 1.0 - ( sse / syy ) : 1.0;
+  return true;
+}
+
+}
 
 void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
 {
@@ -51,6 +114,8 @@ void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
   const int wn = param.has( "n" ) ? param.requires_int( "n" ) : 100;
   const double wmin = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.1;
   const int    scale = param.has( "m" ) ? param.requires_int( "m" ) : 2;
+  const double alpha_lwr = param.has( "alpha-lwr" ) ? param.requires_dbl( "alpha-lwr" ) : 0;
+  const double alpha_upr = param.has( "alpha-upr" ) ? param.requires_dbl( "alpha-upr" ) : 1e12;
  
   const bool narrowband = param.has( "f-lwr" );   
   const double fmin = narrowband ? param.requires_dbl( "f-lwr" ) : -1 ; 
@@ -64,6 +129,8 @@ void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
 	 << "     n (points) = " << wn << "\n"
 	 << "     m (scale)  = " << scale << "\n"
 	 << "     min        = " << wmin << " Hz\n"
+	 << "     alpha-lwr  = " << alpha_lwr << " sec\n"
+	 << "     alpha-upr  = " << alpha_upr << " sec\n"
 	 << "     epoch      = " << ( by_epoch ? "T" : "F" ) << "\n";
   
   if ( narrowband )
@@ -133,6 +200,12 @@ void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
 	  // output
 
 	  const int nw = dfa.w.size();
+	  double alpha = 0 , r2 = 0;
+	  if ( dfa_linear_fit( dfa.t , dfa.fluctuations , alpha_lwr , alpha_upr , &alpha , &r2 ) )
+	    {
+	      writer.value( "ALPHA" , alpha );
+	      writer.value( "R2" , r2 );
+	    }
 
 	  for (int i=0; i<nw; i++)
 	    {
@@ -290,5 +363,4 @@ void dfa_t::proc( const std::vector<double> * d )
     }
 
 }
-
 

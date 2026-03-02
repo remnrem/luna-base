@@ -17,6 +17,11 @@ on:
         options:
           - luna
           - all
+      release_version:
+        description: "Optional release version to publish, e.g. v1.3.4"
+        required: false
+        default: ""
+        type: string
 
 env:
   FFTW_VERSION: 3.3.10
@@ -24,7 +29,43 @@ env:
   NATIVE_DEPS_MODE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_deps_mode || 'luna' }}
 
 jobs:
+  release-meta:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.meta.outputs.enabled }}
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      title: ${{ steps.meta.outputs.title }}
+    steps:
+      - name: Resolve release metadata
+        id: meta
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF_VALUE: ${{ github.ref }}
+          INPUT_RELEASE_VERSION: ${{ github.event.inputs.release_version }}
+        run: |
+          version=""
+
+          if [[ "${EVENT_NAME}" == "push" && "${GITHUB_REF_VALUE}" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_VALUE#refs/tags/}"
+          elif [[ "${EVENT_NAME}" == "workflow_dispatch" && -n "${INPUT_RELEASE_VERSION}" ]]; then
+            version="${INPUT_RELEASE_VERSION}"
+            if [[ "${version}" != v* ]]; then
+              version="v${version}"
+            fi
+          fi
+
+          if [[ -n "${version}" ]]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+            echo "version=${version}" >> "${GITHUB_OUTPUT}"
+            echo "tag=${version}" >> "${GITHUB_OUTPUT}"
+            echo "title=Luna ${version} release" >> "${GITHUB_OUTPUT}"
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+          fi
+
   windows-build:
+    needs: release-meta
     runs-on: windows-latest
     defaults:
       run:
@@ -71,19 +112,19 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           mingw32-make.exe -j${NUMBER_OF_PROCESSORS:-4} ARCH=WINDOWS LGBM=1 LGBM_PATH=${HOME}/LightGBM FFTW=${HOME}/native-deps/windows-fftw
-          ref='refs/tags/v'
-          if [[ ${{ github.ref }} == *${ref}* ]]; then
-            v=$(echo ${{ github.ref }} | cut -d'/' -f3)
+          if [[ "${{ needs.release-meta.outputs.enabled }}" == "true" ]]; then
+            v="${{ needs.release-meta.outputs.version }}"
             mkdir luna-${v}
             cp *.exe ${HOME}/native-deps/windows-fftw/bin/libfftw3-3.dll ${HOME}/LightGBM/lib_lightgbm.dll /mingw64/bin/libgcc_s_seh-1.dll /mingw64/bin/libgomp-1.dll /mingw64/bin/libwinpthread-1.dll luna-${v}/
             zip -r win-luna.zip luna-${v}
           fi
       - uses: actions/upload-artifact@v4
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: needs.release-meta.outputs.enabled == 'true'
         with:
           name: win-luna.zip
           path: ./win-luna.zip
   macos-build:
+    needs: release-meta
     runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
@@ -133,9 +174,8 @@ jobs:
           [[ -e ${HOME}/LightGBM/lib_lightgbm.so ]] && cp ${HOME}/LightGBM/lib_lightgbm.so .
           [[ -e ${HOME}/LightGBM/lib_lightgbm.dylib ]] && cp ${HOME}/LightGBM/lib_lightgbm.dylib .
           make -j$(sysctl -n hw.ncpu) ARCH=MAC FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_PATH=${HOME}/LightGBM
-          ref='refs/tags/v'
-          if [[ ${{ github.ref }} == *${ref}* ]]; then
-            v=$(echo ${{ github.ref }} | cut -d'/' -f3)
+          if [[ "${{ needs.release-meta.outputs.enabled }}" == "true" ]]; then
+            v="${{ needs.release-meta.outputs.version }}"
             mkdir luna-${v}
             cp luna destrat behead lib_lightgbm.dylib luna-${v}/
             cd luna-${v}/
@@ -147,12 +187,13 @@ jobs:
             tar cvzf mac-luna.tar.gz luna-${v}/
           fi
       - uses: actions/upload-artifact@v4
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: needs.release-meta.outputs.enabled == 'true'
         with:
           name: mac-luna.tar.gz
           path: mac-luna.tar.gz
           
   macos-arm64-build:
+      needs: release-meta
       runs-on: macos-14              
       steps:
       - uses: actions/checkout@v4 
@@ -204,9 +245,8 @@ jobs:
       - name: Final Build
         run: |
           make -j$(sysctl -n hw.ncpu) ARCH=MAC LGBM=1 LGBM_PATH=${HOME}/LightGBM/ FFTW=$HOME/fftw-${FFTW_VERSION}
-          ref='refs/tags/v'
-          if [[ ${{ github.ref }} == *${ref}* ]]; then
-            v=$(echo ${{ github.ref }} | cut -d'/' -f3)
+          if [[ "${{ needs.release-meta.outputs.enabled }}" == "true" ]]; then
+            v="${{ needs.release-meta.outputs.version }}"
             mkdir luna-${v}
             cp luna destrat behead luna-${v}/
             cd luna-${v}/
@@ -216,7 +256,7 @@ jobs:
           fi
     
       - uses: actions/upload-artifact@v4
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: needs.release-meta.outputs.enabled == 'true'
         with:
           name: macos-arm64-luna.tar.gz
           path: macos-arm64-luna.tar.gz
@@ -266,21 +306,10 @@ jobs:
           make -j$(nproc) FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_PATH=${HOME}/LightGBM
   release:
     runs-on: ubuntu-latest
-    needs: [linux-build, macos-build, windows-build, macos-arm64-build]
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [release-meta, linux-build, macos-build, windows-build, macos-arm64-build]
+    if: needs.release-meta.outputs.enabled == 'true'
     steps:
       - uses: actions/checkout@v4
-      - name: Create Release
-        id: create_release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: ${{ github.ref }}
-          name: Luna_Release ${{ github.ref }}
-          draft: "false"
-          prerelease: "false"
-          allowUpdates: "true"
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - uses: actions/download-artifact@v4
         id: download
         with:
@@ -292,32 +321,16 @@ jobs:
           mv win-luna.zip/win-luna.zip win_luna.zip
           mv macos-arm64-luna.tar.gz/macos-arm64-luna.tar.gz macos_arm64_luna.tar.gz
           
-      - name: Upload Release Asset Mac
-        id: upload-release-asset-mac
+      - name: Publish Release
+        id: publish-release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "mac_luna.tar.gz"
-          name: "mac_luna.tar.gz"
-          artifactContentType: "application/gzip"
+          tag: ${{ needs.release-meta.outputs.tag }}
+          commit: ${{ github.sha }}
+          name: ${{ needs.release-meta.outputs.title }}
+          artifacts: "mac_luna.tar.gz,macos_arm64_luna.tar.gz,win_luna.zip"
           token: ${{ secrets.GITHUB_TOKEN }}
+          draft: "false"
+          prerelease: "false"
           allowUpdates: "true"
-          
-      - name: Upload Release Asset Mac arm64
-        id: upload-release-asset-mac-arm64
-        uses: ncipollo/release-action@v1
-        with:
-          artifacts: "macos_arm64_luna.tar.gz"
-          name: "macos_arm64_luna.tar.gz"
-          artifactContentType: "application/gzip"
-          token: ${{ secrets.GITHUB_TOKEN }}
-          allowUpdates: "true"
-          
-      - name: Upload Release Asset Win
-        id: upload-release-asset-win
-        uses: ncipollo/release-action@v1
-        with:
-          artifacts: "win_luna.zip"
-          name: "win_luna.zip"
-          artifactContentType: "application/gzip"
-          token: ${{ secrets.GITHUB_TOKEN }}
-          allowUpdates: "true"
+          replacesArtifacts: "true"

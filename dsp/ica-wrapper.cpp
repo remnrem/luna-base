@@ -515,7 +515,6 @@ void dsptools::ica_adjust( edf_t & edf , param_t & param )
 	      // threshold for this corr signal
 	      std::string label = corrsigs.label(c);
 	      double threshold = corr[ label ];
-	      std::cout << "checking " << adjs.label(a) << "  -- " << corrsigs.label(c) << " = " << correl << " " << threshold << "\n";
 	      if ( fabs( correl ) > threshold )
 		{
 		  logger << "   including " << adjs.label(a) << " based on its absolute correlation with "
@@ -595,5 +594,4 @@ void dsptools::ica_adjust( edf_t & edf , param_t & param )
 
   // all done
 }
-
 

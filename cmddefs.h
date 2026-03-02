@@ -107,6 +107,7 @@ class cmddefs_t
   // command URLs , e.g.  zzz.bwh.harvard.edu/luna/ref/
   void add_url( const std::string & cmd , const std::string & url ) ;
 
+  void add_verb( const std::string & cmd , const std::string & verb ) ;
   void add_note( const std::string & cmd , const std::string & note ) ;
 
   // parameters for this command
@@ -222,6 +223,7 @@ class cmddefs_t
   std::vector<std::string> fetch_vars( const std::string & cmd, const std::string & tbl, const bool all = true ) const;
 
   std::string fetch_desc_dom( const std::string & dom ) const;
+  std::string fetch_label_dom( const std::string & dom ) const;
   std::string fetch_desc_cmd( const std::string & cmd ) const;
   std::string fetch_desc_param( const std::string & cmd, const std::string & param ) const;
   std::string fetch_desc_tbl( const std::string & cmd, const std::string & tbl ) const;
@@ -309,6 +311,9 @@ class cmddefs_t
   // cmd->notes
   std::map<std::string,std::string> cnotes;
 
+  // cmd->long-form verbose help text
+  std::map<std::string,std::string> cverb;
+
   // cmd->url
   std::map<std::string,std::string> curl;
 
@@ -391,5 +396,3 @@ private:
 
 
 #endif
-
-

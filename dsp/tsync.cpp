@@ -359,6 +359,7 @@ tsync_t::tsync_t( const Eigen::MatrixXd & P ,
 	  {	    
 	    double sumst0 = 0;
 	    double sumst1 = 0 , sumst2 = 0;
+            const int n_valid = np - 2 * w;
 	    for (int p = w ; p < np - w ; p++)
 	      {
 		// angular difference
@@ -373,9 +374,12 @@ tsync_t::tsync_t( const Eigen::MatrixXd & P ,
 		
 	      }
 
-	    sumst0 /= (double)np;
-	    sumst1 /= (double)np;
-	    sumst2 /= (double)np;
+            if ( n_valid > 0 )
+              {
+                sumst0 /= (double)n_valid;
+                sumst1 /= (double)n_valid;
+                sumst2 /= (double)n_valid;
+              }
 	    
 	    phase_diff[ s1 ][ s2 ][ idx ] = sumst0;
 	    phase_lock[ s1 ][ s2 ][ idx ] = sumst1;

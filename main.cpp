@@ -24,6 +24,9 @@
 #include "main.h"
 #include "param.h"
 
+#include <algorithm>
+#include <cctype>
+
 //
 // global resources
 //
@@ -35,6 +38,23 @@ extern writer_t writer;
 extern logger_t logger;
 
 extern freezer_t freezer;
+
+namespace {
+
+std::string lc( const std::string & s )
+{
+  std::string r = s;
+  std::transform( r.begin() , r.end() , r.begin() ,
+		  []( unsigned char c ) { return std::tolower( c ); } );
+  return r;
+}
+
+bool contains_ci( const std::string & s , const std::string & q )
+{
+  return lc( s ).find( lc( q ) ) != std::string::npos;
+}
+
+}
 
 
 int main(int argc , char ** argv )
@@ -83,9 +103,10 @@ int main(int argc , char ** argv )
   //
   
   std::string usage_msg = luna_base_version() +
-    "url: http://zzz.bwh.harvard.edu/luna/\n"
+    "url: http://zzz.nyspi.org/luna/\n"
     "primary usage: luna [sample-list|EDF] [n1] [n2] [id=ID] [@param-file] \n"
-    "                    [sig=s1,s2] [var1=val1] [-o out.db] [-s COMMANDS] [< command-file]\n";
+    "                    [sig=s1,s2] [var1=val1] [-o out.db] [-s COMMANDS] [< command-file]\n"
+    "help: luna -h [domain|COMMAND]    search help: luna -hs term    verbose domain help: luna -hv domain\n";
   
   //
   // degenerate command line?
@@ -120,14 +141,96 @@ int main(int argc , char ** argv )
   // help mode
   //
 
-  if ( argc >= 2 && ( strcmp( argv[1] , "-h" ) == 0 || strcmp( argv[1] , "-H" ) == 0 ) ) 
+  if ( argc >= 2
+       && ( strcmp( argv[1] , "-h" ) == 0
+	    || strcmp( argv[1] , "-H" ) == 0
+	    || strcmp( argv[1] , "-hv" ) == 0
+	    || strcmp( argv[1] , "-hs" ) == 0 ) ) 
     {
       
       global.api();
 
-      const bool primary = strcmp( argv[1] , "-h" ) == 0;
+      const bool primary = false;
       
-      if ( argc == 2 )  // -h 
+      if ( strcmp( argv[1] , "-hs" ) == 0 )
+	{
+	  if ( argc < 3 )
+	    Helper::halt( "expecting a search term after -hs" );
+
+	  const std::string q = argv[2];
+	  const std::vector<std::string> doms = globals::cmddefs().fetch_doms();
+	  std::set<std::string> listed_cmds;
+	  bool any = false;
+
+	  std::cerr << "\nHelp search: " << q << "\n";
+	  std::cerr << std::string( 13 + q.size() , '-' ) << "\n\n";
+
+	  for (int i=0;i<doms.size();i++)
+	    {
+	      const std::string & dom = doms[i];
+	      const std::string label = globals::cmddefs().fetch_label_dom( dom );
+	      const std::string desc = globals::cmddefs().fetch_desc_dom( dom );
+	      if ( contains_ci( dom , q ) || contains_ci( label , q ) || contains_ci( desc , q ) )
+		{
+		  any = true;
+		  std::string str = dom + " : " + desc;
+		  std::cerr << str << "\n"
+			    << std::string( str.size() , '-' ) << "\n\n"
+			    << globals::cmddefs().help_commands( dom , false )
+			    << "\n";
+		  const std::vector<std::string> cmds = globals::cmddefs().fetch_cmds( dom );
+		  for (int j=0;j<cmds.size();j++) listed_cmds.insert( cmds[j] );
+		}
+	    }
+
+	  std::stringstream ss;
+	  for (int i=0;i<doms.size();i++)
+	    {
+	      const std::vector<std::string> cmds = globals::cmddefs().fetch_cmds( doms[i] );
+	      for (int j=0;j<cmds.size();j++)
+		{
+		  const std::string & cmd = cmds[j];
+		  if ( listed_cmds.find( cmd ) != listed_cmds.end() ) continue;
+		  const std::string desc = globals::cmddefs().fetch_desc_cmd( cmd );
+		  if ( contains_ci( cmd , q ) || contains_ci( desc , q ) )
+		    {
+		      any = true;
+		      ss << globals::cmddefs().help( cmd , true , false , false );
+		    }
+		}
+	    }
+
+	  if ( ss.str() != "" )
+	    {
+	      std::cerr << "Matching commands\n"
+			<< "-----------------\n"
+			<< ss.str()
+			<< "\n";
+	    }
+
+	  if ( ! any )
+	    std::cerr << "No matching domains or commands\n\n";
+	}
+      else if ( strcmp( argv[1] , "-hv" ) == 0 )
+	{
+	  if ( argc < 3 )
+	    Helper::halt( "expecting a domain after -hv" );
+
+	  std::string p = argv[2];
+	  if ( ! globals::cmddefs().is_domain( p ) )
+	    Helper::halt( "option [" + p + "] not recognized as a domain" );
+
+	  std::string str = p + " : " + globals::cmddefs().help_domain( p );
+	  std::cerr << "\n"
+		    << str << "\n"
+		    << std::string( str.size(),'-')
+		    << "\n";
+
+	  const std::vector<std::string> cmds = globals::cmddefs().fetch_cmds( p );
+	  for (int i=0;i<cmds.size();i++)
+	    std::cerr << globals::cmddefs().help( cmds[i] , true , true , false ) << "\n";
+	}
+      else if ( argc == 2 )  // -h 
 	{
 
 	  std::cerr << "\n" << usage_msg << "\n";
@@ -143,6 +246,12 @@ int main(int argc , char ** argv )
 
 	  std::cerr << "For options and output for a given command, add the (upper-case) command after -h, e.g.\n"
 		    << "  luna -h SIGSTATS\n\n";
+
+	  std::cerr << "To search help text across domains and commands, use -hs, e.g.\n"
+		    << "  luna -hs annot\n\n";
+
+	  std::cerr << "For verbose help for all commands in one domain, use -hv, e.g.\n"
+		    << "  luna -hv summ\n\n";
 
 	}
       else // --h all

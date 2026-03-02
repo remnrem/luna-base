@@ -194,7 +194,8 @@ void dsptools::ipc( edf_t & edf , param_t & param )
 	  ipc_t ipc;
 	  
 	  std::vector<int> idx1 = { 0 } ;
-	  std::vector<int> idx2( ns2 );
+	  std::vector<int> idx2;
+          idx2.reserve( ns2 );
 	  for (int i=1; i<=ns2; i++) idx2.push_back( i ); 
 	  
 	  ipc_batch_result_t res = ipc.compute_ipc_seed_to_set( dat , idx1, idx2 , sr, 
