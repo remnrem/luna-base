@@ -1481,6 +1481,7 @@ void cmddefs_t::init()
   // MASK / EMASK 
   
   add_table( "MASK" , "" , "Mask-operation summaries" );
+  add_table( "MASK" , "EMASK" , "Mask-operation summaries by mask expression/label" );
   add_var( "MASK" , "", "N_MATCHES" , "Number of epochs that match the condition (e.g. having annotation A)");
   add_var( "MASK" , "", "N_MASK_SET" , "Number of previously unmasked epochs that were masked by this operation");
   add_var( "MASK" , "", "N_MASK_UNSET" , "Number of previously masked epochs that were unmasked by this operation");
@@ -1490,6 +1491,15 @@ void cmddefs_t::init()
   add_var( "MASK" , "", "MASK_MODE" , "Mask mode" );
   add_var( "MASK" , "", "MATCH_LOGIC" , "Match logic" );
   add_var( "MASK" , "", "MATCH_TYPE" , "Match type" );
+  add_var( "MASK" , "EMASK", "N_MATCHES" , "Number of epochs that match the condition (e.g. having annotation A)");
+  add_var( "MASK" , "EMASK", "N_MASK_SET" , "Number of previously unmasked epochs that were masked by this operation");
+  add_var( "MASK" , "EMASK", "N_MASK_UNSET" , "Number of previously masked epochs that were unmasked by this operation");
+  add_var( "MASK" , "EMASK", "N_UNCHANGED" , "Number of epochs whose mask status was not changed by this operation");
+  add_var( "MASK" , "EMASK", "N_RETAINED" , "Number of epochs retained after this operation");
+  add_var( "MASK" , "EMASK", "N_TOTAL" , "Total number of epochs");
+  add_var( "MASK" , "EMASK", "MASK_MODE" , "Mask mode" );
+  add_var( "MASK" , "EMASK", "MATCH_LOGIC" , "Match logic" );
+  add_var( "MASK" , "EMASK", "MATCH_TYPE" , "Match type" );
 
   //
   // DUMP-MASK

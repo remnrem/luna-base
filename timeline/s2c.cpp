@@ -542,6 +542,15 @@ static s2a2_out_t s2a2_proc(
 void timeline_t::signal2cycle( const param_t & param )
 {
   
+  // Ensure stable factor ordering across runs/subjects for S2C outputs.
+  // Without pre-registration, first-use insertion can make AMP/PH column
+  // order depend on which optional branch emits first.
+  writer.string_factor("SEED");
+  writer.string_factor("SIG");
+  writer.string_factor("PH");
+  writer.string_factor("AMP");
+  writer.string_factor("SEC");
+  writer.string_factor("BIN");
 
   
   //
