@@ -121,5 +121,5 @@ simassoc: utils/simassoc.o libluna.a
 .PHONY: clean
 
 clean:
-	-$(RM) $(TARGETS) libluna.dylib libluna.so libluna.a main.o $(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))
+	-$(RM) $(TARGETS) regional tocol cgi-mapper dmerge simassoc libluna.dylib libluna.so libluna.a main.o $(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))
 	-$(RM) utils/*.o utils/*.d utils/*~

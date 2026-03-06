@@ -923,11 +923,28 @@ bool s2a2_t::window_range_ok(
 {
   if (tp.empty()) return false;
   if (t_hi < t_lo) return false;
-  auto it0 = std::lower_bound(tp.begin(), tp.end(), t_lo);
-  auto it1 = std::upper_bound(tp.begin(), tp.end(), t_hi);
-  if (it0 == tp.end()) return false;
-  size_t j0 = static_cast<size_t>(it0 - tp.begin());
-  size_t j1 = (it1 == tp.begin()) ? 0 : static_cast<size_t>((it1 - tp.begin()) - 1);
+  // Require samples that bracket [t_lo, t_hi]:
+  // j0 is at/before t_lo, j1 is at/after t_hi.
+  auto it0_hi = std::lower_bound(tp.begin(), tp.end(), t_lo);
+  auto it1_lo = std::lower_bound(tp.begin(), tp.end(), t_hi);
+
+  if (it0_hi == tp.begin()) {
+    if (*it0_hi > t_lo) return false;
+  } else if (it0_hi == tp.end()) {
+    return false;
+  }
+
+  if (it1_lo == tp.end()) return false;
+
+  size_t j0 = 0;
+  if (it0_hi == tp.begin()) {
+    j0 = 0;
+  } else {
+    if (it0_hi != tp.end() && *it0_hi == t_lo) j0 = static_cast<size_t>(it0_hi - tp.begin());
+    else j0 = static_cast<size_t>((it0_hi - tp.begin()) - 1);
+  }
+  size_t j1 = static_cast<size_t>(it1_lo - tp.begin());
+
   if (j0 >= tp.size() || j1 >= tp.size() || j0 > j1) return false;
   if (tp[j0] > t_lo) return false;
   if (tp[j1] < t_hi) return false;

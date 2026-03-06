@@ -8,6 +8,13 @@ ARCH=LINUX
 endif
 
 ##
+## Defaults (can override via env or command line: make LGBM=0, make LGBM_PATH=..., etc.)
+##
+
+LGBM ?= 1
+LGBM_PATH ?= /opt/homebrew
+
+##
 ## If dependencies (FFTW, LGBM) are installed locally, 
 ## the DEP variable will be set on the command line
 ##
@@ -22,7 +29,7 @@ endif
 
 ifdef FFTW
 DEP_INCLUDES += -I$(FFTW)/include
-DEP_LIB = -L$(FFTW)/lib
+DEP_LIB += -L$(FFTW)/lib
 ifeq ($(ARCH),LINUX)
 DEP_LIB	+= -Wl,-rpath,$(FFTW)/lib
 endif
@@ -30,9 +37,11 @@ endif
 
 DEP_LIB += -lfftw3
 
+ifeq ($(LGBM),1)
 ifdef LGBM_PATH
 DEP_INCLUDES +=-I$(LGBM_PATH)/include
 DEP_LIB +=-L$(LGBM_PATH)/lib -L$(LGBM_PATH)
+endif
 endif
 
 
@@ -49,8 +58,6 @@ CC = gcc
 CXXFLAGS=-O2 -std=gnu++17 -MMD -MP -I. -I.. -Wno-psabi -Wno-unused-result
 # debug
 #CXXFLAGS=-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -MMD -MP -I. -I.. -std=gnu++17
-
-CXXFLAGS +=$(DEP_INCLUDES)
 
 ifeq ($(ARCH),MAC)
 CXXFLAGS+=-I/usr/local/include
@@ -79,6 +86,8 @@ ifdef PYTHON_PATH
 DEP_INCLUDES += -I$(PYTHON_PATH)
 endif
 
+CXXFLAGS +=$(DEP_INCLUDES)
+
 ##
 ## Linker flags
 ##
@@ -97,11 +106,13 @@ else
  LDFLAGS += -L/usr/local/lib 
 endif
 
+ifeq ($(LGBM),1)
 ifdef LGBM_PATH
 ifeq ($(ARCH),WINDOWS)
  DEP_LIB += -L/mingw64/bin/
 else
  DEP_LIB += -Wl,-rpath,${LGBM_PATH}/lib/ -Wl,-rpath,${LGBM_PATH}/
+endif
 endif
 endif
 
@@ -127,7 +138,7 @@ endif
 
 ifdef STATIC
  LDFLAGS += -static
- ifdef LINUX
+ ifeq ($(ARCH),LINUX)
   LDFLAGS += -static-libgcc -static-libstdc++
  endif
 endif
@@ -173,6 +184,5 @@ RANLIB= ranlib
 RM = rm -f
 ECHO = echo
 SHELL = /bin/sh
-
 
 
