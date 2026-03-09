@@ -1174,19 +1174,23 @@ void cmddefs_t::init()
 	    "DAYS creates annotations marking calendar days and optionally hourly clock-time\n"
 	    "periods across the recording. Designed for multi-day recordings such as actigraphy.\n"
 	    "\n"
-	    "Day annotations (day1, day2, ...) span from the recording start to the first\n"
+	    "Day annotations (day01, day02, ...) span from the recording start to the first\n"
 	    "day boundary, then each subsequent 24-hour period. By default days start at\n"
 	    "noon; use anchor to change (e.g. anchor=0 for midnight-to-midnight).\n"
 	    "\n"
 	    "With the hours option, hourly annotations (00h..23h) are added, each spanning\n"
 	    "the corresponding clock hour across all days. With halves, AM and PM annotations\n"
-	    "are created spanning midnight-to-noon and noon-to-midnight respectively." );
+	    "are created spanning midnight-to-noon and noon-to-midnight respectively.\n"
+	    "With weekend, each anchored day window that begins on Saturday or Sunday also\n"
+	    "receives a weekend annotation." );
 
   add_param( "DAYS" , "anchor" , "12" , "Hour (0-23) at which a new day begins (default: 12 = noon)" );
   add_param( "DAYS" , "prefix" , "day" , "Prefix for day annotation labels (default: day)" );
   add_param( "DAYS" , "hours" , "" , "Also create hourly annotations (00h, 01h, ..., 23h)" );
   add_param( "DAYS" , "hour-prefix" , "" , "Prefix for hourly annotation labels" );
   add_param( "DAYS" , "halves" , "" , "Also create AM and PM annotations" );
+  add_param( "DAYS" , "weekend" , "" , "Also create weekend annotations for anchored day windows starting on Saturday/Sunday" );
+  add_param( "DAYS" , "weekend-label" , "WEEKEND" , "Label for weekend annotations (default: WEEKEND)" );
   add_param( "DAYS" , "verbose" , "" , "Output day-level details to the output database" );
 
 
@@ -1236,9 +1240,10 @@ void cmddefs_t::init()
 	    "W (wake), S (sleep), and ACTIG_G (gap) annotations by default\n"
 	    "(override with wake= / sleep= / gap-out=). Outputs TST/WASO/GAP\n"
 	    "overall and per-day DAY strata.\n"
-	    "Per-day summaries include VALID_MIN, VALID_PCT, and INCLUDED flag\n"
-	    "(INCLUDED=1 when valid minutes >= day-min-valid). Cross-day averages\n"
-	    "use only included days." );
+	    "Per-day summaries include VALID_MIN, VALID_PCT, INCLUDED, and an\n"
+	    "optional day-level QC layer. INCLUDED remains coverage-only\n"
+	    "(valid minutes >= day-min-valid). Cross-day averages and debt\n"
+	    "windows use INCLUDED days that are not QC_DAY_EXCLUDED." );
 
   add_param( "ACTIG" , "sig" , "Activity" , "Activity signal to analyze (required unless prescored)" );
   add_param( "ACTIG" , "epoch" , "60" , "Epoch length in seconds for binning (default: 60)" );
@@ -1266,6 +1271,25 @@ void cmddefs_t::init()
   add_param( "ACTIG" , "day-anchor" , "12" , "Hour (0-23) at which per-day boundaries occur (default: 12 = noon)" );
   add_param( "ACTIG" , "gap-min-pct" , "50" , "Min % of expected samples per epoch to be considered valid (default: 50)" );
   add_param( "ACTIG" , "day-min-valid" , "960" , "Min valid minutes per day for inclusion in cross-day averages (default: 960 = 16h)" );
+  add_param( "ACTIG" , "qc-day" , "T" , "Enable day-level QC pass after scoring (default: T)" );
+  add_param( "ACTIG" , "qc-exclude-flat" , "T" , "Enable flatline-style technical exclusion flag (default: T)" );
+  add_param( "ACTIG" , "qc-exclude-lowvar" , "T" , "Enable collapsed-variability technical exclusion flag (default: T)" );
+  add_param( "ACTIG" , "qc-exclude-nearfloor" , "T" , "Enable near-floor technical exclusion flag (default: T)" );
+  add_param( "ACTIG" , "qc-warn-implausible" , "T" , "Enable combined plausibility warning (default: T)" );
+  add_param( "ACTIG" , "qc-warn-longsleep" , "T" , "Enable long-sleep warning (default: T)" );
+  add_param( "ACTIG" , "qc-warn-highsleep" , "T" , "Enable high sleep-fraction warning (default: T)" );
+  add_param( "ACTIG" , "qc-exclude-out" , "ACTIG_QC_EXCLUDED" , "Annotation label for QC-excluded day windows; empty disables day-QC annotations" );
+  add_param( "ACTIG" , "qc-flat-frac-th" , "0.80" , "Flatline flag threshold: fraction of adjacent valid epoch pairs with abs(delta) <= qc-flat-delta-th" );
+  add_param( "ACTIG" , "qc-flat-delta-th" , "0.0" , "Flatline flag delta threshold on adjacent valid epochs" );
+  add_param( "ACTIG" , "qc-lowvar-frac-th" , "0.80" , "Low-variability flag threshold on fraction of valid epochs in a rolling low-variability state" );
+  add_param( "ACTIG" , "qc-lowvar-cv-th" , "0.05" , "Low-variability flag threshold on day-level coefficient of variation" );
+  add_param( "ACTIG" , "qc-nearfloor-frac-th" , "0.85" , "Near-floor flag threshold on fraction of valid epochs near the day-specific lower tail" );
+  add_param( "ACTIG" , "qc-nearfloor-q-th" , "0.05" , "Quantile used to define the day-specific near-floor reference (default: P05)" );
+  add_param( "ACTIG" , "qc-min-active-epochs" , "24" , "Minimum active epochs required to avoid low-structure technical flags" );
+  add_param( "ACTIG" , "qc-warn-sleep-pct" , "0.85" , "Warning threshold on SCORE_SLEEP_PCT expressed as a 0..1 fraction" );
+  add_param( "ACTIG" , "qc-warn-longsleep-h" , "16" , "Warning threshold on longest sleep bout in hours" );
+  add_param( "ACTIG" , "qc-warn-max-sleep-h" , "20" , "Higher warning threshold on extremely long sleep bout in hours" );
+  add_param( "ACTIG" , "qc-warn-low-wakeruns" , "1" , "Warning threshold on daily wake-run count" );
   add_param( "ACTIG" , "np-step" , "1" ,
 	     "Sliding-window step size in minutes for L5/M10 onset search (default: 1). "
 	     "Must divide 60 evenly (e.g. 1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60). "
@@ -1305,11 +1329,15 @@ void cmddefs_t::init()
   add_var( "ACTIG" , "" , "SCORE_SLEEP_RUN_N" , "Number of contiguous sleep annotation runs" );
   add_var( "ACTIG" , "" , "SCORE_GAP_RUN_N" , "Number of contiguous gap annotation runs" );
   add_var( "ACTIG" , "" , "DAY_N" , "Total number of days" );
-  add_var( "ACTIG" , "" , "DAY_N_INCLUDED" , "Days meeting day-min-valid threshold" );
-  add_var( "ACTIG" , "" , "DAY_N_EXCLUDED" , "Days below day-min-valid threshold" );
-  add_var( "ACTIG" , "" , "SCORE_TST_DAYAVG_MIN" , "Mean TST across included days (minutes)" );
-  add_var( "ACTIG" , "" , "SCORE_WASO_DAYAVG_MIN" , "Mean WASO across included days (minutes)" );
-  add_var( "ACTIG" , "" , "SCORE_SLEEP_PCT_DAYAVG" , "Mean sleep % across included days" );
+  add_var( "ACTIG" , "" , "DAY_N_INCLUDED" , "Days meeting day-min-valid threshold (coverage-only)" );
+  add_var( "ACTIG" , "" , "DAY_N_EXCLUDED" , "Days below day-min-valid threshold (coverage-only)" );
+  add_var( "ACTIG" , "" , "DAY_N_QC_OK" , "Days included after QC with no warnings" );
+  add_var( "ACTIG" , "" , "DAY_N_QC_EXCLUDED" , "Days excluded after applying coverage + day QC" );
+  add_var( "ACTIG" , "" , "DAY_N_QC_WARN" , "Days included after QC but flagged with warnings" );
+  add_var( "ACTIG" , "" , "DAY_N_INCLUDED_POSTQC" , "Days contributing to cross-day averages after coverage + QC filtering" );
+  add_var( "ACTIG" , "" , "SCORE_TST_DAYAVG_MIN" , "Mean TST across post-QC included days (minutes)" );
+  add_var( "ACTIG" , "" , "SCORE_WASO_DAYAVG_MIN" , "Mean WASO across post-QC included days (minutes)" );
+  add_var( "ACTIG" , "" , "SCORE_SLEEP_PCT_DAYAVG" , "Mean sleep % across post-QC included days" );
 
   add_table( "ACTIG" , "DAY" , "Per-day output (day-anchor boundaries)" );
   add_var( "ACTIG" , "DAY" , "SCORE_TST_MIN" , "Daily total sleep time (minutes)" );
@@ -1318,6 +1346,10 @@ void cmddefs_t::init()
   add_var( "ACTIG" , "DAY" , "VALID_MIN" , "Daily valid (non-gap) minutes" );
   add_var( "ACTIG" , "DAY" , "VALID_PCT" , "Daily valid % of total day duration" );
   add_var( "ACTIG" , "DAY" , "INCLUDED" , "1 if day meets day-min-valid threshold, 0 otherwise" );
+  add_var( "ACTIG" , "DAY" , "QC_DAY_OK" , "1 if day is included after QC and has no warnings" );
+  add_var( "ACTIG" , "DAY" , "QC_DAY_EXCLUDED" , "1 if day is excluded after applying coverage + day QC" );
+  add_var( "ACTIG" , "DAY" , "QC_DAY_WARN" , "1 if day remains included but is flagged with warnings" );
+  add_var( "ACTIG" , "DAY" , "QC_TECH_FLAG_N" , "Number of technical day-QC flags triggered" );
   add_var( "ACTIG" , "DAY" , "SCORE_SLEEP_PCT" , "Daily sleep % (of valid scored epochs)" );
   add_var( "ACTIG" , "DAY" , "FRAG_SFI" , "Daily sleep->wake transitions per hour sleep" );
   add_var( "ACTIG" , "DAY" , "FRAG_SFI_N" , "Daily sleep->wake transition count" );
@@ -1328,6 +1360,25 @@ void cmddefs_t::init()
   add_var( "ACTIG" , "DAY" , "FRAG_IMM1_BOUT_N" , "Daily sleep bout count <=1 minute" );
   add_var( "ACTIG" , "DAY" , "SCORE_EPOCH_N" , "Daily valid (non-gap) epoch count" );
   add_var( "ACTIG" , "DAY" , "SCORE_WAKE_EPOCH_N" , "Daily wake epoch count" );
+  add_var( "ACTIG" , "DAY" , "QC_FLAT_FRAC" , "Daily fraction of adjacent valid epoch pairs with minimal change" );
+  add_var( "ACTIG" , "DAY" , "QC_LOWVAR_CV" , "Daily coefficient of variation of valid raw activity" );
+  add_var( "ACTIG" , "DAY" , "QC_NEARFLOOR_FRAC" , "Daily fraction of valid epochs near the day-specific lower tail" );
+  add_var( "ACTIG" , "DAY" , "QC_ACTIVE_EPOCH_N" , "Daily active-structure epoch count based on within-day activity reference" );
+  add_var( "ACTIG" , "DAY" , "QC_LONGEST_QUIET_RUN_MIN" , "Daily longest contiguous run of near-floor epochs (minutes)" );
+  add_var( "ACTIG" , "DAY" , "QC_LONGEST_LOWVAR_RUN_MIN" , "Daily longest contiguous rolling low-variability run (minutes)" );
+  add_var( "ACTIG" , "DAY" , "QC_ACT_MED" , "Daily median raw activity across valid epochs" );
+  add_var( "ACTIG" , "DAY" , "QC_ACT_MAD" , "Daily MAD of raw activity across valid epochs" );
+  add_var( "ACTIG" , "DAY" , "QC_ACT_SD" , "Daily SD of raw activity across valid epochs" );
+  add_var( "ACTIG" , "DAY" , "QC_ACT_P05" , "Daily P05 raw activity across valid epochs" );
+  add_var( "ACTIG" , "DAY" , "QC_ACT_P95" , "Daily P95 raw activity across valid epochs" );
+  add_var( "ACTIG" , "DAY" , "QC_LONGEST_SLEEP_BOUT_MIN" , "Daily longest contiguous sleep bout (minutes)" );
+  add_var( "ACTIG" , "DAY" , "QC_LONGEST_WAKE_BOUT_MIN" , "Daily longest contiguous wake bout (minutes)" );
+  add_var( "ACTIG" , "DAY" , "QC_FLAG_FLAT" , "Daily technical flag: flatline-like activity" );
+  add_var( "ACTIG" , "DAY" , "QC_FLAG_LOWVAR" , "Daily technical flag: collapsed variability and low active structure" );
+  add_var( "ACTIG" , "DAY" , "QC_FLAG_NEARFLOOR" , "Daily technical flag: near-floor day with low active structure" );
+  add_var( "ACTIG" , "DAY" , "QC_WARN_HIGHSLEEP" , "Daily warning: high sleep fraction" );
+  add_var( "ACTIG" , "DAY" , "QC_WARN_LONGSLEEP" , "Daily warning: very long sleep bout" );
+  add_var( "ACTIG" , "DAY" , "QC_WARN_LOWWAKERUNS" , "Daily warning: too few wake runs" );
 
   add_param( "ACTIG" , "debt" , "" , "Compute local sleep debt relative to a target night" );
   add_param( "ACTIG" , "debt-target" , "" ,
