@@ -26,10 +26,25 @@
 #include "edf/slice.h"
 #include "db/db.h"
 #include "helper/logger.h"
+#include <cstdlib>
+#include <iostream>
 #include <iterator>     // std::distance
 
 extern writer_t writer;
 extern logger_t logger;
+
+// DEBUG-REPRO-BEGIN
+static bool luna_re_debug_enabled()
+{
+  static int state = -1;
+  if ( state == -1 )
+    {
+      const char * e = std::getenv( "LUNA_RE_DEBUG" );
+      state = ( e != NULL && *e != '\0' && *e != '0' ) ? 1 : 0;
+    }
+  return state == 1;
+}
+// DEBUG-REPRO-END
 
 
 int timeline_t::first_record() const
@@ -91,13 +106,20 @@ bool timeline_t::remap_timepoint( const uint64_t & tp , uint64_t * tp1 )
   // degenerate case: nothing to do w/ a continuous recording
   if ( edf->header.continuous )
     {
+      if ( luna_re_debug_enabled() )
+        std::cerr << "[LUNA_RE_DEBUG] remap_timepoint(): continuous tp=" << tp << " -> " << tp << "\n";
       *tp1 = tp;
       return true;
     }
 
   // for the EDF+D case, get first record that is equal to greater than
   
-  if ( tp2rec.size() == 0 ) return false;
+  if ( tp2rec.size() == 0 )
+    {
+      if ( luna_re_debug_enabled() )
+        std::cerr << "[LUNA_RE_DEBUG] remap_timepoint(): tp2rec empty, tp=" << tp << "\n";
+      return false;
+    }
   
   std::map<uint64_t,int>::const_iterator pp = tp2rec.lower_bound( tp ); 
 
@@ -125,12 +147,24 @@ bool timeline_t::remap_timepoint( const uint64_t & tp , uint64_t * tp1 )
 	  //std::cout << " offset into this rec = " << offset << "\n";
 	  recnum = rec2orig_rec[ pp->second ];
 	  //std::cout << "recnum = " << recnum << " given " << pp->second << "\n";
-	  *tp1 = recnum * edf->header.record_duration_tp + offset ;
-	  return true;
-	}
-      else
-	return false;
-    }
+		  *tp1 = recnum * edf->header.record_duration_tp + offset ;
+		  if ( luna_re_debug_enabled() )
+		    std::cerr << "[LUNA_RE_DEBUG] remap_timepoint(): tail-map tp=" << tp
+		              << " rec=" << pp->second
+		              << " recnum=" << recnum
+		              << " offset=" << offset
+		              << " -> " << *tp1 << "\n";
+		  return true;
+		}
+	      else
+                {
+                  if ( luna_re_debug_enabled() )
+                    std::cerr << "[LUNA_RE_DEBUG] remap_timepoint(): past-end tp=" << tp
+                              << " last_rec_start=" << pp->first
+                              << " rec_dur_tp=" << edf->header.record_duration_tp << "\n";
+		  return false;
+                }
+	    }
 
 
   //     recs     |------|    |----|----|----|   
@@ -150,6 +184,11 @@ bool timeline_t::remap_timepoint( const uint64_t & tp , uint64_t * tp1 )
       
       // set tp1  
       *tp1 = recnum * edf->header.record_duration_tp ; 
+      if ( luna_re_debug_enabled() )
+        std::cerr << "[LUNA_RE_DEBUG] remap_timepoint(): exact-start tp=" << tp
+                  << " rec=" << pp->second
+                  << " recnum=" << recnum
+                  << " -> " << *tp1 << "\n";
       return true;
     }
   
@@ -168,12 +207,16 @@ bool timeline_t::remap_timepoint( const uint64_t & tp , uint64_t * tp1 )
 	  //   std::cout << " not in GAP\n";
 	  in_gap = false;
 	}
-      else
-	{
-	  //	  if ( verb ) std::cout << "gapper\n";
-	  // is in a gap
-	  return false;
-	}
+	      else
+		{
+		  //	  if ( verb ) std::cout << "gapper\n";
+		  // is in a gap
+		  if ( luna_re_debug_enabled() )
+                    std::cerr << "[LUNA_RE_DEBUG] remap_timepoint(): in-gap tp=" << tp
+                              << " prev_rec_start=" << previous_rec_start
+                              << " prev_rec_end=" << previous_rec_end << "\n";
+		  return false;
+		}
     }
   else if ( pp == tp2rec.begin() )
     {
@@ -181,8 +224,13 @@ bool timeline_t::remap_timepoint( const uint64_t & tp , uint64_t * tp1 )
       // If the search point occurs before /all/ records, need to
       // indicate that we are in a gap also	  
       
-      if ( tp  < pp->first )
-	return false;
+	      if ( tp  < pp->first )
+                {
+                  if ( luna_re_debug_enabled() )
+                    std::cerr << "[LUNA_RE_DEBUG] remap_timepoint(): before-first tp=" << tp
+                              << " first_rec_start=" << pp->first << "\n";
+		  return false;
+                }
       
     }
 
@@ -193,6 +241,12 @@ bool timeline_t::remap_timepoint( const uint64_t & tp , uint64_t * tp1 )
   //     std::cout << " recnum " << recnum << " " << offset << "\n";
   // set tp1
   *tp1 = recnum * edf->header.record_duration_tp + offset ;
+  if ( luna_re_debug_enabled() )
+    std::cerr << "[LUNA_RE_DEBUG] remap_timepoint(): mapped tp=" << tp
+              << " rec=" << pp->second
+              << " recnum=" << recnum
+              << " offset=" << offset
+              << " -> " << *tp1 << "\n";
   
   return true;
 }
@@ -273,6 +327,9 @@ bool timeline_t::interval2records( const interval_t & interval ,
       *start_smp = 0;	  
       *stop_rec = 0;
       *stop_smp = 0;
+      if ( luna_re_debug_enabled() )
+        std::cerr << "[LUNA_RE_DEBUG] interval2records(): empty interval "
+                  << interval.as_string() << "\n";
       return false;
     }
   
@@ -285,7 +342,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
     Helper::halt( "internal error in timeline()" );
     
   // sample rate, in tp units: special case, SR=1e-9
-  uint64_t sample_tp = n_samples_per_record == 0 ? 1LLU : edf->header.record_duration_tp / n_samples_per_record ; 
+  const bool tp_mode = n_samples_per_record == 0;
+  uint64_t sample_tp = tp_mode ? 1LLU : edf->header.record_duration_tp / n_samples_per_record ; 
   
   // pull out stop as well may need to adjust this below
   uint64_t stop_tp = interval.stop;
@@ -357,11 +415,19 @@ bool timeline_t::interval2records( const interval_t & interval ,
       
       // pass back to calling function
       
-      *start_rec = (int)start_record;
-      *start_smp = (int)start_sample;
-      
-      *stop_rec = (int)stop_record;
-      *stop_smp = (int)stop_sample;
+	      *start_rec = (int)start_record;
+	      *stop_rec = (int)stop_record;
+
+	      if ( tp_mode )
+		{
+		  *start_smp = 0;
+		  *stop_smp = 0;
+		}
+	      else
+		{
+		  *start_smp = (int)start_sample;
+		  *stop_smp = (int)stop_sample;
+		}
       
     }
   else
@@ -376,7 +442,14 @@ bool timeline_t::interval2records( const interval_t & interval ,
       // Get first record that is not less than start search point (i.e. equal to or greater than)
       //
       
-      std::map<uint64_t,int>::const_iterator lwr = tp2rec.lower_bound( interval.start ); 
+	      std::map<uint64_t,int>::const_iterator lwr = tp2rec.lower_bound( interval.start ); 
+              if ( luna_re_debug_enabled() )
+                std::cerr << "[LUNA_RE_DEBUG] interval2records(): lower_bound interval="
+                          << interval.as_string()
+                          << " start=" << interval.start
+                          << " lb_is_end=" << ( lwr == tp2rec.end() )
+                          << ( lwr == tp2rec.end() ? "" : ( std::string(" lb_key=") + Helper::int2str( (int)(lwr->first / globals::tp_1sec) ) + "s lb_rec=" + Helper::int2str( lwr->second ) ) )
+                          << "\n";
       
       //
       // This will find the first record AFTER the start; thus, if the
@@ -389,8 +462,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
 
       bool in_gap = false;
       
-      if ( lwr != tp2rec.begin() ) 
-	{
+	      if ( lwr != tp2rec.begin() ) 
+		{
 
 	  // go back one record
 	  --lwr;
@@ -398,14 +471,14 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	  uint64_t previous_rec_end   = previous_rec_start + edf->header.record_duration_tp - 1LLU;
 	  
 	  // does the start point fall within this previous record?
-	  if ( interval.start >= previous_rec_start && interval.start <= previous_rec_end ) 
-	    in_gap = false;
-	  else
-	    {
-	      in_gap = true;
-	      ++lwr;
-	    }
-	}
+		  if ( interval.start >= previous_rec_start && interval.start <= previous_rec_end ) 
+		    in_gap = false;
+		  else
+		    {
+		      in_gap = true;
+		      ++lwr;
+		    }
+		}
       else if ( lwr == tp2rec.begin() )
        	{
 
@@ -418,26 +491,42 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	}
       
       // problem? return empty record set
-      if ( lwr == tp2rec.end() ) 
-	{
-	  *start_rec = 0;
-	  *start_smp = 0;	  
-	  *stop_rec = 0;
+	  if ( lwr == tp2rec.end() ) 
+		{
+		  if ( luna_re_debug_enabled() )
+                    std::cerr << "[LUNA_RE_DEBUG] interval2records(): lwr=end interval="
+                              << interval.as_string()
+                              << " start=" << interval.start
+                              << " stop=" << interval.stop
+                              << " tp2rec.size=" << tp2rec.size()
+                              << "\n";
+		  *start_rec = 0;
+		  *start_smp = 0;	  
+		  *stop_rec = 0;
 	  *stop_smp = 0;
 	  return false;
 	}
       
-      *start_rec = lwr->second;
+	      *start_rec = lwr->second;
+              if ( luna_re_debug_enabled() )
+                std::cerr << "[LUNA_RE_DEBUG] interval2records(): start interval="
+                          << interval.as_string()
+                          << " in_gap=" << in_gap
+                          << " start_rec=" << *start_rec
+                          << " rec_start_tp=" << lwr->first
+                          << "\n";
 
       // figure out start sample, and also whether we need to shift
       // for fractional cases (starts between sample points)
 
-      uint64_t shift = 0LLU;
+	      uint64_t shift = 0LLU;
+              uint64_t start_sample_u64 = 0LLU;
+              uint64_t stop_sample_u64 = 0LLU;
       
       if ( in_gap )
 	{
 	  // i.e. use start of this record, as it is after the 'true' start site
-	  *start_smp = 0; 
+		  start_sample_u64 = 0LLU;
 	  // shift stays at 0
 	}
 	else
@@ -448,7 +537,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	  uint64_t start_sample = n_samples_per_record == 0 ? start_offset :
 	    floor( ( start_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
 	  
-	  *start_smp = (int)start_sample;
+		  start_sample_u64 = start_sample;
 	  
 	  // any shift required?
 	  shift = start_offset - start_sample * sample_tp ;
@@ -476,7 +565,14 @@ bool timeline_t::interval2records( const interval_t & interval ,
       // nb: easier to base this on the last time-point in the interval, rather than +1
       uint64_t stop_tp_m1 = stop_tp > 0 ? stop_tp - 1LLU : 0 ; 
       
-      std::map<uint64_t,int>::const_iterator upr = tp2rec.upper_bound( stop_tp_m1 ); 
+	      std::map<uint64_t,int>::const_iterator upr = tp2rec.upper_bound( stop_tp_m1 ); 
+              if ( luna_re_debug_enabled() )
+                std::cerr << "[LUNA_RE_DEBUG] interval2records(): upper_bound interval="
+                          << interval.as_string()
+                          << " stop_tp_m1=" << stop_tp_m1
+                          << " ub_is_begin=" << ( upr == tp2rec.begin() )
+                          << " ub_is_end=" << ( upr == tp2rec.end() )
+                          << "\n";
       
 
       
@@ -491,15 +587,21 @@ bool timeline_t::interval2records( const interval_t & interval ,
       // special case; if the interval ends before the records even start
       bool ends_before = upr == tp2rec.begin() ;
 
-      if ( ! ends_before ) 
-	{	  
-	  --upr;  
-	  *stop_rec  = upr->second;
-	}
-      else
-	{
-	  // i.e. flag as bad, to ensure that stop is before the start (which will also be rec 0)
-	  //*stop_rec  = -1;
+	      if ( ! ends_before ) 
+		{	  
+		  --upr;  
+		  *stop_rec  = upr->second;
+		}
+	      else
+		{
+		  if ( luna_re_debug_enabled() )
+                    std::cerr << "[LUNA_RE_DEBUG] interval2records(): ends_before interval="
+                              << interval.as_string()
+                              << " stop_tp_m1=" << stop_tp_m1
+                              << " first_rec_start=" << tp2rec.begin()->first
+                              << "\n";
+		  // i.e. flag as bad, to ensure that stop is before the start (which will also be rec 0)
+		  //*stop_rec  = -1;
 
 	  // just return now, empty set:
 	  *start_rec = *start_smp = *stop_rec = *stop_smp = 0;
@@ -523,7 +625,14 @@ bool timeline_t::interval2records( const interval_t & interval ,
       //
       
       // assuming stop_tp_m1 == inclusive
-      in_gap = ! ( stop_tp_m1 >= previous_rec_start && stop_tp_m1 <= previous_rec_end );
+	      in_gap = ! ( stop_tp_m1 >= previous_rec_start && stop_tp_m1 <= previous_rec_end );
+              if ( luna_re_debug_enabled() )
+                std::cerr << "[LUNA_RE_DEBUG] interval2records(): stop-check interval="
+                          << interval.as_string()
+                          << " previous_rec_start=" << previous_rec_start
+                          << " previous_rec_end=" << previous_rec_end
+                          << " in_gap=" << in_gap
+                          << "\n";
       
       // assuming stop_tp is end+1
       //in_gap = ! ( stop_tp > previous_rec_start && stop_tp < previous_rec_end );
@@ -541,8 +650,8 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	  // *stop_smp = n_samples_per_record == 0 ? globals::tp_1sec - 1LLU :
 	  //   n_samples_per_record - 1LLU ;
 
-	  *stop_smp = n_samples_per_record == 0 ? globals::tp_1sec :
-	    n_samples_per_record ;
+		  stop_sample_u64 = tp_mode ? globals::tp_1sec :
+		    n_samples_per_record ;
 	  
 	}
       else
@@ -556,7 +665,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
 	  uint64_t stop_sample = n_samples_per_record == 0 ? stop_offset : 
 	    floor( ( stop_offset / (double)edf->header.record_duration_tp ) * n_samples_per_record ) ;
 
-	  *stop_smp = (int)stop_sample;
+		  stop_sample_u64 = stop_sample;
 
 	  // std::cout << " stop_tp = " << stop_tp << "\n"
 	  // 	    << " upr->first = " << upr->first << "\n"
@@ -572,26 +681,53 @@ bool timeline_t::interval2records( const interval_t & interval ,
       // the continuous case
       //
 
-      if ( *stop_smp == 0 )
-        {
-	  
-	  if ( *stop_rec == 0 )
-	    {
-	      *start_rec = *start_smp = *stop_rec = *stop_smp = 0;
-	      return false;
-	    }
+		      if ( stop_sample_u64 == 0 )
+		        {
+		  
+		  if ( *stop_rec == 0 )
+		    {
+                      if ( luna_re_debug_enabled() )
+                        std::cerr << "[LUNA_RE_DEBUG] interval2records(): stop rolled before first rec interval="
+                                  << interval.as_string()
+                                  << " start_rec=" << *start_rec
+	                                  << " start_smp=" << start_sample_u64
+	                                  << " stop_rec=" << *stop_rec
+	                                  << " stop_smp=" << stop_sample_u64
+	                                  << "\n";
+			      *start_rec = *start_smp = *stop_rec = *stop_smp = 0;
+			      return false;
+		    }
 	  
           *stop_rec = *stop_rec - 1;  
 	  
-          *stop_smp = n_samples_per_record == 0 ? globals::tp_1sec - 1LLU :
-	    n_samples_per_record - 1LLU;
-        }
-      else
-	{
-	  //	  std::cout << " shifting back now! from " << *stop_smp << "\n";
-	  *stop_smp = *stop_smp - 1 ;	  
-	}
-    }
+	          stop_sample_u64 = tp_mode ? globals::tp_1sec - 1LLU :
+		    n_samples_per_record - 1LLU;
+	        }
+	      else
+		{
+		  //	  std::cout << " shifting back now! from " << *stop_smp << "\n";
+		  --stop_sample_u64;
+		}
+
+              if ( tp_mode )
+                {
+                  *start_smp = 0;
+                  *stop_smp = 0;
+                }
+              else
+                {
+                  *start_smp = (int)start_sample_u64;
+                  *stop_smp = (int)stop_sample_u64;
+                }
+	    }
+
+  if ( luna_re_debug_enabled() )
+    std::cerr << "[LUNA_RE_DEBUG] interval2records(): interval=" << interval.as_string()
+              << " start=(" << *start_rec << "," << *start_smp << ")"
+              << " stop=(" << *stop_rec << "," << *stop_smp << ")"
+              << " cont=" << edf->header.continuous
+              << " n_samples_per_record=" << n_samples_per_record
+              << "\n";
 
   
   // std::cout << "recs = " << *start_rec << " " << *stop_rec << "\n";
@@ -628,7 +764,7 @@ bool timeline_t::interval2records( const interval_t & interval ,
   // stops entirely within a gap between two sample points
   //
   
-  if ( *start_rec > *stop_rec || ( *start_rec == *stop_rec && *start_smp > *stop_smp ) )
+  if ( *start_rec > *stop_rec || ( ! tp_mode && *start_rec == *stop_rec && *start_smp > *stop_smp ) )
     {
       *start_rec = *start_smp = *stop_rec = *stop_smp = 0;
       return false;
@@ -727,10 +863,21 @@ bool timeline_t::masked_record( int r ) const
   //    E1111|E22222|E33333|E44444
   //  e.g. 
 
-  if ( ! mask_set ) return false;
+  if ( ! mask_set )
+    {
+      if ( luna_re_debug_enabled() )
+        std::cerr << "[LUNA_RE_DEBUG] masked_record(r=" << r << "): mask_set=0 -> unmasked\n";
+      return false;
+    }
   
   std::map<int,std::set<int> >::const_iterator rr = rec2epoch.find(r);
-  if ( rr == rec2epoch.end() ) return true; // i.e. out of bounds
+  if ( rr == rec2epoch.end() )
+    {
+      if ( luna_re_debug_enabled() )
+        std::cerr << "[LUNA_RE_DEBUG] masked_record(r=" << r
+                  << "): no rec2epoch mapping -> masked\n";
+      return true; // i.e. out of bounds
+    }
   
 
   // OLD behavior : MASKED if spanned by ANY masked epoch
@@ -751,6 +898,9 @@ bool timeline_t::masked_record( int r ) const
       if ( ! mask[ *ee ] ) return false;
       ++ee;
     }
+  if ( luna_re_debug_enabled() )
+    std::cerr << "[LUNA_RE_DEBUG] masked_record(r=" << r
+              << "): all spanning epochs masked (n=" << epochs.size() << ")\n";
   return true;
 
 

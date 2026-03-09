@@ -96,9 +96,9 @@ class slice_t
   }
 
   
-  int size() const 
-  { 
-    return data.size(); 
+  int size() const
+  {
+    return data.empty() ? dig_data.size() : data.size();
   }
   
   interval_t duration() const ;

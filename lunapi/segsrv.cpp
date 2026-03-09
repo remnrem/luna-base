@@ -773,7 +773,8 @@ std::map<double,std::string> segsrv_t::get_hour_ticks() const
 }
 
 
-std::map<double,std::string> segsrv_t::get_clock_ticks(const int n) const
+std::map<double,std::string> segsrv_t::get_clock_ticks(const int n,
+						       const bool multiday ) const
 {
   std::map<double,std::string> t;
   //  if ( ! valid_window ) return t;
@@ -791,16 +792,30 @@ std::map<double,std::string> segsrv_t::get_clock_ticks(const int n) const
   int aint = awin;
   if ( aint < awin ) ++aint;
   
-  // start at (awin)  
-  clocktime_t t1 = edf_start;
+  // start at (awin)
+  clocktime_t t1 = multiday
+    ? clocktime_t( p->edf.header.startdate , p->edf.header.starttime )
+    : edf_start;
+  const bool use_multiday = multiday && t1.valid;
+  const int d0 = t1.d;
+
+  auto fmt_tick = [&]( const clocktime_t & tt ) -> std::string
+  {
+    const std::string hhmm =
+      Helper::zero_pad( tt.h , 2 ) + ":" + Helper::zero_pad( tt.m , 2 );
+    if ( ! use_multiday ) return "| " + hhmm;
+    const int day = tt.d - d0 + 1;
+    return "| " + Helper::int2str( day ) + "-" + hhmm;
+  };
+
   t1.advance_seconds( aint );  
-  t[ aint ] = "| " + t1.as_string( ':' );
+  t[ aint ] = fmt_tick( t1 );
 
   for (int p=1;p<n;p++)
     {
       aint += per;      
       t1.advance_seconds( per );
-      t[ aint ] = "| " + t1.as_string( ':' );
+      t[ aint ] = fmt_tick( t1 );
     }
 
   return t;

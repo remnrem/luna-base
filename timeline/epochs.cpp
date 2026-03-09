@@ -30,9 +30,24 @@
 #include "helper/logger.h"
 #include "helper/helper.h"
 #include "annot/annotate.h"
+#include <cstdlib>
+#include <iostream>
 
 extern writer_t writer;
 extern logger_t logger;
+
+// DEBUG-REPRO-BEGIN
+static bool luna_re_debug_enabled()
+{
+  static int state = -1;
+  if ( state == -1 )
+    {
+      const char * e = std::getenv( "LUNA_RE_DEBUG" );
+      state = ( e != NULL && *e != '\0' && *e != '0' ) ? 1 : 0;
+    }
+  return state == 1;
+}
+// DEBUG-REPRO-END
 
 bool timeline_t::generic_epochs() const
 {
@@ -766,6 +781,14 @@ int timeline_t::reset_epochs()
   
   if ( mask.size() != epochs.size() )
     Helper::halt( "internal error in timeline_t::reset_epochs() - mask size does not match epoch size" );
+
+  if ( luna_re_debug_enabled() )
+    std::cerr << "[LUNA_RE_DEBUG] reset_epochs(): epochs=" << epochs.size()
+              << " mask=" << mask.size()
+              << " rec2tp=" << rec2tp.size()
+              << " tp2rec=" << tp2rec.size()
+              << " record_duration_tp=" << edf->header.record_duration_tp
+              << "\n";
   
   for (int e=0; e<epochs.size(); e++)
     {
@@ -779,10 +802,18 @@ int timeline_t::reset_epochs()
 	  // nb, step back 1 from stop point, as will do a record-inclusive search
 	  //     but then need to add it back on...
 
-	  bool okay1 = remap_timepoint( e1.start , &(e2.start) );
-	  
-	  bool okay2 = remap_timepoint( e1.stop - 1LLU , &(e2.stop) );
-	  ++e2.stop;
+	      bool okay1 = remap_timepoint( e1.start , &(e2.start) );
+	      
+	      bool okay2 = remap_timepoint( e1.stop - 1LLU , &(e2.stop) );
+	      ++e2.stop;
+
+              if ( luna_re_debug_enabled() )
+                std::cerr << "[LUNA_RE_DEBUG] reset_epochs(): e=" << e
+                          << " mask=" << mask[e]
+                          << " e1=" << e1.as_string()
+                          << " map_start=" << okay1
+                          << " map_stop=" << okay2
+                          << " e2=" << e2.as_string() << "\n";
 
 
 	  
@@ -798,12 +829,18 @@ int timeline_t::reset_epochs()
 	      new_epochs.push_back( e1 );
 	      new_epoch_labels.push_back( epoch_labels[e] );
 	    }
-	  else
-	    {
-	      logger << "e" << e << "\tM"
-		     << mask[e] << "\t start/end mapping = "
-		     << okay1 << okay2 
-		     << "\t" << e1.as_string() << "\t" << e2.as_string() << "\n";
+		  else
+		    {
+                      if ( luna_re_debug_enabled() )
+                        std::cerr << "[LUNA_RE_DEBUG] reset_epochs(): HALT e=" << e
+                                  << " e1=" << e1.as_string()
+                                  << " e2=" << e2.as_string()
+                                  << " okay1=" << okay1
+                                  << " okay2=" << okay2 << "\n";
+		      logger << "e" << e << "\tM"
+			     << mask[e] << "\t start/end mapping = "
+			     << okay1 << okay2 
+			     << "\t" << e1.as_string() << "\t" << e2.as_string() << "\n";
 	      Helper::halt( "internal error in timeline_t::reset_epochs()" );
 	    }
 	}      
@@ -824,9 +861,33 @@ int timeline_t::reset_epochs()
   for (int e=0; e<epochs.size(); e++)
     {
       const interval_t interval = epochs[e];
+
+      int dbg_start_rec = 0, dbg_start_smp = 0, dbg_stop_rec = 0, dbg_stop_smp = 0;
+      bool dbg_any = false;
+      if ( luna_re_debug_enabled() )
+        dbg_any = interval2records( interval , 0LLU , &dbg_start_rec , &dbg_start_smp , &dbg_stop_rec , &dbg_stop_smp );
       
       // get the records in this epoch      
       std::set<int> records = records_in_interval( interval );
+
+      if ( luna_re_debug_enabled() )
+        {
+          std::cerr << "[LUNA_RE_DEBUG] reset_epochs(): epoch=" << e
+                    << " interval=" << interval.as_string()
+                    << " interval2records_any=" << dbg_any
+                    << " start=(" << dbg_start_rec << "," << dbg_start_smp << ")"
+                    << " stop=(" << dbg_stop_rec << "," << dbg_stop_smp << ")"
+                    << " records.size=" << records.size()
+                    << "\n";
+
+          std::set<int>::const_iterator rri = records.begin();
+          while ( rri != records.end() )
+            {
+              std::cerr << "[LUNA_RE_DEBUG] reset_epochs(): epoch=" << e
+                        << " record=" << *rri << "\n";
+              ++rri;
+            }
+        }
 
       //std::cout << " got " << records.size() << "  in epoch " << e << "\n";
       
@@ -838,6 +899,28 @@ int timeline_t::reset_epochs()
 	  rec2epoch[ *rr ].insert( e );	  
 	  ++rr;
 	}      
+    }
+
+  if ( luna_re_debug_enabled() )
+    {
+      std::cerr << "[LUNA_RE_DEBUG] reset_epochs(): rebuilt mappings rec2epoch.size="
+                << rec2epoch.size()
+                << " epoch2rec.size=" << epoch2rec.size()
+                << "\n";
+
+      std::map<int,std::set<int> >::const_iterator rr = rec2epoch.begin();
+      while ( rr != rec2epoch.end() )
+        {
+          std::cerr << "[LUNA_RE_DEBUG] reset_epochs(): rec2epoch r=" << rr->first << " ->";
+          std::set<int>::const_iterator ee = rr->second.begin();
+          while ( ee != rr->second.end() )
+            {
+              std::cerr << " " << *ee;
+              ++ee;
+            }
+          std::cerr << "\n";
+          ++rr;
+        }
     }
 
   
@@ -1850,5 +1933,3 @@ void timeline_t::debug_dump_epochs()
       ++ii;
     }
 }
-
-

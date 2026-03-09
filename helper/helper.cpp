@@ -1208,9 +1208,13 @@ bool date_t::is_valid( const std::string & dt , const date_format_t format )
   
   if ( ! Helper::str2int( s_yr , &y1 ) ) return false;
  
-  if ( d1 < 1 || d1 > 31 ) return false;
-  if ( m1 < 1 || m1 > 12 ) return false;    
-  if ( y1 < 0 || y1 >= 100 ) return false;
+  // apply YY -> YYYY expansion (mirrors init()) so day-range check uses real year
+  if      ( y1 >= 0  && y1 < 85  ) y1 += 2000;
+  else if ( y1 >= 85 && y1 < 100 ) y1 += 1900;
+
+  if ( y1 < 1985 || y1 > 3000 ) return false;
+  if ( m1 < 1 || m1 > 12 ) return false;
+  if ( d1 < 1 || d1 > days_in_month( m1 , y1 ) ) return false;
 
   return true;
 }
@@ -1253,8 +1257,10 @@ std::string date_t::datestring( int c , const std::string & delim , const int yd
   d += c;
 
   // return string
-  if ( ydigs == 4 ) 
-    return Helper::int2str( d ) + delim + Helper::int2str( m ) + delim + Helper::int2str( y );
+  if ( ydigs == 4 )
+    return ( d < 10 ? "0" : "" ) + Helper::int2str( d )
+      + delim + ( m < 10 ? "0" : "" ) + Helper::int2str( m )
+      + delim + Helper::int2str( y );
   else if ( ydigs == 2 ) // for EDF startdate formats (fixed char lengths)
     return ( d < 10 ? "0" : "" ) + Helper::int2str( d )
       + delim + ( m < 10 ? "0" : "" ) + Helper::int2str( m )

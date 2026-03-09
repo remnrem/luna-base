@@ -88,7 +88,7 @@ endif
 
 # objects
 libluna.a : $(OBJS)
-	$(AR) $(ARFLAGS) $@ $?
+	$(AR) $(ARFLAGS) $@ $^
 	$(RANLIB) $@
 
 static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a

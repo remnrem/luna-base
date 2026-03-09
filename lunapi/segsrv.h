@@ -446,7 +446,7 @@ public:
   std::string get_window_left_hms() const; 
   std::string get_window_right_hms() const; 
   std::string get_hms( const double s ) const;
-  std::map<double,std::string> get_clock_ticks(const int n) const;
+  std::map<double,std::string> get_clock_ticks(const int n, const bool multiday) const;
   std::map<double,std::string> get_hour_ticks() const;
   double get_total_sec() const; 
   double get_total_sec_original() const; // not impacted by mask - for hypno viz etc

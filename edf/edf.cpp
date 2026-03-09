@@ -40,9 +40,23 @@
 
 #include <iostream>
 #include <fstream>
+#include <cstdlib>
 
 extern writer_t writer;
 extern logger_t logger;
+
+// DEBUG-REPRO-BEGIN
+static bool luna_re_debug_enabled()
+{
+  static int state = -1;
+  if ( state == -1 )
+    {
+      const char * e = std::getenv( "LUNA_RE_DEBUG" );
+      state = ( e != NULL && *e != '\0' && *e != '0' ) ? 1 : 0;
+    }
+  return state == 1;
+}
+// DEBUG-REPRO-END
 
 
 edf_t::edf_t( annotation_set_t * a ) : timeline( this )
@@ -1064,23 +1078,27 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , edfz2_t * edfz2,
       if ( x == 0 )
 	logger << "  *** warning, " << s << " has SR of 0 and should be dropped\n";
       
-      // non-integer SR ? 
+      // non-integer SR (only show for SRs > 1 Hz) ? 
       const bool annotation = Helper::imatch( tlabels[s] , "EDF Annotation" , 14 ) ;
       if ( ! annotation )
 	{
 
 	  double sr = x / record_duration;
 
-	  const bool non_integer = std::fabs(sr - std::round(sr)) > 1e-6;
-	  
-	  if ( non_integer )
+	  if ( sr > 1 )
 	    {
-	      logger << "  *** warning, signal " << s << " ( " << tlabels[s] << " ) has a non-integer SR\n"
-		     << "  *** may wish to use RECORD-SIZE if this is due to a fractional EDF record size\n"
-		     << "  *** (it will resample signals to fit in a new regular, e.g. dur=1, record size)\n"
-		     << "    - record size        = " << record_duration << " seconds\n"
-		     << "    - samples per record = " << x << "\n"
-		     << "    - implied SR         = " << x << " / " << record_duration << " = " << sr << "\n";
+	      
+	      const bool non_integer = std::fabs(sr - std::round(sr)) > 1e-6;
+	      
+	      if ( non_integer && sr >= 1 )
+		{
+		  logger << "  *** warning, signal " << s << " ( " << tlabels[s] << " ) has a non-integer SR\n"
+			 << "  *** you may wish to use RECORD-SIZE if due to a fractional EDF record size\n"
+			 << "  *** (it will resample signals to fit in a new regular, e.g. dur=1, record size)\n"
+			 << "    - record size        = " << record_duration << " seconds\n"
+			 << "    - samples per record = " << x << "\n"
+			 << "    - implied SR         = " << x << " / " << record_duration << " = " << sr << "\n";
+		}
 	    }
 	}
       if ( channels.find(s) != channels.end() )
@@ -1312,10 +1330,10 @@ bool edf_t::read_records( int r1 , int r2 )
   // not already in memory
 
   if ( r1 < 0 ) r1 = 0;
-  if ( r1 > header.nr_all ) r1 = header.nr_all - 1;
-  
+  if ( r1 >= header.nr_all ) r1 = header.nr_all - 1;
+
   if ( r2 < r1 ) r2 = r1;
-  if ( r2 > header.nr_all ) r2 = header.nr_all - 1;
+  if ( r2 >= header.nr_all ) r2 = header.nr_all - 1;
   
   //  std::cerr << "edf_t::read_records :: scanning ... r1, r2 " << r1 << "\t" << r2 << "\n";
   
@@ -1413,7 +1431,7 @@ bool edf_t::init_empty( const std::string & i ,
 
 bool edf_t::read_from_ascii( const std::string & f , // filename
 			     const std::string & i , // id
-			     const int Fs , // fixed Fs for all signals
+			     const int Fs_ ,         // fixed Fs for all signals
 			     const std::vector<std::string> & labels0 ,  // if null, look for header
 			     const std::string & startdate , 
 			     const std::string & starttime 
@@ -1430,6 +1448,12 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
 
   std::vector<std::string> labels;
 
+  const bool sub1 = Fs_ < 0 ;
+
+  if ( Fs_ == 0 ) Helper::halt( "sample rate cannot be 0" );
+
+  const int Fs = abs( Fs_ );
+  
   if ( has_arg_labels ) labels = labels0;
 
   if ( ! Helper::fileExists( filename ) ) 
@@ -1460,22 +1484,41 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
     }
   
       
-  // has a header row (whether we want to use it or not)
+  // detect header row:
+  // 1) explicit '#' prefix, or
+  // 2) implicit non-numeric first row (unless channel labels provided via --chs)
 
-  if ( line[0] == '#' ) 
+  std::string header_line = line;
+
+  if ( line[0] == '#' )
     {
       has_header_labels = true;
-      if ( has_arg_labels ) 
+      header_line = line.substr(1);
+    }
+  else if ( ! has_arg_labels )
+    {
+      std::vector<std::string> tok = Helper::parse( line , "\t ," );
+      bool all_numeric = tok.size() > 0;
+      for (int t=0; t<tok.size(); t++)
+	{
+	  double x = 0;
+	  if ( ! Helper::str2dbl( tok[t] , &x ) )
+	    {
+	      all_numeric = false;
+	      break;
+	    }
+	}
+      has_header_labels = ! all_numeric;
+    }
+
+  if ( has_header_labels )
+    {
+      if ( has_arg_labels )
 	logger << "  ignoring header row in " << filename << " as channel labels specified with --chs\n" ;
       else
-	{
-	  line = line.substr(1);
-	  labels = Helper::parse( line , "\t ," );
-	}
-    } 
-
-  // if no arg or header labels, we need to make something up 
-  else if ( ! has_arg_labels ) 
+	labels = Helper::parse( header_line , "\t ," );
+    }
+  else if ( ! has_arg_labels )
     {
       std::vector<std::string> tok = Helper::parse( line , "\t ," );
       labels.resize( tok.size() );
@@ -1527,9 +1570,19 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
     }
 
   // will ignore any partial records at the end of the file
-  int nr = np / Fs;
-  np = nr * Fs;
 
+  int nr;
+
+  if ( sub1 ) // special case for < 1 Hz signals
+    {
+      nr = np;
+    }
+  else
+    {
+      nr = sub1 ? np : np / Fs;
+      np = nr * Fs;
+    }
+  
   if ( compressed ) 
     IN1.close();
   else
@@ -1569,7 +1622,7 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   header.ns = 0; // these will be added by add_signal()
   header.ns_all = ns; // check this... should only matter for EDF access, so okay... 
   header.nr = header.nr_all = nr;  // likewise, value of nr_all should not matter, but set anyway
-  header.record_duration = 1;
+  header.record_duration = sub1 ? Fs : 1; // if SR < 1 Hz, make record size == Fs, so one sample per second;
   header.record_duration_tp = header.record_duration * globals::tp_1sec;
 
   
@@ -1589,8 +1642,11 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   //
 
   logger << "  reading " << ns << " signals, " 
-	 << nr << " seconds ("
-	 << np << " samples " << Fs << " Hz) from " << filename << "\n";
+	 << nr << " seconds (";
+  if ( Fs_ > 0 )
+    logger << np << " samples " << Fs << " Hz) from " << filename << "\n";
+  else
+    logger << np << " samples 1/" << Fs << " Hz) from " << filename << "\n";
 
   Data::Matrix<double> data( np , ns );
   
@@ -1645,7 +1701,7 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   //
   
   for (int s=0;s<ns;s++)
-    add_signal( labels[s] , Fs , *data.col(s).data_pointer() );
+    add_signal( labels[s] , sub1 ? -1 : Fs , *data.col(s).data_pointer() );
 
   return true;
 }
@@ -4278,6 +4334,32 @@ bool edf_t::restructure( const bool force , const bool verbose , const bool pres
 
   timeline.set_epoch_mapping();
 
+  if ( luna_re_debug_enabled() )
+    {
+      std::cerr << "[LUNA_RE_DEBUG] edf_t::restructure(): begin"
+                << " nr=" << header.nr
+                << " nr_all=" << header.nr_all
+                << " rec2tp=" << timeline.rec2tp.size()
+                << " rec2epoch=" << timeline.rec2epoch.size()
+                << " mask_set=" << timeline.is_epoch_mask_set()
+                << " force=" << force
+                << "\n";
+
+      std::map<int,std::set<int> >::const_iterator rr = timeline.rec2epoch.begin();
+      while ( rr != timeline.rec2epoch.end() )
+        {
+          std::cerr << "[LUNA_RE_DEBUG] edf_t::restructure(): rec2epoch r=" << rr->first << " ->";
+          std::set<int>::const_iterator ee = rr->second.begin();
+          while ( ee != rr->second.end() )
+            {
+              std::cerr << " " << *ee;
+              ++ee;
+            }
+          std::cerr << "\n";
+          ++rr;
+        }
+    }
+
   //
   // Check that we have anything to do
   //
@@ -4371,6 +4453,13 @@ bool edf_t::restructure( const bool force , const bool verbose , const bool pres
       // is this masked in the current retained set?
       bool unmasked  = !timeline.masked_record(r);
 
+      if ( luna_re_debug_enabled() )
+        std::cerr << "[LUNA_RE_DEBUG] edf_t::restructure(): r=" << r
+                  << " retained=" << retained
+                  << " unmasked=" << unmasked
+                  << " found=" << found
+                  << "\n";
+
       if ( verbose )
 	{
 	  const uint64_t tp = timeline.rec2tp[ r ] ;
@@ -4404,13 +4493,18 @@ bool edf_t::restructure( const bool force , const bool verbose , const bool pres
 	    }
 	}
       
-      if ( retained )
-	if ( unmasked ) 
-	  {
-	    if ( ! found ) read_records( r, r );	      
-	    include.insert( r );
-	  }    
-    }
+	      if ( retained )
+		if ( unmasked ) 
+		  {
+		    if ( ! found ) read_records( r, r );	      
+		    include.insert( r );
+                    if ( luna_re_debug_enabled() )
+                      std::cerr << "[LUNA_RE_DEBUG] edf_t::restructure(): include r=" << r << "\n";
+		  }    
+	    }
+
+  if ( luna_re_debug_enabled() )
+    std::cerr << "[LUNA_RE_DEBUG] edf_t::restructure(): include.size=" << include.size() << "\n";
 
   if ( verbose )
     writer.unlevel( "REC" );

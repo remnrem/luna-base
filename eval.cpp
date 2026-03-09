@@ -24,6 +24,7 @@
 #include "eval.h"
 #include "param.h"
 #include "luna.h"
+#include "timeline/actig.h"
 
 extern logger_t logger;
 
@@ -895,6 +896,8 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "ANNOTS" ) )       { fnd = true; proc_list_all_annots( edf, param(c) ); }
       if ( (!fnd) && is( c, "ESPAN" ) )        { fnd = true; proc_espan( edf , param(c) ); }
       if ( (!fnd) && is( c, "MAKE-ANNOTS" ) )  { fnd = true; proc_make_annots( edf , param(c) ); }
+      if ( (!fnd) && is( c, "DAYS" ) )         { fnd = true; proc_days( edf , param(c) ); }
+      if ( (!fnd) && is( c, "ACTIG" ) )        { fnd = true; proc_actig( edf , param(c) ); }
       if ( (!fnd) && is( c, "WRITE-ANNOTS" ) ) { fnd = true; proc_write_annots( edf, param(c) ); }
       if ( (!fnd) && is( c, "META" ) )         { fnd = true; proc_set_annot_metadata( edf, param(c) );  }
       if ( (!fnd) && is( c, "OVERLAP") )       { fnd = true; proc_annotate( edf, param(c) ); }
@@ -3393,6 +3396,18 @@ void proc_make_annots( edf_t & edf , param_t & param )
   edf.annotations->make( param , edf );
 }
 
+
+// DAYS : create day/hour clock-time annotations
+void proc_days( edf_t & edf , param_t & param )
+{
+  actig::days( edf , param );
+}
+
+// ACTIG : nonparametric circadian metrics and wake/sleep scoring
+void proc_actig( edf_t & edf , param_t & param )
+{
+  actig::actig( edf , param );
+}
 
 // META : set annotation meta-data
 void proc_set_annot_metadata( edf_t & edf , param_t & param )

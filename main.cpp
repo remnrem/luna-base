@@ -881,7 +881,7 @@ void process_edfs( cmd_t & cmd )
       if ( single_txt )
 	{
 	  
-	  int fs = globals::param.requires_int( "-fs" );
+	  int fs = globals::param.requires_int( "-fs" ); // -ve value means 1/R
 	  std::string startdate = globals::param.has("-date") ? globals::param.value( "-date" ) : "01.01.00" ; 
 	  std::string starttime = globals::param.has("-time") ? globals::param.value( "-time" ) : "00.00.00" ; 
 	  std::string id = globals::param.has("-id") ? globals::param.value( "-id" ) : rootname ; 

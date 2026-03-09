@@ -211,12 +211,12 @@ class real_FFT
   
   real_FFT() { } 
 
-  real_FFT( int Ndata , int Nfft , int Fs , window_function_t window = WINDOW_NONE ) 
+  real_FFT( int Ndata , int Nfft , double Fs , window_function_t window = WINDOW_NONE ) 
     {
       init( Ndata , Nfft , Fs , window );
     }
   
-  void init( int Ndata , int Nfft , int Fs , window_function_t window = WINDOW_NONE );
+  void init( int Ndata , int Nfft , double Fs , window_function_t window = WINDOW_NONE );
 
   void norm_fac( const double f ) { normalisation_factor = f; } 
 
@@ -230,7 +230,7 @@ class real_FFT
   int Ndata;
   
   // Sampling rate, so we can construct the appropriate Hz for the PSD
-  int Fs;
+  double Fs;
 
   // Forward or inverse FFT?
   fft_t type;
@@ -424,7 +424,7 @@ class PWELCH
  public:
   
  PWELCH( const std::vector<double> & data , 
-	 int Fs, 
+	 double Fs, 
 	 double M , 
 	 int noverlap_segments , 
 	 window_function_t W = WINDOW_TUKEY50 , 
@@ -523,7 +523,7 @@ class PWELCH
   const std::vector<double> & data;
   
   // sampling rate (points per second)
-  const int Fs; 
+  const double Fs; 
   
   // split segment into L intervals of length M (in seconds)
   double M;  

@@ -1143,7 +1143,8 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		a->types.clear();
 
 	      // update local tracker of meta-col order
-	      cols[ a ] = cols[ oo->second ] ;
+	      if ( has_original )
+		cols[ a ] = cols[ oo->second ] ;
 	      
 	      // and now update this iterator
 	      aa = annot_map.find( aname );
@@ -1306,10 +1307,10 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		  // did we encounter an issue when parsing a line?
 		  //
 		  
-		  if ( interval.start == 123456789 && interval.stop == 987654321 )
+		  if ( ninterval.start == 123456789 && ninterval.stop == 987654321 )
 		    return false;
 
-		  
+
 		  // Check for valid ordering: i.e. start of next cannot be before start of prior
 		  
 		  if ( interval.start >= ninterval.start )
@@ -1661,7 +1662,7 @@ interval_t annot_t::get_interval( const std::string & line ,
   
   if ( eline2 && ! eline ) 
     {
-      Helper::vmode_halt( "not a valid epoch row if only second field has e:N encoding");
+      Helper::vmode_halt( "not a valid epoch row if only second field has e:N encoding:\n" + line);
       return interval_t( 123456789, 987654321 ); // special fail code
     }
 
@@ -1701,12 +1702,12 @@ interval_t annot_t::get_interval( const std::string & line ,
 	// expect d1-hh:mm:ss etc or d1 hh:mm:ss etc or d1/hh:mm:ss
 	// expect d2-hh:mm:ss etc
 	std::vector<std::string> dtok = Helper::parse( tok[dd] , "- " );
-	if ( dtok.size() != 2 ) Helper::halt( "bad format: " + tok[dd] );
+	if ( dtok.size() != 2 ) Helper::halt( "bad format: " + tok[dd] + "\n" + line );
 	int day = 0;
 	if ( ! Helper::str2int( dtok[0].substr(1) , &day ) )
 	  Helper::halt( "bad format: " + tok[dd] );
 	if ( day < 1 || day > 100 )
-	  Helper::halt( "expecting d1, d2, ... (up to d100): " + tok[dd] );      
+	  Helper::halt( "expecting d1, d2, ... (up to d100): " + tok[dd] + "\n" + line );      
 	clocktime_t edate = startdatetime;
 	edate.advance_days( day - 1 );
 	// reconstruct
@@ -1728,7 +1729,7 @@ interval_t annot_t::get_interval( const std::string & line ,
       
       if ( parent_edf.header.edfplus || ! parent_edf.header.continuous ) 
 	{
-	  Helper::vmode_halt( "cannot use e:1 notation in .annot files with (discontinuous) EDF+ files" );
+	  Helper::vmode_halt( "cannot use e:1 notation in .annot files with (discontinuous) EDF+ files\n" + line);
 	  return interval_t( 123456789, 987654321 );
 	}  
       
@@ -1740,13 +1741,13 @@ interval_t annot_t::get_interval( const std::string & line ,
       
       if ( tok2.size() < 2 || tok2.size() > 4 ) 
 	{
-	  Helper::vmode_halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
+	  Helper::vmode_halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc\n" + line);
 	  return interval_t( 123456789, 987654321 );
 	}
       
       if ( tok2[0] != "e" ) 
 	{
-	  Helper::vmode_halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );	    
+	  Helper::vmode_halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc\n" + line);
 	  return interval_t( 123456789, 987654321 );
 	}
       
@@ -1756,37 +1757,37 @@ interval_t annot_t::get_interval( const std::string & line ,
       
       if ( ! Helper::str2int( tok2[ tok2.size() - 1 ] , &epoch ) ) 
 	{
-	  Helper::vmode_halt( "invalid epoch: " + tok[2] );
+	  Helper::vmode_halt( "invalid epoch: " + tok[2] + "\n" + line);
 	  return interval_t( 123456789, 987654321 );		    
 	}
       
       if ( epoch == 0 ) 
 	{
-	  Helper::vmode_halt( "invalid E value of '0' (first epoch should be '1')" );
+	  Helper::vmode_halt( "invalid E value of '0' (first epoch should be '1')\n" + line );
 	  return interval_t( 123456789, 987654321 );	
 	}
       
       if ( tok2.size() >= 3 ) 
 	if ( ! Helper::str2int( tok2[ 1 ] , &epoch_length ) ) 
 	  {
-	    Helper::vmode_halt( "invalid epoch length:  " + tok[2] );
+	    Helper::vmode_halt( "invalid epoch length:  " + tok[2] + "\n" + line );
 	    return interval_t( 123456789, 987654321 );		  
 	  }
       
-      if ( tok2.size() == 4  ) 
-	if ( ! Helper::str2int( tok2[ 1 ] , &epoch_increment ) ) 
+      if ( tok2.size() == 4  )
+	if ( ! Helper::str2int( tok2[ 2 ] , &epoch_increment ) )
 	  {
-	    Helper::vmode_halt( "invalid epoch increment:  " + tok[2] );
+	    Helper::vmode_halt( "invalid epoch increment:  " + tok[2] + "\n" + line );
 	    return interval_t( 123456789, 987654321 );
 	  }
-      
+
       uint64_t epoch_length_tp = Helper::sec2tp( epoch_length );
-      
+
       uint64_t epoch_increment_tp = Helper::sec2tp( epoch_increment );
-      
+
       // set interval from current line
       // last point is defined as point *past* end of interval
-      
+
       interval.start = epoch_increment_tp * (epoch-1);
       interval.stop  = interval.start + epoch_length_tp;
       
@@ -1800,13 +1801,13 @@ interval_t annot_t::get_interval( const std::string & line ,
 	  
 	  if ( tok2.size() < 2 || tok2.size() > 4 ) 
 	    {
-	      Helper::vmode_halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );
+	      Helper::vmode_halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc\n" + line );
 	      return interval_t( 123456789, 987654321 );
 	    }
 
 	  if ( tok2[0] != "e" ) 
 	    {
-	      Helper::vmode_halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc" );	    
+	      Helper::vmode_halt( "bad epoch specification, expecting e:1, e:30:1, e:30:30:1, etc\n" + line);
 	      return interval_t( 123456789, 987654321 );
 	    }
 	  
@@ -1814,30 +1815,30 @@ interval_t annot_t::get_interval( const std::string & line ,
 	  
 	  if ( ! Helper::str2int( tok2[ tok2.size() - 1 ] , &epoch ) ) 
 	    {	      
-	      Helper::vmode_halt( "invalid epoch: " + tok[2] );
+	      Helper::vmode_halt( "invalid epoch: " + tok[2] + "\n" + line);
 	      return interval_t( 123456789, 987654321 );
 	    }
 	  
 	  if ( epoch == 0 )
 	    {
-	      Helper::vmode_halt( "invalid E value of '0' (first epoch should be '1')" );
+	      Helper::vmode_halt( "invalid E value of '0' (first epoch should be '1')\n" + line );
 	      return interval_t( 123456789, 987654321 );
 	    }
 	  
 	  if ( tok2.size() >= 3 ) 
 	    if ( ! Helper::str2int( tok2[ 1 ] , &epoch_length ) ) 
 	      {
-		Helper::vmode_halt( "invalid epoch length:  " + tok[2] );
+		Helper::vmode_halt( "invalid epoch length:  " + tok[2]  + "\n" + line );
 		return interval_t( 123456789, 987654321 );
 	      }
 	  
-	  if ( tok2.size() == 4  ) 
-	    if ( ! Helper::str2int( tok2[ 1 ] , &epoch_increment ) ) 
+	  if ( tok2.size() == 4  )
+	    if ( ! Helper::str2int( tok2[ 2 ] , &epoch_increment ) )
 	      {
-		Helper::vmode_halt( "invalid epoch increment:  " + tok[2] );
+		Helper::vmode_halt( "invalid epoch increment:  " + tok[2]  + "\n" + line );
 		return interval_t( 123456789, 987654321 );
 	      }
-	  
+
 	  uint64_t epoch_length_tp = Helper::sec2tp( epoch_length );
 	  
 	  uint64_t epoch_increment_tp = Helper::sec2tp( epoch_increment );
@@ -1894,8 +1895,8 @@ interval_t annot_t::get_interval( const std::string & line ,
       bool is_hms2 = ( *readon || col2dur ) ? false : ( tok_stop_hms.size() == 3 || tok_stop_hms.size() == 4 );
 
       // check for invalid hh:mm or mm:ss forms
-      if ( tok_start_hms.size() == 2 ) Helper::halt( "invalid time string: " + start_str );
-      if ( tok_stop_hms.size() == 2 ) Helper::halt( "invalid time string: " + stop_str );
+      if ( tok_start_hms.size() == 2 ) Helper::halt( "invalid time string: " + start_str  + "\n" + line);
+      if ( tok_stop_hms.size() == 2 ) Helper::halt( "invalid time string: " + stop_str  + "\n" + line);
       
       //      std::cout << " is hms = " << is_hms1 << " " << is_hms2 << "\n";
       
@@ -1932,7 +1933,7 @@ interval_t annot_t::get_interval( const std::string & line ,
 
 	      if ( atime.d != 0 )
 		{
-		  Helper::halt( "elapsed clock-times cannot contain dates: format = 0+hh:mm:ss" );
+		  Helper::halt( "elapsed clock-times cannot contain dates: format = 0+hh:mm:ss\n" + line);
 		  return interval_t( 123456789, 987654321 );
 		}
 
@@ -1962,7 +1963,10 @@ interval_t annot_t::get_interval( const std::string & line ,
 		  if ( globals::check_annot_dates ) 
 		    if ( abs( startdatetime.d - atime.d ) > 365 )
 		      {
-			Helper::vmode_halt( "annotation start date > 1 year from EDF start... please check data" );		  
+			logger << "  EDF start  : " << startdatetime.as_datetime_string() << "\n"
+			       << "  annotation : " << atime.as_datetime_string() << "\n";
+
+			Helper::vmode_halt( "annotation start date > 1 year from EDF start... please check data\n" + line );		  
 			return interval_t( 123456789, 987654321 );
 		      }
 		  
@@ -1977,7 +1981,7 @@ interval_t annot_t::get_interval( const std::string & line ,
 	      else if ( startdatetime.d == 0 && atime.d != 0 )
 		{
 		  // do not allow date info in annot if EDF start is null
-		  Helper::vmode_halt( "cannot specify annotations with date-times if the EDF start date is null (1.1.85)" );
+		  Helper::vmode_halt( "cannot specify date-times if EDF start date is null (1.1.85)\n" + line );
 		  return interval_t( 123456789, 987654321 );
 		  
 		}
@@ -2022,7 +2026,7 @@ interval_t annot_t::get_interval( const std::string & line ,
 	      
 	      if ( btime.d != 0 )
                 {
-		  Helper::vmode_halt( "elapsed clock-times cannot contain dates: format = 0+hh:mm:ss" );
+		  Helper::vmode_halt( "elapsed clock-times cannot contain dates: format = 0+hh:mm:ss\n" + line );
 		  return interval_t( 123456789, 987654321 );
 		}
 	      
@@ -2044,7 +2048,7 @@ interval_t annot_t::get_interval( const std::string & line ,
 		}
 	      else if ( startdatetime.d == 0 && btime.d != 0 )
 		{
-		  Helper::vmode_halt( "cannot specify annotations with date-times if the EDF start date is null (1.1.85)" );
+		  Helper::vmode_halt( "cannot specify date-times if EDF start date is null (1.1.85)\n" + line);
 		  return interval_t( 123456789, 987654321 );
 		}
 	      else

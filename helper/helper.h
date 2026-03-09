@@ -449,8 +449,10 @@ struct date_t {
 
   std::string as_string( char delim = '-' , const int ydigs = 4 ) const
   {
-    if ( ydigs == 4 ) 
-      return Helper::int2str( d ) + delim + Helper::int2str( m ) + delim + Helper::int2str( y );
+    if ( ydigs == 4 )
+      return ( d < 10 ? "0" : "" ) + Helper::int2str( d )
+	+ delim + ( m < 10 ? "0" : "" ) + Helper::int2str( m )
+	+ delim + Helper::int2str( y );
     else if ( ydigs == 2 ) // for EDF startdate formats (fixed char lengths)
       return ( d < 10 ? "0" : "" ) + Helper::int2str( d )
 	+ delim + ( m < 10 ? "0" : "" ) + Helper::int2str( m )
@@ -498,6 +500,19 @@ struct date_t {
     return d < rhs.d;
   }
 
+  bool operator==( const date_t & rhs ) const { return d == rhs.d && m == rhs.m && y == rhs.y; }
+  bool operator!=( const date_t & rhs ) const { return !( *this == rhs ); }
+  bool operator>( const date_t & rhs )  const { return rhs < *this; }
+  bool operator<=( const date_t & rhs ) const { return !( rhs < *this ); }
+  bool operator>=( const date_t & rhs ) const { return !( *this < rhs ); }
+
+  // 0=Sunday, 1=Monday, ..., 5=Friday, 6=Saturday
+  // Jan 1 1985 (count=0) was a Tuesday, so offset by +2
+  int day_of_week() const { return ( count(*this) + 2 ) % 7; }
+
+  bool is_weekend() const { int dow = day_of_week(); return dow == 0 || dow == 6; }
+  bool is_weekday() const { return !is_weekend(); }
+
   void next_day()
   {
     ++d;
@@ -521,15 +536,15 @@ struct date_t {
 
     if ( d == 0 )
       {
-	
+
 	--m;
 
-	if ( m > 0 )
+	if ( m == 0 )
 	  {
 	    --y;
 	    m = 12;
 	  }
-	
+
 	d = days_in_month( m , y );
       }
   }

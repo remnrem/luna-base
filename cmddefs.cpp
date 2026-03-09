@@ -55,7 +55,6 @@ std::string wrap_text( const std::string & text , const int width )
 
       if ( blank )
         {
-          if ( ! first_paragraph ) out << "\n";
           out << "\n";
           first_paragraph = false;
           continue;
@@ -143,6 +142,7 @@ void cmddefs_t::init()
   add_domain( "physio"     , "Physiology"       , "ECG, EMG and related physiological analyses" );
   add_domain( "hypno"      , "Hypnograms"       , "Characterizations of hypnograms" );
   add_domain( "stage"      , "Staging"          , "Automated staging/stage evaluation" );
+  add_domain( "actig"      , "Actigraphy"       , "Actigraphy: circadian metrics and wake/sleep scoring" );
   add_domain( "power"      , "Time/frequency analysis" , "TF including power spectral density estimation" );
   add_domain( "trans"      , "NREM transients (spindle/SO)"  , "Spindles and slow oscillations" );
   add_domain( "cc"         , "Coupling/connectvitiy" , "Coherence and other topographical analyses" );
@@ -1165,9 +1165,202 @@ void cmddefs_t::init()
 
 
   //
+  // DAYS
+  //
+
+  add_cmd( "actig" , "DAYS" , "Create day and clock-time annotations for multi-day recordings" );
+  add_url( "DAYS" , "annotations/#days" );
+  add_verb( "DAYS" ,
+	    "DAYS creates annotations marking calendar days and optionally hourly clock-time\n"
+	    "periods across the recording. Designed for multi-day recordings such as actigraphy.\n"
+	    "\n"
+	    "Day annotations (day1, day2, ...) span from the recording start to the first\n"
+	    "day boundary, then each subsequent 24-hour period. By default days start at\n"
+	    "noon; use anchor to change (e.g. anchor=0 for midnight-to-midnight).\n"
+	    "\n"
+	    "With the hours option, hourly annotations (00h..23h) are added, each spanning\n"
+	    "the corresponding clock hour across all days. With halves, AM and PM annotations\n"
+	    "are created spanning midnight-to-noon and noon-to-midnight respectively." );
+
+  add_param( "DAYS" , "anchor" , "12" , "Hour (0-23) at which a new day begins (default: 12 = noon)" );
+  add_param( "DAYS" , "prefix" , "day" , "Prefix for day annotation labels (default: day)" );
+  add_param( "DAYS" , "hours" , "" , "Also create hourly annotations (00h, 01h, ..., 23h)" );
+  add_param( "DAYS" , "hour-prefix" , "" , "Prefix for hourly annotation labels" );
+  add_param( "DAYS" , "halves" , "" , "Also create AM and PM annotations" );
+  add_param( "DAYS" , "verbose" , "" , "Output day-level details to the output database" );
+
+
+  //
+  // ACTIG
+  //
+
+  add_cmd( "actig" , "ACTIG" , "Actigraphy nonparametric metrics and wake/sleep scoring" );
+  add_url( "ACTIG" , "annotations/#actig" );
+  add_verb( "ACTIG" ,
+	    "ACTIG computes standard nonparametric circadian rhythm metrics\n"
+	    "and optionally performs wake/sleep scoring from an activity signal.\n"
+	    "Gaps (non-wear, bad data) are handled automatically: run MASK and\n"
+	    "RE before ACTIG to mark bad intervals. Epochs with insufficient\n"
+	    "samples (< gap-min-pct of expected) are flagged as gaps and\n"
+	    "excluded from all calculations. Gap runs are annotated as ACTIG_G.\n"
+	    "\n"
+	    "Nonparametric metrics (always computed):\n"
+	    "  IS   Interdaily stability (0=random, 1=perfectly regular)\n"
+	    "  IV   Intradaily variability (~0=smooth, >1=fragmented)\n"
+	    "  L5   Mean activity in the least active 5h window\n"
+	    "  M10  Mean activity in the most active 10h window\n"
+	    "  RA   Relative amplitude: (M10-L5)/(M10+L5)\n"
+	    "\n"
+	    "Wake/sleep scoring methods (with score option):\n"
+	    "  luna       Generic robust scorer (default): device- and epoch-size-\n"
+	    "             agnostic; uses log-transform, robust normalization,\n"
+	    "             local smoothing (smooth), burst density (burst), and\n"
+	    "             run-length persistence rules (min-sleep, max-gap, min-wake).\n"
+	    "             Works with any activity metric (ENMO, counts, MESA, etc.).\n"
+	    "             Optional diagnostic channels (channels): adds _Z, _L, _D,\n"
+	    "             _CS, _SW signals to the EDF for visual inspection.\n"
+	    "  cole       Cole-Kripke (1992) weighted moving average; requires\n"
+	    "             epoch=60 and counts-per-minute activity signal.\n"
+	    "  threshold  Simple threshold on raw activity level.\n"
+	    "\n"
+	    "Fragmentation metrics (with score option, or existing S/W annotations):\n"
+	    "  SFI      Sleep fragmentation index: sleep->wake transitions per hour of sleep\n"
+	    "  SFI_ACT  Actigraphy-style FI = MI + IMM1;\n"
+	    "           MI = % wake epochs in sleep period,\n"
+	    "           IMM1 = % sleep bouts <= 1 epoch\n"
+	    "\n"
+	    "With prescored, ACTIG uses existing sleep/wake annotations instead\n"
+	    "of activity-based scoring. prescored with no value defaults to S,W;\n"
+	    "or specify prescored=sleep_label,wake_label.\n"
+	    "With score, ACTIG creates\n"
+	    "W (wake), S (sleep), and ACTIG_G (gap) annotations by default\n"
+	    "(override with wake= / sleep= / gap-out=). Outputs TST/WASO/GAP\n"
+	    "overall and per-day DAY strata.\n"
+	    "Per-day summaries include VALID_MIN, VALID_PCT, and INCLUDED flag\n"
+	    "(INCLUDED=1 when valid minutes >= day-min-valid). Cross-day averages\n"
+	    "use only included days." );
+
+  add_param( "ACTIG" , "sig" , "Activity" , "Activity signal to analyze (required unless prescored)" );
+  add_param( "ACTIG" , "epoch" , "60" , "Epoch length in seconds for binning (default: 60)" );
+  add_param( "ACTIG" , "bin" , "60" , "NP metric bin size in minutes (default: 60)" );
+  add_param( "ACTIG" , "sum" , "" , "Use sum (not mean) when binning epochs" );
+  add_param( "ACTIG" , "l" , "5" , "Window size in hours for least-active metric (default: 5)" );
+  add_param( "ACTIG" , "m" , "10" , "Window size in hours for most-active metric (default: 10)" );
+  add_param( "ACTIG" , "score" , "" , "Also perform wake/sleep scoring" );
+  add_param( "ACTIG" , "prescored" , "" , "Use existing annotations as sleep/wake instead of scoring. Empty => S,W; else sleep,wake labels." );
+  add_param( "ACTIG" , "method" , "luna" , "Scoring method: luna (default), cole, or threshold" );
+  add_param( "ACTIG" , "thresh" , "" , "Activity threshold for threshold method (default: median of valid epochs)" );
+  add_param( "ACTIG" , "cole-thresh" , "1.0" , "Wake/sleep cutoff for Cole-Kripke score (default: 1.0)" );
+  add_param( "ACTIG" , "smooth" , "10" , "Luna method: smoothing window in minutes (default: 10)" );
+  add_param( "ACTIG" , "burst" , "10" , "Luna method: burst-density window in minutes (default: 10)" );
+  add_param( "ACTIG" , "burst-z" , "0.5" , "Luna method: z-score threshold to count an epoch as a burst (default: 0.5)" );
+  add_param( "ACTIG" , "quiet-z" , "-0.5" , "Luna method: smoothed z-score below which candidate sleep is triggered (default: -0.5)" );
+  add_param( "ACTIG" , "active-frac" , "0.20" , "Luna method: max burst-density fraction allowed for candidate sleep (default: 0.20)" );
+  add_param( "ACTIG" , "min-sleep" , "15" , "Luna method: minimum sleep run duration in minutes (default: 15)" );
+  add_param( "ACTIG" , "max-gap" , "2" , "Luna method: max within-sleep non-sleep gap to fill in minutes (default: 2)" );
+  add_param( "ACTIG" , "min-wake" , "5" , "Luna method: consecutive wake minutes required to end a sleep bout (default: 5)" );
+  add_param( "ACTIG" , "channels" , "" , "Luna method: add diagnostic EDF channels (_Z, _L, _D, _CS, _SW) to the EDF" );
+  add_param( "ACTIG" , "wake" , "W" , "Label for wake annotations when score is used (default: W)" );
+  add_param( "ACTIG" , "sleep" , "S" , "Label for sleep annotations when score is used (default: S)" );
+  add_param( "ACTIG" , "gap-out" , "ACTIG_G" , "Label for gap annotations (default: ACTIG_G)" );
+  add_param( "ACTIG" , "day-anchor" , "12" , "Hour (0-23) at which per-day boundaries occur (default: 12 = noon)" );
+  add_param( "ACTIG" , "gap-min-pct" , "50" , "Min % of expected samples per epoch to be considered valid (default: 50)" );
+  add_param( "ACTIG" , "day-min-valid" , "960" , "Min valid minutes per day for inclusion in cross-day averages (default: 960 = 16h)" );
+  add_param( "ACTIG" , "np-step" , "1" ,
+	     "Sliding-window step size in minutes for L5/M10 onset search (default: 1). "
+	     "Must divide 60 evenly (e.g. 1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60). "
+	     "Finer steps give sub-hour onset precision from the 1-hour-binned profile." );
+  add_param( "ACTIG" , "np-traditional" , "" ,
+	     "Revert to traditional 60-minute onset search step (integer-hour onsets, HH:00:00). "
+	     "Equivalent to np-step=60." );
+
+  add_table( "ACTIG" , "" , "Individual-level output" );
+  add_var( "ACTIG" , "" , "NP_IS" , "Interdaily stability" );
+  add_var( "ACTIG" , "" , "NP_IV" , "Intradaily variability" );
+  add_var( "ACTIG" , "" , "NP_RA" , "Relative amplitude: (M-L)/(M+L)" );
+  add_var( "ACTIG" , "" , "NP_L5" , "Mean activity in the least-active 5h window" );
+  add_var( "ACTIG" , "" , "NP_L5_ONSET" , "Clock time of L5 window onset (HH:MM:SS; sub-hour precision with default np-step=1)" );
+  add_var( "ACTIG" , "" , "NP_L5_ONSET_MIN" , "L5 onset in decimal minutes from midnight (0=00:00, 120=02:00, 1380=23:00); use for regression/correlation" );
+  add_var( "ACTIG" , "" , "NP_M10" , "Mean activity in the most-active 10h window" );
+  add_var( "ACTIG" , "" , "NP_M10_ONSET" , "Clock time of M10 window onset (HH:MM:SS)" );
+  add_var( "ACTIG" , "" , "NP_M10_ONSET_MIN" , "M10 onset in decimal minutes from midnight" );
+  add_var( "ACTIG" , "" , "NP_NE" , "Total epoch bin count (including gaps)" );
+  add_var( "ACTIG" , "" , "NP_NE_VALID" , "Valid (non-gap) epoch bin count" );
+  add_var( "ACTIG" , "" , "NP_NE_GAP" , "Gap epoch bin count" );
+  add_var( "ACTIG" , "" , "NP_NBINS" , "Total NP bin count (including gaps)" );
+  add_var( "ACTIG" , "" , "NP_NBINS_VALID" , "Valid NP bin count" );
+  add_var( "ACTIG" , "" , "NP_NDAYS" , "Number of complete recording days" );
+  add_var( "ACTIG" , "" , "SCORE_TST_MIN" , "Total sleep time (minutes, valid epochs only)" );
+  add_var( "ACTIG" , "" , "SCORE_WASO_MIN" , "Total wake time (minutes, valid epochs only)" );
+  add_var( "ACTIG" , "" , "SCORE_GAP_MIN" , "Total gap time (minutes)" );
+  add_var( "ACTIG" , "" , "SCORE_SLEEP_PCT" , "Sleep % of valid (non-gap) scored epochs" );
+  add_var( "ACTIG" , "" , "FRAG_SFI" , "Luna-style SFI: sleep->wake transitions per hour sleep" );
+  add_var( "ACTIG" , "" , "FRAG_SFI_N" , "Number of sleep->wake transitions" );
+  add_var( "ACTIG" , "" , "FRAG_SFI_ACT" , "Actigraphy FI: FRAG_MI_PCT + FRAG_IMM1_PCT" );
+  add_var( "ACTIG" , "" , "FRAG_MI_PCT" , "Movement index (% wake in sleep period, valid epochs only)" );
+  add_var( "ACTIG" , "" , "FRAG_IMM1_PCT" , "Immobility fragmentation (% sleep bouts <=1 minute)" );
+  add_var( "ACTIG" , "" , "FRAG_IMM_BOUT_N" , "Total sleep bout count in sleep period" );
+  add_var( "ACTIG" , "" , "FRAG_IMM1_BOUT_N" , "Sleep bout count <=1 minute in sleep period" );
+  add_var( "ACTIG" , "" , "SCORE_WAKE_RUN_N" , "Number of contiguous wake annotation runs" );
+  add_var( "ACTIG" , "" , "SCORE_SLEEP_RUN_N" , "Number of contiguous sleep annotation runs" );
+  add_var( "ACTIG" , "" , "SCORE_GAP_RUN_N" , "Number of contiguous gap annotation runs" );
+  add_var( "ACTIG" , "" , "DAY_N" , "Total number of days" );
+  add_var( "ACTIG" , "" , "DAY_N_INCLUDED" , "Days meeting day-min-valid threshold" );
+  add_var( "ACTIG" , "" , "DAY_N_EXCLUDED" , "Days below day-min-valid threshold" );
+  add_var( "ACTIG" , "" , "SCORE_TST_DAYAVG_MIN" , "Mean TST across included days (minutes)" );
+  add_var( "ACTIG" , "" , "SCORE_WASO_DAYAVG_MIN" , "Mean WASO across included days (minutes)" );
+  add_var( "ACTIG" , "" , "SCORE_SLEEP_PCT_DAYAVG" , "Mean sleep % across included days" );
+
+  add_table( "ACTIG" , "DAY" , "Per-day output (day-anchor boundaries)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_TST_MIN" , "Daily total sleep time (minutes)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_WASO_MIN" , "Daily wake time (minutes)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_GAP_MIN" , "Daily gap time (minutes)" );
+  add_var( "ACTIG" , "DAY" , "VALID_MIN" , "Daily valid (non-gap) minutes" );
+  add_var( "ACTIG" , "DAY" , "VALID_PCT" , "Daily valid % of total day duration" );
+  add_var( "ACTIG" , "DAY" , "INCLUDED" , "1 if day meets day-min-valid threshold, 0 otherwise" );
+  add_var( "ACTIG" , "DAY" , "SCORE_SLEEP_PCT" , "Daily sleep % (of valid scored epochs)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_SFI" , "Daily sleep->wake transitions per hour sleep" );
+  add_var( "ACTIG" , "DAY" , "FRAG_SFI_N" , "Daily sleep->wake transition count" );
+  add_var( "ACTIG" , "DAY" , "FRAG_SFI_ACT" , "Daily actigraphy FI: MI_PCT + IMM1_PCT" );
+  add_var( "ACTIG" , "DAY" , "FRAG_MI_PCT" , "Daily movement index (% wake in sleep period)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_IMM1_PCT" , "Daily immobility fragmentation (% bouts <=1 min)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_IMM_BOUT_N" , "Daily sleep bout count in sleep period" );
+  add_var( "ACTIG" , "DAY" , "FRAG_IMM1_BOUT_N" , "Daily sleep bout count <=1 minute" );
+  add_var( "ACTIG" , "DAY" , "SCORE_EPOCH_N" , "Daily valid (non-gap) epoch count" );
+  add_var( "ACTIG" , "DAY" , "SCORE_WAKE_EPOCH_N" , "Daily wake epoch count" );
+
+  add_param( "ACTIG" , "debt" , "" , "Compute local sleep debt relative to a target night" );
+  add_param( "ACTIG" , "debt-target" , "" ,
+	     "Target night: 1-based day number or date (YYYY-MM-DD or DD.MM.YY); required with debt" );
+  add_param( "ACTIG" , "debt-recent" , "2" ,
+	     "Number of nights immediately before target forming the 'recent' window (default: 2)" );
+  add_param( "ACTIG" , "debt-base" , "7" ,
+	     "Number of nights before the recent window forming the baseline (default: 7)" );
+  add_param( "ACTIG" , "debt-min-base" , "3" ,
+	     "Minimum valid baseline nights for DEBT_TST_DELTA / DEBT_TST_REL (default: 3)" );
+  add_param( "ACTIG" , "debt-min-z" , "5" ,
+	     "Minimum valid baseline nights for z-scores and DEBT_INDEX (default: 5)" );
+  add_param( "ACTIG" , "debt-w" , "0.5" ,
+	     "Weight given to TST in DEBT_INDEX (0=fragmentation only, 1=TST only; default: 0.5)" );
+
+  add_var( "ACTIG" , "" , "DEBT_TARGET_DAY" , "Target day number (1-based) used for debt calculation" );
+  add_var( "ACTIG" , "" , "DEBT_N_RECENT"   , "Valid included nights in the recent window" );
+  add_var( "ACTIG" , "" , "DEBT_N_BASE"     , "Valid included nights in the baseline window" );
+  add_var( "ACTIG" , "" , "DEBT_TST_RECENT" , "Mean TST (min) over recent nights" );
+  add_var( "ACTIG" , "" , "DEBT_TST_BASE"   , "Median TST (min) over baseline nights" );
+  add_var( "ACTIG" , "" , "DEBT_FRAG_RECENT", "Mean SFI over recent nights (sleep->wake transitions per hour)" );
+  add_var( "ACTIG" , "" , "DEBT_FRAG_BASE"  , "Median SFI over baseline nights" );
+  add_var( "ACTIG" , "" , "DEBT_TST_DELTA"  , "Baseline median TST minus recent mean TST (min; positive = deficit); needs debt-min-base" );
+  add_var( "ACTIG" , "" , "DEBT_TST_REL"    , "Fractional TST deficit: DELTA / baseline median (0..1); needs debt-min-base" );
+  add_var( "ACTIG" , "" , "DEBT_TST_Z"      , "Z-score of recent mean TST vs baseline distribution (negative = deprived); needs debt-min-z" );
+  add_var( "ACTIG" , "" , "DEBT_FRAG_Z"     , "Z-score of recent mean SFI vs baseline distribution (positive = more fragmented); needs debt-min-z" );
+  add_var( "ACTIG" , "" , "DEBT_INDEX"      , "Composite debt: w*(-TST_Z) + (1-w)*FRAG_Z; higher = more deprived; needs debt-min-z" );
+
+
+  //
   // S2A
   //
-  
+
   //
   // S2C
   //

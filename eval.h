@@ -280,6 +280,8 @@ void proc_list_annots( edf_t & , param_t & );
 void proc_espan( edf_t & , param_t & );
 void proc_write_annots( edf_t & , param_t & );
 void proc_make_annots( edf_t & , param_t & );
+void proc_days( edf_t & , param_t & );
+void proc_actig( edf_t & , param_t & );
 void proc_extend_annots( edf_t & , param_t & );
 void proc_list_all_annots( edf_t & , param_t & );
 void proc_list_spanning_annots( edf_t & , param_t & );

@@ -330,7 +330,7 @@ real_FFT::~real_FFT()
 }
 
 
-void real_FFT::init( int Ndata_, int Nfft_, int Fs_ , window_function_t window_ )
+void real_FFT::init( int Ndata_, int Nfft_, double Fs_ , window_function_t window_ )
 {
   
   Ndata = Ndata_;
@@ -339,6 +339,7 @@ void real_FFT::init( int Ndata_, int Nfft_, int Fs_ , window_function_t window_ 
   window = window_;
 
   if ( Ndata > Nfft ) Helper::halt( "Ndata cannot be larger than Nfft" );
+  if ( Fs <= 0 ) Helper::halt( "sample rate must be > 0 in real_FFT::init()" );
 
   // Allocate storage for input/output
   in = (double*) fftw_malloc(sizeof(double) * Nfft);
@@ -761,20 +762,30 @@ void PWELCH::process()
   //    NOVERLAP = noverlap_points 
   //
   
+  if ( Fs <= 0 ) Helper::halt( "sample rate must be > 0 in PWELCH::process()" );
+  if ( M <= 0 ) Helper::halt( "segment size (M) must be > 0 in PWELCH::process()" );
+
   int total_points             = data.size();
-  int segment_size_points      = M * Fs;   // 'nfft' in Matlab
+  int segment_size_points      = std::lround( M * Fs );   // 'nfft' in Matlab
 
   // handle special case: if only one segment, which is shorter than the total,
   // then allow for one extra segment (e.g. 5-sec epoch but 4-second window) 
 
   if ( segment_size_points < total_points && noverlap_segments == 1 )
     ++noverlap_segments;  
+
+  if ( segment_size_points < 2 )
+    Helper::halt( "Welch segment size too small: need at least 2 sample points (adjust segment-sec or SR)" );
+  if ( noverlap_segments < 1 )
+    Helper::halt( "Welch requires at least one segment" );
   
   int noverlap_points          = noverlap_segments > 1 
     ? ceil( ( noverlap_segments*segment_size_points - total_points  ) / double( noverlap_segments - 1 ) )
     : 0 ;
   
   int segment_increment_points = segment_size_points - noverlap_points;
+  if ( segment_increment_points <= 0 )
+    Helper::halt( "Welch segment increment is zero/negative; ensure overlap is less than segment size" );
   
   // std::cout << "segment_size_points = " << segment_size_points << "\n"
   // 	    << "noverlap_points = " << noverlap_points << "\n"
@@ -1544,6 +1555,5 @@ bool spectral_slope_helper( const std::vector<double> & psd ,
        
      }
  }
-
 
 

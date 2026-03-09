@@ -398,11 +398,28 @@ annot_t * spectral_power( edf_t & edf ,
 
       if ( Fs[s] < min_sr ) continue;
 
-      //
-      // reset bandaid
-      //
+	      //
+	      // reset bandaid
+	      //
 
-      bandaid.init();
+	      bandaid.init();
+
+	      // only emit band-level outputs if SR can represent all configured bands
+	      double max_band_upr = 0;
+	      for (std::vector<frequency_band_t>::const_iterator bi = bandaid.bands.begin();
+		   bi != bandaid.bands.end(); ++bi)
+		{
+		  if ( globals::freq_band.find( *bi ) != globals::freq_band.end() )
+		    {
+		      const double upr = globals::freq_band[ *bi ].second;
+		      if ( upr > max_band_upr ) max_band_upr = upr;
+		    }
+		}
+	      const bool bands_defined = bands && ( max_band_upr == 0 || Fs[s] >= 2 * max_band_upr );
+	      if ( bands && ! bands_defined )
+		logger << "  skipping band-level output for " << signals.label(s)
+		       << ": SR=" << Fs[s] << "Hz insufficient for configured bands up to "
+		       << max_band_upr << "Hz\n";
       
       //
       // Stratify output by channel
@@ -512,12 +529,21 @@ annot_t * spectral_power( edf_t & edf ,
 	   const double segment_sec  = fft_segment_size;
 	   
 	   const int total_points = d->size();
-	   const int segment_points = segment_sec * Fs[s];
-	   const int noverlap_points  = overlap_sec * Fs[s];
+	   const int segment_points = std::lround( segment_sec * Fs[s] );
+	   const int noverlap_points  = std::lround( overlap_sec * Fs[s] );
+	   if ( segment_points < 2 )
+	     {
+	       logger << "  *** skipping epoch " << interval.as_string()
+		      << ", segment-sec too short for SR=" << Fs[s] << "Hz (need >=2 points)\n";
+	       continue;
+	     }
+	   if ( segment_points <= noverlap_points )
+	     Helper::halt( "PSD requires segment-inc/overlap to be less than segment-sec" );
 	   
 	   // implied number of segments
 	   int noverlap_segments = floor( ( total_points - noverlap_points) 
 					  / (double)( segment_points - noverlap_points ) );
+	   if ( noverlap_segments < 1 ) noverlap_segments = 1;
 	   	   
  	   // logger << "total_points = " << total_points << "\n";
  	   // logger << "nooverlap_segments = " << noverlap_segments << "\n";
@@ -571,7 +597,7 @@ annot_t * spectral_power( edf_t & edf ,
 	   
 	   if ( show_epoch || ( cache_epochs && cache_bands ) )
 	     {
-	       if ( bands && bandaid.total > 0 )
+		       if ( bands_defined && bandaid.total > 0 )
 		 {
 		   writer.level( globals::band( SLOW ) , globals::band_strat );
 		   if ( show_epoch && ! suppress_output ) {
@@ -655,7 +681,7 @@ annot_t * spectral_power( edf_t & edf ,
 		   
 		   writer.unlevel( globals::band_strat );
 		 }
-	       else if ( bands && cache_data && cache_epochs && cache_bands && ! dB )
+		       else if ( bands_defined && cache_data && cache_epochs && cache_bands && ! dB )
 		 {
 	       // need to enter 0 in this case for cache
 	       //  nb. only doing this in non-dB mode (i.e. for ASYMM)
@@ -701,7 +727,7 @@ annot_t * spectral_power( edf_t & edf ,
 
 	   if ( show_epoch && calc_slowing )
 	     {
-       	       if ( bands && bandaid.total > 0 )
+	       if ( bands_defined && bandaid.total > 0 )
 		 {
 		   writer.value( "SOF" , bandaid.slow / ( ratio_plus1 + bandaid.slow + bandaid.delta ) );
 		   writer.value( "DAR" , bandaid.delta / ( ratio_plus1 + bandaid.alpha ) );
@@ -1144,7 +1170,7 @@ annot_t * spectral_power( edf_t & edf ,
       // by band 
       //      
 
-      if ( bands )
+	      if ( bands_defined )
 	{
 	  std::vector<frequency_band_t>::const_iterator bi = bandaid.bands.begin();
 	  while ( bi != bandaid.bands.end() )
@@ -1182,7 +1208,7 @@ annot_t * spectral_power( edf_t & edf ,
 	  // band power 
 	  //
 	  
-	  if ( bands )
+		  if ( bands_defined )
 	    {
 	      
 	      std::map<frequency_band_t,std::vector<double> >::const_iterator ii = bandaid.track_band.begin();
@@ -1288,7 +1314,7 @@ annot_t * spectral_power( edf_t & edf ,
 	  // band power
 	  //
 
-	  if ( bands )
+		  if ( bands_defined )
 	    {
 	      
 	      // are we storing relative power? 
@@ -1478,7 +1504,7 @@ annot_t * spectral_power( edf_t & edf ,
       // Band-power ratios 
       //
       
-      if ( bands && calc_ratio )
+	      if ( bands_defined && calc_ratio )
 	{
 	  // ratio=ALPHA/BETA,THETA/DELTA,...
 
@@ -1544,7 +1570,7 @@ annot_t * spectral_power( edf_t & edf ,
       // EEG slowing metrics (band ratios) 
       //
 
-      if ( bands & calc_slowing )
+	      if ( bands_defined && calc_slowing )
 	{
 
 	  // calculate both mean of epoch-ratios,
@@ -1621,7 +1647,7 @@ annot_t * spectral_power( edf_t & edf ,
       // Band-power kurtosis  (redundant now...) 
       //
 
-      if ( bands && calc_kurt )
+	      if ( bands_defined && calc_kurt )
 	{	  
 	  std::map<frequency_band_t,std::vector<double> >::const_iterator ii = bandaid.track_band.begin();	  
 	  while ( ii != bandaid.track_band.end() )
@@ -1658,6 +1684,4 @@ annot_t * spectral_power( edf_t & edf ,
   return NULL;
 
 }
-
-
 
