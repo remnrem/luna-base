@@ -5631,7 +5631,7 @@ void annotation_set_t::clean()
   annots.clear();
   
   std::map<std::string,annot_t*>::const_iterator ii = acopy.begin();
-  while ( ii != annots.end() )
+  while ( ii != acopy.end() )
     {
       annot_t * a = ii->second;
       if ( ! a->empty() ) annots[ ii->first ] = ii->second;

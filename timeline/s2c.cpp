@@ -176,8 +176,8 @@ public:
       max_pos_ticks = static_cast<uint64_t>(llround(th_tmax_pos / globals::tp_duration));
     }
 
-    // percentile-based amplitude , e.g. mag=20 means in top 20% of average MAG value
-    // compared to all other waves
+    // percentile-based amplitude threshold in (0,1], e.g. 0.2 keeps the top 20%
+    // of cycles by average magnitude relative to the other cycles
     sel_mag = param.has("mag-percentile");
 
     th_mag = sel_mag ? param.requires_dbl("mag-percentile") : 0.0;
@@ -346,7 +346,7 @@ public:
   uint64_t max_pos_ticks = 0;     // 0 disables
 
   // debounce / cleanup
-  uint64_t min_sep_ticks = 0;     // minimum time between crossings; 0 => derive from min_cycle_ticks/4 (heuristic)
+  uint64_t min_sep_ticks = 0;     // minimum time between crossings; 0 => derive from min_cycle_ticks/4, else 2*median_dt
   
   
 };
@@ -1200,7 +1200,7 @@ double s2a2_t::interp_value_at_tp_ld(
   return sig[i0] + static_cast<double>(frac) * (sig[i1] - sig[i0]);
 }
 
-// Build a 4-point piecewise map (start crossing -> peak -> trough -> end crossing)
+// Build a 4-point piecewise map (start crossing -> first extremum -> second extremum -> end crossing)
 // and return a fixed-bin (e.g., 101) resample via linear interpolation.
 std::vector<double> s2a2_t::bin_cycle_4pt(
   const std::vector<uint64_t>& tp,
@@ -1220,7 +1220,7 @@ std::vector<double> s2a2_t::bin_cycle_4pt(
   out.resize(static_cast<size_t>(nbins), std::numeric_limits<double>::quiet_NaN());
 
   const long double p0 = 0.0L;
-  // For a sine wave with zero-crossings at start/end, trough at 0.25 and peak at 0.75
+  // The first and second extrema are pinned at phases 0.25 and 0.75.
   const long double p1 = 0.25L;
   const long double p2 = 0.75L;
   const long double p3 = 1.0L;

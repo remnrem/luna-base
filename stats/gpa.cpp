@@ -535,6 +535,9 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 
   verbose = param.has( "verbose" ) ? param.yesno( "verbose" ) : false;
 
+  dump_na_pre_file = param.has( "dump-na-pre" ) ? param.value( "dump-na-pre" ) : "";
+  dump_na_file     = param.has( "dump-na" )     ? param.value( "dump-na" )     : "";
+
   show_xfacs = param.has( "X-factors" ) ? param.yesno( "X-factors" ) : false; 
     
   //
@@ -3160,11 +3163,71 @@ void gpa_t::subset( const std::set<int> & rows , const std::map<int,bool> & cols
   logger << "\n";
 }
 
+void gpa_t::write_na_file( const std::string & fname, const std::vector<int> & rows ) const
+{
+  const int nv = X.cols();
+
+  // collect all factor names present in remaining variables (sorted for stable columns)
+  std::set<std::string> all_factors_set;
+  for (int j=0; j<nv; j++)
+    {
+      const auto fl_it = faclvl.find( vars[j] );
+      if ( fl_it != faclvl.end() )
+	for (const auto & fl : fl_it->second)
+	  all_factors_set.insert( fl.first );
+    }
+  const std::vector<std::string> fac_names( all_factors_set.begin(), all_factors_set.end() );
+
+  std::ofstream dna( fname.c_str() );
+  if ( ! dna.good() )
+    { logger << "  ** could not write file: " << fname << "\n"; return; }
+
+  dna << "ID\tVAR\tBASEVAR";
+  for (const auto & f : fac_names) dna << "\t" << f;
+  dna << "\n";
+
+  for (int ri : rows)
+    for (int j=0; j<nv; j++)
+      if ( std::isnan( X( ri, j ) ) )
+	{
+	  const auto bv_it = basevar.find( vars[j] );
+	  const std::string bv = ( bv_it != basevar.end() && ! bv_it->second.empty() )
+	    ? bv_it->second : vars[j];
+	  dna << ids[ri] << "\t" << vars[j] << "\t" << bv;
+	  const auto fl_it = faclvl.find( vars[j] );
+	  for (const auto & f : fac_names)
+	    {
+	      std::string val = ".";
+	      if ( fl_it != faclvl.end() )
+		{
+		  const auto it = fl_it->second.find( f );
+		  if ( it != fl_it->second.end() ) val = it->second;
+		}
+	      dna << "\t" << val;
+	    }
+	  dna << "\n";
+	}
+
+  logger << "  wrote missing-pattern file: " << fname << "\n";
+}
+
+
 // drop bad cols
 void gpa_t::drop_null_columns()
 {
 
   logger << "  checking for too much missing data ('retain-cols' to skip; 'verbose' to list)\n";
+
+  // pre-column-drop missingness file: all individuals with any NaN
+  if ( ! dump_na_pre_file.empty() )
+    {
+      const int ni0 = X.rows(), nv0 = X.cols();
+      std::vector<int> rows_with_na;
+      for (int i=0; i<ni0; i++)
+	for (int j=0; j<nv0; j++)
+	  if ( std::isnan( X(i,j) ) ) { rows_with_na.push_back(i); break; }
+      write_na_file( dump_na_pre_file, rows_with_na );
+    }
 
   // nothing to do
   if ( n_req == 0 && n_prop < 1e-6 )
@@ -3186,6 +3249,9 @@ void gpa_t::drop_null_columns()
   // n_req cannot be larger than ni
   if ( n_req > ni ) n_req = ni;
 
+  // track dropped vars by basevar (for summary)
+  std::map<std::string,int> dropped_bv_count;
+
   for (int j=0; j<nv; j++)
     {
       int na = 0;
@@ -3193,13 +3259,16 @@ void gpa_t::drop_null_columns()
       int ng = ni - na;
       if ( ng >= n_req && ng / (double)(ni) >= n_prop )
 	good_cols.push_back( j );
-      else if ( verbose ) 
-	logger << "  *** dropping " << vars[j] 
-	       << " due to missing values: " << ng << "/" << ni << " = " << ng / (double)(ni) 
-	       << " good values, given n-req=" << n_req << " and n-prop=" << n_prop << " required\n";
+      else
+	{
+	  const auto bv_it = basevar.find( vars[j] );
+	  const std::string bv = ( bv_it != basevar.end() && ! bv_it->second.empty() )
+	    ? bv_it->second : vars[j];
+	  dropped_bv_count[ bv ]++;
+	}
     }
 
-  // any to remove? 
+  // any to remove?
   if ( good_cols.size() < nv )
     {
       
@@ -3244,7 +3313,21 @@ void gpa_t::drop_null_columns()
 	  
 	}
 
-      logger << "  dropped " << nv - good_cols.size()  << " vars with too many NA values\n";
+      logger << "  dropped " << nv - good_cols.size() << " vars with too many NA values\n";
+
+      // show top base-variables accounting for the dropped vars
+      std::vector<std::pair<int,std::string>> sv;
+      for (const auto & kv : dropped_bv_count)
+	sv.push_back( { kv.second, kv.first } );
+      std::sort( sv.begin(), sv.end(),
+		 []( const std::pair<int,std::string> & a,
+		     const std::pair<int,std::string> & b )
+		 { return a.first > b.first; } );
+      const int show = std::min( (int)sv.size(), 10 );
+      logger << "  top " << show << " base-variables dropped (of "
+	     << sv.size() << " total):\n";
+      for (int k=0; k<show; k++)
+	logger << "    " << sv[k].second << ": " << sv[k].first << " vars\n";
     }
   else
     logger << "  no vars dropped based on missing-value requirements\n";
@@ -3268,30 +3351,168 @@ void gpa_t::qc( const double winsor , const bool stats_mode )
   
   if ( ! retain_rows )
     {
+      // collect (row_idx, n_missing) for dropped individuals
+      std::vector<std::pair<int,int>> dropped_info;
+
       for (int i=0;i<ni;i++)
 	{
 	  int num_missing = 0;
 	  const Eigen::VectorXd & row = X.row(i);
 	  for (int j=0; j<nv; j++)
 	    if ( std::isnan( row[j] ) ) ++num_missing;
-	  if ( num_missing == 0 ) retained.push_back( i );
-	  else if ( verbose )
-	    logger << "  dropping indiv. " << ids[i] << " due to missing values (case-wise deletion)\n";
+	  if ( num_missing == 0 )
+	    retained.push_back( i );
+	  else
+	    dropped_info.push_back( { i, num_missing } );
 	}
-      
+
       if ( retained.size() < ni )
 	{
+	  const int nd = dropped_info.size();
+
+	  // pre-row-drop missingness file: dropped individuals only
+	  if ( ! dump_na_file.empty() )
+	    {
+	      std::vector<int> dropped_rows;
+	      for (const auto & di : dropped_info) dropped_rows.push_back( di.first );
+	      write_na_file( dump_na_file, dropped_rows );
+	    }
+
+	  // always: compact distribution of per-individual missing counts
+	  {
+	    std::vector<int> counts;
+	    for (const auto & di : dropped_info) counts.push_back( di.second );
+	    std::sort( counts.begin(), counts.end() );
+	    int b1=0, b2=0, b3=0, b4=0;
+	    for (int c : counts) {
+	      if      (c <=   5) b1++;
+	      else if (c <=  20) b2++;
+	      else if (c <= 100) b3++;
+	      else               b4++;
+	    }
+	    logger << "  dropping " << nd << "/" << ni
+		   << " individuals; N missing vars per dropped indiv:"
+		   << " 1-5:" << b1 << " 6-20:" << b2
+		   << " 21-100:" << b3 << " >100:" << b4
+		   << " (median=" << counts[nd/2] << ")\n";
+	  }
+
+	  // always: top base-variables with missing data in dropped individuals
+	  {
+	    // build basevar -> variable indices, then count distinct dropped individuals
+	    std::map<std::string,std::vector<int>> bv_varidx;
+	    for (int j=0; j<nv; j++)
+	      {
+		const auto it = basevar.find( vars[j] );
+		const std::string bv = ( it != basevar.end() && ! it->second.empty() )
+		  ? it->second : vars[j];
+		bv_varidx[ bv ].push_back( j );
+	      }
+	    std::vector<std::pair<int,std::string>> sv;
+	    for (const auto & kv : bv_varidx)
+	      {
+		const std::string & bv = kv.first;
+		const std::vector<int> & jj = kv.second;
+		int cnt = 0;
+		for (const auto & di : dropped_info)
+		  for (int j : jj)
+		    if ( std::isnan( X( di.first, j ) ) ) { ++cnt; break; }
+		sv.push_back( { cnt, bv } );
+	      }
+	    std::sort( sv.begin(), sv.end(),
+		       []( const std::pair<int,std::string> & a,
+			   const std::pair<int,std::string> & b )
+		       { return a.first > b.first; } );
+	    const int show = std::min( (int)sv.size(), 10 );
+	    if ( show > 0 )
+	      {
+		logger << "  top " << show << " base-variables with missing data"
+		       << " in dropped individuals:\n";
+		for (int k=0; k<show; k++)
+		  {
+		    const std::string & bv = sv[k].second;
+		    logger << "    " << bv << " [" << bv_varidx[bv].size() << " vars]: "
+			   << sv[k].first << "/" << nd << " dropped\n";
+		  }
+		if ( (int)sv.size() > show )
+		  logger << "    ... and " << (int)sv.size() - show
+			 << " more base-variables\n";
+	      }
+	  }
+
+	  // verbose: factor=level structural patterns
+	  if ( verbose )
+	    {
+	      std::map<std::string,std::vector<int>> fl_vars;
+	      for (int j=0; j<nv; j++)
+		{
+		  const auto it = faclvl.find( vars[j] );
+		  if ( it != faclvl.end() )
+		    for (const auto & fl : it->second)
+		      fl_vars[ fl.first + "=" + fl.second ].push_back( j );
+		}
+
+	      std::map<std::string,int> fl_complete, fl_partial;
+	      for (const auto & kv : fl_vars)
+		{
+		  const std::string & key = kv.first;
+		  const std::vector<int> & jj = kv.second;
+		  const int nvfl = jj.size();
+		  for (const auto & di : dropped_info)
+		    {
+		      int nmiss = 0;
+		      for (int j : jj)
+			if ( std::isnan( X( di.first, j ) ) ) ++nmiss;
+		      if      ( nmiss == nvfl ) fl_complete[ key ]++;
+		      else if ( nmiss  >  0   ) fl_partial[  key ]++;
+		    }
+		}
+
+	      // sort by (complete + partial) count descending
+	      std::vector<std::pair<int,std::string>> sorted_fl;
+	      std::set<std::string> seen;
+	      for (const auto & kv : fl_complete)
+		{ sorted_fl.push_back( { kv.second + (fl_partial.count(kv.first) ? fl_partial.at(kv.first) : 0) , kv.first } ); seen.insert(kv.first); }
+	      for (const auto & kv : fl_partial)
+		if ( ! seen.count(kv.first) )
+		  sorted_fl.push_back( { kv.second, kv.first } );
+	      std::sort( sorted_fl.begin(), sorted_fl.end(),
+			 []( const std::pair<int,std::string> & a,
+			     const std::pair<int,std::string> & b )
+			 { return a.first > b.first; } );
+
+	      const int show = std::min( (int)sorted_fl.size(), 15 );
+	      if ( show > 0 )
+		{
+		  logger << "  factor=level missingness patterns (top " << show
+			 << " of " << sorted_fl.size() << "):\n";
+		  for (int k=0; k<show; k++)
+		    {
+		      const std::string & key = sorted_fl[k].second;
+		      const int n_comp = fl_complete.count(key) ? fl_complete.at(key) : 0;
+		      const int n_part = fl_partial.count(key)  ? fl_partial.at(key)  : 0;
+		      const int nvfl   = fl_vars[key].size();
+		      logger << "    " << key << " [" << nvfl << " vars]: ";
+		      if ( n_comp ) logger << n_comp << "/" << nd << " completely absent";
+		      if ( n_comp && n_part ) logger << ", ";
+		      if ( n_part ) logger << n_part << "/" << nd << " partial";
+		      logger << "\n";
+		    }
+		}
+	    }
+
 	  Eigen::MatrixXd X1 = X( retained, Eigen::all );
 	  X = X1;
-	  
+
 	  std::vector<std::string> ids2 = ids;
 	  ids.clear();
 	  for (int i=0;i<retained.size();i++)
 	    ids.push_back( ids2[retained[i]] );
-	  
+
 	  logger << "  case-wise deletion subsetted X from " << ni
-		 << " to " << X.rows() << " indivs (add 'verbose' to list)\n";
-	  
+		 << " to " << X.rows() << " indivs"
+		 << ( verbose ? "\n" : " (add 'verbose' to see individual names)\n" );
+
 	}
       else
 	logger << "  retained all observations following case-wise deletion screen\n";

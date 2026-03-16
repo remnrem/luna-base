@@ -41,6 +41,7 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
+#include <sstream>
 
 extern writer_t writer;
 extern logger_t logger;
@@ -1541,8 +1542,107 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
 	}
     }
 
-  
+
   const int ns = labels.size();
+
+  struct ascii_tail_info_t {
+    int nonempty_lines;
+    int total_tokens;
+    int first_extra_line;
+    int first_extra_token_index;
+    std::string first_extra_token;
+    std::string first_extra_line_text;
+    bool extra_starts_on_new_line;
+  };
+
+  auto scan_ascii_tail = [&]( const int expected_tokens ) -> ascii_tail_info_t
+    {
+      ascii_tail_info_t info;
+      info.nonempty_lines = 0;
+      info.total_tokens = 0;
+      info.first_extra_line = 0;
+      info.first_extra_token_index = 0;
+      info.extra_starts_on_new_line = false;
+
+      std::ifstream in3;
+      gzifstream zin3;
+
+      if ( compressed )
+	zin3.open( filename.c_str() );
+      else
+	in3.open( filename.c_str() , std::ios::in );
+
+      if ( has_header_labels )
+	{
+	  std::string dummy;
+	  if ( compressed )
+	    Helper::zsafe_getline( zin3 , dummy );
+	  else
+	    Helper::safe_getline( in3 , dummy );
+	}
+
+      int tokens_seen = 0;
+
+      while ( true )
+	{
+	  std::string raw;
+
+	  if ( compressed )
+	    {
+	      Helper::zsafe_getline( zin3 , raw );
+	      if ( zin3.eof() ) break;
+	    }
+	  else
+	    {
+	      Helper::safe_getline( in3 , raw );
+	      if ( in3.eof() ) break;
+	    }
+
+	  if ( Helper::trim( raw ) == "" ) continue;
+
+	  ++info.nonempty_lines;
+
+	  std::istringstream iss( raw );
+	  std::vector<std::string> tokens;
+	  std::string token;
+	  while ( iss >> token ) tokens.push_back( token );
+
+	  info.total_tokens += tokens.size();
+
+	  if ( info.first_extra_line == 0 )
+	    {
+	      if ( tokens_seen >= expected_tokens )
+		{
+		  info.first_extra_line = info.nonempty_lines;
+		  info.first_extra_line_text = raw;
+		  info.extra_starts_on_new_line = true;
+		  if ( tokens.size() )
+		    {
+		      info.first_extra_token_index = 1;
+		      info.first_extra_token = tokens[0];
+		    }
+		}
+	      else if ( tokens_seen + tokens.size() > expected_tokens )
+		{
+		  const int idx = expected_tokens - tokens_seen;
+		  info.first_extra_line = info.nonempty_lines;
+		  info.first_extra_line_text = raw;
+		  info.first_extra_token_index = idx + 1;
+		  info.first_extra_token = tokens[idx];
+		  info.extra_starts_on_new_line = false;
+		}
+	    }
+
+	  tokens_seen += tokens.size();
+	}
+
+      if ( compressed )
+	zin3.close();
+      else
+	in3.close();
+
+      return info;
+    };
 
   //
   // Scan file to get number of records
@@ -1570,6 +1670,8 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
     }
 
   // will ignore any partial records at the end of the file
+
+  const int np_observed = np;
 
   int nr;
 
@@ -1642,40 +1744,116 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   //
 
   logger << "  reading " << ns << " signals, " 
-	 << nr << " seconds (";
+	 << Helper::dbl2str( header.nr * header.record_duration ) << " seconds (";
   if ( Fs_ > 0 )
-    logger << np << " samples " << Fs << " Hz) from " << filename << "\n";
+    logger << np << " rows, " << np << " samples " << Fs << " Hz) from " << filename << "\n";
   else
-    logger << np << " samples 1/" << Fs << " Hz) from " << filename << "\n";
+    logger << np << " rows, " << np << " samples 1/" << Fs << " Hz) from " << filename << "\n";
+
+  logger << "  EDF record size set to " << header.record_duration << " second(s)";
+  if ( Fs_ > 0 )
+    logger << " for >=1 Hz ASCII import (" << Fs << " samples/record)\n";
+  else
+    logger << " for sub-1 Hz ASCII import (1 sample every " << Fs << " second(s))\n";
 
   Data::Matrix<double> data( np , ns );
-  
-  for (int p=0;p<np;p++)
-    for (int s=0;s<ns;s++)
-      {
 
-	if ( compressed )
-	  ZIN2 >> data(p,s);
-	else
-	  IN2 >> data(p,s);
-	
-	if ( IN2.eof() ) 
-	  Helper::halt( filename + " does not contain enough data-points given parameters\n" );
-      }
+  auto strict_str2dbl = [&]( const std::string & tok , double * x ) -> bool
+    {
+      std::istringstream iss( tok );
+      char c = 0;
+      return ( iss >> *x ) && ! ( iss >> c );
+    };
+
+  int file_line = has_header_labels ? 1 : 0;
+
+  for (int p=0; p<np; p++)
+    {
+      std::string raw;
+      bool got_row = false;
+
+      while ( true )
+	{
+	  if ( compressed )
+	    {
+	      Helper::zsafe_getline( ZIN2 , raw );
+	      if ( ZIN2.eof() ) break;
+	    }
+	  else
+	    {
+	      Helper::safe_getline( IN2 , raw );
+	      if ( IN2.eof() ) break;
+	    }
+
+	  ++file_line;
+	  if ( Helper::trim( raw ) == "" ) continue;
+	  got_row = true;
+	  break;
+	}
+
+      if ( ! got_row )
+	Helper::halt( filename + " does not contain enough non-empty data rows given parameters\n" );
+
+      std::istringstream iss( raw );
+
+      for (int s=0; s<ns; s++)
+	{
+	  std::string tok;
+	  if ( ! ( iss >> tok ) )
+	    Helper::halt( "ASCII import expected " + Helper::int2str( ns )
+			  + " numeric columns but row " + Helper::int2str( p + 1 )
+			  + " (file line " + Helper::int2str( file_line ) + ") ended at column "
+			  + Helper::int2str( s + 1 ) + ":\n" + raw );
+
+	  double x = 0;
+	  if ( ! strict_str2dbl( tok , &x ) )
+	    Helper::halt( "ASCII import encountered non-numeric data at row "
+			  + Helper::int2str( p + 1 )
+			  + " (file line " + Helper::int2str( file_line ) + "), column "
+			  + Helper::int2str( s + 1 ) + ": [" + tok + "]\n" + raw );
+
+	  data(p,s) = x;
+	}
+    }
   
-  double dd;
+  bool has_extra_data = false;
 
   if ( compressed )
     {
-      ZIN2 >> dd;
-      if ( ! ZIN2.eof() ) 
-	logger << " ** warning, truncating potential trailing sample points (<1 second) from end of input\n";
+      std::string extra_token;
+      ZIN2 >> extra_token;
+      has_extra_data = ! ZIN2.fail();
     }
   else
     {
-      IN2 >> dd;
-      if ( ! IN2.eof() ) 
-	logger << " ** warning, truncating potential trailing sample points (<1 second) from end of input\n";
+      std::string extra_token;
+      IN2 >> extra_token;
+      has_extra_data = ! IN2.fail();
+    }
+
+  if ( has_extra_data )
+    {
+      const int expected_tokens = np * ns;
+      const ascii_tail_info_t tail = scan_ascii_tail( expected_tokens );
+
+      logger << " ** warning, trailing unread data remain after ASCII import\n"
+	     << "    expected non-empty data rows : " << np << "\n"
+	     << "    observed non-empty data rows : " << np_observed << "\n"
+	     << "    expected numeric values      : " << expected_tokens << " (" << np << " rows x " << ns << " channels)\n"
+	     << "    observed numeric values      : " << tail.total_tokens << "\n";
+
+      if ( tail.first_extra_line )
+	{
+	  logger << "    first unread data row        : " << tail.first_extra_line << "\n"
+		 << "    extra data begin             : "
+		 << ( tail.extra_starts_on_new_line ? "at start of that row" : "within that row" ) << "\n";
+	  if ( tail.first_extra_token != "" )
+	    logger << "    first unread token           : column " << tail.first_extra_token_index
+		   << " = " << tail.first_extra_token << "\n";
+	  logger << "    unread row text              : " << tail.first_extra_line_text << "\n";
+	}
+      else
+	logger << "    unable to localise first unread row on rescan\n";
     }
   
   // should now be end of file...

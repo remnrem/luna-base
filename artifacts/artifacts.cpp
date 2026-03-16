@@ -880,13 +880,20 @@ void  rms_per_epoch( edf_t & edf , param_t & param )
 			
 			// iterate over each c22 summary
 			// aggregating for means
+			// require ALL features finite (all-or-nothing per block/key)
 			if ( c22.valid() )
 			  {
-			    n[ key ]++;
-			    l[ key ] += len;
-			    
+			    bool all_finite = true;
 			    for (int i=0; i<ne22; i++)
-			      m[ key ] [ catch22_t::short_name(i) ] += len * c22.stat(i) ;
+			      if ( ! std::isfinite( c22.stat(i) ) ) { all_finite = false; break; }
+
+			    if ( all_finite )
+			      {
+				n[ key ]++;
+				l[ key ] += len;
+				for (int i=0; i<ne22; i++)
+				  m[ key ] [ catch22_t::short_name(i) ] += len * c22.stat(i) ;
+			      }
 			  }
 		      }
 		    }

@@ -916,17 +916,20 @@ void lunapi_inst_t::refresh()
 
 void lunapi_inst_t::drop()
 {
-  // clear out
+  // Reset in place. Avoid assigning from a temporary edf_t, which
+  // shallow-copies timeline state and internal pointers.
   edf.init();
-  annotations.clean();
-  
-  // set to empty
-  edf_t empty( &annotations );
-  edf = empty;
+  annotations.clear();
+  edf.annotations = &annotations;
+  edf.timeline.annotations = &annotations;
+  edf.id.clear();
+  edf.filename.clear();
+  edf.annot_files.clear();
+  edf.edf_annots.clear();
+  edf.aoccur.clear();
   
   // track meta-data
   state = 0;
-  id = "";
   edf_filename = "";
   annot_filenames.clear();
 }
@@ -995,6 +998,7 @@ bool lunapi_inst_t::empty_edf( const std::string & id,
 			       const std::string & startdate ,
 			       const std::string & starttime )
 {
+  this->id = id;
 
   // make an empty EDF
   bool okay = edf.init_empty( id , nr , rs , startdate , starttime );
@@ -1591,8 +1595,9 @@ std::vector<bool> lunapi_inst_t::has_annots( const std::vector<std::string> & an
 
 bool lunapi_inst_t::has_staging() 
 {
-  // get staging                                                                                                             
-  edf.annotations->make_sleep_stage( edf.timeline );
+  // Rebuild from current annotations so prior placeholder/cached
+  // SleepStage annotations do not mask newly inserted staging.
+  edf.annotations->make_sleep_stage( edf.timeline , true );
 
   // valid?                                                                                                                  
   param_t empty_param;
@@ -1780,10 +1785,13 @@ bool lunapi_inst_t::insert_annotation( const std::string & class_label ,
       const uint64_t start = std::get<0>(x[i]) * globals::tp_1sec ;
       const uint64_t stop  = std::get<1>(x[i]) * globals::tp_1sec + ( durcol2 ? start : 0LLU ) ; 
       
-      annot->add( "." , // dummy instance ID
-                  interval_t( start, stop ) ,
-		  "." );  // channel ID dummy
-    }
+	  annot->add( "." , // dummy instance ID
+	                  interval_t( start, stop ) ,
+			  "." );  // channel ID dummy
+	    }
+
+  if ( class_label != "SleepStage" )
+    edf.annotations->clear_sleep_stage();
 
   return true;
 }
@@ -1844,4 +1852,3 @@ std::string lunapi_t::fetch_desc_var( const std::string & cmd, const std::string
 {
   return globals::cmddefs().fetch_desc_var( cmd , tbl , var );
 }
-

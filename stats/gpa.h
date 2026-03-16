@@ -214,6 +214,9 @@ struct gpa_t {
 
   // drop NA cols
   void drop_null_columns();
+
+  // write ID/BASEVAR/factor-cols file for given row indices
+  void write_na_file( const std::string & fname, const std::vector<int> & rows ) const;
   
   // QC matrix
   void qc( const double winsor , const bool stats_mode );
@@ -325,6 +328,8 @@ private:
   // opts
   bool verbose;
   bool show_xfacs;
+  std::string dump_na_pre_file; // if set, write before column dropping (all indivs w/ any NaN)
+  std::string dump_na_file;     // if set, write before row dropping (dropped indivs only)
   
   // [run] number of permutations;
   //       can be 0, means asymptotic only

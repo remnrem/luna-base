@@ -14,6 +14,7 @@ else
 endif
 
 SRCS = globals.cpp eval.cpp param.cpp cmddefs.cpp optdefs.cpp dummy.cpp \
+        $(wildcard tests/*.cpp) \
         $(wildcard edf/*.cpp) \
         $(wildcard edfz/*.cpp) \
         $(wildcard defs/*.cpp) \
@@ -118,7 +119,13 @@ dmerge: utils/merge.o utils/merge-helpers.o
 simassoc: utils/simassoc.o libluna.a
 	$(CXX) -o $@ $^  $(LDFLAGS) $(DEP_LIB)
 
-.PHONY: clean
+.PHONY: clean test
+
+test: luna
+	./luna __LUNA_TESTS__ all
+
+test-verbose: luna
+	./luna __LUNA_TESTS__ all verbose
 
 clean:
 	-$(RM) $(TARGETS) regional tocol cgi-mapper dmerge simassoc libluna.dylib libluna.so libluna.a main.o $(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))

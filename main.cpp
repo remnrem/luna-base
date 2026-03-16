@@ -23,6 +23,7 @@
 #include "luna.h"
 #include "main.h"
 #include "param.h"
+#include "tests/tests.h"
 
 #include <algorithm>
 #include <cctype>
@@ -41,18 +42,10 @@ extern freezer_t freezer;
 
 namespace {
 
-std::string lc( const std::string & s )
-{
-  std::string r = s;
-  std::transform( r.begin() , r.end() , r.begin() ,
-		  []( unsigned char c ) { return std::tolower( c ); } );
-  return r;
-}
-
-bool contains_ci( const std::string & s , const std::string & q )
-{
-  return lc( s ).find( lc( q ) ) != std::string::npos;
-}
+std::string lc( const std::string & s );
+bool contains_ci( const std::string & s , const std::string & q );
+int gcd_int( int a , int b );
+int parse_ascii_fs_arg( const std::string & raw );
 
 }
 
@@ -128,13 +121,26 @@ int main(int argc , char ** argv )
   //
   
   if ( argc >= 2 && strcmp( argv[1] ,"-d" ) == 0 )
-    { 
+    {
       std::string p = argc >= 3 ? argv[2] : "";
       std::string p2 = argc >= 4 ? argv[3] : "";
       global.api();
-      proc_dummy( p , p2 ); 
-      std::exit( globals::retcode ); 
-    } 
+      proc_dummy( p , p2 );
+      std::exit( globals::retcode );
+    }
+
+  //
+  // integrated test suite: luna __LUNA_TESTS__ [group] [verbose]
+  //
+
+  if ( argc >= 2 && strcmp( argv[1] , "__LUNA_TESTS__" ) == 0 )
+    {
+      std::string grp  = argc >= 3 ? argv[2] : "all";
+      bool verbose     = argc >= 4 && std::string(argv[3]) == "verbose";
+      global.api();
+      proc_tests( grp , verbose );
+      std::exit( globals::retcode );
+    }
   
   
   //
@@ -881,7 +887,7 @@ void process_edfs( cmd_t & cmd )
       if ( single_txt )
 	{
 	  
-	  int fs = globals::param.requires_int( "-fs" ); // -ve value means 1/R
+	  int fs = parse_ascii_fs_arg( globals::param.requires( "-fs" ) ); // -ve value means exact 1/R
 	  std::string startdate = globals::param.has("-date") ? globals::param.value( "-date" ) : "01.01.00" ; 
 	  std::string starttime = globals::param.has("-time") ? globals::param.value( "-time" ) : "00.00.00" ; 
 	  std::string id = globals::param.has("-id") ? globals::param.value( "-id" ) : rootname ; 
@@ -2438,6 +2444,76 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       std::exit(0);
     }
   
+}
+
+
+namespace {
+
+std::string lc( const std::string & s )
+{
+  std::string r = s;
+  std::transform( r.begin() , r.end() , r.begin() ,
+		  []( unsigned char c ) { return std::tolower( c ); } );
+  return r;
+}
+
+bool contains_ci( const std::string & s , const std::string & q )
+{
+  return lc( s ).find( lc( q ) ) != std::string::npos;
+}
+
+int gcd_int( int a , int b )
+{
+  a = std::abs( a );
+  b = std::abs( b );
+  while ( b != 0 )
+    {
+      const int t = a % b;
+      a = b;
+      b = t;
+    }
+  return a == 0 ? 1 : a;
+}
+
+int parse_ascii_fs_arg( const std::string & raw )
+{
+  int fs = 0;
+  if ( raw.find( '/' ) == std::string::npos )
+    {
+      if ( Helper::str2int( raw , &fs ) ) return fs;
+      Helper::halt( "--fs requires an integer or rational value (e.g. 200, -15, 1/15, 4/60)" );
+    }
+
+  std::vector<std::string> tok = Helper::quoted_parse( raw , "/" );
+  if ( tok.size() != 2 )
+    Helper::halt( "--fs requires an integer or rational value (e.g. 200, -15, 1/15, 4/60)" );
+
+  int num = 0;
+  int den = 0;
+
+  if ( ! Helper::str2int( tok[0] , &num ) || ! Helper::str2int( tok[1] , &den ) )
+    Helper::halt( "--fs requires an integer or rational value (e.g. 200, -15, 1/15, 4/60)" );
+
+  if ( num <= 0 || den <= 0 )
+    Helper::halt( "--fs rational values must have positive numerator and denominator" );
+
+  const int g = gcd_int( num , den );
+  num /= g;
+  den /= g;
+
+  if ( num >= den )
+    {
+      if ( num % den != 0 )
+	Helper::halt( "--fs=" + raw + " implies a non-integer sampling rate > 1 Hz, which is not supported by this loader" );
+      return num / den;
+    }
+
+  if ( den % num != 0 )
+    Helper::halt( "--fs=" + raw + " implies a sub-1 Hz rate that is not an exact 1/N Hz interval, which is not supported by this loader" );
+
+  return -( den / num );
+}
+
 }
 
 

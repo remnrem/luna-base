@@ -46,11 +46,12 @@ void dsptools::siggen( edf_t & edf , param_t & param )
   const bool add_to_existing = param.has( "add" );
 
   // SR of a new channel?
-  const int fs = update_existing_channel ? -1 : param.requires_int( "sr" );  
+  const int fs = update_existing_channel ?
+    edf.header.sampling_freq( edf.header.signal( siglab ) )
+    : param.requires_int( "sr" );  
   if ( (!update_existing_channel) && fs < 1 )
     Helper::halt( "requires postive sample rate specified with 'sr'" );
-
-  
+    
   //
   // Options
   //
@@ -67,7 +68,8 @@ void dsptools::siggen( edf_t & edf , param_t & param )
       if ( sine_param.size() == 2 ) sine_param.resize(3,0);
       else if ( sine_param.size() != 3 ) Helper::halt( "expecting sine=frq,amp{,phase}" );
       if ( sine_param[0] <= 0 ) Helper::halt( "frq must be positive" );
-      if ( sine_param[0] >= fs / 2.0 ) Helper::halt( "frq not under Nyquist frequency, given sample rate" );
+      if ( sine_param[0] >= fs / 2.0 ) Helper::halt( "frq not under Nyquist frequency, given sample rate: "
+						     + Helper::dbl2str(sine_param[0] ) + " " + Helper::dbl2str( fs / 2.0 ) ) ;
       if ( sine_param[1] <= 0 ) Helper::halt( "amp should be positive, non-zero" );
     }
 

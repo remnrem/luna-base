@@ -1238,7 +1238,7 @@ void cmddefs_t::init()
 	    "or specify prescored=sleep_label,wake_label.\n"
 	    "With score, ACTIG creates\n"
 	    "W (wake), S (sleep), and ACTIG_G (gap) annotations by default\n"
-	    "(override with wake= / sleep= / gap-out=). Outputs TST/WASO/GAP\n"
+	    "(override with wake= / sleep= / gap-out=). Outputs TST/TWT/GAP\n"
 	    "overall and per-day DAY strata.\n"
 	    "Per-day summaries include VALID_MIN, VALID_PCT, INCLUDED, and an\n"
 	    "optional day-level QC layer. INCLUDED remains coverage-only\n"
@@ -1248,6 +1248,7 @@ void cmddefs_t::init()
   add_param( "ACTIG" , "sig" , "Activity" , "Activity signal to analyze (required unless prescored)" );
   add_param( "ACTIG" , "epoch" , "60" , "Epoch length in seconds for binning (default: 60)" );
   add_param( "ACTIG" , "bin" , "60" , "NP metric bin size in minutes (default: 60)" );
+  add_param( "ACTIG" , "np-full-days" , "T" , "Restrict NP metrics to complete 24 h recording days, dropping any trailing partial day (default: T)" );
   add_param( "ACTIG" , "sum" , "" , "Use sum (not mean) when binning epochs" );
   add_param( "ACTIG" , "l" , "5" , "Window size in hours for least-active metric (default: 5)" );
   add_param( "ACTIG" , "m" , "10" , "Window size in hours for most-active metric (default: 10)" );
@@ -1308,14 +1309,14 @@ void cmddefs_t::init()
   add_var( "ACTIG" , "" , "NP_M10" , "Mean activity in the most-active 10h window" );
   add_var( "ACTIG" , "" , "NP_M10_ONSET" , "Clock time of M10 window onset (HH:MM:SS)" );
   add_var( "ACTIG" , "" , "NP_M10_ONSET_MIN" , "M10 onset in decimal minutes from midnight" );
-  add_var( "ACTIG" , "" , "NP_NE" , "Total epoch bin count (including gaps)" );
-  add_var( "ACTIG" , "" , "NP_NE_VALID" , "Valid (non-gap) epoch bin count" );
-  add_var( "ACTIG" , "" , "NP_NE_GAP" , "Gap epoch bin count" );
-  add_var( "ACTIG" , "" , "NP_NBINS" , "Total NP bin count (including gaps)" );
-  add_var( "ACTIG" , "" , "NP_NBINS_VALID" , "Valid NP bin count" );
+  add_var( "ACTIG" , "" , "NP_NE" , "Epoch bin count used for NP metrics (including gaps)" );
+  add_var( "ACTIG" , "" , "NP_NE_VALID" , "Valid (non-gap) epoch bin count used for NP metrics" );
+  add_var( "ACTIG" , "" , "NP_NE_GAP" , "Gap epoch bin count used for NP metrics" );
+  add_var( "ACTIG" , "" , "NP_NBINS" , "NP bin count used for NP metrics (including gaps)" );
+  add_var( "ACTIG" , "" , "NP_NBINS_VALID" , "Valid NP bin count used for NP metrics" );
   add_var( "ACTIG" , "" , "NP_NDAYS" , "Number of complete recording days" );
   add_var( "ACTIG" , "" , "SCORE_TST_MIN" , "Total sleep time (minutes, valid epochs only)" );
-  add_var( "ACTIG" , "" , "SCORE_WASO_MIN" , "Total wake time (minutes, valid epochs only)" );
+  add_var( "ACTIG" , "" , "SCORE_TWT_MIN" , "Total wake time (minutes, valid epochs only)" );
   add_var( "ACTIG" , "" , "SCORE_GAP_MIN" , "Total gap time (minutes)" );
   add_var( "ACTIG" , "" , "SCORE_SLEEP_PCT" , "Sleep % of valid (non-gap) scored epochs" );
   add_var( "ACTIG" , "" , "FRAG_SFI" , "Luna-style SFI: sleep->wake transitions per hour sleep" );
@@ -1336,12 +1337,12 @@ void cmddefs_t::init()
   add_var( "ACTIG" , "" , "DAY_N_QC_WARN" , "Days included after QC but flagged with warnings" );
   add_var( "ACTIG" , "" , "DAY_N_INCLUDED_POSTQC" , "Days contributing to cross-day averages after coverage + QC filtering" );
   add_var( "ACTIG" , "" , "SCORE_TST_DAYAVG_MIN" , "Mean TST across post-QC included days (minutes)" );
-  add_var( "ACTIG" , "" , "SCORE_WASO_DAYAVG_MIN" , "Mean WASO across post-QC included days (minutes)" );
+  add_var( "ACTIG" , "" , "SCORE_TWT_DAYAVG_MIN" , "Mean WASO across post-QC included days (minutes)" );
   add_var( "ACTIG" , "" , "SCORE_SLEEP_PCT_DAYAVG" , "Mean sleep % across post-QC included days" );
 
   add_table( "ACTIG" , "DAY" , "Per-day output (day-anchor boundaries)" );
   add_var( "ACTIG" , "DAY" , "SCORE_TST_MIN" , "Daily total sleep time (minutes)" );
-  add_var( "ACTIG" , "DAY" , "SCORE_WASO_MIN" , "Daily wake time (minutes)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_TWT_MIN" , "Daily wake time (minutes)" );
   add_var( "ACTIG" , "DAY" , "SCORE_GAP_MIN" , "Daily gap time (minutes)" );
   add_var( "ACTIG" , "DAY" , "VALID_MIN" , "Daily valid (non-gap) minutes" );
   add_var( "ACTIG" , "DAY" , "VALID_PCT" , "Daily valid % of total day duration" );
@@ -1394,6 +1395,7 @@ void cmddefs_t::init()
   add_param( "ACTIG" , "debt-w" , "0.5" ,
 	     "Weight given to TST in DEBT_INDEX (0=fragmentation only, 1=TST only; default: 0.5)" );
 
+  add_var( "ACTIG" , "" , "DEBT_MAPPED"     , "1 if debt-target was within the recording, 0 if outside (outputs skipped)" );
   add_var( "ACTIG" , "" , "DEBT_TARGET_DAY" , "Target day number (1-based) used for debt calculation" );
   add_var( "ACTIG" , "" , "DEBT_N_RECENT"   , "Valid included nights in the recent window" );
   add_var( "ACTIG" , "" , "DEBT_N_BASE"     , "Valid included nights in the baseline window" );
@@ -1406,6 +1408,28 @@ void cmddefs_t::init()
   add_var( "ACTIG" , "" , "DEBT_TST_Z"      , "Z-score of recent mean TST vs baseline distribution (negative = deprived); needs debt-min-z" );
   add_var( "ACTIG" , "" , "DEBT_FRAG_Z"     , "Z-score of recent mean SFI vs baseline distribution (positive = more fragmented); needs debt-min-z" );
   add_var( "ACTIG" , "" , "DEBT_INDEX"      , "Composite debt: w*(-TST_Z) + (1-w)*FRAG_Z; higher = more deprived; needs debt-min-z" );
+
+  add_param( "ACTIG" , "norm" , "" ,
+	     "Z-score target night against all other valid nights (alternative to debt when no prior baseline is available)" );
+  add_param( "ACTIG" , "norm-target" , "" ,
+	     "Target night for norm: 1-based day number or date (YYYY-MM-DD or DD.MM.YY); defaults to debt-target if set" );
+  add_param( "ACTIG" , "norm-min" , "5" ,
+	     "Minimum valid reference nights required to emit norm Z-scores (default: 5)" );
+  add_param( "ACTIG" , "norm-w" , "0.5" ,
+	     "Weight given to TST in NORM_INDEX (0=fragmentation only, 1=TST only; default: 0.5)" );
+
+  add_var( "ACTIG" , "" , "NORM_MAPPED"     , "1 if norm-target was within the recording, 0 if outside (outputs skipped)" );
+  add_var( "ACTIG" , "" , "NORM_TARGET_DAY" , "Target day number (1-based) used for norm calculation" );
+  add_var( "ACTIG" , "" , "NORM_N"          , "Number of valid reference nights (all valid non-target nights)" );
+  add_var( "ACTIG" , "" , "NORM_TST"        , "Target night TST (min)" );
+  add_var( "ACTIG" , "" , "NORM_FRAG"       , "Target night SFI (sleep->wake transitions per hour)" );
+  add_var( "ACTIG" , "" , "NORM_TST_MN"     , "Mean TST (min) of reference nights; needs norm-min" );
+  add_var( "ACTIG" , "" , "NORM_TST_SD"     , "SD of TST (min) across reference nights; needs norm-min" );
+  add_var( "ACTIG" , "" , "NORM_TST_Z"      , "Z-score of target TST vs all other valid nights (negative = short); needs norm-min" );
+  add_var( "ACTIG" , "" , "NORM_FRAG_MN"    , "Mean SFI of reference nights; needs norm-min" );
+  add_var( "ACTIG" , "" , "NORM_FRAG_SD"    , "SD of SFI across reference nights; needs norm-min" );
+  add_var( "ACTIG" , "" , "NORM_FRAG_Z"     , "Z-score of target SFI vs all other valid nights (positive = more fragmented); needs norm-min" );
+  add_var( "ACTIG" , "" , "NORM_INDEX"      , "Composite norm: w*(-TST_Z) + (1-w)*FRAG_Z; higher = more deprived; needs norm-min" );
 
 
   //
