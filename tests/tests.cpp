@@ -38,6 +38,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <iostream>
 #include <iomanip>
 #include <random>
@@ -50,6 +51,13 @@
 #include <limits>
 #include <algorithm>
 #include <stdexcept>
+
+#ifdef _WIN32
+#include <process.h>
+#ifdef near
+#undef near
+#endif
+#endif
 
 // ============================================================
 // Internal types
@@ -91,15 +99,37 @@ static void record( std::vector<test_result_t> & results ,
 // Helpers: numeric
 // ============================================================
 
-static bool near( double a, double b, double tol )
+static bool approx_equal( double a, double b, double tol )
 {
   return std::fabs(a - b) <= tol;
 }
 
-static bool near_rel( double a, double b, double rel_tol )
+static bool approx_equal_rel( double a, double b, double rel_tol )
 {
   double denom = std::max( std::fabs(b), 1e-12 );
   return std::fabs(a - b) / denom <= rel_tol;
+}
+
+static int current_pid()
+{
+#ifdef _WIN32
+  return _getpid();
+#else
+  return getpid();
+#endif
+}
+
+static std::string temp_base_path( const std::string & stem )
+{
+  const char * temp_dir = std::getenv("TMPDIR");
+#ifdef _WIN32
+  if ( temp_dir == nullptr || *temp_dir == '\0' ) temp_dir = std::getenv("TEMP");
+  if ( temp_dir == nullptr || *temp_dir == '\0' ) temp_dir = std::getenv("TMP");
+  if ( temp_dir == nullptr || *temp_dir == '\0' ) temp_dir = ".";
+#else
+  if ( temp_dir == nullptr || *temp_dir == '\0' ) temp_dir = "/tmp";
+#endif
+  return std::string(temp_dir) + "/luna_" + stem + "_" + std::to_string( current_pid() );
 }
 
 // ============================================================
@@ -358,7 +388,7 @@ static void test_signal( lunapi_t * eng,
     double sd  = get_val( p, "STATS", "SD" );
     std::ostringstream m;
     m << "mean=" << mn << " (exp≈0), SD=" << sd << " (exp≈" << 2.0/std::sqrt(2.0) << ")";
-    record(R,"signal/sine-amplitude", near(mn,0.0,0.05) && near(sd,2.0/std::sqrt(2.0),0.1), m.str(), V);
+    record(R,"signal/sine-amplitude", approx_equal(mn,0.0,0.05) && approx_equal(sd,2.0/std::sqrt(2.0),0.1), m.str(), V);
   } catch(std::exception & e) { record(R,"signal/sine-amplitude",false,e.what(),V); }
 
   // A2 — SIMUL white noise: mean≈0, SD>0
@@ -370,7 +400,7 @@ static void test_signal( lunapi_t * eng,
     double sd = get_val(p,"STATS","SD");
     std::ostringstream m;
     m << "mean=" << mn << " SD=" << sd;
-    record(R,"signal/siggen-eval", near(mn,0.0,0.1) && sd>0, m.str(), V);
+    record(R,"signal/siggen-eval", approx_equal(mn,0.0,0.1) && sd>0, m.str(), V);
   } catch(std::exception & e) { record(R,"signal/siggen-eval",false,e.what(),V); }
 
   // A3 — add mode: SIGGEN creates then adds to itself, doubling amplitude
@@ -382,7 +412,7 @@ static void test_signal( lunapi_t * eng,
     double sd = get_val(p,"STATS","SD");
     std::ostringstream m;
     m << "SD=" << sd << " (exp≈" << 2.0/std::sqrt(2.0) << " after double-sine add)";
-    record(R,"signal/siggen-add", near(sd, 2.0/std::sqrt(2.0), 0.2), m.str(), V);
+    record(R,"signal/siggen-add", approx_equal(sd, 2.0/std::sqrt(2.0), 0.2), m.str(), V);
   } catch(std::exception & e) { record(R,"signal/siggen-add",false,e.what(),V); }
 
   // A4 — two channels at different SRs
@@ -412,7 +442,7 @@ static void test_signal( lunapi_t * eng,
     double sd_after = get_val(p,"STATS","SD");
     std::ostringstream m;
     m << "SD before=" << sd_before << " after=" << sd_after << " (exp≈0)";
-    record(R,"signal/update-signal", sd_before > 0.1 && near(sd_after,0.0,1e-6), m.str(), V);
+    record(R,"signal/update-signal", sd_before > 0.1 && approx_equal(sd_after,0.0,1e-6), m.str(), V);
   } catch(std::exception & e) { record(R,"signal/update-signal",false,e.what(),V); }
 }
 
@@ -431,7 +461,7 @@ static void test_epoch( lunapi_t * eng,
     p->eval("EPOCH len=30");
     double ne = get_val(p,"EPOCH","NE");
     std::ostringstream m; m << "NE=" << ne << " (exp=720)";
-    record(R,"epoch/standard-30s", near(ne,720,0.5), m.str(), V);
+    record(R,"epoch/standard-30s", approx_equal(ne,720,0.5), m.str(), V);
   } catch(std::exception & e) { record(R,"epoch/standard-30s",false,e.what(),V); }
 
   // B2 — with rs=1 (single-sample records)
@@ -443,7 +473,7 @@ static void test_epoch( lunapi_t * eng,
     p->eval("EPOCH len=30");
     double ne = get_val(p,"EPOCH","NE");
     std::ostringstream m; m << "NE=" << ne << " (exp=720, rs=1)";
-    record(R,"epoch/rs1-30s", near(ne,720,0.5), m.str(), V);
+    record(R,"epoch/rs1-30s", approx_equal(ne,720,0.5), m.str(), V);
   } catch(std::exception & e) { record(R,"epoch/rs1-30s",false,e.what(),V); }
 
   // B3 — rs=30 (record size matches epoch size)
@@ -455,7 +485,7 @@ static void test_epoch( lunapi_t * eng,
     p->eval("EPOCH len=30");
     double ne = get_val(p,"EPOCH","NE");
     std::ostringstream m; m << "NE=" << ne << " (exp=720, rs=30)";
-    record(R,"epoch/rs30-30s", near(ne,720,0.5), m.str(), V);
+    record(R,"epoch/rs30-30s", approx_equal(ne,720,0.5), m.str(), V);
   } catch(std::exception & e) { record(R,"epoch/rs30-30s",false,e.what(),V); }
 
   // B4 — overlapping epochs (len=30 inc=15)
@@ -465,7 +495,7 @@ static void test_epoch( lunapi_t * eng,
     double ne = get_val(p,"EPOCH","NE");
     // 720*30 sec / 15s step - 1 = 1439 epochs
     std::ostringstream m; m << "NE=" << ne << " (exp=1439)";
-    record(R,"epoch/overlapping-inc15", near(ne,1439,1.5), m.str(), V);
+    record(R,"epoch/overlapping-inc15", approx_equal(ne,1439,1.5), m.str(), V);
   } catch(std::exception & e) { record(R,"epoch/overlapping-inc15",false,e.what(),V); }
 
   // B5 — 5-second epochs
@@ -475,7 +505,7 @@ static void test_epoch( lunapi_t * eng,
     double ne = get_val(p,"EPOCH","NE");
     // 720*30/5 = 4320
     std::ostringstream m; m << "NE=" << ne << " (exp=4320)";
-    record(R,"epoch/5sec-epochs", near(ne,4320,0.5), m.str(), V);
+    record(R,"epoch/5sec-epochs", approx_equal(ne,4320,0.5), m.str(), V);
   } catch(std::exception & e) { record(R,"epoch/5sec-epochs",false,e.what(),V); }
 
   // B6 — EPOCH called twice: NE is stable
@@ -486,7 +516,7 @@ static void test_epoch( lunapi_t * eng,
     p->eval("EPOCH len=30");
     double ne2 = get_val(p,"EPOCH","NE");
     std::ostringstream m; m << "NE1=" << ne1 << " NE2=" << ne2;
-    record(R,"epoch/dump-stable", near(ne1,ne2,0.5), m.str(), V);
+    record(R,"epoch/dump-stable", approx_equal(ne1,ne2,0.5), m.str(), V);
   } catch(std::exception & e) { record(R,"epoch/dump-stable",false,e.what(),V); }
 }
 
@@ -504,7 +534,7 @@ static void test_mask( lunapi_t * eng,
     double nr2 = get_val(p,"RE","NR2");
     globals::empty = false; globals::problem = false;
     std::ostringstream m; m << "NR2=" << nr2 << " (exp=0)";
-    record(R,"mask/mask-all", near(nr2,0,0.5), m.str(), V);
+    record(R,"mask/mask-all", approx_equal(nr2,0,0.5), m.str(), V);
   } catch(std::exception & e) { record(R,"mask/mask-all",false,e.what(),V); }
 
   // C2 — MASK none: after MASK all then MASK none, RE retains all 720 records
@@ -514,7 +544,7 @@ static void test_mask( lunapi_t * eng,
     p->eval("MASK none & RE");
     double nr2 = get_val(p,"RE","NR2");
     std::ostringstream m; m << "NR2=" << nr2 << " (exp=720)";
-    record(R,"mask/mask-none", near(nr2,720,0.5), m.str(), V);
+    record(R,"mask/mask-none", approx_equal(nr2,720,0.5), m.str(), V);
   } catch(std::exception & e) { record(R,"mask/mask-none",false,e.what(),V); }
 
   // C3 — MASK ifnot=N2 with annotation: N_RETAINED = # N2 epochs
@@ -533,7 +563,7 @@ static void test_mask( lunapi_t * eng,
     p->eval("EPOCH len=30 & MASK ifnot=N2");
     double ret = get_val(p,"MASK","N_RETAINED");
     std::ostringstream m; m << "N_RETAINED=" << ret << " (exp=300)";
-    record(R,"mask/ifnot-annot", near(ret,300,0.5), m.str(), V);
+    record(R,"mask/ifnot-annot", approx_equal(ret,300,0.5), m.str(), V);
   } catch(std::exception & e) { record(R,"mask/ifnot-annot",false,e.what(),V); }
 
   // C4 — MASK epoch=1-100: verify via RE NR2=100
@@ -542,7 +572,7 @@ static void test_mask( lunapi_t * eng,
     p->eval("EPOCH len=30 & MASK epoch=1-100 & RE");
     double nr2 = get_val(p,"RE","NR2");
     std::ostringstream m; m << "NR2=" << nr2 << " (exp=100)";
-    record(R,"mask/epoch-range", near(nr2,100,0.5), m.str(), V);
+    record(R,"mask/epoch-range", approx_equal(nr2,100,0.5), m.str(), V);
   } catch(std::exception & e) { record(R,"mask/epoch-range",false,e.what(),V); }
 
   // C5 — RE with rs=1: DUR2 after RE == 200*30s
@@ -553,7 +583,7 @@ static void test_mask( lunapi_t * eng,
     p->eval("EPOCH len=30 & MASK epoch=1-200 & RE");
     double dur2 = get_val(p,"RE","DUR2");
     std::ostringstream m; m << "DUR2=" << dur2 << "s (exp=6000, rs=1)";
-    record(R,"mask/re-basic-rs1", near(dur2,6000.0,1.0), m.str(), V);
+    record(R,"mask/re-basic-rs1", approx_equal(dur2,6000.0,1.0), m.str(), V);
   } catch(std::exception & e) { record(R,"mask/re-basic-rs1",false,e.what(),V); }
 
   // C6 — RE with rs=30: DUR2 after RE == 200*30s  (regression guard)
@@ -564,7 +594,7 @@ static void test_mask( lunapi_t * eng,
     p->eval("EPOCH len=30 & MASK epoch=1-200 & RE");
     double dur2 = get_val(p,"RE","DUR2");
     std::ostringstream m; m << "DUR2=" << dur2 << "s (exp=6000, rs=30)";
-    record(R,"mask/re-basic-rs30", near(dur2,6000.0,1.0), m.str(), V);
+    record(R,"mask/re-basic-rs30", approx_equal(dur2,6000.0,1.0), m.str(), V);
   } catch(std::exception & e) { record(R,"mask/re-basic-rs30",false,e.what(),V); }
 
   // C7 — DOUBLE RE with rs=30: NR2 from second RE > 0  (uint64_t overflow regression)
@@ -595,7 +625,7 @@ static void test_mask( lunapi_t * eng,
     p->eval("EPOCH len=30 & MASK epoch=1-100 & MASK flip & RE");
     double nr2 = get_val(p,"RE","NR2");
     std::ostringstream m; m << "NR2 after flip+RE=" << nr2 << " (exp=620)";
-    record(R,"mask/mask-flip", near(nr2,620,0.5), m.str(), V);
+    record(R,"mask/mask-flip", approx_equal(nr2,620,0.5), m.str(), V);
   } catch(std::exception & e) { record(R,"mask/mask-flip",false,e.what(),V); }
 
   // C9 — MASK epoch list (non-contiguous); verify via RE
@@ -604,7 +634,7 @@ static void test_mask( lunapi_t * eng,
     p->eval("EPOCH len=30 & MASK epoch=1,3,5,7,9 & RE");
     double nr2 = get_val(p,"RE","NR2");
     std::ostringstream m; m << "NR2=" << nr2 << " (exp=5)";
-    record(R,"mask/epoch-list", near(nr2,5,0.5), m.str(), V);
+    record(R,"mask/epoch-list", approx_equal(nr2,5,0.5), m.str(), V);
   } catch(std::exception & e) { record(R,"mask/epoch-list",false,e.what(),V); }
 
   // C10 — RE reduces signal duration
@@ -615,7 +645,7 @@ static void test_mask( lunapi_t * eng,
     double dur_after = p->last_sec();
     std::ostringstream m;
     m << "dur before=" << dur_before << " after=" << dur_after << " (exp≈3000s)";
-    record(R,"mask/re-duration", dur_after < dur_before && near(dur_after,3000.0,60.0), m.str(), V);
+    record(R,"mask/re-duration", dur_after < dur_before && approx_equal(dur_after,3000.0,60.0), m.str(), V);
   } catch(std::exception & e) { record(R,"mask/re-duration",false,e.what(),V); }
 }
 
@@ -658,7 +688,7 @@ static void test_filter( lunapi_t * eng,
     p->eval("FILTER sig=EEG highpass=2 tw=1 ripple=0.01 & EPOCH len=30 & PSD sig=EEG max=20 spectrum=T");
     double pwr_dc_after    = band_power(p, 0.0, 0.5);
     double pwr_high_after  = band_power(p, 8.0, 12.0);
-    bool pass = near_rel(pwr_high_after, pwr_high_before, 0.5) &&
+    bool pass = approx_equal_rel(pwr_high_after, pwr_high_before, 0.5) &&
 		pwr_dc_after < pwr_high_after * 0.1;
     std::ostringstream m;
     m << "highpass: DC_after=" << pwr_dc_after << " 10Hz_after=" << pwr_high_after;
@@ -705,7 +735,7 @@ static void test_resample( lunapi_t * eng,
     double dur_after = p->last_sec();
     p->eval("EPOCH len=30 & PSD sig=EEG max=60 spectrum=T");
     double pf = peak_freq(p);
-    bool pass = near(dur_before,dur_after,60.0) && near(pf,10.0,1.5);
+    bool pass = approx_equal(dur_before,dur_after,60.0) && approx_equal(pf,10.0,1.5);
     std::ostringstream m;
     m << "dur=" << dur_after << " peak_f=" << pf << " (exp≈10Hz)";
     record(R,"resample/downsample-256-128", pass, m.str(), V);
@@ -721,7 +751,7 @@ static void test_resample( lunapi_t * eng,
     double dur_after = p->last_sec();
     p->eval("EPOCH len=30 & PSD sig=EEG max=30 spectrum=T");
     double pf = peak_freq(p);
-    bool pass = near(dur_before,dur_after,60.0) && near(pf,10.0,1.5);
+    bool pass = approx_equal(dur_before,dur_after,60.0) && approx_equal(pf,10.0,1.5);
     std::ostringstream m;
     m << "dur=" << dur_after << " peak_f=" << pf << " (exp≈10Hz)";
     record(R,"resample/upsample-64-256", pass, m.str(), V);
@@ -741,7 +771,7 @@ static void test_psd( lunapi_t * eng,
     p->eval("EPOCH len=30 & PSD sig=EEG max=30 spectrum=T");
     double pf = peak_freq(p);
     std::ostringstream m; m << "peak_f=" << pf << " (exp≈10Hz)";
-    record(R,"psd/sine-peak-10hz", near(pf,10.0,1.0), m.str(), V);
+    record(R,"psd/sine-peak-10hz", approx_equal(pf,10.0,1.0), m.str(), V);
   } catch(std::exception & e) { record(R,"psd/sine-peak-10hz",false,e.what(),V); }
 
   // F2 — sigma band power > alpha when signal is 13Hz
@@ -885,7 +915,7 @@ static void test_hypno( lunapi_t * eng,
     p->eval("EPOCH len=30 & HYPNO");
     double tst = get_val(p,"HYPNO","TST");
     double se  = get_val(p,"HYPNO","SE");
-    bool pass = near(tst, 720*30.0/60.0, 1.0) && near(se, 100.0, 1 );
+    bool pass = approx_equal(tst, 720*30.0/60.0, 1.0) && approx_equal(se, 100.0, 1 );
     std::ostringstream m; m << "TST=" << tst << "min (exp=" << 720*30.0/60.0 << ") SE=" << se << "% (exp=1.00)";
     record(R,"hypno/all-n2-tst-se", pass, m.str(), V);
   } catch(std::exception & e) { record(R,"hypno/all-n2-tst-se",false,e.what(),V); }
@@ -907,7 +937,7 @@ static void test_hypno( lunapi_t * eng,
     // N2 % of TST is under SS strata, variable PCT, where SS column = "N2"
     double n2p = get_val_where(p,"HYPNO","SS","SS","N2","PCT");
     // TST should be ~180 min (360 N2 epochs × 30s / 60)
-    bool pass = near(tst, 180.0, 2.0) && near(n2p, 1.0, 0.1);
+    bool pass = approx_equal(tst, 180.0, 2.0) && approx_equal(n2p, 1.0, 0.1);
     std::ostringstream m; m << "TST=" << tst << " (exp=180) N2%=" << n2p << " (exp=1.00)";
     record(R,"hypno/mixed-wake-n2", pass, m.str(), V);
   } catch(std::exception & e) { record(R,"hypno/mixed-wake-n2",false,e.what(),V); }
@@ -927,7 +957,7 @@ static void test_hypno( lunapi_t * eng,
     p->eval("EPOCH len=30 & HYPNO");
     double se  = get_val(p,"HYPNO","SE");
     // TST=600*30/60=300min; TIB=720*30/60=360min; SE=300/360*100=83.3%
-    bool pass = near(se, 83.3, 3.0);
+    bool pass = approx_equal(se, 83.3, 3.0);
     std::ostringstream m; m << "SE=" << se << "% (exp≈83.3%)";
     record(R,"hypno/sleep-efficiency", pass, m.str(), V);
   } catch(std::exception & e) { record(R,"hypno/sleep-efficiency",false,e.what(),V); }
@@ -1007,7 +1037,7 @@ static void test_annot( lunapi_t * eng,
     p->eval("ANNOTS");
     // The ANNOTS command outputs per-annotation strata
     double cnt = get_val(p,"ANNOTS","COUNT");
-    bool pass = near(cnt, 4.0, 0.5);
+    bool pass = approx_equal(cnt, 4.0, 0.5);
     std::ostringstream m; m << "COUNT=" << cnt << " (exp=4)";
     record(R,"annot/annots-count", pass, m.str(), V);
   } catch(std::exception & e) { record(R,"annot/annots-count",false,e.what(),V); }
@@ -1035,32 +1065,29 @@ static void test_write( lunapi_t * eng,
 {
   // J1 — write to temp file, re-attach, verify channel count and duration
   try {
-    // Unique temp path
-    char tmp[256];
-    std::snprintf(tmp, sizeof(tmp), "/tmp/luna_test_%d.edf", (int)getpid());
+    const std::string tmp = temp_base_path("test_edf");
     auto p = make_sine_inst(eng, 10.0, 256, 1.0);
     p->eval( std::string("WRITE edf=") + tmp + " force-edf=T" );
 
     auto p2 = eng->inst("T_reload");
-    bool ok = p2->attach_edf( std::string(tmp) + ".edf" );
+    bool ok = p2->attach_edf( tmp + ".edf" );
 
     int ns1 = (int)p->channels().size();
     int ns2 = (int)p2->channels().size();
     double dur1 = p->last_sec_original();
     double dur2 = p2->last_sec_original();
-    bool pass = ok && (ns2 == ns1) && near(dur1, dur2, 30.0);
+    bool pass = ok && (ns2 == ns1) && approx_equal(dur1, dur2, 30.0);
     std::ostringstream m;
     m << "ns1=" << ns1 << " ns2=" << ns2
       << " dur1=" << dur1 << " dur2=" << dur2;
     record(R,"write/edf-round-trip", pass, m.str(), V);
     // cleanup
-    std::remove( (std::string(tmp) + ".edf").c_str() );
+    std::remove( (tmp + ".edf").c_str() );
   } catch(std::exception & e) { record(R,"write/edf-round-trip",false,e.what(),V); }
 
   // J2 — write-annots round-trip: WRITE-ANNOTS then re-attach, count matches
   try {
-    char tmp[256];
-    std::snprintf(tmp, sizeof(tmp), "/tmp/luna_test_annot_%d", (int)getpid());
+    const std::string tmp = temp_base_path("test_annot");
     auto p = make_sine_inst(eng);
     std::vector<std::tuple<double,double>> ivs;
     for (int i=0; i<10; i++) ivs.push_back({i*30.0, (i+1)*30.0});
@@ -1069,30 +1096,29 @@ static void test_write( lunapi_t * eng,
 
     auto p2 = eng->inst("T_ra");
     p2->empty_edf("T_ra", 720, 30, "01.01.85","22.00.00");
-    p2->attach_annot( std::string(tmp) + ".annot" );
+    p2->attach_annot( tmp + ".annot" );
     auto fa = p2->fetch_annots({"RoundTrip"});
     bool pass = (int)fa.size() == 10;
     std::ostringstream m; m << "re-fetched " << fa.size() << " intervals (exp=10)";
     record(R,"write/annot-round-trip", pass, m.str(), V);
-    std::remove( (std::string(tmp) + ".annot").c_str() );
+    std::remove( (tmp + ".annot").c_str() );
   } catch(std::exception & e) { record(R,"write/annot-round-trip",false,e.what(),V); }
 
   // J3 — STATS mean/SD preserved through EDF write/read
   try {
-    char tmp[256];
-    std::snprintf(tmp, sizeof(tmp), "/tmp/luna_test_stats_%d", (int)getpid());
+    const std::string tmp = temp_base_path("test_stats");
     auto p = make_sine_inst(eng, 10.0, 256, 1.5);
     p->eval("STATS sig=EEG");
     double sd1 = get_val(p,"STATS","SD");
     p->eval( std::string("WRITE edf=") + tmp + " force-edf=T" );
     auto p2 = eng->inst("T_stats");
-    p2->attach_edf( std::string(tmp) + ".edf" );
+    p2->attach_edf( tmp + ".edf" );
     p2->eval("STATS sig=EEG");
     double sd2 = get_val(p2,"STATS","SD");
-    bool pass = near_rel(sd1, sd2, 0.02);
+    bool pass = approx_equal_rel(sd1, sd2, 0.02);
     std::ostringstream m; m << "SD before=" << sd1 << " after=" << sd2;
     record(R,"write/stats-preserved", pass, m.str(), V);
-    std::remove( (std::string(tmp) + ".edf").c_str() );
+    std::remove( (tmp + ".edf").c_str() );
   } catch(std::exception & e) { record(R,"write/stats-preserved",false,e.what(),V); }
 }
 
@@ -1109,7 +1135,7 @@ static void test_script( lunapi_t * eng,
     p->eval("EPOCH len=30 & STATS sig=EEG");
     double ne = get_val(p,"EPOCH","NE");
     double sd = get_val(p,"STATS","SD");
-    bool pass = near(ne,720,0.5) && sd > 0;
+    bool pass = approx_equal(ne,720,0.5) && sd > 0;
     std::ostringstream m; m << "NE=" << ne << " SD=" << sd;
     record(R,"script/amp-separator", pass, m.str(), V);
   } catch(std::exception & e) { record(R,"script/amp-separator",false,e.what(),V); }
@@ -1204,7 +1230,7 @@ static void test_lunapi( lunapi_t * eng,
   try {
     auto p = make_sine_inst(eng);  // 720*30 = 21600 s
     double ls = p->last_sec();
-    bool pass = near(ls, 21600.0, 60.0);
+    bool pass = approx_equal(ls, 21600.0, 60.0);
     std::ostringstream m; m << "last_sec=" << ls << " (exp=21600)";
     record(R,"lunapi/last-sec", pass, m.str(), V);
   } catch(std::exception & e) { record(R,"lunapi/last-sec",false,e.what(),V); }
@@ -1328,7 +1354,7 @@ static void test_segsrv( lunapi_t * eng,
   try {
     auto [p, ss] = make_ss("T_ss1");
     double ts = ss->get_total_sec();
-    bool pass = near(ts, 720.0*30, 60.0);
+    bool pass = approx_equal(ts, 720.0*30, 60.0);
     std::ostringstream m; m << "total_sec=" << ts << " (exp=" << 720.0*30 << ")";
     record(R,"segsrv/total-sec", pass, m.str(), V);
     delete ss;
