@@ -206,9 +206,8 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	  double dur = edfs[ pp->second ]->header.nr * edfs[ pp->second ]->header.record_duration;
 	  
 	  logger << "  for EDF " << sidx-1 << ", start = " << pp->first << " and next EDF start = " << ss->first << "\n";
-	  logger << "    implied duration based on # records      = " << diff << "\n";
-	  logger << "    implied duration based on next EDF start = " << dur << "\n"; 
-	  
+	  logger << "    implied duration based on # records      = " << dur << "\n";
+	  logger << "    implied duration based on next EDF start = " << diff << "\n"; 
 	  if ( dur - diff > 0.5 )
 	    {
 	      overlap = true;
@@ -353,7 +352,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
 	} // next EDF
       
       const int np_obs = dt.size();
-      const int np_exp = nr * edfs[0]->header.sampling_freq(s);
+      const int np_exp = nr * edfs[0]->header.n_samples[s];
       
       if ( np_obs != np_exp )
 	Helper::halt( "expected and observed number of sample points did not align" );
