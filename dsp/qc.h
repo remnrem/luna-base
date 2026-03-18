@@ -28,6 +28,7 @@ struct param_t;
 struct signal_list_t;
 
 #include <string>
+#include <vector>
 
 namespace dsptools
 {
@@ -51,6 +52,7 @@ namespace dsptools
 
     void do_resp( signal_list_t & signals );
     int resp_min_sr;
+    int resp_hard_min_sr;
     double resp_th;
     double resp_prop_th;
     double resp_window_dur;

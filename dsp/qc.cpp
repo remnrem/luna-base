@@ -24,6 +24,7 @@
 #include "param.h"
 
 #include "dsp/fir.h"
+#include "dsp/resample.h"
 #include "dsp/iir.h"
 #include "dsp/ecgsuppression.h"
 #include "stats/eigen_ops.h"
@@ -85,8 +86,9 @@ dsptools::qc_t::qc_t( edf_t & edf1 , param_t & param ) : edf(edf1)
   resp_p2_lwr = param.has( "resp-p2-lwr" ) ? param.requires_dbl( "resp-p2-lwr" ) : 1 ;
   resp_p2_upr = param.has( "resp-p2-upr" ) ? param.requires_dbl( "resp-p2-upr" ) : 10 ;
     
-  resp_min_sr = param.has( "resp-min-sr" ) ? param.requires_int( "resp-min-sr" ) : 32 ;
-  resp_epsilon = param.has( "resp-epsilon" ) ? param.requires_dbl( "resp-epsilon" ) : 1e-8 ;
+  resp_min_sr      = param.has( "resp-min-sr"      ) ? param.requires_int( "resp-min-sr"      ) : 32 ;
+  resp_hard_min_sr = param.has( "resp-hard-min-sr" ) ? param.requires_int( "resp-hard-min-sr" ) : 4  ;
+  resp_epsilon     = param.has( "resp-epsilon"      ) ? param.requires_dbl( "resp-epsilon"      ) : 1e-8 ;
 
   // per-window artifact thresholds
   resp_flatline_floor  = param.has( "resp-flat-floor" )     ? param.requires_dbl( "resp-flat-floor" )     : 1e-4 ;
@@ -413,17 +415,47 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
   for (int s=0; s<ns; s++)
     {
 
-      //
-      // just bail for now if SR is too low
-      //
-
       const double Fs = edf.header.sampling_freq( signals(s) );
-      
-      if ( Fs < resp_min_sr )
-	Helper::halt( signals.label(s) + " has a sample rate of "
-		      + Helper::dbl2str( Fs ) + ", lower resp-min-sr="
-		      + Helper::dbl2str( resp_min_sr ) );      
 
+      //
+      // Hard floor: below this SR no meaningful RESP analysis is possible;
+      // skip the channel and flag it in the output.
+      //
+
+      if ( Fs < resp_hard_min_sr )
+	{
+	  logger << "  ** skipping " << signals.label(s)
+		 << " (SR=" << Fs << " Hz is below resp-hard-min-sr=" << resp_hard_min_sr
+		 << "; channel omitted from RESP analysis)\n";
+	  writer.level( signals.label(s) , globals::signal_strat );
+	  writer.level( 1 , "RESP" );
+	  writer.value( "FLAGGED" , 1 );
+	  writer.value( "LOW_SR"  , 1 );
+	  writer.unlevel( "RESP" );
+	  writer.level( "RESP" , "DOMAIN" );
+	  writer.value( "FLAGGED" , 1 );
+	  writer.value( "LOW_SR"  , 1 );
+	  writer.unlevel( "DOMAIN" );
+	  continue;
+	}
+
+      //
+      // Soft minimum: if SR is below resp_min_sr but above the hard floor,
+      // upsample to resp_min_sr so that the full noise band (resp_p2_upr)
+      // and analysis window sizes are fully supported.  Note: upsampling does
+      // not recover spectral information above the original Nyquist (Fs/2),
+      // so the noise-band estimate will be naturally truncated for low-SR
+      // channels; the check remains meaningful for the respiratory signal
+      // band and flatline/clip/jump criteria.
+      //
+
+      const bool   do_upsample  = ( Fs < resp_min_sr );
+      const double effective_Fs = do_upsample ? (double)resp_min_sr : Fs;
+
+      if ( do_upsample )
+	logger << "  ** upsampling " << signals.label(s)
+	       << " from " << Fs << " to " << resp_min_sr
+	       << " Hz for RESP analysis (original Nyquist = " << Fs/2.0 << " Hz)\n";
 
       //
       // start processing this signal
@@ -465,12 +497,23 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 
 	  // note: final true returns sample points
 	  slice_t slice( edf , signals(s) , interval, 1, false , true );
-	  
+
 	  std::vector<double> * d = slice.nonconst_pdata();
 
 	  const std::vector<int> * sp = slice.psmps();
 
-	  const int n = d->size();
+	  // number of samples at the original SR (needed for sp indexing below)
+	  const int n_orig = (int)d->size();
+
+	  // upsample epoch to effective_Fs if channel SR is below resp_min_sr
+	  std::vector<double> d_up;
+	  if ( do_upsample )
+	    {
+	      d_up = dsptools::resample( d , Fs , effective_Fs );
+	      d = &d_up;
+	    }
+
+	  const int n = (int)d->size();
 
 	  //
 	  // Per-window artifact checks (must run before FFT modifies d)
@@ -506,7 +549,7 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 	  flag_jump.push_back( flag_jump_e );
 	  flag_bad_epoch.push_back( epoch_bad );
 
-	  FFT fftseg( n , n , Fs , FFT_FORWARD , WINDOW_NONE );
+	  FFT fftseg( n , n , effective_Fs , FFT_FORWARD , WINDOW_NONE );
 
 	  fftseg.apply( &((*d)[0]) , n );
 	  
@@ -532,7 +575,8 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 	  //  so below, we only extract non-missing points from the start/stop
 	  //  ranges stored in smps[]
 
-	  std::pair<int,int> smps1( (*sp)[0] , (*sp)[n-1] );
+	  // sp is indexed at original SR; use n_orig (not n) when upsampled
+	  std::pair<int,int> smps1( (*sp)[0] , (*sp)[n_orig-1] );
 	  
 	  // track for this epoch
 	  snr.push_back( snr1 );
