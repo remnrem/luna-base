@@ -46,6 +46,8 @@ struct rpeaks_t
   double bpm( interval_t & , double lwr = 0 , double upr = 0 ) ;
   
   int clean( double , double );
+
+  int lockout( double , const std::vector<double> & );
   
   std::vector<uint64_t> beats( interval_t & ) const;
 
@@ -111,7 +113,49 @@ struct rr_intervals_t {
   
 };
 
-struct rpeak_opt_t;
+struct rpeak_opt_t {
+
+  rpeak_opt_t()
+  {
+    ripple = 0.01;
+    tw = 3;
+    flwr = 5;
+    fupr = 20;
+    median_filter_window = 9;
+
+    //smoothed Z
+    lag_sec = 10;
+    influence = 0.001;
+
+    th = 2;
+    th2 = 1;
+    max = 0; // no max.
+
+    mindur_sec = 0.04; // 40 msec
+    mindur2_sec = 0.04; // same
+  }
+
+  double ripple;
+  double tw;
+  double flwr;
+  double fupr;
+  int median_filter_window;
+
+  // smoothedZ peak finding
+  double lag_sec;
+  double influence;
+
+  // core
+  double th;
+  double max;
+  double mindur_sec; // 40 ms
+
+  // flanking region
+  double th2;
+  double mindur2_sec; // 40 ms
+
+};
+
 
 namespace dsptools 
 {  

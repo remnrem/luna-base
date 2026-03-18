@@ -2931,6 +2931,345 @@ void cmddefs_t::init()
   add_param( "LINE-DENOISE" , "w" , "1,1" , "Noise-band and neighboring-band widths in Hz" );
   add_param( "LINE-DENOISE" , "epoch" , "" , "Run the denoiser separately within each epoch" );
 
+  //
+  // QC
+  //
+
+  add_cmd( "artifact" , "QC" , "Multi-domain signal quality control for PSG recordings" );
+  add_url( "QC" , "artifacts/#qc" );
+  add_verb( "QC" ,
+            "Run signal quality control across one or more PSG signal domains: respiratory "
+            "(resp), SpO2/oximetry (oxy), EEG (eeg), EMG (emg), ECG/EKG (ecg), and EOG (eog).\n"
+            "\n"
+            "For each domain, QC evaluates per-epoch artifact criteria including flatline "
+            "detection, clipping, extreme amplitude excursions, spectral anomalies (high-frequency "
+            "contamination, spectral peakedness), Hjorth parameter outliers, and for ECG, "
+            "RR interval / heart-rate implausibility. Each criterion flags individual epochs; "
+            "channel-level BAD is declared when the proportion of bad epochs or the longest "
+            "contiguous bad run exceeds configurable thresholds.\n"
+            "\n"
+            "Line noise is evaluated in all domains except RESP and OXY, but is tracked "
+            "separately (LN_BAD) and does not contribute to the primary BAD flag — line noise "
+            "is typically trivially removable by filtering. R-peak detection for ECG is performed "
+            "once on the whole signal and per-epoch metrics are then derived from that global "
+            "peak list.\n"
+            "\n"
+            "Output includes a cross-domain CH x DOMAIN summary, a per-domain per-channel "
+            "summary with individual proportion flags, and optionally per-epoch window-level "
+            "statistics (epoch option). Epoch-spanning bad-interval annotations are emitted "
+            "by default." );
+
+  // --- Signal group assignment ---
+  add_param( "QC" , "resp" , "THOR,ABD"  , "Assign channel(s) to the respiratory domain" );
+  add_param( "QC" , "oxy"  , "SpO2"      , "Assign channel(s) to the SpO2/oximetry domain" );
+  add_param( "QC" , "eeg"  , "C3,C4"     , "Assign channel(s) to the EEG domain" );
+  add_param( "QC" , "emg"  , "lchin"     , "Assign channel(s) to the EMG domain" );
+  add_param( "QC" , "ecg"  , "ECG1"      , "Assign channel(s) to the ECG domain" );
+  add_param( "QC" , "eog"  , "LOC,ROC"   , "Assign channel(s) to the EOG domain" );
+
+  // --- General options ---
+  add_param( "QC" , "epoch"        , ""   , "Emit per-epoch (WIN-level) metrics for all active domains" );
+  add_param( "QC" , "annot"        , "QC" , "Annotation prefix; by default emits per-channel annotations (QC_<CH>)" );
+  add_param( "QC" , "annot-domain" , "QC" , "Emit per-domain annotations instead (QC_<DOMAIN>); no channel suffix" );
+  add_param( "QC" , "annot-show"   , "F"  , "Set F to suppress all QC annotations" );
+
+  // --- Respiratory (RESP) parameters ---
+  add_param( "QC" , "resp-min-sr"        , "32"   , "Minimum sample rate for respiratory channels (Hz)" );
+  add_param( "QC" , "resp-win"           , "120"  , "Analysis window size (sec)" );
+  add_param( "QC" , "resp-inc"           , "10"   , "Analysis window step (sec)" );
+  add_param( "QC" , "resp-snr-th"        , "10"   , "SNR threshold separating respiratory signal from noise windows" );
+  add_param( "QC" , "resp-th"            , "0.1"  , "Maximum permitted proportion of noise-level windows" );
+  add_param( "QC" , "resp-p1-lwr"        , "0.1"  , "Lower bound of respiratory signal frequency band (Hz)" );
+  add_param( "QC" , "resp-p1-upr"        , "1"    , "Upper bound of respiratory signal frequency band (Hz)" );
+  add_param( "QC" , "resp-p2-lwr"        , "1"    , "Lower bound of respiratory noise frequency band (Hz)" );
+  add_param( "QC" , "resp-p2-upr"        , "10"   , "Upper bound of respiratory noise frequency band (Hz)" );
+  add_param( "QC" , "resp-flat-floor"    , ""     , "Amplitude floor for flatline detection" );
+  add_param( "QC" , "resp-flat-prop"     , ""     , "Proportion of near-zero derivatives that flags a flatline window" );
+  add_param( "QC" , "resp-clip-prop"     , ""     , "Proportion of clipped samples that flags a clipping window" );
+  add_param( "QC" , "resp-jump-th"       , ""     , "MAD multiplier for jump artifact detection" );
+  add_param( "QC" , "resp-flag-prop", "0.5"  , "Channel flagged if this fraction of epochs are flagged" );
+  add_param( "QC" , "resp-flag-run"       , "3600"  , "Channel flagged if contiguous flagged-epoch run >= this many seconds" );
+  add_param( "QC" , "resp-add-channel"   , ""     , "Add a noise-estimate waveform as a new EDF channel" );
+
+  // --- SpO2 / oximetry (OXY) parameters ---
+  add_param( "QC" , "oxy-min-sr"         , "1"    , "Minimum sample rate for SpO2 channels (Hz)" );
+  add_param( "QC" , "oxy-win"            , "30"   , "Analysis window size (sec)" );
+  add_param( "QC" , "oxy-inc"            , "30"   , "Analysis window step (sec)" );
+  add_param( "QC" , "oxy-range-lo"       , "50"   , "Lower bound of physiologically valid SpO2 range (%)" );
+  add_param( "QC" , "oxy-range-hi"       , "100"  , "Upper bound of physiologically valid SpO2 range (%)" );
+  add_param( "QC" , "oxy-range-prop"     , "0.05" , "Epoch flagged if this fraction of samples are out of range" );
+  add_param( "QC" , "oxy-flat-th"        , "95"   , "Flatline detection: constant-value threshold (%)" );
+  add_param( "QC" , "oxy-flat-k"         , "3"    , "Flatline detection: minimum run length (epochs)" );
+  add_param( "QC" , "oxy-jump-th"        , "10"   , "Maximum permitted epoch-to-epoch SpO2 change (%)" );
+  add_param( "QC" , "oxy-invalid-floor"  , "1"    , "Values at or below this are treated as missing/invalid (%)" );
+  add_param( "QC" , "oxy-missing-prop"   , "0.1"  , "Epoch flagged if this fraction of samples are missing" );
+  add_param( "QC" , "oxy-flag-prop" , "0.5"  , "Channel flagged if this fraction of epochs are flagged" );
+  add_param( "QC" , "oxy-flag-run"        , "3600"  , "Channel flagged if contiguous flagged-epoch run >= this many seconds" );
+
+  // --- EEG parameters ---
+  add_param( "QC" , "eeg-min-sr"         , "100"  , "Minimum sample rate for EEG channels (Hz)" );
+  add_param( "QC" , "eeg-win"            , "30"   , "Analysis window size (sec)" );
+  add_param( "QC" , "eeg-inc"            , "30"   , "Analysis window step (sec)" );
+  add_param( "QC" , "eeg-flat-th"        , "2"    , "Flatline: epoch flagged if SD < threshold (µV)" );
+  add_param( "QC" , "eeg-flat-prop"      , "0.8"  , "Flatline: epoch flagged if this proportion of sample-to-sample derivatives are near-zero" );
+  add_param( "QC" , "eeg-flat-eps"       , "1e-4" , "Flatline: near-zero derivative threshold (µV/sample)" );
+  add_param( "QC" , "eeg-clip-prop"      , "0.01" , "Clipping: epoch flagged if this proportion of samples are at ADC limits" );
+  add_param( "QC" , "eeg-amp-th"         , "500"  , "Extreme amplitude: threshold (µV)" );
+  add_param( "QC" , "eeg-amp-prop"       , "0.05" , "Extreme amplitude: epoch flagged if this fraction of samples exceed threshold" );
+  add_param( "QC" , "eeg-hf-lo"          , "20"   , "HF contamination: power band lower bound (Hz)" );
+  add_param( "QC" , "eeg-hf-hi"          , "40"   , "HF contamination: power band upper bound (Hz)" );
+  add_param( "QC" , "eeg-sig-lo"         , "0.5"  , "HF contamination: reference signal band lower bound (Hz)" );
+  add_param( "QC" , "eeg-sig-hi"         , "20"   , "HF contamination: reference signal band upper bound (Hz)" );
+  add_param( "QC" , "eeg-hf-th"          , "1.5"  , "HF contamination: epoch flagged if P[HF] / P[signal] exceeds threshold" );
+  add_param( "QC" , "eeg-ln-bw"          , "2"    , "Line noise: ± Hz bandwidth around 50 and 60 Hz" );
+  add_param( "QC" , "eeg-ln-lo"          , "0.5"  , "Line noise: broadband reference lower bound (Hz)" );
+  add_param( "QC" , "eeg-ln-hi"          , "40"   , "Line noise: broadband reference upper bound (Hz)" );
+  add_param( "QC" , "eeg-ln-th"          , "0.3"  , "Line noise: epoch flagged if max(P50,P60) / P[broadband] > threshold (tracked separately; does not affect FLAGGED)" );
+  add_param( "QC" , "eeg-peak-th"        , "15"   , "Spectral peakedness (SPK): epoch flagged if total variation of detrended log-PSD residuals exceeds threshold" );
+  add_param( "QC" , "eeg-kurt-th"        , "5"    , "Spectral kurtosis (KURT): epoch flagged if excess kurtosis of detrended log-PSD residuals exceeds threshold" );
+  add_param( "QC" , "eeg-hjorth-lo"      , "0.5"  , "Hjorth pre-filter: IIR Butterworth bandpass lower cutoff (Hz)" );
+  add_param( "QC" , "eeg-hjorth-hi"      , "40"   , "Hjorth pre-filter: IIR Butterworth bandpass upper cutoff (Hz)" );
+  add_param( "QC" , "eeg-hjorth-ord"     , "2"    , "Hjorth pre-filter: Butterworth filter order" );
+  add_param( "QC" , "eeg-hjorth-z"       , "10"   , "Hjorth outlier: epoch flagged if |robust z-score| of activity or complexity exceeds threshold" );
+  add_param( "QC" , "eeg-flag-prop"       , "0.5"  , "Channel flagged if this fraction of epochs are flagged" );
+  add_param( "QC" , "eeg-flag-run"        , "3600"  , "Channel flagged if contiguous flagged-epoch run >= this many seconds" );
+
+  // --- EMG parameters ---
+  add_param( "QC" , "emg-min-sr"         , "100"  , "Minimum sample rate for EMG channels (Hz)" );
+  add_param( "QC" , "emg-win"            , "30"   , "Analysis window size (sec)" );
+  add_param( "QC" , "emg-inc"            , "30"   , "Analysis window step (sec)" );
+  add_param( "QC" , "emg-flat-th"        , "0.5"  , "Flatline: epoch flagged if SD < threshold (µV)" );
+  add_param( "QC" , "emg-flat-prop"      , "0.8"  , "Flatline: epoch flagged if this proportion of derivatives are near-zero" );
+  add_param( "QC" , "emg-flat-eps"       , "1e-4" , "Flatline: near-zero derivative threshold (µV/sample)" );
+  add_param( "QC" , "emg-clip-prop"      , "0.01" , "Clipping: epoch flagged if this proportion of samples are at ADC limits" );
+  add_param( "QC" , "emg-rms-th"         , "150"  , "High RMS: epoch flagged if broadband RMS exceeds threshold (µV)" );
+  add_param( "QC" , "emg-imp-n"          , "5"    , "Impulse artifact: minimum count of samples with |z| above threshold" );
+  add_param( "QC" , "emg-imp-z"          , "8"    , "Impulse artifact: z-score threshold" );
+  add_param( "QC" , "emg-ln-bw"          , "2"    , "Line noise: ± Hz bandwidth around 50 and 60 Hz" );
+  add_param( "QC" , "emg-ln-lo"          , "10"   , "Line noise: broadband reference lower bound (Hz)" );
+  add_param( "QC" , "emg-ln-hi"          , "100"  , "Line noise: broadband reference upper bound (Hz; Nyquist-capped)" );
+  add_param( "QC" , "emg-ln-th"          , "0.3"  , "Line noise: epoch flagged if P[line] / P[broadband] > threshold (tracked separately; does not affect FLAGGED)" );
+  add_param( "QC" , "emg-flag-prop"       , "0.5"  , "Channel flagged if this fraction of epochs are flagged" );
+  add_param( "QC" , "emg-flag-run"        , "3600"  , "Channel flagged if contiguous flagged-epoch run >= this many seconds" );
+
+  // --- ECG parameters ---
+  add_param( "QC" , "ecg-min-sr"         , "128"  , "Minimum sample rate for ECG channels (Hz)" );
+  add_param( "QC" , "ecg-win"            , "30"   , "Analysis window size (sec)" );
+  add_param( "QC" , "ecg-inc"            , "30"   , "Analysis window step (sec)" );
+  add_param( "QC" , "ecg-flat-th"        , "0.02" , "Flatline: epoch flagged if SD < threshold (mV)" );
+  add_param( "QC" , "ecg-flat-prop"      , "0.8"  , "Flatline: epoch flagged if this proportion of derivatives are near-zero" );
+  add_param( "QC" , "ecg-flat-eps"       , "1e-4" , "Flatline: near-zero derivative threshold (mV/sample)" );
+  add_param( "QC" , "ecg-clip-prop"      , "0.01" , "Clipping: epoch flagged if this proportion of samples are at ADC limits" );
+  add_param( "QC" , "ecg-hr-min"         , "25"   , "HR plausibility: minimum heart rate estimated from clean RR intervals (bpm)" );
+  add_param( "QC" , "ecg-hr-max"         , "220"  , "HR plausibility: maximum heart rate estimated from clean RR intervals (bpm)" );
+  add_param( "QC" , "ecg-rr-min"         , "300"  , "RR plausibility: minimum plausible RR interval (ms)" );
+  add_param( "QC" , "ecg-rr-max"         , "2000" , "RR plausibility: maximum plausible RR interval (ms)" );
+  add_param( "QC" , "ecg-rr-prop"        , "0.2"  , "RR plausibility: epoch flagged if this fraction of RR intervals fall outside the plausible range" );
+  add_param( "QC" , "ecg-min-beats"      , "5"    , "Beat detection: epoch flagged if fewer than this many R-peaks are found" );
+  add_param( "QC" , "ecg-ln-bw"          , "2"    , "Line noise: ± Hz bandwidth around 50 and 60 Hz" );
+  add_param( "QC" , "ecg-sig-lo"         , "5"    , "Line noise: cardiac signal band lower bound for denominator (Hz)" );
+  add_param( "QC" , "ecg-sig-hi"         , "25"   , "Line noise: cardiac signal band upper bound for denominator (Hz)" );
+  add_param( "QC" , "ecg-ln-th"          , "0.4"  , "Line noise: epoch flagged if max(P50,P60) / P[cardiac band] > threshold (tracked separately; does not affect FLAGGED)" );
+  add_param( "QC" , "ecg-flag-prop"       , "0.5"  , "Channel flagged if this fraction of epochs are flagged" );
+  add_param( "QC" , "ecg-flag-run"        , "3600"  , "Channel flagged if contiguous flagged-epoch run >= this many seconds" );
+  add_param( "QC" , "ecg-add-peaks"       , ""      , "Add a point annotation (Rpk_<ch>) for each detected R-peak (for visual QC)" );
+
+  // --- EOG parameters ---
+  add_param( "QC" , "eog-min-sr"         , "32"   , "Minimum sample rate for EOG channels (Hz)" );
+  add_param( "QC" , "eog-win"            , "30"   , "Analysis window size (sec)" );
+  add_param( "QC" , "eog-inc"            , "30"   , "Analysis window step (sec)" );
+  add_param( "QC" , "eog-flat-th"        , "3"    , "Flatline: epoch flagged if SD < threshold (µV)" );
+  add_param( "QC" , "eog-flat-prop"      , "0.8"  , "Flatline: epoch flagged if this proportion of derivatives are near-zero" );
+  add_param( "QC" , "eog-flat-eps"       , "1e-4" , "Flatline: near-zero derivative threshold (µV/sample)" );
+  add_param( "QC" , "eog-clip-prop"      , "0.01" , "Clipping: epoch flagged if this proportion of samples are at ADC limits" );
+  add_param( "QC" , "eog-amp-th"         , "700"  , "Extreme amplitude: threshold (µV)" );
+  add_param( "QC" , "eog-amp-prop"       , "0.05" , "Extreme amplitude: epoch flagged if this fraction of samples exceed threshold" );
+  add_param( "QC" , "eog-hf-lo"          , "20"   , "HF contamination: power band lower bound (Hz)" );
+  add_param( "QC" , "eog-hf-hi"          , "40"   , "HF contamination: power band upper bound (Hz)" );
+  add_param( "QC" , "eog-sig-lo"         , "0.3"  , "HF contamination: reference signal band lower bound (Hz)" );
+  add_param( "QC" , "eog-sig-hi"         , "20"   , "HF contamination: reference signal band upper bound (Hz)" );
+  add_param( "QC" , "eog-hf-th"          , "1.5"  , "HF contamination: epoch flagged if P[HF] / P[signal] exceeds threshold" );
+  add_param( "QC" , "eog-ln-bw"          , "2"    , "Line noise: ± Hz bandwidth around 50 and 60 Hz" );
+  add_param( "QC" , "eog-ln-lo"          , "0.3"  , "Line noise: broadband reference lower bound (Hz)" );
+  add_param( "QC" , "eog-ln-hi"          , "40"   , "Line noise: broadband reference upper bound (Hz)" );
+  add_param( "QC" , "eog-ln-th"          , "0.3"  , "Line noise: epoch flagged if max(P50,P60) / P[broadband] > threshold (tracked separately; does not affect FLAGGED)" );
+  add_param( "QC" , "eog-hjorth-lo"      , "0.5"  , "Hjorth pre-filter: IIR Butterworth bandpass lower cutoff (Hz)" );
+  add_param( "QC" , "eog-hjorth-hi"      , "20"   , "Hjorth pre-filter: IIR Butterworth bandpass upper cutoff (Hz)" );
+  add_param( "QC" , "eog-hjorth-ord"     , "2"    , "Hjorth pre-filter: Butterworth filter order" );
+  add_param( "QC" , "eog-hjorth-z"       , "10"   , "Hjorth outlier: epoch flagged if |robust z-score| of activity or complexity exceeds threshold" );
+  add_param( "QC" , "eog-flag-prop"       , "0.5"  , "Channel flagged if this fraction of epochs are flagged" );
+  add_param( "QC" , "eog-flag-run"        , "3600"  , "Channel flagged if contiguous flagged-epoch run >= this many seconds" );
+
+  // --- Output tables ---
+
+  // Cross-domain summary (one row per channel per domain)
+  add_table( "QC" , "CH,DOMAIN" , "Cross-domain channel QC summary" );
+  add_var( "QC" , "CH,DOMAIN" , "FLAGGED"      , "Channel flagged in this domain (0/1)" );
+  add_var( "QC" , "CH,DOMAIN" , "N_FLAG_EPOCH" , "Number of bad epochs" );
+  add_var( "QC" , "CH,DOMAIN" , "MAX_FLAG_RUN" , "Longest contiguous run of bad epochs (sec)" );
+  add_var( "QC" , "CH,DOMAIN" , "LN_FLAG"      , "Channel flagged for line noise in this domain (0/1); EEG/EMG/ECG/EOG only" );
+  add_var( "QC" , "CH,DOMAIN" , "MAX_LN_RUN"  , "Longest contiguous run of line-noise epochs (sec); EEG/EMG/ECG/EOG only" );
+
+  // RESP per-channel summary
+  add_table( "QC" , "CH,RESP" , "Per-channel respiratory QC summary" );
+  add_var( "QC" , "CH,RESP" , "N_VALID_WIN"  , "Number of valid (non-artifact) windows" );
+  add_var( "QC" , "CH,RESP" , "P_VALID_WIN"  , "Proportion of valid windows" );
+  add_var( "QC" , "CH,RESP" , "P_NOISE1"     , "Proportion of windows with SNR below threshold" );
+  add_var( "QC" , "CH,RESP" , "P_NOISE2"     , "Proportion of windows with elevated noise-band power" );
+  add_var( "QC" , "CH,RESP" , "P_NOISE3"     , "Proportion of windows failing both SNR and noise-band criteria" );
+  add_var( "QC" , "CH,RESP" , "P_FLAG_EPOCH"  , "Proportion of bad epochs" );
+  add_var( "QC" , "CH,RESP" , "P_FLAT"       , "Proportion of flatline epochs" );
+  add_var( "QC" , "CH,RESP" , "P_CLIP"       , "Proportion of clipped epochs" );
+  add_var( "QC" , "CH,RESP" , "P_JUMP"       , "Proportion of jump-artifact epochs" );
+  add_var( "QC" , "CH,RESP" , "FLAGGED"       , "Channel flagged (0/1)" );
+
+  // RESP per-window output [epoch]
+  add_table( "QC" , "CH,RESP,WIN" , "Per-window respiratory QC metrics [epoch]" );
+  add_var( "QC" , "CH,RESP,WIN" , "P1"        , "Respiratory band power estimate" );
+  add_var( "QC" , "CH,RESP,WIN" , "SNR"       , "Signal-to-noise ratio for this window" );
+  add_var( "QC" , "CH,RESP,WIN" , "CRIT"      , "Noise criteria value" );
+  add_var( "QC" , "CH,RESP,WIN" , "FLAT"      , "Flatline flag (0/1)" );
+  add_var( "QC" , "CH,RESP,WIN" , "CLIP"      , "Clipping flag (0/1)" );
+  add_var( "QC" , "CH,RESP,WIN" , "JUMP"      , "Jump artifact flag (0/1)" );
+  add_var( "QC" , "CH,RESP,WIN" , "FLAG_EPOCH" , "Window flagged as bad (0/1)" );
+
+  // SpO2/OXY per-channel summary
+  add_table( "QC" , "CH,OXY" , "Per-channel SpO2 QC summary" );
+  add_var( "QC" , "CH,OXY" , "RESCALED"     , "Signal was auto-rescaled from 0-1 to 0-100 (0/1)" );
+  add_var( "QC" , "CH,OXY" , "P_FLAG_EPOCH"  , "Proportion of bad epochs" );
+  add_var( "QC" , "CH,OXY" , "P_RANGE"      , "Proportion of epochs with out-of-range values" );
+  add_var( "QC" , "CH,OXY" , "P_FLAT"       , "Proportion of flatline epochs" );
+  add_var( "QC" , "CH,OXY" , "P_JUMP"       , "Proportion of jump-artifact epochs" );
+  add_var( "QC" , "CH,OXY" , "P_MISSING"    , "Proportion of epochs with excessive missing/invalid data" );
+  add_var( "QC" , "CH,OXY" , "FLAGGED"       , "Channel flagged (0/1)" );
+
+  // SpO2/OXY per-window output [epoch]
+  add_table( "QC" , "CH,OXY,WIN" , "Per-window SpO2 QC metrics [epoch]" );
+  add_var( "QC" , "CH,OXY,WIN" , "RANGE"     , "Out-of-range flag (0/1)" );
+  add_var( "QC" , "CH,OXY,WIN" , "FLAT"      , "Flatline flag (0/1)" );
+  add_var( "QC" , "CH,OXY,WIN" , "JUMP"      , "Jump artifact flag (0/1)" );
+  add_var( "QC" , "CH,OXY,WIN" , "MISSING"   , "Excessive missing/invalid data flag (0/1)" );
+  add_var( "QC" , "CH,OXY,WIN" , "FLAG_EPOCH" , "Window flagged as bad (0/1)" );
+
+  // EEG per-channel summary
+  add_table( "QC" , "CH,EEG" , "Per-channel EEG QC summary" );
+  add_var( "QC" , "CH,EEG" , "FLAGGED"      , "Channel flagged (0/1)" );
+  add_var( "QC" , "CH,EEG" , "N_FLAG_EPOCH" , "Number of bad epochs" );
+  add_var( "QC" , "CH,EEG" , "PROP_FLAG"    , "Proportion of bad epochs" );
+  add_var( "QC" , "CH,EEG" , "MAX_FLAG_RUN" , "Longest contiguous bad run (sec)" );
+  add_var( "QC" , "CH,EEG" , "P_FLAT"      , "Proportion of flatline epochs" );
+  add_var( "QC" , "CH,EEG" , "P_CLIP"      , "Proportion of clipped epochs" );
+  add_var( "QC" , "CH,EEG" , "P_AMP"       , "Proportion of extreme-amplitude epochs" );
+  add_var( "QC" , "CH,EEG" , "P_HF"        , "Proportion of high-frequency contamination epochs" );
+  add_var( "QC" , "CH,EEG" , "P_PEAK"      , "Proportion of epochs flagged by spectral peakedness (SPK or KURT)" );
+  add_var( "QC" , "CH,EEG" , "P_HJORTH"    , "Proportion of Hjorth outlier epochs" );
+  add_var( "QC" , "CH,EEG" , "P_LN"        , "Proportion of line-noise epochs (tracked separately; does not affect FLAGGED)" );
+  add_var( "QC" , "CH,EEG" , "MAX_LN_RUN"  , "Longest contiguous line-noise run (sec)" );
+  add_var( "QC" , "CH,EEG" , "LN_FLAG"      , "Channel flagged for excessive line noise (0/1)" );
+
+  // EEG per-window output [epoch]
+  add_table( "QC" , "CH,EEG,WIN" , "Per-window EEG QC metrics [epoch]" );
+  add_var( "QC" , "CH,EEG,WIN" , "SD"        , "Epoch standard deviation (µV)" );
+  add_var( "QC" , "CH,EEG,WIN" , "DERIV"     , "Proportion of near-zero sample-to-sample derivatives" );
+  add_var( "QC" , "CH,EEG,WIN" , "HF_RATIO"  , "Ratio of HF band power to signal band power" );
+  add_var( "QC" , "CH,EEG,WIN" , "LN_RATIO"  , "Ratio of line-noise band power to broadband power" );
+  add_var( "QC" , "CH,EEG,WIN" , "SPK"       , "Spectral peakedness: total variation of detrended log-PSD residuals (2-28 Hz)" );
+  add_var( "QC" , "CH,EEG,WIN" , "KURT"      , "Spectral kurtosis: excess kurtosis of detrended log-PSD residuals (2-28 Hz)" );
+  add_var( "QC" , "CH,EEG,WIN" , "ACT"       , "Hjorth activity on bandpass-filtered signal" );
+  add_var( "QC" , "CH,EEG,WIN" , "CPLX"      , "Hjorth complexity on bandpass-filtered signal" );
+  add_var( "QC" , "CH,EEG,WIN" , "FLAT"      , "Flatline flag (0/1)" );
+  add_var( "QC" , "CH,EEG,WIN" , "CLIP"      , "Clipping flag (0/1)" );
+  add_var( "QC" , "CH,EEG,WIN" , "AMP"       , "Extreme amplitude flag (0/1)" );
+  add_var( "QC" , "CH,EEG,WIN" , "HF"        , "High-frequency contamination flag (0/1)" );
+  add_var( "QC" , "CH,EEG,WIN" , "LN"        , "Line noise flag (0/1; does not contribute to BAD_EPOCH)" );
+  add_var( "QC" , "CH,EEG,WIN" , "PEAK"      , "Spectral peakedness flag: SPK or KURT threshold exceeded (0/1)" );
+  add_var( "QC" , "CH,EEG,WIN" , "HJORTH"    , "Hjorth outlier flag (0/1)" );
+  add_var( "QC" , "CH,EEG,WIN" , "FLAG_EPOCH" , "Epoch flagged as bad (0/1); excludes LN" );
+
+  // EMG per-channel summary
+  add_table( "QC" , "CH,EMG" , "Per-channel EMG QC summary" );
+  add_var( "QC" , "CH,EMG" , "FLAGGED"      , "Channel flagged (0/1)" );
+  add_var( "QC" , "CH,EMG" , "N_FLAG_EPOCH" , "Number of bad epochs" );
+  add_var( "QC" , "CH,EMG" , "PROP_FLAG"    , "Proportion of bad epochs" );
+  add_var( "QC" , "CH,EMG" , "MAX_FLAG_RUN" , "Longest contiguous bad run (sec)" );
+  add_var( "QC" , "CH,EMG" , "P_FLAT"      , "Proportion of flatline epochs" );
+  add_var( "QC" , "CH,EMG" , "P_CLIP"      , "Proportion of clipped epochs" );
+  add_var( "QC" , "CH,EMG" , "P_HI_RMS"   , "Proportion of high broadband RMS epochs" );
+  add_var( "QC" , "CH,EMG" , "P_IMP"       , "Proportion of impulse-artifact epochs" );
+  add_var( "QC" , "CH,EMG" , "P_LN"        , "Proportion of line-noise epochs (tracked separately; does not affect FLAGGED)" );
+  add_var( "QC" , "CH,EMG" , "MAX_LN_RUN"  , "Longest contiguous line-noise run (sec)" );
+  add_var( "QC" , "CH,EMG" , "LN_FLAG"      , "Channel flagged for excessive line noise (0/1)" );
+
+  // EMG per-window output [epoch]
+  add_table( "QC" , "CH,EMG,WIN" , "Per-window EMG QC metrics [epoch]" );
+  add_var( "QC" , "CH,EMG,WIN" , "SD"        , "Epoch standard deviation (µV)" );
+  add_var( "QC" , "CH,EMG,WIN" , "DERIV"     , "Proportion of near-zero sample-to-sample derivatives" );
+  add_var( "QC" , "CH,EMG,WIN" , "RMS"       , "Epoch broadband RMS (µV)" );
+  add_var( "QC" , "CH,EMG,WIN" , "LN_RATIO"  , "Ratio of line-noise band power to broadband power" );
+  add_var( "QC" , "CH,EMG,WIN" , "FLAT"      , "Flatline flag (0/1)" );
+  add_var( "QC" , "CH,EMG,WIN" , "CLIP"      , "Clipping flag (0/1)" );
+  add_var( "QC" , "CH,EMG,WIN" , "HI_RMS"    , "High broadband RMS flag (0/1)" );
+  add_var( "QC" , "CH,EMG,WIN" , "HI_LN"     , "Line noise flag (0/1; does not contribute to BAD_EPOCH)" );
+  add_var( "QC" , "CH,EMG,WIN" , "IMP"       , "Impulse artifact flag (0/1)" );
+  add_var( "QC" , "CH,EMG,WIN" , "FLAG_EPOCH" , "Epoch flagged as bad (0/1); excludes line noise" );
+
+  // ECG per-channel summary
+  add_table( "QC" , "CH,ECG" , "Per-channel ECG QC summary" );
+  add_var( "QC" , "CH,ECG" , "N_PEAKS"     , "Total R-peaks detected in the full signal" );
+  add_var( "QC" , "CH,ECG" , "FLAGGED"      , "Channel flagged (0/1)" );
+  add_var( "QC" , "CH,ECG" , "N_FLAG_EPOCH" , "Number of bad epochs" );
+  add_var( "QC" , "CH,ECG" , "PROP_FLAG"    , "Proportion of bad epochs" );
+  add_var( "QC" , "CH,ECG" , "MAX_FLAG_RUN" , "Longest contiguous bad run (sec)" );
+  add_var( "QC" , "CH,ECG" , "P_FLAT"      , "Proportion of flatline epochs" );
+  add_var( "QC" , "CH,ECG" , "P_CLIP"      , "Proportion of clipped epochs" );
+  add_var( "QC" , "CH,ECG" , "P_RR"        , "Proportion of epochs with RR/HR implausibility or insufficient beats" );
+  add_var( "QC" , "CH,ECG" , "P_LN"        , "Proportion of line-noise epochs (tracked separately; does not affect FLAGGED)" );
+  add_var( "QC" , "CH,ECG" , "MAX_LN_RUN"  , "Longest contiguous line-noise run (sec)" );
+  add_var( "QC" , "CH,ECG" , "LN_FLAG"      , "Channel flagged for excessive line noise (0/1)" );
+
+  // ECG per-window output [epoch]
+  add_table( "QC" , "CH,ECG,WIN" , "Per-window ECG QC metrics [epoch]" );
+  add_var( "QC" , "CH,ECG,WIN" , "NP"        , "Number of R-peaks in this epoch (from whole-signal detection)" );
+  add_var( "QC" , "CH,ECG,WIN" , "HR"        , "Mean heart rate estimated from clean (in-range) RR intervals (bpm)" );
+  add_var( "QC" , "CH,ECG,WIN" , "RR"        , "Mean RR interval across all beats in epoch (ms)" );
+  add_var( "QC" , "CH,ECG,WIN" , "P_RR"      , "Proportion of RR intervals outside plausible range [ecg-rr-min, ecg-rr-max]" );
+  add_var( "QC" , "CH,ECG,WIN" , "FLAT"      , "Flatline flag (0/1)" );
+  add_var( "QC" , "CH,ECG,WIN" , "CLIP"      , "Clipping flag (0/1)" );
+  add_var( "QC" , "CH,ECG,WIN" , "RR_FLAG"    , "RR/HR implausibility or insufficient beat count flag (0/1)" );
+  add_var( "QC" , "CH,ECG,WIN" , "LN"        , "Line noise flag (0/1; does not contribute to BAD_EPOCH)" );
+  add_var( "QC" , "CH,ECG,WIN" , "FLAG_EPOCH" , "Epoch flagged as bad (0/1); excludes line noise" );
+
+  // EOG per-channel summary
+  add_table( "QC" , "CH,EOG" , "Per-channel EOG QC summary" );
+  add_var( "QC" , "CH,EOG" , "FLAGGED"      , "Channel flagged (0/1)" );
+  add_var( "QC" , "CH,EOG" , "N_FLAG_EPOCH" , "Number of bad epochs" );
+  add_var( "QC" , "CH,EOG" , "PROP_FLAG"    , "Proportion of bad epochs" );
+  add_var( "QC" , "CH,EOG" , "MAX_FLAG_RUN" , "Longest contiguous bad run (sec)" );
+  add_var( "QC" , "CH,EOG" , "P_FLAT"      , "Proportion of flatline epochs" );
+  add_var( "QC" , "CH,EOG" , "P_CLIP"      , "Proportion of clipped epochs" );
+  add_var( "QC" , "CH,EOG" , "P_AMP"       , "Proportion of extreme-amplitude epochs" );
+  add_var( "QC" , "CH,EOG" , "P_HF"        , "Proportion of high-frequency contamination epochs" );
+  add_var( "QC" , "CH,EOG" , "P_HJORTH"    , "Proportion of Hjorth outlier epochs" );
+  add_var( "QC" , "CH,EOG" , "P_LN"        , "Proportion of line-noise epochs (tracked separately; does not affect FLAGGED)" );
+  add_var( "QC" , "CH,EOG" , "MAX_LN_RUN"  , "Longest contiguous line-noise run (sec)" );
+  add_var( "QC" , "CH,EOG" , "LN_FLAG"      , "Channel flagged for excessive line noise (0/1)" );
+
+  // EOG per-window output [epoch]
+  add_table( "QC" , "CH,EOG,WIN" , "Per-window EOG QC metrics [epoch]" );
+  add_var( "QC" , "CH,EOG,WIN" , "SD"        , "Epoch standard deviation (µV)" );
+  add_var( "QC" , "CH,EOG,WIN" , "DERIV"     , "Proportion of near-zero sample-to-sample derivatives" );
+  add_var( "QC" , "CH,EOG,WIN" , "HF_RATIO"  , "Ratio of HF band power to signal band power" );
+  add_var( "QC" , "CH,EOG,WIN" , "LN_RATIO"  , "Ratio of line-noise band power to broadband power" );
+  add_var( "QC" , "CH,EOG,WIN" , "ACT"       , "Hjorth activity on bandpass-filtered signal" );
+  add_var( "QC" , "CH,EOG,WIN" , "CPLX"      , "Hjorth complexity on bandpass-filtered signal" );
+  add_var( "QC" , "CH,EOG,WIN" , "FLAT"      , "Flatline flag (0/1)" );
+  add_var( "QC" , "CH,EOG,WIN" , "CLIP"      , "Clipping flag (0/1)" );
+  add_var( "QC" , "CH,EOG,WIN" , "AMP"       , "Extreme amplitude flag (0/1)" );
+  add_var( "QC" , "CH,EOG,WIN" , "HF"        , "High-frequency contamination flag (0/1)" );
+  add_var( "QC" , "CH,EOG,WIN" , "LN"        , "Line noise flag (0/1; does not contribute to BAD_EPOCH)" );
+  add_var( "QC" , "CH,EOG,WIN" , "HJORTH"    , "Hjorth outlier flag (0/1)" );
+  add_var( "QC" , "CH,EOG,WIN" , "FLAG_EPOCH" , "Epoch flagged as bad (0/1); excludes line noise" );
+
   /////////////////////////////////////////////////////////////////////////////////
   //
   // HYPNOGRAMS

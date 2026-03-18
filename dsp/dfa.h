@@ -37,8 +37,9 @@ struct dfa_t {
 
   dfa_t();
 
-  // default, 0.1s to 10s 
-  void set_windows( double sr, double l = 0.1 , int m = 2 , int c = 100 ) ;
+  void set_windows( double sr , double l = 0.1 , int m = 2 , int c = 100 ) ;
+  void set_windows_seconds( double sr , double lwr_sec , double upr_sec , int c ) ;
+  void set_windows_classical( double sr , int np , int c ) ;
 
   void filter_hilbert( const double flwr1 , const double fupr1 ,
 		       const double ripple1 , const double tw1 ,

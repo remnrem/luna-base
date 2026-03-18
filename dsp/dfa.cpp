@@ -31,6 +31,7 @@
 #include "edf/slice.h"
 
 #include <cmath>
+#include <set>
 
 extern logger_t logger;
 extern writer_t writer;
@@ -112,8 +113,12 @@ void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
   // parameters
 
   const int wn = param.has( "n" ) ? param.requires_int( "n" ) : 100;
-  const double wmin = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.1;
+  const bool explicit_time_grid = param.has( "min" ) || param.has( "max" );
+  const bool classical_grid = explicit_time_grid ? false : param.value( "grid" , true ) != "TIME";
   const int    scale = param.has( "m" ) ? param.requires_int( "m" ) : 2;
+  const double wmin = param.has( "min" ) ? param.requires_dbl( "min" ) : 0.1;
+  const double wmax = param.has( "max" ) ? param.requires_dbl( "max" ) :
+                      wmin * pow( 10.0 , scale );
   const double alpha_lwr = param.has( "alpha-lwr" ) ? param.requires_dbl( "alpha-lwr" ) : 0;
   const double alpha_upr = param.has( "alpha-upr" ) ? param.requires_dbl( "alpha-upr" ) : 1e12;
  
@@ -127,8 +132,16 @@ void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
   
   logger << "  DFA parameters\n"
 	 << "     n (points) = " << wn << "\n"
-	 << "     m (scale)  = " << scale << "\n"
-	 << "     min        = " << wmin << " Hz\n"
+	 << "     grid       = " << ( classical_grid ? "classical" : "time" ) << "\n";
+
+  if ( classical_grid )
+    logger << "     points     = " << wn << " between 4 and T/4 samples\n";
+  else
+    logger << "     min        = " << wmin << " sec\n"
+	   << "     max        = " << wmax << " sec\n"
+	   << "     m (scale)  = " << scale << "\n";
+
+  logger
 	 << "     alpha-lwr  = " << alpha_lwr << " sec\n"
 	 << "     alpha-upr  = " << alpha_upr << " sec\n"
 	 << "     epoch      = " << ( by_epoch ? "T" : "F" ) << "\n";
@@ -169,7 +182,6 @@ void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
 
       const double Fs = edf.header.sampling_freq( signals(s) );       
       dfa_t dfa;
-      dfa.set_windows( Fs , wmin , scale, wn );
       dfa.filter_hilbert( fmin, fmax, ripple, tw , envelope );
       
       //
@@ -194,6 +206,11 @@ void dsptools::dfa_wrapper( edf_t & edf , param_t & param )
 	  const std::vector<double> * d = slice.pdata();
 	  
 	  // perform DFA
+
+	  if ( classical_grid )
+	    dfa.set_windows_classical( Fs , d->size() , wn );
+	  else
+	    dfa.set_windows_seconds( Fs , wmin , wmax , wn );
 
 	  dfa.proc( d );	        
 	  
@@ -240,22 +257,71 @@ dfa_t::dfa_t()
 }
 
 
-void dfa_t::set_windows( double sr1 , double l, int mexp , int c )
+void dfa_t::set_windows( double sr1 , double l , int mexp , int c )
+{
+  set_windows_seconds( sr1 , l , l * pow( 10.0 , mexp ) , c );
+}
+
+
+void dfa_t::set_windows_seconds( double sr1 , double lwr_sec , double upr_sec , int c )
 {
   sr = sr1;
   if ( c < 2 ) Helper::halt( "bad DFA values" );
-  if ( mexp < 2 ) Helper::halt( "bad DFA values" ); 
-  if ( l <= 0 ) Helper::halt( "bad wmin and wmax values" ); 
+  if ( lwr_sec <= 0 || upr_sec <= 0 || upr_sec <= lwr_sec ) Helper::halt( "bad DFA min/max values" );
 
   w.resize( c );
   t.resize( c );
   
-  // add on exponential scale up to ^2 (0.1 - 10s)
+  // log-spaced timescale grid in seconds
       
   for (int i=0; i<c; i++)
     {
-      t[ i ] = l * pow( 10 , i / (double)(c-1) * mexp );
+      t[ i ] = lwr_sec * pow( upr_sec / lwr_sec , i / (double)( c - 1 ) );
       w[ i ] = sr * t[ i ];
+    }
+}
+
+
+void dfa_t::set_windows_classical( double sr1 , int np , int c )
+{
+  sr = sr1;
+  if ( c < 2 ) Helper::halt( "bad DFA values" );
+  if ( np < 16 ) Helper::halt( "bad DFA trace length for classical grid" );
+
+  const int lwr = 4;
+  const int upr = np / 4;
+
+  if ( upr < lwr ) Helper::halt( "bad DFA trace length for classical grid" );
+
+  std::set<int> windows;
+
+  if ( upr == lwr )
+    windows.insert( lwr );
+  else
+    for (int i=0; i<c; ++i)
+      {
+        const double pos = i / (double)( c - 1 );
+        const double wl = lwr * pow( upr / (double)lwr , pos );
+        windows.insert( (int)std::floor( wl + 0.5 ) );
+      }
+
+  if ( windows.size() < 2 )
+    {
+      windows.insert( lwr );
+      windows.insert( upr );
+    }
+
+  if ( windows.size() < 2 ) Helper::halt( "bad DFA classical scale grid" );
+
+  w.clear();
+  t.clear();
+  w.reserve( windows.size() );
+  t.reserve( windows.size() );
+
+  for (std::set<int>::const_iterator ii = windows.begin(); ii != windows.end(); ++ii)
+    {
+      w.push_back( *ii );
+      t.push_back( *ii / sr );
     }
 }
 
@@ -363,4 +429,3 @@ void dfa_t::proc( const std::vector<double> * d )
     }
 
 }
-

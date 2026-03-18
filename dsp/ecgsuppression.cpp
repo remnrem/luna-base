@@ -154,6 +154,54 @@ int rpeaks_t::clean( double mn , double mx )
   return trk.size();
 }
 
+int rpeaks_t::lockout( double mn , const std::vector<double> & score )
+{
+  if ( R_t.size() < 2 ) return 0;
+
+  const uint64_t tpmin = mn * globals::tp_1sec;
+  const bool has_indices = R_i.size() == R_t.size() && score.size() != 0;
+
+  std::vector<uint64_t> kept_t;
+  std::vector<uint64_t> kept_i;
+
+  kept_t.reserve( R_t.size() );
+  if ( has_indices ) kept_i.reserve( R_i.size() );
+
+  int removed = 0;
+  int start = 0;
+  while ( start < R_t.size() )
+    {
+      int stop = start + 1;
+      while ( stop < R_t.size() && R_t[ stop ] - R_t[ start ] < tpmin ) ++stop;
+
+      int best = start;
+      if ( has_indices )
+        {
+          double best_score = std::abs( score[ R_i[ start ] ] );
+          for (int i=start+1; i<stop; i++)
+            {
+              double candidate_score = std::abs( score[ R_i[i] ] );
+              if ( candidate_score >= best_score )
+                {
+                  best = i;
+                  best_score = candidate_score;
+                }
+            }
+        }
+
+      kept_t.push_back( R_t[ best ] );
+      if ( has_indices ) kept_i.push_back( R_i[ best ] );
+      removed += stop - start - 1;
+      start = stop;
+    }
+
+  R_t = kept_t;
+  if ( has_indices ) R_i = kept_i;
+  npks = R_t.size();
+
+  return removed;
+}
+
 	 
 
 void dsptools::ecgsuppression( edf_t & edf , param_t & param )
@@ -472,50 +520,6 @@ void dsptools::ecgsuppression( edf_t & edf , param_t & param )
   
 }
 
-struct rpeak_opt_t {
-
-  rpeak_opt_t()
-  {
-    ripple = 0.01;
-    tw = 3;
-    flwr = 5;
-    fupr = 20;
-    median_filter_window = 9;
-
-    //smoothed Z
-    lag_sec = 10;      
-    influence = 0.001;
- 
-    th = 2;
-    th2 = 1;
-    max = 0; // no max.
-
-    mindur_sec = 0.04; // 40 msec
-    mindur2_sec = 0.04; // same
-  }
-
-  double ripple;
-  double tw;
-  double flwr;
-  double fupr;
-  int median_filter_window;
-
-  // smoothedZ peak finding
-  double lag_sec;
-  double influence;
-
-  // core
-  double th;
-  double max; 
-  double mindur_sec; // 40 ms
-  
-  // flanking region
-  double th2;
-  double mindur2_sec; // 40 ms
-
-      
-  
-};
 
 
 rpeaks_t dsptools::mpeakdetect2( const std::vector<double> * d ,
@@ -634,6 +638,8 @@ rpeaks_t dsptools::mpeakdetect2( const std::vector<double> * d ,
       peaks.R_t[ i ] = (*tp)[ inverted ? minloc[i] : maxloc[i] ] ;
       peaks.R_i[ i ] = inverted ? minloc[i] : maxloc[i] ;
     }
+
+  peaks.lockout( 0.3 , bpf );
   
 
   //
