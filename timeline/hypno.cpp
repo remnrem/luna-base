@@ -4024,15 +4024,22 @@ void hypnogram_t::output( const bool verbose ,
 	  // Sleep Fragmentation Index /  Stage Transition Index
 	  //
 	  
-	  // SFI = # of transitions into W / TST
-	  // STI = # of sleep-sleep transitions / TST
-	  
+	  // SFI  = # of transitions into W / TST
+	  // SFI1 = # of transitions into W or N1 / TST  (N1 as a fragmentation proxy)
+	  // STI  = # of sleep-sleep transitions / TST
+
 	  int trans_to_w = transitions5[ NREM1 ][ WAKE ]
 	    + transitions5[ NREM2 ][ WAKE ]
 	    + transitions5[ NREM3 ][ WAKE ]
 	    + transitions5[ REM ][ WAKE ];
 	  writer.value( "SFI" , trans_to_w / (double)TST );
-	  
+
+	  int trans_to_w_or_n1 = trans_to_w
+	    + transitions5[ NREM2 ][ NREM1 ]
+	    + transitions5[ NREM3 ][ NREM1 ]
+	    + transitions5[ REM ][ NREM1 ];
+	  writer.value( "SFI1" , trans_to_w_or_n1 / (double)TST );
+
 	  int trans_within_sleep =
 	    transitions5[ NREM1 ][ NREM2 ]
 	    + transitions5[ NREM1 ][ NREM3 ]

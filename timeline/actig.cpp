@@ -89,17 +89,18 @@ struct bout_counts_t {
 
 static bout_counts_t extract_bouts( const std::vector<bool> & is_gap ,
                                     const std::vector<bool> & is_wake ,
-                                    int first_sleep , int last_sleep )
+                                    const std::vector<bool> & in_period ,
+                                    int first , int last )
 {
   bout_counts_t b;
-  if ( first_sleep == -1 ) return b;
-  int i = first_sleep;
-  while ( i <= last_sleep )
+  if ( first == -1 ) return b;
+  int i = first;
+  while ( i <= last )
     {
-      if ( is_gap[i] ) { ++i; continue; }
+      if ( is_gap[i] || !in_period[i] ) { ++i; continue; }
       const bool wake = is_wake[i];
       int j = i + 1;
-      while ( j <= last_sleep && !is_gap[j] && is_wake[j] == wake ) ++j;
+      while ( j <= last && !is_gap[j] && in_period[j] && is_wake[j] == wake ) ++j;
       if ( wake ) b.wake_epochs.push_back( j - i );
       else        b.sleep_epochs.push_back( j - i );
       i = j;
@@ -115,6 +116,102 @@ static double pct_min( const std::vector<int> & runs , double q , double epoch_s
   mins.reserve( runs.size() );
   for ( int r : runs ) mins.push_back( r * epoch_sec / 60.0 );
   return MiscMath::percentile( mins , q );
+}
+
+// Shannon conditional entropy H(X_t | X_{t-1}) for a 2-state (sleep/wake)
+// sequence within in_period, skipping gaps and out-of-period epochs.
+// Returns entropy in bits; 0 if fewer than 2 valid epochs.
+static double transition_entropy( const std::vector<bool> & is_gap ,
+                                  const std::vector<bool> & is_wake ,
+                                  const std::vector<bool> & in_period ,
+                                  int first , int last )
+{
+  if ( first == -1 ) return 0.0;
+  int n[2][2] = { {0,0}, {0,0} };
+  int prev = -1;
+  for ( int i = first ; i <= last ; i++ )
+    {
+      if ( is_gap[i] || !in_period[i] ) continue;
+      const int s = is_wake[i] ? 1 : 0;
+      if ( prev >= 0 ) n[prev][s]++;
+      prev = s;
+    }
+  const int total = n[0][0] + n[0][1] + n[1][0] + n[1][1];
+  if ( total == 0 ) return 0.0;
+  double h = 0.0;
+  for ( int i = 0 ; i < 2 ; i++ )
+    {
+      const int row = n[i][0] + n[i][1];
+      if ( row == 0 ) continue;
+      const double pi = row / (double)total;
+      for ( int j = 0 ; j < 2 ; j++ )
+        if ( n[i][j] > 0 )
+          {
+            const double pij = n[i][j] / (double)row;
+            h -= pi * pij * std::log2( pij );
+          }
+    }
+  return h;
+}
+
+// Shannon entropy of the empirical bout-length distribution (bits).
+// Measures variability of bout lengths; 0 if empty or all same length.
+static double rl_entropy( const std::vector<int> & bouts )
+{
+  if ( bouts.size() < 2 ) return 0.0;
+  std::map<int,int> cnt;
+  for ( int r : bouts ) cnt[r]++;
+  const double N = (double)bouts.size();
+  double h = 0.0;
+  for ( auto & kv : cnt )
+    {
+      const double p = kv.second / N;
+      h -= p * std::log2( p );
+    }
+  return h;
+}
+
+// Transition probabilities P(sleep→wake) and P(wake→sleep) within a period.
+// Uses the ML estimator with last-epoch correction and a Bayesian lambda
+// smoothing factor (paper: Springer BMC Med Res Methodol 2024; default λ=1,
+// corresponding to a uniform / Laplace-smoothing prior).
+//
+// Formula (s=1): TP_SW = (n_SW + λ) / (T_sleep − I(last=sleep) + λ)
+//                TP_WS = (n_WS + λ) / (T_wake  − I(last=wake)  + λ)
+//
+// Gap epochs reset the transition chain (no transition counted across a gap)
+// but all valid in-period epochs contribute to epoch counts.
+struct tp_pair_t { double tp_sw = 0.0 , tp_ws = 0.0; };
+
+static tp_pair_t transition_probs( const std::vector<bool> & is_gap ,
+                                   const std::vector<bool> & is_wake ,
+                                   const std::vector<bool> & in_period ,
+                                   int first , int last ,
+                                   double lambda )
+{
+  tp_pair_t tp;
+  if ( first == -1 ) return tp;
+  int n_sw = 0 , n_ws = 0;
+  int t_sleep = 0 , t_wake = 0;
+  int last_state = -1;   // state of last valid (non-gap, in-period) epoch
+  int prev = -1;         // previous state in current unbroken chain; reset on gap
+  for ( int i = first ; i <= last ; i++ )
+    {
+      if ( is_gap[i] || !in_period[i] ) { prev = -1; continue; }
+      const int s = is_wake[i] ? 1 : 0;
+      if ( s == 0 ) t_sleep++; else t_wake++;
+      if ( prev == 0 && s == 1 ) n_sw++;
+      if ( prev == 1 && s == 0 ) n_ws++;
+      prev = s;
+      last_state = s;
+    }
+  // MLE last-epoch correction: last in-period epoch is observed but has no
+  // successor within the period, so subtract it from the at-risk denominator.
+  const double denom_S = t_sleep - ( last_state == 0 ? 1 : 0 ) + lambda;
+  const double denom_W = t_wake  - ( last_state == 1 ? 1 : 0 ) + lambda;
+  if ( denom_S > 0 ) tp.tp_sw = ( n_sw + lambda ) / denom_S;
+  if ( denom_W > 0 ) tp.tp_ws = ( n_ws + lambda ) / denom_W;
+  return tp;
 }
 
 static double first_day_boundary_sec( const clocktime_t & startdatetime ,
@@ -162,12 +259,15 @@ struct actig_day_qc_t
   bool flag_flat = false;
   bool flag_lowvar = false;
   bool flag_nearfloor = false;
+  bool flag_allsleep = false;
+  bool flag_allwake = false;
   bool warn_highsleep = false;
   bool warn_longsleep = false;
   bool warn_lowwakeruns = false;
   bool warn_implausible = false;
   bool day_warn = false;
   bool day_excluded_tech = false;
+  bool day_excluded_extreme = false;
   bool day_excluded = false;
   bool day_ok = false;
 };
@@ -272,30 +372,41 @@ void actig::actig( edf_t & edf , param_t & param )
   // Signal (optional in prescored mode)
   //
 
-  const bool do_score = param.has( "score" );
-  const bool do_prescored = param.has( "prescored" );
+  const bool do_score        = param.has( "score" );
+  const bool do_score_period = param.has( "score-period" );
+  const bool do_any_score    = do_score || do_score_period;
+  const bool do_prescored    = param.has( "prescored" );
+  const bool do_verbose      = param.has( "verbose" );
+  const bool do_investigate  = param.has( "investigate" );
 
+  // Epoch-level prescored labels (S/W by default)
   std::string presc_sleep_label = "S";
   std::string presc_wake_label  = "W";
   if ( do_prescored && ! param.empty( "prescored" ) )
     {
       std::vector<std::string> tok = Helper::parse( param.value( "prescored" ) , "," );
       if ( tok.size() != 2 || tok[0] == "" || tok[1] == "" )
-	Helper::halt( "ACTIG: prescored must be empty or exactly two comma-delimited labels: sleep,wake" );
+	Helper::halt( "ACTIG: prescored must be empty or exactly two comma-delimited labels: sleep-epoch,wake-epoch" );
       presc_sleep_label = tok[0];
       presc_wake_label  = tok[1];
     }
 
-  if ( do_score && do_prescored )
-    Helper::halt( "ACTIG: cannot specify both score and prescored" );
+  if ( do_score && do_score_period )
+    Helper::halt( "ACTIG: cannot specify both score and score-period" );
+  if ( do_any_score && do_prescored )
+    Helper::halt( "ACTIG: cannot specify both score/score-period and prescored" );
 
-  // need_signal: signal required for scoring (non-prescored mode)
+  // need_signal: signal required only when actively scoring
   // have_signal: signal available for NP metrics and gap detection
-  //   (either required for scoring, or optionally supplied in prescored mode)
-  const bool need_signal = ! do_prescored;
-  const bool have_signal = need_signal || ( do_prescored && param.has( "sig" ) );
+  //   (required for scoring, or optionally supplied in prescored/annotation mode)
+  const bool need_signal = do_any_score;
+  // sig=* is injected by Luna as a default; only treat sig as explicitly provided
+  // when it names a specific channel (not the wildcard)
+  const bool sig_explicit = param.has( "sig" ) && ! param.empty( "sig" )
+                            && param.value( "sig" ) != "*";
+  const bool have_signal = do_any_score || sig_explicit;
   const std::string siglab = need_signal ? param.requires( "sig" )
-                           : ( have_signal ? param.value( "sig" ) : "" );
+                           : ( sig_explicit ? param.value( "sig" ) : "" );
 
   int slot = -1;
   double Fs = 0;
@@ -357,17 +468,29 @@ void actig::actig( edf_t & edf , param_t & param )
   // threshold for threshold method
   const double thresh = param.has( "thresh" ) ? param.requires_dbl( "thresh" ) : -1;
 
-  // labels for wake/sleep/gap annotations
-  const std::string wake_label  = param.has( "wake" )  ? param.value( "wake" )  : "W";
-  const std::string sleep_label = param.has( "sleep" ) ? param.value( "sleep" ) : "S";
-  const std::string gap_label   = param.has( "gap-out" ) ? param.value( "gap-out" ) : "ACTIG_G";
+  // labels for wake/sleep/gap output annotations
+  // score-period defaults to WP/SP; score defaults to W/S
+  const std::string wake_label  = param.has( "wake" )    ? param.value( "wake" )
+                                : ( do_score_period ? "WP" : "W" );
+  const std::string sleep_label = param.has( "sleep" )   ? param.value( "sleep" )
+                                : ( do_score_period ? "SP" : "S" );
+
+  // Sleep/wake period window annotations (SP/WP by default).
+  // These define the sleep/wake windows for fragmentation metrics.
+  // Looked up regardless of scoring mode; falls back to empirical if absent.
+  const std::string period_sleep_label = param.has( "sleep-period" ) ? param.value( "sleep-period" ) : "SP";
+  const std::string period_wake_label  = param.has( "wake-period" )  ? param.value( "wake-period" )  : "WP";
+
+  // Bayesian smoothing for transition probability estimates (λ in ML formula).
+  // λ=1 is a uniform/Laplace prior; avoids zero-count issues in short recordings.
+  const double tp_lambda = param.has( "tp-lambda" ) ? param.requires_dbl( "tp-lambda" ) : 1.0;
 
   // Day boundary anchor hour for NP and per-day summaries.
   const int day_anchor_hr = param.has( "day-anchor" ) ? param.requires_int( "day-anchor" ) : 12;
   if ( day_anchor_hr < 0 || day_anchor_hr > 23 )
     Helper::halt( "ACTIG: day-anchor must be 0..23" );
 
-  // gap: minimum % of expected samples for an epoch to be considered valid
+  // minimum % of valid epochs per NP bin for the bin to be included
   const double gap_min_pct = param.has( "gap-min-pct" ) ? param.requires_dbl( "gap-min-pct" ) : 50.0;
   if ( gap_min_pct < 0 || gap_min_pct > 100 )
     Helper::halt( "ACTIG: gap-min-pct must be 0..100" );
@@ -385,7 +508,12 @@ void actig::actig( edf_t & edf , param_t & param )
   const bool qc_warn_implausible  = ! param.has( "qc-warn-implausible" ) || param.yesno( "qc-warn-implausible" );
   const bool qc_warn_longsleep    = ! param.has( "qc-warn-longsleep" )   || param.yesno( "qc-warn-longsleep" );
   const bool qc_warn_highsleep    = ! param.has( "qc-warn-highsleep" )   || param.yesno( "qc-warn-highsleep" );
-  const std::string qc_exclude_label = param.has( "qc-exclude-out" ) ? param.value( "qc-exclude-out" ) : "ACTIG_QC_EXCLUDED";
+  const std::string qc_exclude_label  = param.has( "qc-exclude-out" )  ? param.value( "qc-exclude-out" )  : "QC_EXCLUDED";
+  const std::string qc_extreme_label  = param.has( "qc-extreme-out" )  ? param.value( "qc-extreme-out" )  : "QC_EXTREME";
+  const bool qc_exclude_allsleep      = ! param.has( "qc-exclude-allsleep" ) || param.yesno( "qc-exclude-allsleep" );
+  const bool qc_exclude_allwake       = ! param.has( "qc-exclude-allwake" )  || param.yesno( "qc-exclude-allwake" );
+  const double qc_allsleep_th         = param.has( "qc-allsleep-th" ) ? param.requires_dbl( "qc-allsleep-th" ) : 0.98;
+  const double qc_allwake_th          = param.has( "qc-allwake-th" )  ? param.requires_dbl( "qc-allwake-th" )  : 0.98;
 
   const double qc_flat_frac_th      = param.has( "qc-flat-frac-th" )      ? param.requires_dbl( "qc-flat-frac-th" )      : 0.80;
   const double qc_flat_delta_th     = param.has( "qc-flat-delta-th" )     ? param.requires_dbl( "qc-flat-delta-th" )     : 0.0;
@@ -416,15 +544,26 @@ void actig::actig( edf_t & edf , param_t & param )
   if ( qc_warn_max_sleep_h < qc_warn_longsleep_h )
     Helper::halt( "ACTIG: qc-warn-max-sleep-h must be >= qc-warn-longsleep-h" );
 
+  // Threshold method smoothing: triangular window half-width in minutes (0 = off)
+  const double thresh_smooth_min  = param.has( "thresh-smooth" ) ? param.requires_dbl( "thresh-smooth" ) : 0.0;
+  if ( thresh_smooth_min < 0 )
+    Helper::halt( "ACTIG: thresh-smooth must be >= 0" );
+
   // Luna method parameters
-  const double luna_smooth_min    = param.has( "smooth" )      ? param.requires_dbl( "smooth" )      : 10.0;
-  const double luna_burst_min     = param.has( "burst" )       ? param.requires_dbl( "burst" )       : 10.0;
+  // score-period uses coarser defaults to produce contiguous period blocks
+  const double luna_smooth_min    = param.has( "smooth" )      ? param.requires_dbl( "smooth" )
+                                  : ( do_score_period ? 30.0  :  1.0  );
+  const double luna_burst_min     = param.has( "burst" )       ? param.requires_dbl( "burst" )
+                                  : ( do_score_period ? 10.0  :  3.0  );
   const double luna_burst_z       = param.has( "burst-z" )     ? param.requires_dbl( "burst-z" )     :  0.5;
   const double luna_quiet_z       = param.has( "quiet-z" )     ? param.requires_dbl( "quiet-z" )     : -0.5;
   const double luna_active_frac   = param.has( "active-frac" ) ? param.requires_dbl( "active-frac" ) :  0.20;
-  const double luna_min_sleep_min = param.has( "min-sleep" )   ? param.requires_dbl( "min-sleep" )   : 15.0;
-  const double luna_max_gap_min   = param.has( "max-gap" )     ? param.requires_dbl( "max-gap" )     :  2.0;
-  const double luna_min_wake_min  = param.has( "min-wake" )    ? param.requires_dbl( "min-wake" )    :  5.0;
+  const double luna_min_sleep_min = param.has( "min-sleep" )   ? param.requires_dbl( "min-sleep" )
+                                  : ( do_score_period ? 60.0  :  1.0  );
+  const double luna_max_gap_min   = param.has( "max-gap" )     ? param.requires_dbl( "max-gap" )
+                                  : ( do_score_period ? 10.0  :  1.0  );
+  const double luna_min_wake_min  = param.has( "min-wake" )    ? param.requires_dbl( "min-wake" )
+                                  : ( do_score_period ? 20.0  :  1.0  );
 
   // add diagnostic channels (_Z, _L, _D, _CS, _SW) to the EDF (luna method only)
   const bool do_channels = param.has( "channels" );
@@ -446,20 +585,22 @@ void actig::actig( edf_t & edf , param_t & param )
   const double      norm_w           = param.has( "norm-w" )          ? param.requires_dbl( "norm-w" )      : 0.5;
 
 
-  logger << "  settings: sig=" << ( need_signal ? siglab : "<prescored>" );
-  if ( need_signal ) logger << ", sr=" << Fs << " Hz";
-  logger << ", epoch=" << epoch_sec << "s"
-	 << ", bin=" << np_bin_min << "m\n";
-  logger << "  settings: L=" << l_hours << "h"
-	 << ", M=" << m_hours << "h"
-	 << ", score=" << ( do_score ? "yes" : "no" )
-	 << ", method=" << method
-	 << ", sum=" << ( use_sum ? "yes" : "no" ) << "\n";
-  logger << "  gap settings: gap-min-pct=" << gap_min_pct
-	 << "%, day-min-valid=" << day_min_valid_min << " min\n";
-  logger << "  day QC: " << ( qc_day ? "enabled" : "disabled" )
-	 << ", tech flags require >=2 of [flat, lowvar, nearfloor]"
-	 << ", warnings do not change inclusion\n";
+  if ( do_verbose )
+    {
+      logger << "  settings: sig=" << ( need_signal ? siglab : "<prescored>" );
+      if ( need_signal ) logger << ", sr=" << Fs << " Hz";
+      logger << ", epoch=" << epoch_sec << "s"
+	     << ", bin=" << np_bin_min << "m\n";
+      logger << "  settings: L=" << l_hours << "h"
+	     << ", M=" << m_hours << "h"
+	     << ", score=" << ( do_score ? "yes" : ( do_score_period ? "period" : "no" ) )
+	     << ", method=" << method
+	     << ", sum=" << ( use_sum ? "yes" : "no" ) << "\n";
+      logger << "  day-min-valid=" << day_min_valid_min << " min\n";
+      logger << "  day QC: " << ( qc_day ? "enabled" : "disabled" )
+	     << ", tech flags require >=2 of [flat, lowvar, nearfloor]"
+	     << ", warnings do not change inclusion\n";
+    }
 
 
   //
@@ -561,12 +702,42 @@ void actig::actig( edf_t & edf , param_t & param )
 	    }
 	}
     }
+
   else
     {
-      // prescored with no signal: treat all epochs as valid, no gap detection
+      // prescored with no signal: no signal-based gap detection;
+      // EDF+D holes will be flagged below via the record structure.
       n_valid_epochs = n_epochs;
       n_gap_epochs = 0;
-      logger << "  prescored mode: no signal provided; NP metrics will not be computed\n";
+      if ( do_verbose )
+	logger << "  prescored mode: no signal provided; NP metrics will not be computed\n";
+    }
+
+  // EDF+D holes: epoch bins that fall between retained records after MASK+RE.
+  // Detected from the EDF record structure (rec2tp) — works regardless of
+  // whether a signal was provided.  Keep is_gap[e]=true for scoring (never
+  // bridge across holes); EDF+D holes are already marked by EXCLUDED annotations.
+  std::vector<bool> is_edf_hole( n_epochs , false );
+  if ( !edf.header.continuous )
+    {
+      // Start with all bins as holes; clear any bin covered by a retained record.
+      std::fill( is_edf_hole.begin() , is_edf_hole.end() , true );
+      const uint64_t rec_dur_tp = edf.header.record_duration_tp;
+      for ( auto & kv : edf.timeline.rec2tp )
+	{
+	  const uint64_t rec_start = kv.second;
+	  if ( rec_start < recording_start_tp ) continue;
+	  const uint64_t rec_stop  = rec_start + rec_dur_tp;
+	  const int e0 = (int)( ( rec_start - recording_start_tp ) / epoch_tp );
+	  const int e1 = (int)( ( rec_stop  - recording_start_tp - 1 ) / epoch_tp );
+	  for ( int e = e0 ; e <= e1 && e < n_epochs ; e++ )
+	    is_edf_hole[e] = false;
+	}
+      // In no-signal mode, is_gap[] starts all-false; mark holes as gap so
+      // they are excluded from TST/TWT and the prescored annotation lookup.
+      if ( !have_signal )
+	for ( int e = 0 ; e < n_epochs ; e++ )
+	  if ( is_edf_hole[e] ) { is_gap[e] = true; n_gap_epochs++; n_valid_epochs--; }
     }
 
   logger << "  recording: " << total_sec << " sec ("
@@ -578,11 +749,338 @@ void actig::actig( edf_t & edf , param_t & param )
 
   // ---------------------------------------------------------------
   //
+  // INVESTIGATE mode: signal pre-screen / parameter suggestion report
+  //
+  // ---------------------------------------------------------------
+
+  if ( do_investigate )
+    {
+      if ( ! have_signal )
+	Helper::halt( "ACTIG investigate requires sig=<channel>" );
+
+      // Collect valid epoch values
+      std::vector<double> valid_vals;
+      valid_vals.reserve( n_valid_epochs );
+      for ( int e = 0; e < n_epochs; e++ )
+	if ( ! is_gap[e] ) valid_vals.push_back( epochs[e] );
+
+      const int nv = (int) valid_vals.size();
+      if ( nv == 0 ) { logger << "  INVESTIGATE: no valid epochs found\n"; return; }
+
+      // Sort for percentile queries
+      std::vector<double> sv = valid_vals;
+      std::sort( sv.begin(), sv.end() );
+      auto pct = [&]( double p ) -> double {
+	const int idx = std::max( 0, std::min( (int)( p * nv ), nv - 1 ) );
+	return sv[ idx ];
+      };
+
+      // Zero fraction
+      const int n_zero = (int)std::count_if( valid_vals.begin(), valid_vals.end(),
+					     []( double x ){ return x == 0.0; } );
+      const double zero_frac = n_zero / (double) nv;
+
+      // Overall mean / SD / CV
+      const double g_mean = vec_mean( valid_vals );
+      const double g_sd   = vec_sd( valid_vals );
+      const double g_cv   = g_mean > 1e-9 ? g_sd / g_mean : 0.0;
+
+      // log(1+x) space — mirrors luna scoring exactly
+      std::vector<double> ly( nv );
+      for ( int i = 0; i < nv; i++ ) ly[i] = std::log( 1.0 + valid_vals[i] );
+
+      double ly_med = vec_median( ly );
+      if ( ly_med < 1e-9 )
+	{
+	  // active-sub-distribution correction (same as luna method)
+	  std::vector<double> act_ly;
+	  for ( double v : ly ) if ( v > 1e-9 ) act_ly.push_back( v );
+	  if ( ! act_ly.empty() ) ly_med = vec_median( act_ly );
+	}
+      const double ly_mad  = vec_mad( ly, ly_med );
+      // z-score for a zero epoch: log(1+0) = 0
+      const double z_zero  = ( ly_mad > 1e-9 ) ? ( 0.0 - ly_med ) / ly_mad
+	                                         : std::numeric_limits<double>::quiet_NaN();
+      const double active_frac_obs = ( nv - n_zero ) / (double) nv;
+
+      // Zero-run and nonzero-run analysis
+      std::vector<int> zero_runs, nonzero_runs;
+      {
+	int cur_z = 0, cur_nz = 0;
+	for ( int e = 0; e < n_epochs; e++ )
+	  {
+	    if ( is_gap[e] )
+	      {
+		if ( cur_z  > 0 ) { zero_runs.push_back( cur_z );      cur_z  = 0; }
+		if ( cur_nz > 0 ) { nonzero_runs.push_back( cur_nz );  cur_nz = 0; }
+		continue;
+	      }
+	    if ( epochs[e] == 0.0 )
+	      { if ( cur_nz > 0 ) { nonzero_runs.push_back( cur_nz ); cur_nz = 0; } cur_z++; }
+	    else
+	      { if ( cur_z  > 0 ) { zero_runs.push_back( cur_z );    cur_z  = 0; } cur_nz++; }
+	  }
+	if ( cur_z  > 0 ) zero_runs.push_back( cur_z );
+	if ( cur_nz > 0 ) nonzero_runs.push_back( cur_nz );
+      }
+
+      auto run_med_min = [&]( const std::vector<int> & r ) -> double {
+	if ( r.empty() ) return 0.0;
+	std::vector<double> rd( r.begin(), r.end() );
+	return vec_median( rd ) * epoch_sec / 60.0;
+      };
+      auto run_max_min = [&]( const std::vector<int> & r ) -> double {
+	if ( r.empty() ) return 0.0;
+	return *std::max_element( r.begin(), r.end() ) * epoch_sec / 60.0;
+      };
+
+      // Flat-frac: fraction of consecutive same-valued valid epoch pairs
+      int flat_pair_n = 0, flat_pair_match_n = 0;
+      {
+	double prev = std::numeric_limits<double>::quiet_NaN();
+	for ( int e = 0; e < n_epochs; e++ )
+	  {
+	    if ( is_gap[e] ) { prev = std::numeric_limits<double>::quiet_NaN(); continue; }
+	    if ( std::isfinite( prev ) )
+	      {
+		flat_pair_n++;
+		if ( std::fabs( epochs[e] - prev ) <= qc_flat_delta_th ) flat_pair_match_n++;
+	      }
+	    prev = epochs[e];
+	  }
+      }
+      const double global_flat_frac = flat_pair_n > 0 ? flat_pair_match_n / (double) flat_pair_n : 0.0;
+
+      // Nearfloor: fraction at/below P(qc_nearfloor_q_th) + eps
+      const double nf_q_val = pct( qc_nearfloor_q_th );
+      const double nf_eps   = std::max( std::fabs( pct( 0.95 ) - nf_q_val ) * 1e-6 , 1e-9 );
+      const double nf_th    = nf_q_val + nf_eps;
+      int n_nearfloor = 0;
+      for ( double x : valid_vals ) if ( x <= nf_th ) ++n_nearfloor;
+      const double global_nearfloor_frac = n_nearfloor / (double) nv;
+
+      // ---- Derive report items ----
+
+      const bool warn_flat      = global_flat_frac      >= qc_flat_frac_th;
+      const bool warn_nearfloor = global_nearfloor_frac >= qc_nearfloor_frac_th;
+      const bool warn_lowvar    = g_cv                  <  qc_lowvar_cv_th;
+      const int  n_qc_triggers  = (int)warn_flat + (int)warn_nearfloor + (int)warn_lowvar;
+      const bool qc_exclusion_likely = n_qc_triggers >= 2;
+
+      const double max_z_min = run_max_min( zero_runs );
+
+      // z-score check: will zero epochs qualify as sleep?
+      const bool zeros_qualify = std::isfinite( z_zero ) && ( z_zero < luna_quiet_z );
+
+      // Non-zero run stats (for score-period min-wake suggestion)
+      const double nz_med_min  = run_med_min( nonzero_runs );
+      const double nz_max_min  = run_max_min( nonzero_runs );
+
+      // Zero-run P75 (for score-period min-sleep suggestion)
+      double zero_run_p75_min = 0.0;
+      if ( ! zero_runs.empty() )
+	{
+	  std::vector<double> zrd( zero_runs.begin(), zero_runs.end() );
+	  std::sort( zrd.begin(), zrd.end() );
+	  const int idx = std::min( (int)( 0.75 * zrd.size() ), (int)zrd.size() - 1 );
+	  zero_run_p75_min = zrd[idx] * epoch_sec / 60.0;
+	}
+
+      // score-period: suggest min-sleep = 2 x P75 of zero runs, floored at 20 min
+      // idea: the minimum sleep period should be longer than most short zero bursts
+      const double sp_min_sleep_suggest = std::max( 20.0, 2.0 * zero_run_p75_min );
+      // round to nearest 5 min
+      const double sp_min_sleep = std::round( sp_min_sleep_suggest / 5.0 ) * 5.0;
+
+      // score-period: suggest min-wake = median nonzero run, floored at 10 min
+      const double sp_min_wake_suggest = std::max( 10.0, nz_med_min );
+      const double sp_min_wake = std::round( sp_min_wake_suggest / 5.0 ) * 5.0;
+
+      // Common optional flags (quiet-z, active-frac, QC)
+      std::string common_flags;
+      if ( ! zeros_qualify && std::isfinite( z_zero ) )
+	common_flags += " quiet-z=" + Helper::dbl2str( std::floor( z_zero ) - 1.0 , 1 );
+      if ( active_frac_obs < luna_active_frac && active_frac_obs > 0 )
+	common_flags += " active-frac=" + Helper::dbl2str( active_frac_obs * 0.5 , 2 );
+      if ( qc_exclusion_likely )
+	{
+	  if ( warn_flat )      common_flags += " qc-exclude-flat=F";
+	  if ( warn_nearfloor ) common_flags += " qc-exclude-nearfloor=F";
+	  if ( warn_lowvar )    common_flags += " qc-exclude-lowvar=F";
+	}
+
+      const std::string base = "  ACTIG sig=" + siglab
+	+ ( Fs < 1.0 && expected_spe > 1 ? " sum" : "" );
+      const std::string cmd_score    = base + " score" + common_flags;
+      const std::string cmd_period   = base + " score-period" + common_flags
+	+ " min-sleep=" + Helper::dbl2str( sp_min_sleep , 0 )
+	+ " min-wake="  + Helper::dbl2str( sp_min_wake  , 0 );
+
+      // ---- Print report ----
+      logger << "\n";
+      logger << "  ============================================================\n";
+      logger << "  ACTIG INVESTIGATE: " << siglab << "\n";
+      logger << "  ============================================================\n";
+      logger << "\n";
+      logger << "  Fs=" << Fs << " Hz, epoch=" << epoch_sec << " s ("
+	     << (int)( Fs * epoch_sec + 0.5 ) << " sample/epoch), "
+	     << nv << " valid epochs, " << n_gap_epochs << " gap\n";
+      logger << "\n";
+
+      // Signal distribution (compact)
+      logger << "  Distribution  zeros=" << Helper::dbl2str( zero_frac * 100.0 , 1 ) << "%"
+	     << "  P25=" << Helper::dbl2str( pct(0.25) , 2 )
+	     << "  P50=" << Helper::dbl2str( pct(0.50) , 2 )
+	     << "  P75=" << Helper::dbl2str( pct(0.75) , 2 )
+	     << "  P95=" << Helper::dbl2str( pct(0.95) , 2 )
+	     << "  max=" << Helper::dbl2str( pct(1.00) , 2 ) << "\n";
+      logger << "  Mean=" << Helper::dbl2str( g_mean , 2 )
+	     << "  SD=" << Helper::dbl2str( g_sd , 2 )
+	     << "  CV=" << Helper::dbl2str( g_cv , 3 ) << "\n";
+      logger << "\n";
+
+      // Zero-run summary
+      if ( ! zero_runs.empty() )
+	logger << "  Zero runs: " << zero_runs.size()
+	       << " runs, median=" << Helper::dbl2str( run_med_min( zero_runs ) , 1 ) << " min"
+	       << ", max=" << Helper::dbl2str( max_z_min , 1 ) << " min\n";
+      else
+	logger << "  Zero runs: none\n";
+      logger << "\n";
+
+      // Issues and actions
+      int issue_n = 0;
+      logger << "  --- Issues ---\n";
+
+      // 1. Zero-epoch scoring
+      if ( std::isfinite( z_zero ) )
+	{
+	  if ( zeros_qualify )
+	    {
+	      logger << "  [OK] Zero-valued epochs score as sleep candidates\n"
+		     << "       (z=" << Helper::dbl2str( z_zero , 2 )
+		     << " < quiet-z=" << luna_quiet_z << "; no change needed)\n";
+	    }
+	  else
+	    {
+	      ++issue_n;
+	      logger << "  [" << issue_n << "] Zero epochs score as WAKE, not sleep\n"
+		     << "      z(zero)=" << Helper::dbl2str( z_zero , 2 )
+		     << " >= quiet-z=" << luna_quiet_z << "\n"
+		     << "      Fix: add  quiet-z=" << Helper::dbl2str( std::floor( z_zero ) - 1.0 , 1 )
+		     << "  or use  method=threshold thresh=1\n";
+	    }
+	}
+
+      // 2. Non-wear / long zero runs
+      if ( max_z_min >= 240.0 )
+	{
+	  ++issue_n;
+	  logger << "  [" << issue_n << "] Very long zero runs (max " << Helper::dbl2str( max_z_min , 0 )
+		 << " min = " << Helper::dbl2str( max_z_min / 60.0 , 1 ) << " hrs)\n"
+		 << "      Zero epochs score as sleep — but extended zeros are often non-wear,\n"
+		 << "      not genuine sleep. There is no reliable way to distinguish the two\n"
+		 << "      from activity counts alone. Options:\n"
+		 << "        a) Accept zeros as sleep (device records during sleep with no movement)\n"
+		 << "        b) Annotate confirmed non-wear periods before scoring and use MASK\n"
+		 << "        c) Use method=threshold thresh=1 for a simple zero=sleep rule,\n"
+		 << "           then inspect scored output manually\n";
+	}
+      else if ( max_z_min >= 60.0 )
+	{
+	  ++issue_n;
+	  logger << "  [" << issue_n << "] Long zero runs present (max " << Helper::dbl2str( max_z_min , 0 )
+		 << " min)\n"
+		 << "      May be non-wear or genuine sleep; inspect scored output\n";
+	}
+
+      // 3. Low sampling rate
+      if ( Fs < 1.0 && expected_spe > 1 )
+	{
+	  ++issue_n;
+	  logger << "  [" << issue_n << "] Sub-Hz sample rate (" << Fs << " Hz, "
+		 << expected_spe << " samples/epoch)\n"
+		 << "      Add  sum  so epoch values are totals, not per-sample means\n";
+	}
+
+      // 4. active-frac mismatch
+      if ( active_frac_obs < luna_active_frac && active_frac_obs > 0 )
+	{
+	  ++issue_n;
+	  logger << "  [" << issue_n << "] Active (nonzero) fraction " << Helper::dbl2str( active_frac_obs * 100.0 , 1 )
+		 << "% < active-frac=" << luna_active_frac << "\n"
+		 << "      The burst-density gate uses active-frac to cap the fraction of\n"
+		 << "      high-activity epochs in a local window before marking as wake.\n"
+		 << "      With so few nonzero epochs this threshold may block sleep scoring.\n"
+		 << "      Suggest: active-frac=" << Helper::dbl2str( active_frac_obs * 0.5 , 2 ) << "\n";
+	}
+
+      // 5. QC exclusions
+      if ( qc_exclusion_likely )
+	{
+	  ++issue_n;
+	  logger << "  [" << issue_n << "] Day QC flags likely to exclude whole days\n"
+		 << "      Global estimates:";
+	  if ( warn_flat )
+	    logger << "  flat=" << Helper::dbl2str( global_flat_frac * 100.0 , 1 ) << "%";
+	  if ( warn_nearfloor )
+	    logger << "  nearfloor=" << Helper::dbl2str( global_nearfloor_frac * 100.0 , 1 ) << "%";
+	  if ( warn_lowvar )
+	    logger << "  CV=" << Helper::dbl2str( g_cv , 3 );
+	  logger << "\n"
+		 << "      Excluded days appear as all-WAKE in output, not as gaps.\n"
+		 << "      Add these params to disable the offending flags:\n";
+	  if ( warn_flat )      logger << "        qc-exclude-flat=F\n";
+	  if ( warn_nearfloor ) logger << "        qc-exclude-nearfloor=F\n";
+	  if ( warn_lowvar )    logger << "        qc-exclude-lowvar=F\n";
+	}
+      else if ( n_qc_triggers == 1 )
+	{
+	  logger << "  [OK] Day QC: signal looks mostly OK (1 marginal check, but 2 needed to drop a day)\n";
+	}
+      else
+	{
+	  logger << "  [OK] Day QC: signal looks fine, days should not be dropped by quality checks\n";
+	}
+
+      if ( issue_n == 0 )
+	logger << "  No issues detected\n";
+
+      logger << "\n";
+
+      // Suggested commands
+      logger << "  --- Suggested commands ---\n";
+      logger << "\n";
+      logger << "  Epoch-level W/S scoring:\n";
+      logger << cmd_score << "\n";
+      logger << "\n";
+      logger << "  Sleep/wake period windows (SP/WP):\n";
+      logger << cmd_period << "\n";
+      if ( ! zero_runs.empty() )
+	logger << "  (min-sleep=" << Helper::dbl2str( sp_min_sleep , 0 )
+	       << " from 2 x P75 zero-run=" << Helper::dbl2str( zero_run_p75_min , 1 ) << " min"
+	       << ";  min-wake=" << Helper::dbl2str( sp_min_wake , 0 )
+	       << " from median nonzero-run=" << Helper::dbl2str( nz_med_min , 1 ) << " min)\n";
+      if ( max_z_min >= 240.0 )
+	{
+	  logger << "\n";
+	  logger << "  Simple zero=sleep threshold alternative:\n";
+	  logger << base << " score method=threshold thresh=1\n";
+	}
+      logger << "\n";
+      logger << "  ============================================================\n";
+      logger << "\n";
+      return;
+    }
+
+
+  // ---------------------------------------------------------------
+  //
   // Nonparametric circadian metrics
   //
   // ---------------------------------------------------------------
 
-  if ( have_signal )
+  if ( have_signal && ! do_score_period )
     {
 
   //
@@ -672,7 +1170,7 @@ void actig::actig( edf_t & edf , param_t & param )
       np_n_bins = n_bins - np_dropped_bins;
       if ( np_n_bins == 0 )
         logger << "  NP full-days restriction left no complete anchored 24 h days; NP metrics will not be computed\n";
-      else
+      else if ( do_verbose )
         {
           if ( startdatetime.valid )
             {
@@ -695,10 +1193,8 @@ void actig::actig( edf_t & edf , param_t & param )
   const int np_epoch_used_stop = np_epoch_start + np_epochs_used;
 
   int np_n_valid_epochs = 0;
-  int np_n_gap_epochs = 0;
   for ( int e = np_epoch_start ; e < np_epoch_used_stop ; e++ )
     if ( !is_gap[e] ) ++np_n_valid_epochs;
-    else ++np_n_gap_epochs;
 
   double grand_mean = 0;
   int    gm_n = 0;
@@ -784,7 +1280,7 @@ void actig::actig( edf_t & edf , param_t & param )
   //  Use a 1440-point minute-of-day profile across the retained NP window,
   //  matching the nparACT approach of computing L5/M10 from minute averages
   //  rather than from the coarser hourly NP bins.
-  //  Slots with no valid data remain 0 (noted via NP_NE_GAP).
+  //  Slots with no valid data remain 0.
   //
 
   double L5_val = 0 , M10_val = 0 , RA = 0;
@@ -897,17 +1393,20 @@ void actig::actig( edf_t & edf , param_t & param )
       writer.value( "NP_L5_ONSET_MIN" , L5_min_midnight );
       writer.value( "NP_M10_ONSET_MIN", M10_min_midnight );
 
-      logger << "  NP metrics: IS=" << IS
-	     << " IV=" << IV
-	     << " L" << l_hours << "=" << L5_val  << " (" << L5_hms  << ", " << L5_min_midnight  << " min)"
-	     << " M" << m_hours << "=" << M10_val << " (" << M10_hms << ", " << M10_min_midnight << " min)"
-	     << " RA=" << RA
-	     << "\n";
-      if ( ! np_traditional )
-	logger << "  NP L5/M10 onset resolution: " << np_step_min << " min"
-	       << " (use np-traditional for classic 1-hour resolution)\n";
+      if ( do_verbose )
+	{
+	  logger << "  NP metrics: IS=" << IS
+		 << " IV=" << IV
+		 << " L" << l_hours << "=" << L5_val  << " (" << L5_hms  << ", " << L5_min_midnight  << " min)"
+		 << " M" << m_hours << "=" << M10_val << " (" << M10_hms << ", " << M10_min_midnight << " min)"
+		 << " RA=" << RA
+		 << "\n";
+	  if ( ! np_traditional )
+	    logger << "  NP L5/M10 onset resolution: " << np_step_min << " min"
+		   << " (use np-traditional for classic 1-hour resolution)\n";
+	}
     }
-  else
+  else if ( do_verbose )
     logger << "  NP metrics: no signal; IS/IV/L5/M10/RA not computed\n";
 
   writer.value( "NP_NE"    , np_full_days ? np_epochs_used : n_epochs );
@@ -916,19 +1415,14 @@ void actig::actig( edf_t & edf , param_t & param )
 
   if ( have_signal )
     {
-      int np_n_gap_bins = np_n_bins - np_n_valid_bins;
       if ( ! np_full_days )
-	{
-	  np_n_valid_epochs = n_valid_epochs;
-	  np_n_gap_epochs = n_gap_epochs;
-	}
+	np_n_valid_epochs = n_valid_epochs;
 
       writer.value( "NP_NE_VALID"    , np_n_valid_epochs );
-      writer.value( "NP_NE_GAP"      , np_n_gap_epochs );
       writer.value( "NP_NBINS_VALID" , np_n_valid_bins );
-      logger << "  NP bins: " << np_n_bins << " total, "
-	     << np_n_valid_bins << " valid, "
-	     << np_n_gap_bins << " gap\n";
+      if ( do_verbose )
+	logger << "  NP bins: " << np_n_bins << " total, "
+	       << np_n_valid_bins << " valid\n";
     }
 
   } // if ( have_signal ) -- end NP section
@@ -950,7 +1444,32 @@ void actig::actig( edf_t & edf , param_t & param )
   std::vector<bool> is_wake( n_epochs , true );
   std::string score_method = method;
 
-  if ( do_prescored )
+  // If no scoring mode and no explicit prescored, check whether epoch
+  // annotations already exist in memory (e.g. from a prior ACTIG score run).
+  // If so, treat as implicit prescored; otherwise return after NP metrics.
+  bool do_prescored_eff = do_prescored;
+  if ( ! do_any_score && ! do_prescored )
+    {
+      if ( do_debt )
+	Helper::halt( "ACTIG: debt requires score or prescored to be specified" );
+      if ( do_norm )
+	Helper::halt( "ACTIG: norm requires score or prescored to be specified" );
+      annot_t * impl_w = edf.timeline.annotations->find( presc_wake_label );
+      annot_t * impl_s = edf.timeline.annotations->find( presc_sleep_label );
+      if ( impl_w == NULL || impl_s == NULL )
+	{
+	  logger << "  no score mode and no epoch annotations ("
+		 << presc_sleep_label << "/" << presc_wake_label
+		 << ") found; skipping TST and fragmentation outputs\n";
+	  return;
+	}
+      logger << "  no score mode but epoch annotations ("
+	     << presc_sleep_label << "/" << presc_wake_label
+	     << ") found; treating as prescored\n";
+      do_prescored_eff = true;
+    }
+
+  if ( do_prescored_eff )
     {
       annot_t * a_wake_in  = edf.timeline.annotations->find( presc_wake_label );
       annot_t * a_sleep_in = edf.timeline.annotations->find( presc_sleep_label );
@@ -1003,22 +1522,13 @@ void actig::actig( edf_t & edf , param_t & param )
 			+ presc_sleep_label + ", wake=" + presc_wake_label );
 	}
     }
-  else if ( ! do_score )
-    {
-      if ( do_debt )
-	Helper::halt( "ACTIG: debt requires score or prescored to be specified" );
-      if ( do_norm )
-	Helper::halt( "ACTIG: norm requires score or prescored to be specified" );
-      logger << "  score not requested; skipping wake/sleep annotations and TST outputs\n";
-      return;
-    }
 
   // Cole-Kripke weights are calibrated for 60-second epochs.
   else if ( ( method == "cole" || method == "threshold" ) &&
 	    std::fabs( epoch_sec - 60.0 ) > 1e-6 )
     Helper::halt( "ACTIG: cole and threshold methods require epoch=60" );
 
-  if ( do_score && ( method == "threshold" || method == "thresh" ) )
+  if ( do_any_score && ( method == "threshold" || method == "thresh" ) )
     {
 
       double t = thresh;
@@ -1038,14 +1548,42 @@ void actig::actig( edf_t & edf , param_t & param )
 	    }
 	  else t = 0;
 
-	  logger << "  threshold method: median of valid epochs = " << t << "\n";
+	  if ( do_verbose )
+	    logger << "  threshold method: median of valid epochs = " << t << "\n";
 	}
 
-      for ( int i = 0 ; i < n_epochs ; i++ )
-	if ( !is_gap[i] ) is_wake[i] = ( epochs[i] >= t );
+      // Optional triangular-window smoothing before threshold
+      const int thresh_smooth_half = thresh_smooth_min > 0
+	? std::max( 1, (int)std::round( thresh_smooth_min * 60.0 / epoch_sec ) ) : 0;
+
+      if ( thresh_smooth_half > 0 )
+	{
+	  std::vector<double> smoothed( n_epochs , 0.0 );
+	  for ( int i = 0 ; i < n_epochs ; i++ )
+	    {
+	      if ( is_gap[i] ) continue;
+	      double wsum = 0.0, wtot = 0.0;
+	      for ( int j = -thresh_smooth_half ; j <= thresh_smooth_half ; j++ )
+		{
+		  const int idx = i + j;
+		  const double w = thresh_smooth_half + 1 - std::abs( j );
+		  const double v = ( idx < 0 || idx >= n_epochs || is_gap[idx] ) ? 0.0 : epochs[idx];
+		  wsum += w * v;
+		  wtot += w;
+		}
+	      smoothed[i] = wtot > 0 ? wsum / wtot : 0.0;
+	    }
+	  for ( int i = 0 ; i < n_epochs ; i++ )
+	    if ( !is_gap[i] ) is_wake[i] = ( smoothed[i] >= t );
+	}
+      else
+	{
+	  for ( int i = 0 ; i < n_epochs ; i++ )
+	    if ( !is_gap[i] ) is_wake[i] = ( epochs[i] >= t );
+	}
 
     }
-  else if ( do_score && method == "cole" )
+  else if ( do_any_score && method == "cole" )
     {
 
       //
@@ -1082,7 +1620,7 @@ void actig::actig( edf_t & edf , param_t & param )
 	}
 
     }
-  else if ( do_score && method == "luna" )
+  else if ( do_any_score && method == "luna" )
     {
 
       // ---------------------------------------------------------------
@@ -1105,14 +1643,17 @@ void actig::actig( edf_t & edf , param_t & param )
       const int n_gap_fill   = std::max( 0, (int)std::round( luna_max_gap_min   * 60.0 / epoch_sec ) );
       const int n_wake_break = std::max( 1, (int)std::round( luna_min_wake_min  * 60.0 / epoch_sec ) );
 
-      logger << "  luna: smooth=" << luna_smooth_min << "m (n=" << n_smooth << ")"
-	     << ", burst=" << luna_burst_min << "m (n=" << n_burst_w << ")"
-	     << ", burst-z=" << luna_burst_z
-	     << ", quiet-z=" << luna_quiet_z
-	     << ", active-frac=" << luna_active_frac << "\n";
-      logger << "  luna: min-sleep=" << luna_min_sleep_min << "m (n=" << n_min_sleep << ")"
-	     << ", max-gap=" << luna_max_gap_min << "m (n=" << n_gap_fill << ")"
-	     << ", min-wake=" << luna_min_wake_min << "m (n=" << n_wake_break << ")\n";
+      if ( do_verbose )
+	{
+	  logger << "  luna: smooth=" << luna_smooth_min << "m (n=" << n_smooth << ")"
+		 << ", burst=" << luna_burst_min << "m (n=" << n_burst_w << ")"
+		 << ", burst-z=" << luna_burst_z
+		 << ", quiet-z=" << luna_quiet_z
+		 << ", active-frac=" << luna_active_frac << "\n";
+	  logger << "  luna: min-sleep=" << luna_min_sleep_min << "m (n=" << n_min_sleep << ")"
+		 << ", max-gap=" << luna_max_gap_min << "m (n=" << n_gap_fill << ")"
+		 << ", min-wake=" << luna_min_wake_min << "m (n=" << n_wake_break << ")\n";
+	}
 
       // Epoch-level diagnostic arrays (allocated only when channels requested)
       std::vector<double> eg_Z, eg_L, eg_D, eg_CS;
@@ -1138,7 +1679,8 @@ void actig::actig( edf_t & edf , param_t & param )
 	  }
       }
 
-      logger << "  luna: " << blocks.size() << " contiguous block(s)\n";
+      if ( do_verbose )
+	logger << "  luna: " << blocks.size() << " contiguous block(s)\n";
 
       for ( auto & blk : blocks )
 	{
@@ -1255,13 +1797,14 @@ void actig::actig( edf_t & edf , param_t & param )
 		if ( cand[i] ) n_cand++;
 	      }
 	    D_mean /= bsz;
-	    logger << "  luna diag block [" << bs << "," << be << "] bsz=" << bsz
-		   << ": log(act) range=[" << y_min << "," << y_max << "]"
-		   << " med=" << vec_median(y) << " z-range=[" << z_min << "," << z_max << "]"
-		   << " D_mean=" << D_mean
-		   << " n_quiet(L<" << luna_quiet_z << ")=" << n_cand_quiet
-		   << " n_burst_ok(D<" << luna_active_frac << ")=" << n_cand_burst
-		   << " n_cand=" << n_cand << "\n";
+	    if ( do_verbose )
+	      logger << "  luna diag block [" << bs << "," << be << "] bsz=" << bsz
+		     << ": log(act) range=[" << y_min << "," << y_max << "]"
+		     << " med=" << vec_median(y) << " z-range=[" << z_min << "," << z_max << "]"
+		     << " D_mean=" << D_mean
+		     << " n_quiet(L<" << luna_quiet_z << ")=" << n_cand_quiet
+		     << " n_burst_ok(D<" << luna_active_frac << ")=" << n_cand_burst
+		     << " n_cand=" << n_cand << "\n";
 	  }
 
 	  // Step 7: Run-length persistence rules
@@ -1290,7 +1833,8 @@ void actig::actig( edf_t & edf , param_t & param )
 	  // Post pass-1 count
 	  {
 	    int n1 = 0; for ( int i=0;i<bsz;i++) if(filled[i]) n1++;
-	    logger << "  luna diag: after gap-fill (pass1): " << n1 << " sleep epochs\n";
+	    if ( do_verbose )
+	      logger << "  luna diag: after gap-fill (pass1): " << n1 << " sleep epochs\n";
 	  }
 
 	  // Pass 2: Remove sleep runs shorter than n_min_sleep
@@ -1314,7 +1858,8 @@ void actig::actig( edf_t & edf , param_t & param )
 	  // Post pass-2 count
 	  {
 	    int n2 = 0; for ( int i=0;i<bsz;i++) if(filled[i]) n2++;
-	    logger << "  luna diag: after min-sleep (pass2): " << n2 << " sleep epochs\n";
+	    if ( do_verbose )
+	      logger << "  luna diag: after min-sleep (pass2): " << n2 << " sleep epochs\n";
 	  }
 
 	  // Pass 3: Wake-persistence state machine
@@ -1430,7 +1975,7 @@ void actig::actig( edf_t & edf , param_t & param )
 
     }  // end luna method
 
-  else if ( do_score )
+  else if ( do_any_score )
     {
       Helper::halt( "ACTIG: unknown scoring method '" + method
 		    + "' (use: luna, cole, threshold)" );
@@ -1445,17 +1990,21 @@ void actig::actig( edf_t & edf , param_t & param )
 
   annot_t * a_wake  = NULL;
   annot_t * a_sleep = NULL;
-  annot_t * a_gap_a = NULL;
-  if ( do_score )
+  if ( do_any_score )
     {
+      if ( edf.timeline.annotations->find( wake_label ) != NULL )
+	Helper::halt( "ACTIG: score output label '" + wake_label
+		      + "' already exists; drop or remap it before scoring" );
+      if ( edf.timeline.annotations->find( sleep_label ) != NULL )
+	Helper::halt( "ACTIG: score output label '" + sleep_label
+		      + "' already exists; drop or remap it before scoring" );
+
       a_wake  = edf.timeline.annotations->add( wake_label );
       a_sleep = edf.timeline.annotations->add( sleep_label );
-      a_gap_a = edf.timeline.annotations->add( gap_label );
 
       a_wake->description  = "Actigraphy-scored wake";
       a_sleep->description = "Actigraphy-scored sleep";
-      a_gap_a->description = "Actigraphy gap / non-wear";
-      a_wake->file = a_sleep->file = a_gap_a->file = "ACTIG";
+      a_wake->file = a_sleep->file = "ACTIG";
     }
 
   auto epoch_state = [&]( int i ) -> int {
@@ -1464,8 +2013,8 @@ void actig::actig( edf_t & edf , param_t & param )
     return 2;
   };
 
-  int wake_inst = 1 , sleep_inst = 1 , gap_inst = 1;
-  int total_wake = 0 , total_sleep = 0 , total_gap_epochs = 0;
+  int wake_inst = 1 , sleep_inst = 1;
+  int total_wake = 0 , total_sleep = 0;
 
   int run_start = 0;
   for ( int i = 1 ; i <= n_epochs ; i++ )
@@ -1481,27 +2030,32 @@ void actig::actig( edf_t & edf , param_t & param )
 	  const int run_len = i - run_start;
 	  const int st = epoch_state( run_start );
 
-	  if ( st == 0 )
+	  if ( st == 1 )
 	    {
-	      if ( do_score ) a_gap_a->add( Helper::int2str( gap_inst ) , ival , "." );
-	      ++gap_inst;
-	      total_gap_epochs += run_len;
-	    }
-	  else if ( st == 1 )
-	    {
-	      if ( do_score ) a_wake->add( Helper::int2str( wake_inst ) , ival , "." );
+	      if ( do_any_score ) a_wake->add( Helper::int2str( wake_inst ) , ival , "." );
 	      ++wake_inst;
 	      total_wake += run_len;
 	    }
 	  else
 	    {
-	      if ( do_score ) a_sleep->add( Helper::int2str( sleep_inst ) , ival , "." );
+	      if ( do_any_score ) a_sleep->add( Helper::int2str( sleep_inst ) , ival , "." );
 	      ++sleep_inst;
 	      total_sleep += run_len;
 	    }
 
 	  run_start = i;
 	}
+    }
+
+
+  //
+  // score-period: annotations written; skip all metric computation and output
+  //
+
+  if ( do_score_period )
+    {
+      logger << "  score-period: SP/WP annotations written; all metrics skipped\n";
+      return;
     }
 
 
@@ -1513,93 +2067,43 @@ void actig::actig( edf_t & edf , param_t & param )
 
   const double total_sleep_min     = total_sleep * epoch_sec / 60.0;
   const double total_wake_min      = total_wake  * epoch_sec / 60.0;
-  const double total_gap_min       = total_gap_epochs * epoch_sec / 60.0;
   const double sleep_pct           = n_valid_epochs > 0
     ? 100.0 * total_sleep / (double)n_valid_epochs : 0;
 
-  // SFI: sleep->wake transitions; skip transitions that cross a gap
-  int trans_to_w = 0;
-  for ( int i = 1 ; i < n_epochs ; i++ )
-    if ( !is_gap[i] && !is_gap[i-1] && !is_wake[i-1] && is_wake[i] )
-      ++trans_to_w;
+  // Period annotations (S/W): define sleep/wake windows for fragmentation.
+  // Looked up regardless of scoring mode; fall back to empirical if absent.
+  annot_t * a_sleep_period = edf.timeline.annotations->find( period_sleep_label );
+  annot_t * a_wake_period  = edf.timeline.annotations->find( period_wake_label  );
+  const bool have_sleep_period_annot = ( a_sleep_period != NULL );
+  const bool have_wake_period_annot  = ( a_wake_period  != NULL );
 
-  const double total_sleep_h = total_sleep * epoch_sec / 3600.0;
-  const double sfi_luna_h    = total_sleep_h > 0 ? trans_to_w / total_sleep_h : 0;
-
-  // SFI_ACT: sleep window = [first valid sleep epoch, last valid sleep epoch]
-  int first_sleep_epoch = -1 , last_sleep_epoch = -1;
+  // Per-epoch flags: does this epoch overlap an S- or W-period annotation?
+  std::vector<bool> in_sleep_period( n_epochs , false );
+  std::vector<bool> in_wake_period ( n_epochs , false );
   for ( int i = 0 ; i < n_epochs ; i++ )
-    if ( !is_gap[i] && !is_wake[i] )
-      {
-	if ( first_sleep_epoch == -1 ) first_sleep_epoch = i;
-	last_sleep_epoch = i;
-      }
-
-  int    imm_bout_n = 0 , imm1_bout_n = 0;
-  double mi_pct = 0 , imm1_pct = 0 , sfi_act = 0;
-
-  int    frag_wake_bout_n = 0;
-  double frag_wake_bout_med = 0 , frag_wake_bout_p90 = 0 , frag_wake_bout_max = 0;
-  double frag_sleep_bout_med = 0 , frag_sleep_bout_p10 = 0 , frag_sleep_bout_max = 0;
-
-  if ( first_sleep_epoch != -1 )
     {
-      // MI: wake % within sleep window, over valid epochs only
-      int wake_in_win = 0 , valid_in_win = 0;
-      for ( int i = first_sleep_epoch ; i <= last_sleep_epoch ; i++ )
-	if ( !is_gap[i] ) { valid_in_win++; if ( is_wake[i] ) wake_in_win++; }
-      mi_pct = valid_in_win > 0 ? 100.0 * wake_in_win / (double)valid_in_win : 0;
-
-      // Bout extraction (sleep + wake)
-      const bout_counts_t bouts = extract_bouts( is_gap , is_wake ,
-                                                 first_sleep_epoch , last_sleep_epoch );
-      imm_bout_n  = (int)bouts.sleep_epochs.size();
-      imm1_bout_n = 0;
-      for ( int r : bouts.sleep_epochs ) if ( r <= 1 ) ++imm1_bout_n;
-
-      imm1_pct = imm_bout_n > 0 ? 100.0 * imm1_bout_n / (double)imm_bout_n : 0;
-      sfi_act  = mi_pct + imm1_pct;
-
-      // Bout-duration summaries
-      frag_wake_bout_n   = (int)bouts.wake_epochs.size();
-      frag_wake_bout_med = pct_min( bouts.wake_epochs  , 0.50 , epoch_sec );
-      frag_wake_bout_p90 = pct_min( bouts.wake_epochs  , 0.90 , epoch_sec );
-      frag_wake_bout_max = bouts.wake_epochs.empty()  ? 0.0
-        : *std::max_element( bouts.wake_epochs.begin()  , bouts.wake_epochs.end() )
-          * epoch_sec / 60.0;
-      frag_sleep_bout_med = pct_min( bouts.sleep_epochs , 0.50 , epoch_sec );
-      frag_sleep_bout_p10 = pct_min( bouts.sleep_epochs , 0.10 , epoch_sec );
-      frag_sleep_bout_max = bouts.sleep_epochs.empty() ? 0.0
-        : *std::max_element( bouts.sleep_epochs.begin() , bouts.sleep_epochs.end() )
-          * epoch_sec / 60.0;
+      const double start_sec = i * epoch_sec;
+      double stop_sec = ( i + 1 ) * epoch_sec;
+      if ( stop_sec > total_sec ) stop_sec = total_sec;
+      const interval_t ival( Helper::sec2tp( start_sec ) ,
+			      Helper::sec2tp( stop_sec ) );
+      if ( have_sleep_period_annot )
+	in_sleep_period[i] = ! a_sleep_period->extract( ival ).empty();
+      if ( have_wake_period_annot )
+	in_wake_period[i]  = ! a_wake_period->extract(  ival ).empty();
     }
+  if ( have_sleep_period_annot )
+    logger << "  period annotations: using '" << period_sleep_label
+	   << "' for sleep-window definition\n";
+  if ( have_wake_period_annot )
+    logger << "  period annotations: using '" << period_wake_label
+	   << "' for wake-window definition\n";
 
-  writer.value( "SCORE_TST_MIN"     , total_sleep_min );
-  writer.value( "SCORE_TWT_MIN"     , total_wake_min );
-  writer.value( "SCORE_GAP_MIN"     , total_gap_min );
+  writer.value( "SCORE_TST"   , total_sleep_min );
+  writer.value( "SCORE_TWT"   , total_wake_min );
   if ( total_sleep + total_wake > 0 )
-    writer.value( "SCORE_SLEEP_PCT"   , sleep_pct );
-  if ( first_sleep_epoch != -1 )
-    {
-      writer.value( "FRAG_SFI"         , sfi_luna_h );
-      writer.value( "FRAG_SFI_N"       , trans_to_w );
-      writer.value( "FRAG_SFI_ACT"     , sfi_act );
-      writer.value( "FRAG_MI_PCT"      , mi_pct );
-      writer.value( "FRAG_IMM1_PCT"    , imm1_pct );
-      writer.value( "FRAG_IMM_BOUT_N"  , imm_bout_n );
-      writer.value( "FRAG_IMM1_BOUT_N" , imm1_bout_n );
-      writer.value( "FRAG_WAKE_BOUT_N"       , frag_wake_bout_n );
-      writer.value( "FRAG_WAKE_BOUT_MED_MIN" , frag_wake_bout_med );
-      writer.value( "FRAG_WAKE_BOUT_P90_MIN" , frag_wake_bout_p90 );
-      writer.value( "FRAG_WAKE_BOUT_MAX_MIN" , frag_wake_bout_max );
-      writer.value( "FRAG_SLEEP_BOUT_MED_MIN", frag_sleep_bout_med );
-      writer.value( "FRAG_SLEEP_BOUT_P10_MIN", frag_sleep_bout_p10 );
-      writer.value( "FRAG_SLEEP_BOUT_MAX_MIN", frag_sleep_bout_max );
-    }
-  writer.value( "SCORE_METHOD"     , score_method );
-  writer.value( "SCORE_WAKE_RUN_N" , wake_inst - 1 );
-  writer.value( "SCORE_SLEEP_RUN_N", sleep_inst - 1 );
-  writer.value( "SCORE_GAP_RUN_N"  , gap_inst - 1 );
+    writer.value( "SCORE_SLEEP_PCT" , sleep_pct );
+
 
 
   // -----------------------------------------------------------------------
@@ -1649,9 +2153,12 @@ void actig::actig( edf_t & edf , param_t & param )
 
   std::vector<double> sleep_sec_day;
   std::vector<double> wake_sec_day;
+  std::vector<double> sleep_sec_sp_day;   // TST within SP window
+  std::vector<double> wake_sec_sp_day;    // TWT within SP window
+  std::vector<double> sleep_sec_wp_day;   // TST within WP window
+  std::vector<double> wake_sec_wp_day;    // TWT within WP window
 
   std::vector<int> day_epoch_n;        // valid (non-gap) epochs per day
-  std::vector<int> day_gap_epoch_n;    // gap epochs per day
   std::vector<int> day_wake_epoch_n;
   std::vector<int> day_trans_to_w;
   std::vector<int> day_first_idx;      // first valid epoch index in day
@@ -1663,7 +2170,6 @@ void actig::actig( edf_t & edf , param_t & param )
     if ( (size_t)(d+1) > day_epoch_n.size() )
       {
 	day_epoch_n.resize( d+1 , 0 );
-	day_gap_epoch_n.resize( d+1 , 0 );
 	day_wake_epoch_n.resize( d+1 , 0 );
 	day_trans_to_w.resize( d+1 , 0 );
 	day_first_idx.resize( d+1 , -1 );
@@ -1678,12 +2184,7 @@ void actig::actig( edf_t & edf , param_t & param )
       const int di = day_index_for_sec( start_sec );
       ensure_day( di );
 
-      if ( is_gap[i] )
-	{
-	  // gap epochs: count separately, do not contribute to wake/sleep
-	  day_gap_epoch_n[di]++;
-	  continue;
-	}
+      if ( is_gap[i] ) continue;
 
       const double stop_sec = std::min( (i+1) * epoch_sec , total_sec );
 
@@ -1696,6 +2197,18 @@ void actig::actig( edf_t & edf , param_t & param )
 	accumulate_day_seconds( &wake_sec_day , start_sec , stop_sec );
       else
 	accumulate_day_seconds( &sleep_sec_day , start_sec , stop_sec );
+
+      // SP/WP-stratified TST/TWT
+      if ( in_sleep_period[i] )
+	{
+	  if ( is_wake[i] ) accumulate_day_seconds( &wake_sec_sp_day  , start_sec , stop_sec );
+	  else              accumulate_day_seconds( &sleep_sec_sp_day , start_sec , stop_sec );
+	}
+      else if ( in_wake_period[i] )
+	{
+	  if ( is_wake[i] ) accumulate_day_seconds( &wake_sec_wp_day  , start_sec , stop_sec );
+	  else              accumulate_day_seconds( &sleep_sec_wp_day , start_sec , stop_sec );
+	}
     }
 
   // Transitions (skip cross-gap)
@@ -1713,20 +2226,53 @@ void actig::actig( edf_t & edf , param_t & param )
 
   double sum_sleep_sec = 0.0;
   double sum_wake_sec  = 0.0;
+  double sum_sleep_sec_sp = 0.0 , sum_wake_sec_sp = 0.0;
+  double sum_sleep_sec_wp = 0.0 , sum_wake_sec_wp = 0.0;
   int    n_included_days = 0;
   int    n_qc_ok_days = 0;
   int    n_qc_excluded_days = 0;
   int    n_qc_warn_days = 0;
   int    n_included_postqc_days = 0;
 
+  // Accumulators for day-averaged fragmentation metrics
+  double sum_frag_sfi           = 0.0;
+  double sum_frag_mi_act        = 0.0;
+  double sum_frag_fi_act        = 0.0;
+  double sum_frag_sfi_act       = 0.0;
+  double sum_frag_wake_bout_med  = 0.0;
+  double sum_frag_wake_bout_p90  = 0.0;
+  double sum_frag_wake_bout_max  = 0.0;
+  double sum_frag_sleep_bout_med = 0.0;
+  double sum_frag_sleep_bout_p10 = 0.0;
+  double sum_frag_sleep_bout_max = 0.0;
+  double sum_frag_trans_ent_S    = 0.0;
+  double sum_frag_rl_ent_se_S    = 0.0;
+  double sum_frag_rl_ent_we_S    = 0.0;
+  double sum_frag_tp_sw_S        = 0.0;
+  double sum_frag_tp_ws_S        = 0.0;
+  double sum_frag_trans_ent_W    = 0.0;
+  double sum_frag_rl_ent_se_W    = 0.0;
+  double sum_frag_rl_ent_we_W    = 0.0;
+  double sum_frag_tp_sw_W        = 0.0;
+  double sum_frag_tp_ws_W        = 0.0;
+  int    n_frag_dayavg           = 0;
+  int    n_frag_W_dayavg         = 0;
+
   std::vector<actig_day_qc_t> day_qc( n_days );
   annot_t * a_qc_excluded = NULL;
+  annot_t * a_qc_extreme  = NULL;
   writer.numeric_factor( "DAY" );
   if ( qc_day && qc_exclude_label != "" )
     {
       a_qc_excluded = edf.timeline.annotations->add( qc_exclude_label );
-      a_qc_excluded->description = "ACTIG QC-excluded day";
+      a_qc_excluded->description = "ACTIG QC-excluded day (signal quality)";
       a_qc_excluded->file = "ACTIG";
+    }
+  if ( qc_day && qc_extreme_label != "" && ( qc_exclude_allsleep || qc_exclude_allwake ) )
+    {
+      a_qc_extreme = edf.timeline.annotations->add( qc_extreme_label );
+      a_qc_extreme->description = "ACTIG QC-excluded day (extreme sleep/wake ratio)";
+      a_qc_extreme->file = "ACTIG";
     }
 
   auto join_flags = []( const std::vector<std::string> & x ) -> std::string
@@ -1749,19 +2295,17 @@ void actig::actig( edf_t & edf , param_t & param )
     {
       const double sleep_sec    = d < sleep_sec_day.size()  ? sleep_sec_day[d]   : 0.0;
       const double wake_sec     = d < wake_sec_day.size()   ? wake_sec_day[d]    : 0.0;
+      const double sleep_sec_sp = d < sleep_sec_sp_day.size() ? sleep_sec_sp_day[d] : 0.0;
+      const double wake_sec_sp  = d < wake_sec_sp_day.size()  ? wake_sec_sp_day[d]  : 0.0;
+      const double sleep_sec_wp = d < sleep_sec_wp_day.size() ? sleep_sec_wp_day[d] : 0.0;
+      const double wake_sec_wp  = d < wake_sec_wp_day.size()  ? wake_sec_wp_day[d]  : 0.0;
       const int day_epochs      = d < day_epoch_n.size()    ? day_epoch_n[d]     : 0;
-      const int day_gap_epochs  = d < day_gap_epoch_n.size()? day_gap_epoch_n[d] : 0;
       const int day_wake_epochs = d < day_wake_epoch_n.size()? day_wake_epoch_n[d]: 0;
-      const int day_trans       = d < day_trans_to_w.size() ? day_trans_to_w[d]  : 0;
 
-      const double day_sleep_h     = sleep_sec / 3600.0;
-      const double day_sfi_luna_h  = day_sleep_h > 0 ? day_trans / day_sleep_h : 0.0;
+      int    day_trans_win  = 0;
+      double day_sfi_luna_h = 0.0;
 
       const double valid_min_day   = day_epochs * epoch_sec / 60.0;
-      const double gap_min_day     = day_gap_epochs * epoch_sec / 60.0;
-      const double total_day_min   = valid_min_day + gap_min_day;
-      const double valid_pct_day   = total_day_min > 0
-	? 100.0 * valid_min_day / total_day_min : 0.0;
       const double day_total_valid = sleep_sec + wake_sec;
       const double day_sleep_pct   = day_total_valid > 0
 	? 100.0 * sleep_sec / day_total_valid : 0.0;
@@ -1772,9 +2316,14 @@ void actig::actig( edf_t & edf , param_t & param )
       int    day_imm_bout_n = 0 , day_imm1_bout_n = 0;
       double day_mi_pct = 0 , day_imm1_pct = 0 , day_sfi_act = 0;
       bool   day_has_sleep_window = false;
+      bool   day_has_wake_window  = false;
       int    day_frag_wake_bout_n = 0;
       double day_frag_wake_bout_med = 0 , day_frag_wake_bout_p90 = 0 , day_frag_wake_bout_max = 0;
       double day_frag_sleep_bout_med = 0 , day_frag_sleep_bout_p10 = 0 , day_frag_sleep_bout_max = 0;
+      double day_trans_ent_S = 0 , day_rl_ent_se_S = 0 , day_rl_ent_we_S = 0;
+      double day_trans_ent_W = 0 , day_rl_ent_se_W = 0 , day_rl_ent_we_W = 0;
+      double day_tp_sw_S = 0 , day_tp_ws_S = 0;
+      double day_tp_sw_W = 0 , day_tp_ws_W = 0;
       actig_day_qc_t qc;
       bool lowvar_frac_flag = false;
 
@@ -1787,7 +2336,7 @@ void actig::actig( edf_t & edf , param_t & param )
 	  int flat_pair_n = 0 , flat_pair_match_n = 0;
 	  int prev_valid_idx = -1;
 
-	  int first_sleep_day = -1 , last_sleep_day = -1;
+	  // QC data collection (valid epochs only)
 	  for ( int i = b ; i <= e ; i++ )
 	    if ( !is_gap[i] )
 	      {
@@ -1799,23 +2348,65 @@ void actig::actig( edf_t & edf , param_t & param )
 		      flat_pair_match_n++;
 		  }
 		prev_valid_idx = i;
-		if ( !is_wake[i] )
+	      }
+
+	  // Build in_S_day: which epochs within [b,e] are "in the sleep period".
+	  // Source is S-period annotations if present; otherwise empirical
+	  // (first..last non-gap sleep epoch within the day's range).
+	  // Fragmentation code consumes this vector directly — no further branching.
+	  std::vector<bool> in_S_day( n_epochs , false );
+	  if ( have_sleep_period_annot )
+	    {
+	      for ( int i = b ; i <= e ; i++ )
+		in_S_day[i] = in_sleep_period[i];
+	    }
+	  else
+	    {
+	      int fs = -1 , ls = -1;
+	      for ( int i = b ; i <= e ; i++ )
+		if ( !is_gap[i] && !is_wake[i] )
 		  {
-		    if ( first_sleep_day == -1 ) first_sleep_day = i;
-		    last_sleep_day = i;
+		    if ( fs == -1 ) fs = i;
+		    ls = i;
 		  }
+	      if ( fs != -1 )
+		for ( int i = fs ; i <= ls ; i++ )
+		  in_S_day[i] = true;
+	    }
+
+	  // Sleep window bounds (for extract_bouts range and day_has_sleep_window)
+	  int first_sleep_day = -1 , last_sleep_day = -1;
+	  for ( int i = b ; i <= e ; i++ )
+	    if ( in_S_day[i] )
+	      {
+		if ( first_sleep_day == -1 ) first_sleep_day = i;
+		last_sleep_day = i;
 	      }
 
 	  if ( first_sleep_day != -1 )
 	    {
-	      int wake_in_win = 0 , valid_in_win = 0;
+	      // MI + SFI: only over in-S-period, non-gap epochs.
+	      // Gaps and out-of-S-period epochs are skipped; prev_in_S tracks
+	      // the last valid epoch so transitions are never counted across them.
+	      int wake_in_win = 0 , valid_in_win = 0 , sleep_in_win = 0;
+	      int prev_in_S = -1;
 	      for ( int i = first_sleep_day ; i <= last_sleep_day ; i++ )
-		if ( !is_gap[i] ) { valid_in_win++; if ( is_wake[i] ) wake_in_win++; }
+		{
+		  if ( is_gap[i] || !in_S_day[i] ) continue;
+		  valid_in_win++;
+		  if ( is_wake[i] ) wake_in_win++;
+		  else              sleep_in_win++;
+		  if ( prev_in_S != -1 && !is_wake[prev_in_S] && is_wake[i] )
+		    ++day_trans_win;
+		  prev_in_S = i;
+		}
 	      day_mi_pct = valid_in_win > 0
 		? 100.0 * wake_in_win / (double)valid_in_win : 0.0;
+	      const double day_win_sleep_h = sleep_in_win * epoch_sec / 3600.0;
+	      day_sfi_luna_h = day_win_sleep_h > 0 ? day_trans_win / day_win_sleep_h : 0.0;
 
 	      day_has_sleep_window = true;
-	      const bout_counts_t day_bouts = extract_bouts( is_gap , is_wake ,
+	      const bout_counts_t day_bouts = extract_bouts( is_gap , is_wake , in_S_day ,
                                                              first_sleep_day , last_sleep_day );
 	      day_imm_bout_n  = (int)day_bouts.sleep_epochs.size();
 	      day_imm1_bout_n = 0;
@@ -1836,6 +2427,60 @@ void actig::actig( edf_t & edf , param_t & param )
 	      day_frag_sleep_bout_max = day_bouts.sleep_epochs.empty() ? 0.0
 		: *std::max_element( day_bouts.sleep_epochs.begin() , day_bouts.sleep_epochs.end() )
 		  * epoch_sec / 60.0;
+
+	      // Entropy metrics for S period
+	      day_trans_ent_S = transition_entropy( is_gap , is_wake , in_S_day ,
+						    first_sleep_day , last_sleep_day );
+	      day_rl_ent_se_S = rl_entropy( day_bouts.sleep_epochs );
+	      day_rl_ent_we_S = rl_entropy( day_bouts.wake_epochs  );
+
+	      // Transition probabilities for S period (ML + Bayesian λ correction)
+	      const tp_pair_t tp_S = transition_probs( is_gap , is_wake , in_S_day ,
+						       first_sleep_day , last_sleep_day , tp_lambda );
+	      day_tp_sw_S = tp_S.tp_sw;
+	      day_tp_ws_S = tp_S.tp_ws;
+	    }
+
+	  // Build in_W_day: W-period annotation if present, otherwise complement
+	  // of S period (all non-gap, non-S-period epochs within the day).
+	  std::vector<bool> in_W_day( n_epochs , false );
+	  if ( have_wake_period_annot )
+	    {
+	      for ( int i = b ; i <= e ; i++ )
+		in_W_day[i] = in_wake_period[i];
+	    }
+	  else
+	    {
+	      for ( int i = b ; i <= e ; i++ )
+		if ( !is_gap[i] && !in_S_day[i] )
+		  in_W_day[i] = true;
+	    }
+
+	  // W window bounds
+	  int first_wake_day = -1 , last_wake_day = -1;
+	  for ( int i = b ; i <= e ; i++ )
+	    if ( in_W_day[i] )
+	      {
+		if ( first_wake_day == -1 ) first_wake_day = i;
+		last_wake_day = i;
+	      }
+
+	  // Entropy metrics for W period
+	  if ( first_wake_day != -1 )
+	    {
+	      const bout_counts_t W_bouts = extract_bouts( is_gap , is_wake , in_W_day ,
+							   first_wake_day , last_wake_day );
+	      day_trans_ent_W = transition_entropy( is_gap , is_wake , in_W_day ,
+						    first_wake_day , last_wake_day );
+	      day_rl_ent_se_W = rl_entropy( W_bouts.sleep_epochs );
+	      day_rl_ent_we_W = rl_entropy( W_bouts.wake_epochs  );
+
+	      // Transition probabilities for W period
+	      const tp_pair_t tp_W = transition_probs( is_gap , is_wake , in_W_day ,
+						       first_wake_day , last_wake_day , tp_lambda );
+	      day_tp_sw_W = tp_W.tp_sw;
+	      day_tp_ws_W = tp_W.tp_ws;
+	      day_has_wake_window = true;
 	    }
 
 	  if ( !day_epochs_valid.empty() )
@@ -1964,15 +2609,21 @@ void actig::actig( edf_t & edf , param_t & param )
 
       if ( qc_day )
 	{
-	  qc.flag_flat = qc_exclude_flat
-	    && qc.flat_frac >= qc_flat_frac_th;
-	  qc.flag_lowvar = qc_exclude_lowvar
-	    && lowvar_frac_flag
-	    && qc.lowvar_cv <= qc_lowvar_cv_th
-	    && qc.active_epoch_n < qc_min_active_epochs;
-	  qc.flag_nearfloor = qc_exclude_nearfloor
-	    && qc.nearfloor_frac >= qc_nearfloor_frac_th
-	    && qc.active_epoch_n < qc_min_active_epochs;
+	  // Signal-quality tech flags are only meaningful when an activity
+	  // signal is present; skip them in prescored-no-signal mode so that
+	  // an all-zero epochs array does not spuriously exclude every day.
+	  if ( have_signal )
+	    {
+	      qc.flag_flat = qc_exclude_flat
+		&& qc.flat_frac >= qc_flat_frac_th;
+	      qc.flag_lowvar = qc_exclude_lowvar
+		&& lowvar_frac_flag
+		&& qc.lowvar_cv <= qc_lowvar_cv_th
+		&& qc.active_epoch_n < qc_min_active_epochs;
+	      qc.flag_nearfloor = qc_exclude_nearfloor
+		&& qc.nearfloor_frac >= qc_nearfloor_frac_th
+		&& qc.active_epoch_n < qc_min_active_epochs;
+	    }
 
 	  qc.tech_flag_n = ( qc.flag_flat ? 1 : 0 )
 	    + ( qc.flag_lowvar ? 1 : 0 )
@@ -1991,14 +2642,25 @@ void actig::actig( edf_t & edf , param_t & param )
 	    && qc.longest_sleep_bout_min >= qc_warn_longsleep_h * 60.0
 	    && qc.active_epoch_n < qc_min_active_epochs;
 
+	  // Extreme sleep/wake ratio flags (applied to included days only,
+	  // requires day_total_valid > 0 so sleep_pct is meaningful)
+	  if ( day_total_valid > 0 )
+	    {
+	      qc.flag_allsleep = qc_exclude_allsleep
+		&& ( day_sleep_pct / 100.0 ) >= qc_allsleep_th;
+	      qc.flag_allwake  = qc_exclude_allwake
+		&& ( day_sleep_pct / 100.0 ) <= ( 1.0 - qc_allwake_th );
+	    }
+	  qc.day_excluded_extreme = qc.flag_allsleep || qc.flag_allwake;
+
 	  qc.day_warn = qc.warn_highsleep || qc.warn_longsleep
 	    || qc.warn_lowwakeruns || qc.warn_implausible;
 	  qc.day_excluded_tech = qc.tech_flag_n >= 2;
 	}
 
-      qc.day_excluded = ( !included ) || qc.day_excluded_tech;
-      qc.day_warn = included && !qc.day_excluded_tech && qc.day_warn;
-      qc.day_ok = included && !qc.day_excluded_tech && !qc.day_warn;
+      qc.day_excluded = ( !included ) || qc.day_excluded_tech || qc.day_excluded_extreme;
+      qc.day_warn = included && !qc.day_excluded_tech && !qc.day_excluded_extreme && qc.day_warn;
+      qc.day_ok = included && !qc.day_excluded_tech && !qc.day_excluded_extreme && !qc.day_warn;
       day_qc[d] = qc;
 
       const int day_num = (int)d + 1;
@@ -2013,18 +2675,26 @@ void actig::actig( edf_t & edf , param_t & param )
 	  day_stop_sec = std::min( first_boundary_sec + d * 86400.0 , total_sec );
 	}
 
-      if ( qc.day_excluded && a_qc_excluded != NULL && day_stop_sec > day_start_sec )
+      if ( qc.day_excluded_tech && a_qc_excluded != NULL && day_stop_sec > day_start_sec )
 	a_qc_excluded->add( "." ,
 			    interval_t( Helper::sec2tp( day_start_sec ) ,
 					Helper::sec2tp( day_stop_sec ) ) ,
 			    "." );
 
+      if ( qc.day_excluded_extreme && a_qc_extreme != NULL && day_stop_sec > day_start_sec )
+	a_qc_extreme->add( "." ,
+			   interval_t( Helper::sec2tp( day_start_sec ) ,
+				       Helper::sec2tp( day_stop_sec ) ) ,
+			   "." );
+
       writer.level( day_num , "DAY" );
-      writer.value( "SCORE_TST_MIN"     , sleep_sec / 60.0 );
-      writer.value( "SCORE_TWT_MIN"    , wake_sec  / 60.0 );
-      writer.value( "SCORE_GAP_MIN"     , gap_min_day );
+      writer.value( "SCORE_TST"     , sleep_sec / 60.0 );
+      writer.value( "SCORE_TWT"     , wake_sec  / 60.0 );
+      writer.value( "SCORE_TST_SP"  , sleep_sec_sp / 60.0 );
+      writer.value( "SCORE_TWT_SP"  , wake_sec_sp  / 60.0 );
+      writer.value( "SCORE_TST_WP"  , sleep_sec_wp / 60.0 );
+      writer.value( "SCORE_TWT_WP"  , wake_sec_wp  / 60.0 );
       writer.value( "VALID_MIN"         , valid_min_day );
-      writer.value( "VALID_PCT"         , valid_pct_day );
       writer.value( "INCLUDED"          , included ? 1 : 0 );
       writer.value( "SCORE_EPOCH_N"     , day_epochs );
       writer.value( "SCORE_WAKE_EPOCH_N", day_wake_epochs );
@@ -2036,19 +2706,30 @@ void actig::actig( edf_t & edf , param_t & param )
       if ( day_has_sleep_window )
 	{
 	  writer.value( "FRAG_SFI"         , day_sfi_luna_h );
-	  writer.value( "FRAG_SFI_N"       , day_trans );
+	  writer.value( "FRAG_SFI_N"       , day_trans_win );
 	  writer.value( "FRAG_SFI_ACT"     , day_sfi_act );
-	  writer.value( "FRAG_MI_PCT"      , day_mi_pct );
-	  writer.value( "FRAG_IMM1_PCT"    , day_imm1_pct );
-	  writer.value( "FRAG_IMM_BOUT_N"  , day_imm_bout_n );
-	  writer.value( "FRAG_IMM1_BOUT_N" , day_imm1_bout_n );
-	  writer.value( "FRAG_WAKE_BOUT_N"       , day_frag_wake_bout_n );
-	  writer.value( "FRAG_WAKE_BOUT_MED_MIN" , day_frag_wake_bout_med );
-	  writer.value( "FRAG_WAKE_BOUT_P90_MIN" , day_frag_wake_bout_p90 );
-	  writer.value( "FRAG_WAKE_BOUT_MAX_MIN" , day_frag_wake_bout_max );
-	  writer.value( "FRAG_SLEEP_BOUT_MED_MIN", day_frag_sleep_bout_med );
-	  writer.value( "FRAG_SLEEP_BOUT_P10_MIN", day_frag_sleep_bout_p10 );
-	  writer.value( "FRAG_SLEEP_BOUT_MAX_MIN", day_frag_sleep_bout_max );
+	  writer.value( "FRAG_MI"          , day_mi_pct );
+	  writer.value( "FRAG_FI"          , day_imm1_pct );
+	  writer.value( "FRAG_WAKE_BOUT_N"   , day_frag_wake_bout_n );
+	  writer.value( "FRAG_WAKE_BOUT_MED" , day_frag_wake_bout_med );
+	  writer.value( "FRAG_WAKE_BOUT_P90" , day_frag_wake_bout_p90 );
+	  writer.value( "FRAG_WAKE_BOUT_MAX" , day_frag_wake_bout_max );
+	  writer.value( "FRAG_SLEEP_BOUT_MED", day_frag_sleep_bout_med );
+	  writer.value( "FRAG_SLEEP_BOUT_P10", day_frag_sleep_bout_p10 );
+	  writer.value( "FRAG_SLEEP_BOUT_MAX", day_frag_sleep_bout_max );
+	  writer.value( "FRAG_TRANS_ENT_S"       , day_trans_ent_S );
+	  writer.value( "FRAG_RL_ENT_SE_S"       , day_rl_ent_se_S );
+	  writer.value( "FRAG_RL_ENT_WE_S"       , day_rl_ent_we_S );
+	  writer.value( "FRAG_TP_SW_S"           , day_tp_sw_S );
+	  writer.value( "FRAG_TP_WS_S"           , day_tp_ws_S );
+	}
+      if ( day_has_wake_window )
+	{
+	  writer.value( "FRAG_TRANS_ENT_W" , day_trans_ent_W );
+	  writer.value( "FRAG_RL_ENT_SE_W" , day_rl_ent_se_W );
+	  writer.value( "FRAG_RL_ENT_WE_W" , day_rl_ent_we_W );
+	  writer.value( "FRAG_TP_SW_W"     , day_tp_sw_W );
+	  writer.value( "FRAG_TP_WS_W"     , day_tp_ws_W );
 	}
       if ( day_epochs > 0 )
 	{
@@ -2066,9 +2747,12 @@ void actig::actig( edf_t & edf , param_t & param )
 	  writer.value( "QC_ACT_P95"              , qc.act_p95 );
 	  writer.value( "QC_LONGEST_SLEEP_BOUT_MIN" , qc.longest_sleep_bout_min );
 	  writer.value( "QC_LONGEST_WAKE_BOUT_MIN"  , qc.longest_wake_bout_min );
-	  writer.value( "QC_FLAG_FLAT"            , qc.flag_flat       ? 1 : 0 );
-	  writer.value( "QC_FLAG_LOWVAR"          , qc.flag_lowvar     ? 1 : 0 );
-	  writer.value( "QC_FLAG_NEARFLOOR"       , qc.flag_nearfloor  ? 1 : 0 );
+	  writer.value( "QC_FLAG_FLAT"            , qc.flag_flat           ? 1 : 0 );
+	  writer.value( "QC_FLAG_LOWVAR"          , qc.flag_lowvar         ? 1 : 0 );
+	  writer.value( "QC_FLAG_NEARFLOOR"       , qc.flag_nearfloor      ? 1 : 0 );
+	  writer.value( "QC_FLAG_ALLSLEEP"        , qc.flag_allsleep       ? 1 : 0 );
+	  writer.value( "QC_FLAG_ALLWAKE"         , qc.flag_allwake        ? 1 : 0 );
+	  writer.value( "QC_DAY_EXCLUDED_EXTREME" , qc.day_excluded_extreme? 1 : 0 );
 	  writer.value( "QC_WARN_HIGHSLEEP"       , qc.warn_highsleep  ? 1 : 0 );
 	  writer.value( "QC_WARN_LONGSLEEP"       , qc.warn_longsleep  ? 1 : 0 );
 	  writer.value( "QC_WARN_LOWWAKERUNS"     , qc.warn_lowwakeruns ? 1 : 0 );
@@ -2084,6 +2768,8 @@ void actig::actig( edf_t & edf , param_t & param )
 	{
 	  sum_sleep_sec += sleep_sec;
 	  sum_wake_sec  += wake_sec;
+	  sum_sleep_sec_sp += sleep_sec_sp;  sum_wake_sec_sp += wake_sec_sp;
+	  sum_sleep_sec_wp += sleep_sec_wp;  sum_wake_sec_wp += wake_sec_wp;
 	  n_included_postqc_days++;
 	  n_qc_ok_days++;
 	}
@@ -2091,8 +2777,38 @@ void actig::actig( edf_t & edf , param_t & param )
 	{
 	  sum_sleep_sec += sleep_sec;
 	  sum_wake_sec  += wake_sec;
+	  sum_sleep_sec_sp += sleep_sec_sp;  sum_wake_sec_sp += wake_sec_sp;
+	  sum_sleep_sec_wp += sleep_sec_wp;  sum_wake_sec_wp += wake_sec_wp;
 	  n_included_postqc_days++;
 	  n_qc_warn_days++;
+	}
+      if ( ( qc.day_ok || qc.day_warn ) && day_has_sleep_window )
+	{
+	  sum_frag_sfi           += day_sfi_luna_h;
+	  sum_frag_mi_act        += day_mi_pct;
+	  sum_frag_fi_act        += day_imm1_pct;
+	  sum_frag_sfi_act       += day_sfi_act;
+	  sum_frag_wake_bout_med += day_frag_wake_bout_med;
+	  sum_frag_wake_bout_p90 += day_frag_wake_bout_p90;
+	  sum_frag_wake_bout_max += day_frag_wake_bout_max;
+	  sum_frag_sleep_bout_med+= day_frag_sleep_bout_med;
+	  sum_frag_sleep_bout_p10+= day_frag_sleep_bout_p10;
+	  sum_frag_sleep_bout_max+= day_frag_sleep_bout_max;
+	  sum_frag_trans_ent_S   += day_trans_ent_S;
+	  sum_frag_rl_ent_se_S   += day_rl_ent_se_S;
+	  sum_frag_rl_ent_we_S   += day_rl_ent_we_S;
+	  sum_frag_tp_sw_S       += day_tp_sw_S;
+	  sum_frag_tp_ws_S       += day_tp_ws_S;
+	  ++n_frag_dayavg;
+	}
+      if ( ( qc.day_ok || qc.day_warn ) && day_has_wake_window )
+	{
+	  sum_frag_trans_ent_W   += day_trans_ent_W;
+	  sum_frag_rl_ent_se_W   += day_rl_ent_se_W;
+	  sum_frag_rl_ent_we_W   += day_rl_ent_we_W;
+	  sum_frag_tp_sw_W       += day_tp_sw_W;
+	  sum_frag_tp_ws_W       += day_tp_ws_W;
+	  ++n_frag_W_dayavg;
 	}
       if ( qc.day_excluded ) n_qc_excluded_days++;
 
@@ -2107,13 +2823,14 @@ void actig::actig( edf_t & edf , param_t & param )
 	  if ( qc.warn_longsleep ) warn_names.push_back( "longsleep" );
 	  if ( qc.warn_lowwakeruns ) warn_names.push_back( "lowwakeruns" );
 	  if ( qc.warn_implausible ) warn_names.push_back( "possible_nonwear" );
-	  logger << "  day " << day_name
-		 << ": valid=" << valid_min_day << "m"
-		 << ", excluded=" << ( qc.day_excluded ? "yes" : "no" )
-		 << ", tech-flags=" << qc.tech_flag_n
-		 << " [" << join_flags( tech_names ) << "]"
-		 << ", warn=" << warn_names.size()
-		 << " [" << join_flags( warn_names ) << "]\n";
+	  if ( do_verbose )
+	    logger << "  day " << day_name
+		   << ": valid=" << valid_min_day << "m"
+		   << ", excluded=" << ( qc.day_excluded ? "yes" : "no" )
+		   << ", tech-flags=" << qc.tech_flag_n
+		   << " [" << join_flags( tech_names ) << "]"
+		   << ", warn=" << warn_names.size()
+		   << " [" << join_flags( warn_names ) << "]\n";
 	}
     }
 
@@ -2130,30 +2847,66 @@ void actig::actig( edf_t & edf , param_t & param )
       if ( n_included_postqc_days > 0 )
 	{
 	  const double total_scored_sec = sum_sleep_sec + sum_wake_sec;
-	  writer.value( "SCORE_TST_DAYAVG_MIN"   , ( sum_sleep_sec / n_included_postqc_days ) / 60.0 );
-	  writer.value( "SCORE_TWT_DAYAVG_MIN"  , ( sum_wake_sec  / n_included_postqc_days ) / 60.0 );
+	  const double n_pqc = (double)n_included_postqc_days;
+	  writer.value( "SCORE_TST_DAYAVG"      , ( sum_sleep_sec    / n_pqc ) / 60.0 );
+	  writer.value( "SCORE_TWT_DAYAVG"      , ( sum_wake_sec     / n_pqc ) / 60.0 );
+	  writer.value( "SCORE_TST_SP_DAYAVG"   , ( sum_sleep_sec_sp / n_pqc ) / 60.0 );
+	  writer.value( "SCORE_TWT_SP_DAYAVG"   , ( sum_wake_sec_sp  / n_pqc ) / 60.0 );
+	  writer.value( "SCORE_TST_WP_DAYAVG"   , ( sum_sleep_sec_wp / n_pqc ) / 60.0 );
+	  writer.value( "SCORE_TWT_WP_DAYAVG"   , ( sum_wake_sec_wp  / n_pqc ) / 60.0 );
 	  writer.value( "SCORE_SLEEP_PCT_DAYAVG" ,
 			total_scored_sec > 0
 			? 100.0 * sum_sleep_sec / total_scored_sec : 0.0 );
 	}
+      if ( n_frag_dayavg > 0 )
+	{
+	  const double n = (double)n_frag_dayavg;
+	  writer.value( "FRAG_SFI"            , sum_frag_sfi           / n );
+	  writer.value( "FRAG_MI"             , sum_frag_mi_act        / n );
+	  writer.value( "FRAG_FI"             , sum_frag_fi_act        / n );
+	  writer.value( "FRAG_SFI_ACT"        , sum_frag_sfi_act       / n );
+	  writer.value( "FRAG_WAKE_BOUT_MED"  , sum_frag_wake_bout_med / n );
+	  writer.value( "FRAG_WAKE_BOUT_P90"  , sum_frag_wake_bout_p90 / n );
+	  writer.value( "FRAG_WAKE_BOUT_MAX"  , sum_frag_wake_bout_max / n );
+	  writer.value( "FRAG_SLEEP_BOUT_MED" , sum_frag_sleep_bout_med/ n );
+	  writer.value( "FRAG_SLEEP_BOUT_P10" , sum_frag_sleep_bout_p10/ n );
+	  writer.value( "FRAG_SLEEP_BOUT_MAX" , sum_frag_sleep_bout_max/ n );
+	  writer.value( "FRAG_TRANS_ENT_S"    , sum_frag_trans_ent_S   / n );
+	  writer.value( "FRAG_RL_ENT_SE_S"   , sum_frag_rl_ent_se_S   / n );
+	  writer.value( "FRAG_RL_ENT_WE_S"   , sum_frag_rl_ent_we_S   / n );
+	  writer.value( "FRAG_TP_SW_S"       , sum_frag_tp_sw_S       / n );
+	  writer.value( "FRAG_TP_WS_S"       , sum_frag_tp_ws_S       / n );
+	  writer.value( "FRAG_N"              , n_frag_dayavg );
+	}
+      if ( n_frag_W_dayavg > 0 )
+	{
+	  const double nw = (double)n_frag_W_dayavg;
+	  writer.value( "FRAG_TRANS_ENT_W"    , sum_frag_trans_ent_W   / nw );
+	  writer.value( "FRAG_RL_ENT_SE_W"    , sum_frag_rl_ent_se_W   / nw );
+	  writer.value( "FRAG_RL_ENT_WE_W"    , sum_frag_rl_ent_we_W   / nw );
+	  writer.value( "FRAG_TP_SW_W"        , sum_frag_tp_sw_W       / nw );
+	  writer.value( "FRAG_TP_WS_W"        , sum_frag_tp_ws_W       / nw );
+	}
     }
 
-  if ( n_days > 0 )
-    logger << "  per-day output: " << n_days << " day(s), "
-	   << n_included_days << " included (>= "
-	   << day_min_valid_min << " valid min)"
-	   << ( startdatetime.valid ? "" : " [no valid start datetime; treating entire record as one day]" )
-	   << "\n";
-  if ( qc_day && n_days > 0 )
-    logger << "  per-day QC: " << n_days << " day(s), "
-	   << n_included_postqc_days << " included, "
-	   << n_qc_excluded_days << " excluded, "
-	   << n_qc_warn_days << " warning-only\n";
+  if ( do_verbose && n_days > 0 )
+    {
+      logger << "  per-day output: " << n_days << " day(s), "
+	     << n_included_days << " included (>= "
+	     << day_min_valid_min << " valid min)"
+	     << ( startdatetime.valid ? "" : " [no valid start datetime; treating entire record as one day]" )
+	     << "\n";
+      if ( qc_day )
+	logger << "  per-day QC: " << n_days << " day(s), "
+	       << n_included_postqc_days << " included, "
+	       << n_qc_excluded_days << " excluded, "
+	       << n_qc_warn_days << " warning-only\n";
+    }
 
   logger << "  scored " << n_epochs << " epoch bins: "
 	 << total_sleep << " sleep (" << total_sleep_min << " min), "
 	 << total_wake  << " wake ("  << total_wake_min  << " min), "
-	 << total_gap_epochs << " gap (" << total_gap_min << " min), "
+	 << n_gap_epochs << " gap (" << n_gap_epochs * epoch_sec / 60.0 << " min), "
 	 << sleep_pct << "% sleep (of valid)\n";
 
 
@@ -2611,6 +3364,8 @@ void actig::days( edf_t & edf , param_t & param )
   if ( anchor_hr < 0 || anchor_hr > 23 )
     Helper::halt( "DAYS anchor must be 0..23" );
 
+  const bool add_days = param.yesno( "days" , true , true );
+
   const std::string day_prefix = param.has( "prefix" ) ? param.value( "prefix" ) : "day";
 
   const bool add_hours = param.has( "hours" );
@@ -2618,6 +3373,38 @@ void actig::days( edf_t & edf , param_t & param )
   const std::string hr_prefix = param.has( "hour-prefix" ) ? param.value( "hour-prefix" ) : "";
 
   const bool add_halves = param.has( "halves" );
+
+  // Arbitrary bin duration
+  const bool add_bins = param.has( "bin" );
+  double bin_dur_sec = 3600.0;
+  std::string bin_prefix = "b";
+  int bin_ndigits = 2;
+
+  if ( add_bins )
+    {
+      std::string binval = param.value( "bin" );
+      double mult = 1.0; // default: seconds
+      if ( ! binval.empty() )
+	{
+	  char last = binval[ binval.size() - 1 ];
+	  if ( last == 's' || last == 'S' ) { mult = 1.0;    binval = binval.substr( 0, binval.size() - 1 ); }
+	  else if ( last == 'm' || last == 'M' ) { mult = 60.0;   binval = binval.substr( 0, binval.size() - 1 ); }
+	  else if ( last == 'h' || last == 'H' ) { mult = 3600.0; binval = binval.substr( 0, binval.size() - 1 ); }
+	}
+      double bval = 0;
+      if ( ! Helper::str2dbl( binval , &bval ) || bval <= 0 )
+	Helper::halt( "DAYS bin: invalid duration '" + param.value( "bin" ) + "'" );
+      bin_dur_sec = bval * mult;
+      if ( bin_dur_sec <= 0 || bin_dur_sec > 86400 )
+	Helper::halt( "DAYS bin duration must be > 0 and <= 86400 seconds" );
+
+      bin_prefix = param.has( "bin-prefix" ) ? param.value( "bin-prefix" ) : "b";
+      const int n_bins_per_day = (int)std::ceil( 86400.0 / bin_dur_sec );
+      bin_ndigits = n_bins_per_day > 999 ? 4 : ( n_bins_per_day > 99 ? 3 : 2 );
+    }
+
+  // Clock-window annotations
+  const bool add_windows = param.has( "window" );
   const bool add_weekend = param.has( "weekend" );
   const std::string weekend_label = param.has( "weekend-label" ) ? param.value( "weekend-label" ) : "WEEKEND";
 
@@ -2641,6 +3428,8 @@ void actig::days( edf_t & edf , param_t & param )
   //
 
   int day_num = 1;
+  int n_full_days = 0;
+  int n_partial_days = 0;
 
   double day_start_sec = 0;
   double day_stop_sec  = first_boundary_sec;
@@ -2667,11 +3456,13 @@ void actig::days( edf_t & edf , param_t & param )
       uint64_t tp_start = Helper::sec2tp( day_start_sec );
       uint64_t tp_stop  = Helper::sec2tp( day_stop_sec );
 
-      annot_t * a = edf.timeline.annotations->add( name );
-      a->description = name;
-      a->file = "DAYS";
-
-      a->add( "." , interval_t( tp_start , tp_stop ) , "." );
+      if ( add_days )
+	{
+	  annot_t * a = edf.timeline.annotations->add( name );
+	  a->description = name;
+	  a->file = "DAYS";
+	  a->add( "." , interval_t( tp_start , tp_stop ) , "." );
+	}
 
       clocktime_t ds = startdatetime;
       ds.advance_seconds( day_start_sec );
@@ -2699,9 +3490,11 @@ void actig::days( edf_t & edf , param_t & param )
 	  writer.value( "WEEKEND" , is_weekend ? 1 : 0 );
 	}
 
-      logger << "  " << name
-	     << " : " << day_start_sec << " - " << day_stop_sec
-	     << " sec (" << (day_stop_sec - day_start_sec) / 3600.0 << " hrs)\n";
+
+      if ( day_stop_sec - day_start_sec >= 86400.0 - 1.0 )
+	++n_full_days;
+      else
+	++n_partial_days;
 
       ++day_num;
       day_start_sec = day_stop_sec;
@@ -2714,10 +3507,14 @@ void actig::days( edf_t & edf , param_t & param )
   if ( verbose )
     writer.unlevel( "DAY" );
 
-  logger << "  DAYS: created " << (day_num - 1) << " day annotations";
-  if ( anchor_hr != 12 )
-    logger << " (anchor=" << anchor_hr << "h)";
-  logger << "\n";
+  if ( add_days )
+    {
+      logger << "  DAYS: created " << (n_full_days + n_partial_days) << " day annotations"
+	     << " (" << n_full_days << " full, " << n_partial_days << " partial)";
+      if ( anchor_hr != 12 )
+	logger << " (anchor=" << anchor_hr << "h)";
+      logger << "\n";
+    }
   if ( weekend_annot != NULL )
     logger << "  DAYS: created " << n_weekend_annots << " weekend annotations\n";
 
@@ -2819,6 +3616,165 @@ void actig::days( edf_t & edf , param_t & param )
 	}
 
       logger << "  DAYS: created " << n_half_annots << " AM/PM annotations\n";
+    }
+
+
+  //
+  // Arbitrary clock-time bin annotations
+  //
+
+  if ( add_bins )
+    {
+      int n_bin_annots = 0;
+      const int n_bins_per_day = (int)std::ceil( 86400.0 / bin_dur_sec );
+
+      // helper: seconds-past-midnight --> HHMMSS string (allows h=24 for end-of-day)
+      auto tod_hhmmss = []( double sec ) -> std::string {
+	int h = (int)( sec / 3600.0 );
+	int m = (int)( ( sec - h * 3600.0 ) / 60.0 );
+	int s = (int)( sec - h * 3600.0 - m * 60.0 );
+	return Helper::zero_pad( h , 2 ) + Helper::zero_pad( m , 2 ) + Helper::zero_pad( s , 2 );
+      };
+
+      for ( int b = 0; b < n_bins_per_day; b++ )
+	{
+	  // clock-time offset of bin b from midnight
+	  double bin_tod_sec = b * bin_dur_sec;
+	  double bin_end_tod = std::min( (b + 1) * bin_dur_sec , 86400.0 );
+
+	  const std::string name = bin_prefix
+	    + Helper::zero_pad( b , bin_ndigits )
+	    + "_" + tod_hhmmss( bin_tod_sec )
+	    + "_" + tod_hhmmss( bin_end_tod );
+
+	  annot_t * a = edf.timeline.annotations->add( name );
+	  a->description = name;
+	  a->file = "DAYS";
+
+	  double offset = bin_tod_sec - start_tod_sec;
+	  if ( offset < 0 ) offset += 86400.0;
+
+	  double b_start = offset;
+	  int inst = 1;
+
+	  while ( b_start < total_sec )
+	    {
+	      double b_stop = b_start + bin_dur_sec;
+	      if ( b_stop > total_sec ) b_stop = total_sec;
+
+	      if ( b_stop > b_start )
+		{
+		  a->add( Helper::int2str( inst ) ,
+			  interval_t( Helper::sec2tp( b_start ) ,
+				      Helper::sec2tp( b_stop ) ) ,
+			  "." );
+		  ++n_bin_annots;
+		  ++inst;
+		}
+
+	      b_start += 86400.0;
+	    }
+	}
+
+      logger << "  DAYS: created " << n_bin_annots << " bin annotations"
+	     << " (" << bin_dur_sec << "s bins, " << n_bins_per_day << " per day)\n";
+    }
+
+
+  //
+  // Arbitrary clock-window annotations (repeating each day)
+  //
+
+  if ( add_windows )
+    {
+      const std::vector<std::string> wspecs = param.strvector( "window" , "," );
+      int auto_label_idx = 1;
+
+      for ( int wi = 0; wi < (int)wspecs.size(); wi++ )
+	{
+	  const std::string & spec = wspecs[wi];
+	  std::string label;
+	  std::string timerange;
+
+	  // Format: label:HH:MM-HH:MM  or  HH:MM-HH:MM
+	  if ( ! spec.empty() && ! isdigit( (unsigned char)spec[0] ) )
+	    {
+	      // has a label prefix before the first ':'
+	      const size_t colon_pos = spec.find( ':' );
+	      if ( colon_pos == std::string::npos )
+		Helper::halt( "DAYS window: bad format '" + spec + "'; expected [label:]HH:MM-HH:MM" );
+	      label     = spec.substr( 0 , colon_pos );
+	      timerange = spec.substr( colon_pos + 1 );
+	    }
+	  else
+	    {
+	      label     = "W" + Helper::int2str( auto_label_idx++ );
+	      timerange = spec;
+	    }
+
+	  // Parse HH:MM-HH:MM  (find '-' after at least pos 3 to skip past first HH:MM)
+	  const size_t dash_pos = timerange.find( '-' , 3 );
+	  if ( dash_pos == std::string::npos )
+	    Helper::halt( "DAYS window: bad time range '" + timerange + "'; expected HH:MM-HH:MM" );
+
+	  const std::string start_str = timerange.substr( 0 , dash_pos );
+	  const std::string end_str   = timerange.substr( dash_pos + 1 );
+
+	  int sh = 0, sm = 0, eh = 0, em = 0;
+	  if ( sscanf( start_str.c_str() , "%d:%d" , &sh , &sm ) != 2 ||
+	       sscanf( end_str.c_str()   , "%d:%d" , &eh , &em ) != 2 )
+	    Helper::halt( "DAYS window: could not parse times in '" + spec + "'" );
+
+	  if ( sh < 0 || sh > 23 || sm < 0 || sm > 59 ||
+	       eh < 0 || eh > 23 || em < 0 || em > 59 )
+	    Helper::halt( "DAYS window: invalid time values in '" + spec + "'" );
+
+	  const double win_start_tod = sh * 3600.0 + sm * 60.0;
+	  const double win_end_tod   = eh * 3600.0 + em * 60.0;
+
+	  // duration; handle midnight-crossing windows
+	  double win_dur_sec;
+	  if ( win_end_tod > win_start_tod )
+	    win_dur_sec = win_end_tod - win_start_tod;
+	  else
+	    win_dur_sec = 86400.0 - win_start_tod + win_end_tod;
+
+	  if ( win_dur_sec <= 0 )
+	    Helper::halt( "DAYS window: zero-duration window in '" + spec + "'" );
+
+	  annot_t * a = edf.timeline.annotations->add( label );
+	  a->description = label;
+	  a->file = "DAYS";
+
+	  double offset = win_start_tod - start_tod_sec;
+	  if ( offset < 0 ) offset += 86400.0;
+
+	  double w_start = offset;
+	  int inst = 1;
+	  int n_this_window = 0;
+
+	  while ( w_start < total_sec )
+	    {
+	      double w_stop = w_start + win_dur_sec;
+	      if ( w_stop > total_sec ) w_stop = total_sec;
+
+	      if ( w_stop > w_start )
+		{
+		  a->add( Helper::int2str( inst ) ,
+			  interval_t( Helper::sec2tp( w_start ) ,
+				      Helper::sec2tp( w_stop ) ) ,
+			  "." );
+		  ++n_this_window;
+		  ++inst;
+		}
+
+	      w_start += 86400.0;
+	    }
+
+	  logger << "  DAYS: created " << n_this_window
+		 << " window annotations for '" << label << "' ("
+		 << start_str << "-" << end_str << ")\n";
+	}
     }
 
 }

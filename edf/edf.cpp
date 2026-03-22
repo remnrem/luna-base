@@ -2292,10 +2292,27 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   // (we have to check that all downstream functons will play nicely with an empty set being returned)
   //
   
-  if ( ! okay ) 
+  if ( ! okay )
     {
-      if ( ! globals::api_mode ) 
-	logger << " ** warning ... empty intervals returned (check intervals/sampling rates)\n";
+      if ( ! globals::api_mode )
+	{
+	  // give a more specific hint for sub-1 Hz signals: the epoch must span at least one sample
+	  const double sr = header.record_duration_tp > 0
+	    ? (double)n_samples_per_record * globals::tp_1sec / (double)header.record_duration_tp
+	    : 0.0;
+	  if ( sr > 0 && sr < 1.0 )
+	    {
+	      const double interval_sec = (double)(stop - start) / (double)globals::tp_1sec;
+	      logger << " ** warning ... empty interval for low-SR signal ("
+		     << sr << " Hz; sample period = " << (1.0/sr) << "s): "
+		     << "sampling rate must be >= 1/epoch_length"
+		     << ( interval_sec > 0 ? " (i.e. >= " + Helper::dbl2str( 1.0/interval_sec ) + " Hz for a "
+			  + Helper::dbl2str( interval_sec ) + "s epoch)" : "" )
+		     << "\n";
+	    }
+	  else
+	    logger << " ** warning ... empty intervals returned (check intervals/sampling rates)\n";
+	}
       return ret; // i.e. empty
     }
 

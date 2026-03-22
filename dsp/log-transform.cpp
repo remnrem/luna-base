@@ -25,9 +25,12 @@
 #include "param.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
+#include "miscmath/miscmath.h"
 
 #include "helper/helper.h"
 #include "helper/logger.h"
+
+#include <cmath>
 
 extern logger_t logger;
 
@@ -37,43 +40,60 @@ void dsptools::log_transform( edf_t & edf , param_t & param )
   //
   // get signals
   //
-  
+
   std::string signal_label = param.requires( "sig" );
   const bool no_annotations = true;
   signal_list_t signals = edf.header.signal_list( signal_label , no_annotations );
   const int ns = signals.size();
 
   //
-  // options
+  // options:
+  //  offset=<c>  fixed additive constant before log (e.g. offset=1 → log(x+1))
+  //  eps=<p>     data-driven offset: 0.1 × p-th percentile (default p=0.01, i.e. 1st pctile)
+  //              ignored if offset= is given
   //
 
-  const double eps_th = param.has( "eps" ) ? param.requires_dbl( "eps" ) : 0.01 ;  
+  const bool use_fixed_offset = param.has( "offset" );
+  double fixed_offset = 0;
 
-  if ( eps_th <= 0 || eps_th > 0.2 ) Helper::halt( "eps must be 0 < th <= 0.2" );
+  double eps_th = 0.01;
 
-  logger << "  using eps = 0.1 * " << eps_th << " percentile\n";
-  
-  //
-  // process data 
-  //
-
-  logger << "  log-transforming signals:";
-  
-  for (int s=0; s<ns; s++)
+  if ( use_fixed_offset )
     {
+      fixed_offset = param.requires_dbl( "offset" );
+      if ( fixed_offset < 0 )
+	Helper::halt( "LOG offset must be >= 0" );
+      logger << "  LOG: using fixed offset " << fixed_offset << " -> log(x + " << fixed_offset << ")\n";
+    }
+  else
+    {
+      eps_th = param.has( "eps" ) ? param.requires_dbl( "eps" ) : 0.01;
+      if ( eps_th <= 0 || eps_th > 0.2 )
+	Helper::halt( "LOG eps must be between 0 and 0.2 (as a proportion, e.g. 0.01 = 1st percentile)" );
+      logger << "  LOG: using data-driven offset = 0.1 x "
+	     << Helper::dbl2str( eps_th * 100.0 , 4 ) << "th percentile\n";
+    }
 
-      logger << " " << signals.label(s) ;
-      
+  //
+  // process signals
+  //
+
+  logger << "  LOG: transforming:";
+
+  for (int s = 0; s < ns; s++)
+    {
+      logger << " " << signals.label(s);
+
       slice_t slice( edf , signals(s) , edf.timeline.wholetrace() );
 
       std::vector<double> d = *slice.nonconst_pdata();
 
       const int n = d.size();
 
-      // check for negative
+      // clamp negatives to 0
       int neg_cnt = 0;
       double max_neg = 0;
-      for (int i=0; i<n; i++)
+      for (int i = 0; i < n; i++)
 	if ( d[i] < 0 )
 	  {
 	    if ( d[i] < max_neg ) max_neg = d[i];
@@ -82,25 +102,32 @@ void dsptools::log_transform( edf_t & edf , param_t & param )
 	  }
 
       if ( neg_cnt )
-	logger << "\n"
-	       << "  *** warning - " << neg_cnt 
-	       << " (of " << n << ") negative values found, clamping to 0.0\n"
-	       << "  ***         - minimum value = " << max_neg << "\n";
+	logger << "\n  *** warning - " << neg_cnt << " (of " << n
+	       << ") negative values clamped to 0; minimum was " << max_neg << "\n";
 
-      // get eps
-      double eps_val = 0.1 * MiscMath::percentile( d , eps_th );
-      if (!(eps_val > 0.0) || !std::isfinite(eps_val)) eps_val = 1e-12;
+      // determine offset
+      double offset;
+      if ( use_fixed_offset )
+	{
+	  offset = fixed_offset;
+	}
+      else
+	{
+	  offset = 0.1 * MiscMath::percentile( d , eps_th );
+	  if ( ! ( offset > 0.0 ) || ! std::isfinite( offset ) )
+	    {
+	      offset = 1e-12;
+	      logger << "\n  *** note: eps percentile was <= 0 or non-finite; using fallback offset = 1e-12\n";
+	    }
+	}
 
-      // do transform
-      for (int i=0; i<n; i++)
-	d[i] = log( d[i] + eps_val ) ;
-      
+      // apply log(x + offset)
+      for (int i = 0; i < n; i++)
+	d[i] = std::log( d[i] + offset );
+
       edf.update_signal( signals(s) , &d );
-      
     }
 
   logger << "\n";
-  
+
 }
-
-

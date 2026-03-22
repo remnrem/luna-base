@@ -2471,7 +2471,7 @@ void timeline_t::signal_means_by_annot( const param_t & param )
 
   if ( ns == 0 ) return;
   
-  const int Fs = edf->header.sampling_freq( signals(0) );
+  const double Fs = edf->header.sampling_freq( signals(0) );
   for (int s=1; s<ns; s++)
     if ( edf->header.sampling_freq( signals(s) ) != Fs )
       Helper::halt( "signals must have similar sampling rates" );

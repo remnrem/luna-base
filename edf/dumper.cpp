@@ -1611,11 +1611,18 @@ void edf_t::tabulate( param_t & param )
 
   std::vector<int> cnts_req;
   if ( param.has( "req" ) ) cnts_req = param.intvector( "req" );
-  
+
+  //
+  // Histogram binning: bin=N creates N uniformly-spaced bins
+  //
+
+  const int n_bins = param.has( "bin" ) ? param.requires_int( "bin" ) : 0 ;
+  if ( n_bins < 0 ) Helper::halt( "bin must be a positive integer" );
+
   //
   // Attach signals
   //
-  
+
   const bool no_annotations = true;
 
   signal_list_t signals = header.signal_list(  param.requires( "sig" ) , no_annotations );
@@ -1623,13 +1630,13 @@ void edf_t::tabulate( param_t & param )
   const int ns = signals.size();
 
   if ( ns == 0 ) return;
-  
+
   //
   // Numeric precision
   //
-  
+
   const bool use_prec = param.has( "prec" ) ;
-  const int prec = use_prec ? param.requires_int( "prec" ) : 0 ; 
+  const int prec = use_prec ? param.requires_int( "prec" ) : 0 ;
   if ( prec < 0 ) Helper::halt( "prec must be a positive integer" );
 
   
@@ -1638,87 +1645,173 @@ void edf_t::tabulate( param_t & param )
   //
 
   timeline.ensure_epoched();
-  
+
   for (int s=0; s<ns; s++)
     {
-      
-      timeline.first_epoch();
-      
+
       writer.level( signals.label(s) , globals::signal_strat );
-      
+
       std::map<double,int> cnts;
 
-      while ( 1 ) 
+      //
+      // For sub-1 Hz signals (sample interval > epoch duration), the
+      // per-epoch slice approach fails: interval2records() uses whole-
+      // sample-interval semantics and returns empty when the epoch is
+      // shorter than one sample period.  Instead iterate per-record.
+      //
+
+      const int nspr = header.n_samples[ signals(s) ];
+      const bool sub_epoch = nspr > 0 &&
+	( (double)header.record_duration / nspr > timeline.epoch_length() );
+
+      if ( sub_epoch )
 	{
-	  
-	  int epoch = timeline.next_epoch();      
-	  
+	  int r = timeline.first_record();
+	  while ( r != -1 )
+	    {
+	      if ( ! timeline.masked_record( r ) )
+		{
+		  const uint64_t rec_start = timeline.timepoint( r , 0 , nspr );
+		  const uint64_t rec_stop  = rec_start + header.record_duration_tp;
+		  std::vector<double> rdata = fixedrate_signal( rec_start , rec_stop ,
+							        signals(s) , 1 ,
+							        NULL , NULL , NULL , NULL );
+		  for (int i=0; i < (int)rdata.size(); i++)
+		    cnts[ rdata[i] ]++;
+		}
+	      r = timeline.next_record( r );
+	    }
+	}
+      else
+	{
+
+      timeline.first_epoch();
+
+      while ( 1 )
+	{
+
+	  int epoch = timeline.next_epoch();
+
 	  if ( epoch == -1 ) break;
-	  
+
 	  interval_t interval = timeline.epoch( epoch );
-	  
+
 	  slice_t slice( *this , signals(s) , interval );
-	  
+
 	  const std::vector<double> * d = slice.pdata();
-	  
-	  std::map<double,int> ecnts;	  
-	  
+
+	  std::map<double,int> ecnts;
+
 	  const int np = d->size();
-	  
+
 	  for (int i=0; i<np; i++)
 	    {
 	      ecnts[ (*d)[i] ]++;
 	      cnts[ (*d)[i] ]++;
 	    }
 
-	  
+
 	} // next epoch
+
+	} // end if sub_epoch / else
       
 
       //
       // output
       //
 
-      
-      // number of distinct values for this channel
-
-      writer.value( "NV" , (int)cnts.size() );
-
-      // if req=X,Y,Z given, then # of distinct values w/ at least
-      // this many obs
-      
-      if ( cnts_req.size() )
+      if ( n_bins > 0 && ! cnts.empty() )
 	{
-	  for (int i=0; i < cnts_req.size(); i++)
+
+	  //
+	  // Histogram mode: aggregate exact counts into N uniform bins
+	  //
+
+	  const double v_min = param.has( "min" ) ? param.requires_dbl( "min" ) : cnts.begin()->first;
+	  const double v_max = param.has( "max" ) ? param.requires_dbl( "max" ) : cnts.rbegin()->first;
+	  const double bin_width = ( v_min == v_max ) ? 1.0 : ( v_max - v_min ) / n_bins ;
+
+	  std::vector<int> bin_cnts( n_bins , 0 );
+
+	  std::map<double,int>::const_iterator ii = cnts.begin();
+	  while ( ii != cnts.end() )
 	    {
-	      writer.level( cnts_req[i] , "REQ" );
-	      
-	      int cnt = 0;
-	      std::map<double,int>::const_iterator ii = cnts.begin();
-	      while ( ii != cnts.end() )
-		{
-		  if (  ii->second >= cnts_req[i] ) ++cnt;
-		  ++ii;
-		}
-	      writer.value( "NV" , cnt );
+	      int b = ( v_min == v_max ) ? 0 :
+		(int)floor( ( ii->first - v_min ) / bin_width );
+	      if ( b < 0 ) b = 0;
+	      if ( b >= n_bins ) b = n_bins - 1;
+	      bin_cnts[ b ] += ii->second;
+	      ++ii;
 	    }
-	  writer.unlevel( "REQ" );
+
+	  // NV = number of non-empty bins
+	  int nv = 0;
+	  for (int b=0; b<n_bins; b++) if ( bin_cnts[b] > 0 ) ++nv;
+	  writer.value( "NV" , nv );
+
+	  // req: count bins with at least this many observations
+	  if ( cnts_req.size() )
+	    {
+	      for (int i=0; i < (int)cnts_req.size(); i++)
+		{
+		  writer.level( cnts_req[i] , "REQ" );
+		  int cnt = 0;
+		  for (int b=0; b<n_bins; b++) if ( bin_cnts[b] >= cnts_req[i] ) ++cnt;
+		  writer.value( "NV" , cnt );
+		}
+	      writer.unlevel( "REQ" );
+	    }
+
+	  // per-bin output: BIN = 1-based index, BLWR/BUPR = bounds, N = count
+	  for (int b=0; b<n_bins; b++)
+	    {
+	      writer.level( b+1 , "BIN" );
+	      writer.value( "BLWR" , v_min + b * bin_width );
+	      writer.value( "BUPR" , v_min + (b+1) * bin_width );
+	      writer.value( "N" , bin_cnts[b] );
+	    }
+	  writer.unlevel( "BIN" );
+
 	}
-
-
-      //
-      // Basic table
-      //
-      
-      std::map<double,int>::const_iterator ii = cnts.begin();
-      while ( ii != cnts.end() )
+      else
 	{
-	  writer.level( ii->first , "VALUE" );
-	  writer.value( "N" , ii->second );
-	  ++ii;
-	}
-      writer.unlevel( "VALUE" );
-      
+
+	  // number of distinct values for this channel
+	  writer.value( "NV" , (int)cnts.size() );
+
+	  // if req=X,Y,Z given, then # of distinct values w/ at least
+	  // this many obs
+
+	  if ( cnts_req.size() )
+	    {
+	      for (int i=0; i < (int)cnts_req.size(); i++)
+		{
+		  writer.level( cnts_req[i] , "REQ" );
+
+		  int cnt = 0;
+		  std::map<double,int>::const_iterator ii = cnts.begin();
+		  while ( ii != cnts.end() )
+		    {
+		      if ( ii->second >= cnts_req[i] ) ++cnt;
+		      ++ii;
+		    }
+		  writer.value( "NV" , cnt );
+		}
+	      writer.unlevel( "REQ" );
+	    }
+
+	  // basic table
+	  std::map<double,int>::const_iterator ii = cnts.begin();
+	  while ( ii != cnts.end() )
+	    {
+	      writer.level( ii->first , "VALUE" );
+	      writer.value( "N" , ii->second );
+	      ++ii;
+	    }
+	  writer.unlevel( "VALUE" );
+
+	} // end bin / no-bin output
+
       // next signal
       writer.unlevel( globals::signal_strat );
     }

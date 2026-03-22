@@ -1040,8 +1040,11 @@ void segsrv_t::set_empirical_phys_ranges( const std::string & ch , const T * dat
       return;
     }
   
-  // else percentiles
-  empirical_phys_ranges[ ch ] = std::pair<double,double>( stats.p5 , stats.p95 );
+  // else percentiles; if flat (p5==p95), fall back to true min/max
+  if ( stats.p5 == stats.p95 )
+    empirical_phys_ranges[ ch ] = std::pair<double,double>( stats.min_val, stats.max_val );
+  else
+    empirical_phys_ranges[ ch ] = std::pair<double,double>( stats.p5 , stats.p95 );
 
   //  std::cout << " setting " <<  stats.p5 << " " << stats.p95 << "\n";
 

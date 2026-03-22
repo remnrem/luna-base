@@ -606,17 +606,25 @@ void cmddefs_t::init()
 	    "It is mainly intended for discrete or quantized signals, where you want to know\n"
 	    "how many values occur and how often each value is observed." );
   add_param( "TABULATE" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
-  add_param( "TABULATE" , "req" , "1000", "Count distinct values w/ at least this many observations" );
+  add_param( "TABULATE" , "req" , "1000", "Count distinct values (or bins) w/ at least this many observations" );
   add_param( "TABULATE" , "prec" , "2" , "Round values to this number of decimal places before tabulation" );
+  add_param( "TABULATE" , "bin" , "100" , "Create N uniformly-spaced histogram bins instead of per-value counts; BIN = bin lower bound, BMAX = upper bound" );
+  add_param( "TABULATE" , "min" , "-1.0" , "Lower bound for histogram bins (default: data minimum)" );
+  add_param( "TABULATE" , "max" , "1.0" , "Upper bound for histogram bins (default: data maximum)" );
 
   add_table( "TABULATE" , "CH" , "Per-channel tabulation" );
-  add_var( "TABULATE" , "CH" , "NV" , "Number of discrete values observed for this channel" );
+  add_var( "TABULATE" , "CH" , "NV" , "Number of discrete values (or non-empty bins if bin=N) observed for this channel" );
 
   add_table( "TABULATE" , "CH,REQ" , "Per-channel required-count summaries" );
-  add_var( "TABULATE" , "CH,REQ" , "NV" , "Number of values observed at least REQ times" );
+  add_var( "TABULATE" , "CH,REQ" , "NV" , "Number of values (or bins) observed at least REQ times" );
 
-  add_table( "TABULATE" , "CH,VALUE" , "Per-channel/value tabulation statistics" );
+  add_table( "TABULATE" , "CH,VALUE" , "Per-channel/value tabulation statistics (default, without bin=N)" );
   add_var( "TABULATE" , "CH,VALUE" , "N" , "Number of sample points for this value/channel" );
+
+  add_table( "TABULATE" , "CH,BIN" , "Per-channel histogram bin tabulation (with bin=N); BIN is 1-based index" );
+  add_var( "TABULATE" , "CH,BIN" , "BLWR" , "Lower bound of this histogram bin" );
+  add_var( "TABULATE" , "CH,BIN" , "BUPR" , "Upper bound of this histogram bin" );
+  add_var( "TABULATE" , "CH,BIN" , "N" , "Number of sample points in this histogram bin" );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -1171,8 +1179,8 @@ void cmddefs_t::init()
   add_cmd( "actig" , "DAYS" , "Create day and clock-time annotations for multi-day recordings" );
   add_url( "DAYS" , "annotations/#days" );
   add_verb( "DAYS" ,
-	    "DAYS creates annotations marking calendar days and optionally hourly clock-time\n"
-	    "periods across the recording. Designed for multi-day recordings such as actigraphy.\n"
+	    "DAYS creates annotations marking calendar days and clock-time periods across\n"
+	    "the recording. Designed for multi-day recordings such as actigraphy.\n"
 	    "\n"
 	    "Day annotations (day01, day02, ...) span from the recording start to the first\n"
 	    "day boundary, then each subsequent 24-hour period. By default days start at\n"
@@ -1182,12 +1190,25 @@ void cmddefs_t::init()
 	    "the corresponding clock hour across all days. With halves, AM and PM annotations\n"
 	    "are created spanning midnight-to-noon and noon-to-midnight respectively.\n"
 	    "With weekend, each anchored day window that begins on Saturday or Sunday also\n"
-	    "receives a weekend annotation." );
+	    "receives a weekend annotation.\n"
+	    "\n"
+	    "With bin, arbitrary-duration clock-time bins are created (e.g. bin=15m gives\n"
+	    "96 bins b00..b95 per day cycle). Duration can be specified in seconds (s),\n"
+	    "minutes (m), or hours (h); default unit is seconds.\n"
+	    "\n"
+	    "With window, named clock-time intervals are created that repeat each day\n"
+	    "(e.g. window=evening:16:00-20:00). Multiple windows are comma-separated.\n"
+	    "Windows may cross midnight (e.g. window=night:22:00-06:00). If no label is\n"
+	    "given, windows are named W1, W2, etc." );
 
+  add_param( "DAYS" , "days" , "T" , "Whether to create day annotations (default: T); set days=F to suppress" );
   add_param( "DAYS" , "anchor" , "12" , "Hour (0-23) at which a new day begins (default: 12 = noon)" );
   add_param( "DAYS" , "prefix" , "day" , "Prefix for day annotation labels (default: day)" );
   add_param( "DAYS" , "hours" , "" , "Also create hourly annotations (00h, 01h, ..., 23h)" );
   add_param( "DAYS" , "hour-prefix" , "" , "Prefix for hourly annotation labels" );
+  add_param( "DAYS" , "bin" , "" , "Create clock-time bin annotations of given duration; suffix s/m/h for seconds/minutes/hours (e.g. 15m, 2h, 900s)" );
+  add_param( "DAYS" , "bin-prefix" , "b" , "Prefix for bin annotation labels (default: b)" );
+  add_param( "DAYS" , "window" , "" , "Create named clock-window annotations repeating each day; format: [label:]HH:MM-HH:MM, comma-separated for multiple" );
   add_param( "DAYS" , "halves" , "" , "Also create AM and PM annotations" );
   add_param( "DAYS" , "weekend" , "" , "Also create weekend annotations for anchored day windows starting on Saturday/Sunday" );
   add_param( "DAYS" , "weekend-label" , "WEEKEND" , "Label for weekend annotations (default: WEEKEND)" );
@@ -1206,7 +1227,7 @@ void cmddefs_t::init()
 	    "Gaps (non-wear, bad data) are handled automatically: run MASK and\n"
 	    "RE before ACTIG to mark bad intervals. Epochs with insufficient\n"
 	    "samples (< gap-min-pct of expected) are flagged as gaps and\n"
-	    "excluded from all calculations. Gap runs are annotated as ACTIG_G.\n"
+	    "excluded from all calculations. Gap runs are annotated as G (score) or GP (score-period).\n"
 	    "\n"
 	    "Nonparametric metrics (always computed):\n"
 	    "  IS   Interdaily stability (0=random, 1=perfectly regular)\n"
@@ -1227,48 +1248,66 @@ void cmddefs_t::init()
 	    "             epoch=60 and counts-per-minute activity signal.\n"
 	    "  threshold  Simple threshold on raw activity level.\n"
 	    "\n"
-	    "Fragmentation metrics (with score option, or existing S/W annotations):\n"
-	    "  SFI      Sleep fragmentation index: sleep->wake transitions per hour of sleep\n"
-	    "  SFI_ACT  Actigraphy-style FI = MI + IMM1;\n"
-	    "           MI = % wake epochs in sleep period,\n"
-	    "           IMM1 = % sleep bouts <= 1 epoch\n"
+	    "Fragmentation metrics (with score or prescored option):\n"
+	    "  SFI        Sleep fragmentation index: sleep->wake transitions per hour sleep\n"
+	    "  SFI_ACT    Actigraphy-style FI = MI_ACT + FI_ACT\n"
+	    "  MI_ACT     Movement index: % wake epochs within the sleep period\n"
+	    "  FI_ACT     Fragmentation index: % sleep bouts that are <=1 epoch\n"
+	    "  TP_SW_S/W  P(sleep->wake) within the sleep/wake period (Bayesian MLE)\n"
+	    "  TP_WS_S/W  P(wake->sleep) within the sleep/wake period (Bayesian MLE)\n"
+	    "  TRANS_ENT  Shannon conditional entropy H(X_t|X_{t-1}) (bits)\n"
+	    "  RL_ENT     Run-length entropy of bout-length distribution (bits)\n"
+	    "All fragmentation metrics are restricted to within the sleep period (SP)\n"
+	    "or wake period (WP). The period is defined by sleep-period/wake-period\n"
+	    "annotations if present; otherwise empirically as the first-to-last sleep\n"
+	    "epoch span for SP and its complement for WP.\n"
 	    "\n"
-	    "With prescored, ACTIG uses existing sleep/wake annotations instead\n"
-	    "of activity-based scoring. prescored with no value defaults to S,W;\n"
-	    "or specify prescored=sleep_label,wake_label.\n"
-	    "With score, ACTIG creates\n"
-	    "W (wake), S (sleep), and ACTIG_G (gap) annotations by default\n"
-	    "(override with wake= / sleep= / gap-out=). Outputs TST/TWT/GAP\n"
-	    "overall and per-day DAY strata.\n"
+	    "With prescored, ACTIG uses existing epoch annotations instead of\n"
+	    "activity-based scoring. Empty value defaults to S/W epoch labels;\n"
+	    "specify prescored=sleep-epoch-label,wake-epoch-label to override.\n"
+	    "sleep-period/wake-period annotations (default SP/WP) are used separately\n"
+	    "to define the sleep/wake windows for fragmentation.\n"
+	    "With score, ACTIG creates W (wake), S (sleep), and G (gap)\n"
+	    "annotations by default (override with wake= / sleep= / gap-out=).\n"
+	    "With score-period, ACTIG creates WP/SP period-window annotations only,\n"
+	    "suppressing all metric output. Coarser defaults produce contiguous blocks\n"
+	    "suitable for use as sleep-period/wake-period in a subsequent ACTIG score run.\n"
 	    "Per-day summaries include VALID_MIN, VALID_PCT, INCLUDED, and an\n"
 	    "optional day-level QC layer. INCLUDED remains coverage-only\n"
-	    "(valid minutes >= day-min-valid). Cross-day averages and debt\n"
-	    "windows use INCLUDED days that are not QC_DAY_EXCLUDED." );
+	    "(valid minutes >= day-min-valid). Cross-day averages use INCLUDED\n"
+	    "days that are not QC_DAY_EXCLUDED." );
 
-  add_param( "ACTIG" , "sig" , "Activity" , "Activity signal to analyze (required unless prescored)" );
+  add_param( "ACTIG" , "sig" , "Activity" , "Activity signal to analyze. Required for score and score-period modes. "
+	     "Omit (or leave as default sig=*) when using pre-existing S/W annotations (prescored or implicit prescored). "
+	     "If Luna injects sig=* as its default, ACTIG treats this as 'no signal specified'." );
   add_param( "ACTIG" , "epoch" , "60" , "Epoch length in seconds for binning (default: 60)" );
   add_param( "ACTIG" , "bin" , "60" , "NP metric bin size in minutes (default: 60)" );
   add_param( "ACTIG" , "np-full-days" , "T" , "Restrict NP metrics to complete 24 h recording days, dropping any trailing partial day (default: T)" );
   add_param( "ACTIG" , "sum" , "" , "Use sum (not mean) when binning epochs" );
   add_param( "ACTIG" , "l" , "5" , "Window size in hours for least-active metric (default: 5)" );
   add_param( "ACTIG" , "m" , "10" , "Window size in hours for most-active metric (default: 10)" );
-  add_param( "ACTIG" , "score" , "" , "Also perform wake/sleep scoring" );
-  add_param( "ACTIG" , "prescored" , "" , "Use existing annotations as sleep/wake instead of scoring. Empty => S,W; else sleep,wake labels." );
+  add_param( "ACTIG" , "score" , "" , "Perform wake/sleep scoring; writes S/W epoch annotations" );
+  add_param( "ACTIG" , "score-period" , "" , "Score and write SP/WP period-window annotations only; suppresses all metric output. Uses coarser defaults (smooth=30, min-sleep=60, max-gap=10, min-wake=20) suited for defining sleep/wake period windows." );
+  add_param( "ACTIG" , "prescored" , "" , "Use existing epoch annotations as sleep/wake instead of scoring. Empty => S,W (default epoch labels); else sleep-epoch,wake-epoch labels." );
+  add_param( "ACTIG" , "sleep-period" , "SP" , "Annotation label for sleep-period windows restricting fragmentation metrics (default: SP)" );
+  add_param( "ACTIG" , "wake-period"  , "WP" , "Annotation label for wake-period windows restricting fragmentation metrics (default: WP)" );
+  add_param( "ACTIG" , "tp-lambda" , "1.0" , "Bayesian smoothing λ for transition probability estimates; λ=1 is a uniform prior avoiding zero-count issues (default: 1.0)" );
   add_param( "ACTIG" , "method" , "luna" , "Scoring method: luna (default), cole, or threshold" );
   add_param( "ACTIG" , "thresh" , "" , "Activity threshold for threshold method (default: median of valid epochs)" );
+  add_param( "ACTIG" , "thresh-smooth" , "0" , "Threshold method: half-width in minutes of triangular smoothing window applied before threshold (0 = no smoothing)" );
   add_param( "ACTIG" , "cole-thresh" , "1.0" , "Wake/sleep cutoff for Cole-Kripke score (default: 1.0)" );
-  add_param( "ACTIG" , "smooth" , "10" , "Luna method: smoothing window in minutes (default: 10)" );
-  add_param( "ACTIG" , "burst" , "10" , "Luna method: burst-density window in minutes (default: 10)" );
+  add_param( "ACTIG" , "smooth" , "1/30" , "Luna method: smoothing window in minutes (default: 1 for score, 30 for score-period)" );
+  add_param( "ACTIG" , "burst" , "3/10" , "Luna method: burst-density window in minutes (default: 3 for score, 10 for score-period)" );
   add_param( "ACTIG" , "burst-z" , "0.5" , "Luna method: z-score threshold to count an epoch as a burst (default: 0.5)" );
   add_param( "ACTIG" , "quiet-z" , "-0.5" , "Luna method: smoothed z-score below which candidate sleep is triggered (default: -0.5)" );
   add_param( "ACTIG" , "active-frac" , "0.20" , "Luna method: max burst-density fraction allowed for candidate sleep (default: 0.20)" );
-  add_param( "ACTIG" , "min-sleep" , "15" , "Luna method: minimum sleep run duration in minutes (default: 15)" );
-  add_param( "ACTIG" , "max-gap" , "2" , "Luna method: max within-sleep non-sleep gap to fill in minutes (default: 2)" );
-  add_param( "ACTIG" , "min-wake" , "5" , "Luna method: consecutive wake minutes required to end a sleep bout (default: 5)" );
+  add_param( "ACTIG" , "min-sleep" , "5/60" , "Luna method: minimum sleep run duration in minutes (default: 5 for score, 60 for score-period); asymmetrically larger than min-wake to avoid quiet-rest-as-sleep artifact" );
+  add_param( "ACTIG" , "max-gap" , "1/10" , "Luna method: max within-sleep non-sleep gap to fill in minutes (default: 1 for score, 10 for score-period)" );
+  add_param( "ACTIG" , "min-wake" , "1/20" , "Luna method: consecutive wake minutes required to end a sleep bout (default: 1 for score, 20 for score-period); kept small to sensitively detect wake during sleep" );
   add_param( "ACTIG" , "channels" , "" , "Luna method: add diagnostic EDF channels (_Z, _L, _D, _CS, _SW) to the EDF" );
-  add_param( "ACTIG" , "wake" , "W" , "Label for wake annotations when score is used (default: W)" );
-  add_param( "ACTIG" , "sleep" , "S" , "Label for sleep annotations when score is used (default: S)" );
-  add_param( "ACTIG" , "gap-out" , "ACTIG_G" , "Label for gap annotations (default: ACTIG_G)" );
+  add_param( "ACTIG" , "wake" , "W/WP" , "Label for wake annotations (default: W for score, WP for score-period)" );
+  add_param( "ACTIG" , "sleep" , "S/SP" , "Label for sleep annotations (default: S for score, SP for score-period)" );
+  add_param( "ACTIG" , "gap-out" , "G/GP" , "Label for gap annotations (default: G for score, GP for score-period)" );
   add_param( "ACTIG" , "day-anchor" , "12" , "Hour (0-23) at which per-day boundaries occur (default: 12 = noon)" );
   add_param( "ACTIG" , "gap-min-pct" , "50" , "Min % of expected samples per epoch to be considered valid (default: 50)" );
   add_param( "ACTIG" , "day-min-valid" , "960" , "Min valid minutes per day for inclusion in cross-day averages (default: 960 = 16h)" );
@@ -1279,7 +1318,12 @@ void cmddefs_t::init()
   add_param( "ACTIG" , "qc-warn-implausible" , "T" , "Enable combined plausibility warning (default: T)" );
   add_param( "ACTIG" , "qc-warn-longsleep" , "T" , "Enable long-sleep warning (default: T)" );
   add_param( "ACTIG" , "qc-warn-highsleep" , "T" , "Enable high sleep-fraction warning (default: T)" );
-  add_param( "ACTIG" , "qc-exclude-out" , "ACTIG_QC_EXCLUDED" , "Annotation label for QC-excluded day windows; empty disables day-QC annotations" );
+  add_param( "ACTIG" , "qc-exclude-out" , "QC_EXCLUDED" , "Annotation label for signal-quality QC-excluded day windows; empty disables" );
+  add_param( "ACTIG" , "qc-exclude-allsleep" , "T" , "Exclude days where scored sleep fraction >= qc-allsleep-th (default: T)" );
+  add_param( "ACTIG" , "qc-exclude-allwake"  , "T" , "Exclude days where scored wake fraction >= qc-allwake-th (default: T)" );
+  add_param( "ACTIG" , "qc-allsleep-th" , "0.98" , "Sleep fraction threshold for all-sleep exclusion (default: 0.98)" );
+  add_param( "ACTIG" , "qc-allwake-th"  , "0.98" , "Wake fraction threshold for all-wake exclusion (default: 0.98)" );
+  add_param( "ACTIG" , "qc-extreme-out" , "QC_EXTREME" , "Annotation label for extreme sleep/wake ratio exclusions; empty disables" );
   add_param( "ACTIG" , "qc-flat-frac-th" , "0.80" , "Flatline flag threshold: fraction of adjacent valid epoch pairs with abs(delta) <= qc-flat-delta-th" );
   add_param( "ACTIG" , "qc-flat-delta-th" , "0.0" , "Flatline flag delta threshold on adjacent valid epochs" );
   add_param( "ACTIG" , "qc-lowvar-frac-th" , "0.80" , "Low-variability flag threshold on fraction of valid epochs in a rolling low-variability state" );
@@ -1298,6 +1342,16 @@ void cmddefs_t::init()
   add_param( "ACTIG" , "np-traditional" , "" ,
 	     "Revert to traditional 60-minute onset search step (integer-hour onsets, HH:00:00). "
 	     "Equivalent to np-step=60." );
+  add_param( "ACTIG" , "verbose" , "" ,
+	     "Print detailed diagnostic log output: settings, NP metric values, luna algorithm "
+	     "parameters, per-block diagnostics (luna diag), and per-day QC summaries. "
+	     "By default these are suppressed to keep log output clean." );
+  add_param( "ACTIG" , "investigate" , "" ,
+	     "Signal prescreen mode: print a diagnostic report of the signal distribution, "
+	     "zero-run structure, luna scoring simulation (expected z-score for zero epochs), "
+	     "day QC flag likelihood, and suggested scoring parameters. "
+	     "Exits after the report; no metrics or annotations are produced. "
+	     "Requires sig=<channel>." );
 
   add_table( "ACTIG" , "" , "Individual-level output" );
   add_var( "ACTIG" , "" , "NP_IS" , "Interdaily stability" );
@@ -1319,16 +1373,6 @@ void cmddefs_t::init()
   add_var( "ACTIG" , "" , "SCORE_TWT_MIN" , "Total wake time (minutes, valid epochs only)" );
   add_var( "ACTIG" , "" , "SCORE_GAP_MIN" , "Total gap time (minutes)" );
   add_var( "ACTIG" , "" , "SCORE_SLEEP_PCT" , "Sleep % of valid (non-gap) scored epochs" );
-  add_var( "ACTIG" , "" , "FRAG_SFI" , "Luna-style SFI: sleep->wake transitions per hour sleep" );
-  add_var( "ACTIG" , "" , "FRAG_SFI_N" , "Number of sleep->wake transitions" );
-  add_var( "ACTIG" , "" , "FRAG_SFI_ACT" , "Actigraphy FI: FRAG_MI_PCT + FRAG_IMM1_PCT" );
-  add_var( "ACTIG" , "" , "FRAG_MI_PCT" , "Movement index (% wake in sleep period, valid epochs only)" );
-  add_var( "ACTIG" , "" , "FRAG_IMM1_PCT" , "Immobility fragmentation (% sleep bouts <=1 minute)" );
-  add_var( "ACTIG" , "" , "FRAG_IMM_BOUT_N" , "Total sleep bout count in sleep period" );
-  add_var( "ACTIG" , "" , "FRAG_IMM1_BOUT_N" , "Sleep bout count <=1 minute in sleep period" );
-  add_var( "ACTIG" , "" , "SCORE_WAKE_RUN_N" , "Number of contiguous wake annotation runs" );
-  add_var( "ACTIG" , "" , "SCORE_SLEEP_RUN_N" , "Number of contiguous sleep annotation runs" );
-  add_var( "ACTIG" , "" , "SCORE_GAP_RUN_N" , "Number of contiguous gap annotation runs" );
   add_var( "ACTIG" , "" , "DAY_N" , "Total number of days" );
   add_var( "ACTIG" , "" , "DAY_N_INCLUDED" , "Days meeting day-min-valid threshold (coverage-only)" );
   add_var( "ACTIG" , "" , "DAY_N_EXCLUDED" , "Days below day-min-valid threshold (coverage-only)" );
@@ -1337,13 +1381,42 @@ void cmddefs_t::init()
   add_var( "ACTIG" , "" , "DAY_N_QC_WARN" , "Days included after QC but flagged with warnings" );
   add_var( "ACTIG" , "" , "DAY_N_INCLUDED_POSTQC" , "Days contributing to cross-day averages after coverage + QC filtering" );
   add_var( "ACTIG" , "" , "SCORE_TST_DAYAVG_MIN" , "Mean TST across post-QC included days (minutes)" );
-  add_var( "ACTIG" , "" , "SCORE_TWT_DAYAVG_MIN" , "Mean WASO across post-QC included days (minutes)" );
+  add_var( "ACTIG" , "" , "SCORE_TWT_DAYAVG_MIN" , "Mean TWT across post-QC included days (minutes)" );
+  add_var( "ACTIG" , "" , "SCORE_TST_SP_DAYAVG_MIN" , "Mean TST within SP (sleep period) window across post-QC included days (minutes)" );
+  add_var( "ACTIG" , "" , "SCORE_TWT_SP_DAYAVG_MIN" , "Mean TWT within SP (sleep period) window across post-QC included days (minutes)" );
+  add_var( "ACTIG" , "" , "SCORE_TST_WP_DAYAVG_MIN" , "Mean TST within WP (wake period) window across post-QC included days (minutes)" );
+  add_var( "ACTIG" , "" , "SCORE_TWT_WP_DAYAVG_MIN" , "Mean TWT within WP (wake period) window across post-QC included days (minutes)" );
   add_var( "ACTIG" , "" , "SCORE_SLEEP_PCT_DAYAVG" , "Mean sleep % across post-QC included days" );
+  add_var( "ACTIG" , "" , "FRAG_SFI"            , "Day-averaged SFI: sleep->wake transitions per hour sleep (within S period)" );
+  add_var( "ACTIG" , "" , "FRAG_MI_ACT"         , "Day-averaged movement index: % wake epochs within the sleep period" );
+  add_var( "ACTIG" , "" , "FRAG_FI_ACT"         , "Day-averaged fragmentation index: % sleep bouts <=1 epoch within S period" );
+  add_var( "ACTIG" , "" , "FRAG_SFI_ACT"        , "Day-averaged actigraphy FI: MI_ACT + FI_ACT" );
+  add_var( "ACTIG" , "" , "FRAG_WAKE_BOUT_MED_MIN" , "Day-averaged median wake bout duration within S period (minutes)" );
+  add_var( "ACTIG" , "" , "FRAG_WAKE_BOUT_P90_MIN" , "Day-averaged P90 wake bout duration within S period (minutes)" );
+  add_var( "ACTIG" , "" , "FRAG_WAKE_BOUT_MAX_MIN" , "Day-averaged maximum wake bout duration within S period (minutes)" );
+  add_var( "ACTIG" , "" , "FRAG_SLEEP_BOUT_MED_MIN" , "Day-averaged median sleep bout duration within S period (minutes)" );
+  add_var( "ACTIG" , "" , "FRAG_SLEEP_BOUT_P10_MIN" , "Day-averaged P10 sleep bout duration within S period (minutes)" );
+  add_var( "ACTIG" , "" , "FRAG_SLEEP_BOUT_MAX_MIN" , "Day-averaged maximum sleep bout duration within S period (minutes)" );
+  add_var( "ACTIG" , "" , "FRAG_TRANS_ENT_S"    , "Day-averaged conditional transition entropy H(X_t|X_{t-1}) within S period (bits)" );
+  add_var( "ACTIG" , "" , "FRAG_RL_ENT_SE_S"    , "Day-averaged run-length entropy of sleep bouts within S period (bits)" );
+  add_var( "ACTIG" , "" , "FRAG_RL_ENT_WE_S"    , "Day-averaged run-length entropy of wake bouts within S period (bits)" );
+  add_var( "ACTIG" , "" , "FRAG_TP_SW_S"        , "Day-averaged P(sleep->wake) within S period (Bayesian ML estimator)" );
+  add_var( "ACTIG" , "" , "FRAG_TP_WS_S"        , "Day-averaged P(wake->sleep) within S period (Bayesian ML estimator)" );
+  add_var( "ACTIG" , "" , "FRAG_N"              , "Number of days contributing to S-period fragmentation day-averages" );
+  add_var( "ACTIG" , "" , "FRAG_TRANS_ENT_W"    , "Day-averaged conditional transition entropy H(X_t|X_{t-1}) within W period (bits)" );
+  add_var( "ACTIG" , "" , "FRAG_RL_ENT_SE_W"    , "Day-averaged run-length entropy of sleep bouts within W period (bits)" );
+  add_var( "ACTIG" , "" , "FRAG_RL_ENT_WE_W"    , "Day-averaged run-length entropy of wake bouts within W period (bits)" );
+  add_var( "ACTIG" , "" , "FRAG_TP_SW_W"        , "Day-averaged P(sleep->wake) within W period (Bayesian ML estimator)" );
+  add_var( "ACTIG" , "" , "FRAG_TP_WS_W"        , "Day-averaged P(wake->sleep) within W period (Bayesian ML estimator)" );
 
   add_table( "ACTIG" , "DAY" , "Per-day output (day-anchor boundaries)" );
-  add_var( "ACTIG" , "DAY" , "SCORE_TST_MIN" , "Daily total sleep time (minutes)" );
-  add_var( "ACTIG" , "DAY" , "SCORE_TWT_MIN" , "Daily wake time (minutes)" );
-  add_var( "ACTIG" , "DAY" , "SCORE_GAP_MIN" , "Daily gap time (minutes)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_TST_MIN" , "Daily total sleep time (minutes, all epochs)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_TWT_MIN" , "Daily total wake time (minutes, all epochs)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_TST_SP_MIN" , "Daily TST within SP (sleep period) window (minutes)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_TWT_SP_MIN" , "Daily TWT within SP (sleep period) window (minutes)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_TST_WP_MIN" , "Daily TST within WP (wake period) window — nap sleep (minutes)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_TWT_WP_MIN" , "Daily TWT within WP (wake period) window (minutes)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_GAP_MIN" , "Daily within-record gap time (minutes); EDF+D holes excluded" );
   add_var( "ACTIG" , "DAY" , "VALID_MIN" , "Daily valid (non-gap) minutes" );
   add_var( "ACTIG" , "DAY" , "VALID_PCT" , "Daily valid % of total day duration" );
   add_var( "ACTIG" , "DAY" , "INCLUDED" , "1 if day meets day-min-valid threshold, 0 otherwise" );
@@ -1352,14 +1425,29 @@ void cmddefs_t::init()
   add_var( "ACTIG" , "DAY" , "QC_DAY_WARN" , "1 if day remains included but is flagged with warnings" );
   add_var( "ACTIG" , "DAY" , "QC_TECH_FLAG_N" , "Number of technical day-QC flags triggered" );
   add_var( "ACTIG" , "DAY" , "SCORE_SLEEP_PCT" , "Daily sleep % (of valid scored epochs)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_SFI" , "Daily sleep->wake transitions per hour sleep" );
-  add_var( "ACTIG" , "DAY" , "FRAG_SFI_N" , "Daily sleep->wake transition count" );
-  add_var( "ACTIG" , "DAY" , "FRAG_SFI_ACT" , "Daily actigraphy FI: MI_PCT + IMM1_PCT" );
-  add_var( "ACTIG" , "DAY" , "FRAG_MI_PCT" , "Daily movement index (% wake in sleep period)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_IMM1_PCT" , "Daily immobility fragmentation (% bouts <=1 min)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_IMM_BOUT_N" , "Daily sleep bout count in sleep period" );
-  add_var( "ACTIG" , "DAY" , "FRAG_IMM1_BOUT_N" , "Daily sleep bout count <=1 minute" );
-  add_var( "ACTIG" , "DAY" , "SCORE_EPOCH_N" , "Daily valid (non-gap) epoch count" );
+  add_var( "ACTIG" , "DAY" , "FRAG_SFI"            , "Daily SFI: sleep->wake transitions per hour sleep (within S period)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_SFI_N"          , "Daily sleep->wake transition count within S period" );
+  add_var( "ACTIG" , "DAY" , "FRAG_SFI_ACT"        , "Daily actigraphy FI: MI_ACT + FI_ACT" );
+  add_var( "ACTIG" , "DAY" , "FRAG_MI_ACT"         , "Daily movement index: % wake epochs within S period" );
+  add_var( "ACTIG" , "DAY" , "FRAG_FI_ACT"         , "Daily fragmentation index: % sleep bouts <=1 epoch within S period" );
+  add_var( "ACTIG" , "DAY" , "FRAG_WAKE_BOUT_N"    , "Daily wake bout count within S period" );
+  add_var( "ACTIG" , "DAY" , "FRAG_WAKE_BOUT_MED_MIN" , "Daily median wake bout duration within S period (minutes)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_WAKE_BOUT_P90_MIN" , "Daily P90 wake bout duration within S period (minutes)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_WAKE_BOUT_MAX_MIN" , "Daily maximum wake bout duration within S period (minutes)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_SLEEP_BOUT_MED_MIN" , "Daily median sleep bout duration within S period (minutes)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_SLEEP_BOUT_P10_MIN" , "Daily P10 sleep bout duration within S period (minutes)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_SLEEP_BOUT_MAX_MIN" , "Daily maximum sleep bout duration within S period (minutes)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_TRANS_ENT_S"   , "Daily conditional transition entropy H(X_t|X_{t-1}) within S period (bits)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_RL_ENT_SE_S"   , "Daily run-length entropy of sleep bouts within S period (bits)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_RL_ENT_WE_S"   , "Daily run-length entropy of wake bouts within S period (bits)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_TP_SW_S"       , "Daily P(sleep->wake) within S period (Bayesian ML estimator)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_TP_WS_S"       , "Daily P(wake->sleep) within S period (Bayesian ML estimator)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_TRANS_ENT_W"   , "Daily conditional transition entropy H(X_t|X_{t-1}) within W period (bits)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_RL_ENT_SE_W"   , "Daily run-length entropy of sleep bouts within W period (bits)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_RL_ENT_WE_W"   , "Daily run-length entropy of wake bouts within W period (bits)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_TP_SW_W"       , "Daily P(sleep->wake) within W period (Bayesian ML estimator)" );
+  add_var( "ACTIG" , "DAY" , "FRAG_TP_WS_W"       , "Daily P(wake->sleep) within W period (Bayesian ML estimator)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_EPOCH_N"      , "Daily valid (non-gap) epoch count" );
   add_var( "ACTIG" , "DAY" , "SCORE_WAKE_EPOCH_N" , "Daily wake epoch count" );
   add_var( "ACTIG" , "DAY" , "QC_FLAT_FRAC" , "Daily fraction of adjacent valid epoch pairs with minimal change" );
   add_var( "ACTIG" , "DAY" , "QC_LOWVAR_CV" , "Daily coefficient of variation of valid raw activity" );
@@ -1377,9 +1465,10 @@ void cmddefs_t::init()
   add_var( "ACTIG" , "DAY" , "QC_FLAG_FLAT" , "Daily technical flag: flatline-like activity" );
   add_var( "ACTIG" , "DAY" , "QC_FLAG_LOWVAR" , "Daily technical flag: collapsed variability and low active structure" );
   add_var( "ACTIG" , "DAY" , "QC_FLAG_NEARFLOOR" , "Daily technical flag: near-floor day with low active structure" );
-  add_var( "ACTIG" , "DAY" , "QC_WARN_HIGHSLEEP" , "Daily warning: high sleep fraction" );
-  add_var( "ACTIG" , "DAY" , "QC_WARN_LONGSLEEP" , "Daily warning: very long sleep bout" );
+  add_var( "ACTIG" , "DAY" , "QC_WARN_HIGHSLEEP"   , "Daily warning: high sleep fraction" );
+  add_var( "ACTIG" , "DAY" , "QC_WARN_LONGSLEEP"   , "Daily warning: very long sleep bout" );
   add_var( "ACTIG" , "DAY" , "QC_WARN_LOWWAKERUNS" , "Daily warning: too few wake runs" );
+  add_var( "ACTIG" , "DAY" , "QC_WARN_IMPLAUSIBLE" , "Daily warning: implausible combined sleep pattern (possible non-wear)" );
 
   add_param( "ACTIG" , "debt" , "" , "Compute local sleep debt relative to a target night" );
   add_param( "ACTIG" , "debt-target" , "" ,
@@ -2215,6 +2304,32 @@ void cmddefs_t::init()
   add_param( "SCALE" , "min-max" , "-100,100" , "Set a new min/max scale for the signal" );
   add_param( "SCALE" , "clip-min" , "-500" , "Clip values below this threshold" );
   add_param( "SCALE" , "clip-max" , "500" , "Clip values above this threshold" );
+
+  //
+  // LOG
+  //
+
+  add_cmd( "manip" , "LOG" , "Log-transform one or more signals" );
+  add_url( "LOG" , "manipulations/#log" );
+  add_verb( "LOG" ,
+	    "LOG applies a natural log transform to one or more signals: log(x + offset).\n"
+	    "\n"
+	    "Values below zero are clamped to 0 before the transform with a warning.\n"
+	    "\n"
+	    "The additive offset can be set in two ways:\n"
+	    "\n"
+	    " offset=<c>  use a fixed constant (e.g. offset=1 gives log(x+1), the standard\n"
+	    "             choice for count or activity data). Recommended for actigraphy.\n"
+	    "\n"
+	    " eps=<p>     data-driven: offset = 0.1 x the p-th percentile of the signal\n"
+	    "             (default p=0.01, i.e. 1st percentile). Suitable for spectral power\n"
+	    "             or other strictly positive data. Falls back to 1e-12 if the\n"
+	    "             percentile is zero or non-finite (e.g. when >p% of values are 0).\n"
+	    "\n"
+	    "offset= takes priority over eps= if both are given." );
+  add_param( "LOG" , "sig"    , "activity" , "Signals to transform" );
+  add_param( "LOG" , "offset" , "1"        , "Fixed additive constant before log (e.g. 1 for log(x+1))" );
+  add_param( "LOG" , "eps"    , "0.01"     , "Data-driven offset: 0.1 x this percentile of signal (ignored if offset= given)" );
 
   //
   // SHIFT
@@ -3403,7 +3518,8 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "" , "NREMC" , "Number of sleep cycles" );
   add_var( "HYPNO" , "" , "NREMC_MINS" , "Mean duration of each sleep cycle" );
 
-  add_var( "HYPNO" , "" , "SFI" , "Sleep Fragmentation Index" );
+  add_var( "HYPNO" , "" , "SFI"  , "Sleep Fragmentation Index: transitions to W per minute TST" );
+  add_var( "HYPNO" , "" , "SFI1" , "Sleep Fragmentation Index (N1-inclusive): transitions to W or N1 per minute TST" );
   add_var( "HYPNO" , "" , "TI_S" , "Sleep Transition Index" );
   add_var( "HYPNO" , "" , "TI_S3" , "Sleep Transition Index, 3-stage classification" );
   add_var( "HYPNO" , "" , "TI_RNR" , "Sleep Transition Index: REM-NREM only" );
