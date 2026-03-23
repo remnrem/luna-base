@@ -486,14 +486,14 @@ void MiscMath::hjorth( const std::vector<double> * data ,
     Helper::halt( "NULL given to hjorth()" );
   
   const int n = data->size();
-  if ( n < 2 ) 
+  if ( n < 3 )
     {
       *activity   = 0;
       *complexity = 0;
       *mobility   = 0;
       return;
     }
-  
+
   std::vector<double> dxV = diff( *data );
   std::vector<double> ddxV = diff( dxV );  
 

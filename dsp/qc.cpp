@@ -217,12 +217,12 @@ dsptools::qc_t::qc_t( edf_t & edf1 , param_t & param ) : edf(edf1)
   ecg_clip_prop      = param.has( "ecg-clip-prop" ) ? param.requires_dbl( "ecg-clip-prop" ) : 0.01 ;
 
   // HR / RR plausibility
-  ecg_hr_min         = param.has( "ecg-hr-min"    ) ? param.requires_dbl( "ecg-hr-min"    ) : 25.0 ;
-  ecg_hr_max         = param.has( "ecg-hr-max"    ) ? param.requires_dbl( "ecg-hr-max"    ) : 220.0;
-  ecg_rr_min_ms      = param.has( "ecg-rr-min"    ) ? param.requires_dbl( "ecg-rr-min"    ) : 300.0;
-  ecg_rr_max_ms      = param.has( "ecg-rr-max"    ) ? param.requires_dbl( "ecg-rr-max"    ) : 2000.0;
-  ecg_rr_flag_prop    = param.has( "ecg-rr-prop"   ) ? param.requires_dbl( "ecg-rr-prop"   ) : 0.20 ;
-  ecg_min_beats      = param.has( "ecg-min-beats" ) ? param.requires_int( "ecg-min-beats" ) : 5    ;
+  ecg_hr_min         = param.has( "ecg-hr-min"    ) ? param.requires_dbl( "ecg-hr-min"    ) : 40.0 ;
+  ecg_hr_max         = param.has( "ecg-hr-max"    ) ? param.requires_dbl( "ecg-hr-max"    ) : 140.0;
+  ecg_rr_min_ms      = param.has( "ecg-rr-min"    ) ? param.requires_dbl( "ecg-rr-min"    ) : 430.0;
+  ecg_rr_max_ms      = param.has( "ecg-rr-max"    ) ? param.requires_dbl( "ecg-rr-max"    ) : 1500.0;
+  ecg_rr_flag_prop   = param.has( "ecg-rr-prop"   ) ? param.requires_dbl( "ecg-rr-prop"   ) : 0.05 ;
+  ecg_min_beats      = param.has( "ecg-min-beats" ) ? param.requires_int( "ecg-min-beats" ) : 10   ;
 
   // line noise
   ecg_ln_bw          = param.has( "ecg-ln-bw"     ) ? param.requires_dbl( "ecg-ln-bw"     ) : 2.0  ;

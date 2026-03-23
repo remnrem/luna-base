@@ -23,6 +23,7 @@
 #include "dsp/ipc.h"
 
 #include <vector>
+#include <map>
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "param.h"
@@ -32,6 +33,101 @@
 
 extern writer_t writer;
 extern logger_t logger;
+
+namespace
+{
+
+ipc_stats_t average_ipc_stats( const std::vector<ipc_stats_t> & stats_in )
+{
+  ipc_stats_t out;
+  out.plv = out.mean_ipc = out.mean_ipc_weighted = out.frac_inphase = 0.0;
+
+  std::vector<double> phases;
+  int n_mean_ipc = 0, n_mean_ipc_weighted = 0, n_plv = 0, n_frac_inphase = 0;
+
+  for (int i=0; i<stats_in.size(); i++)
+    {
+      const ipc_stats_t & stat = stats_in[i];
+      out.n_total += stat.n_total;
+      out.n_used += stat.n_used;
+
+      if ( std::isfinite( stat.mean_ipc ) )
+        {
+          out.mean_ipc += stat.mean_ipc;
+          ++n_mean_ipc;
+        }
+      if ( std::isfinite( stat.mean_ipc_weighted ) )
+        {
+          out.mean_ipc_weighted += stat.mean_ipc_weighted;
+          ++n_mean_ipc_weighted;
+        }
+      if ( std::isfinite( stat.plv ) )
+        {
+          out.plv += stat.plv;
+          ++n_plv;
+        }
+      if ( std::isfinite( stat.frac_inphase ) )
+        {
+          out.frac_inphase += stat.frac_inphase;
+          ++n_frac_inphase;
+        }
+      if ( std::isfinite( stat.mean_phase ) ) phases.push_back( stat.mean_phase );
+    }
+
+  out.mean_ipc = n_mean_ipc ? out.mean_ipc / (double)n_mean_ipc : std::numeric_limits<double>::quiet_NaN();
+  out.mean_ipc_weighted = n_mean_ipc_weighted ? out.mean_ipc_weighted / (double)n_mean_ipc_weighted : std::numeric_limits<double>::quiet_NaN();
+  out.plv = n_plv ? out.plv / (double)n_plv : std::numeric_limits<double>::quiet_NaN();
+  out.frac_inphase = n_frac_inphase ? out.frac_inphase / (double)n_frac_inphase : std::numeric_limits<double>::quiet_NaN();
+  out.mean_phase = ipc_t::circular_mean( phases ).mean_phase;
+
+  return out;
+}
+
+void write_ipc_summary_row( const std::string & ch1 ,
+                            const std::string & ch2 ,
+                            const ipc_stats_t & stats ,
+                            const bool flip_phase = false )
+{
+  writer.level( ch1 , globals::signal1_strat );
+  writer.level( ch2 , globals::signal2_strat );
+  writer.value( "N_TOT" , (int)stats.n_total );
+  writer.value( "N_USED" , (int)stats.n_used );
+  writer.value( "IPC" , stats.mean_ipc );
+  writer.value( "WIPC" , stats.mean_ipc_weighted );
+  writer.value( "PLV" , stats.plv );
+  writer.value( "PHASE" , flip_phase && std::isfinite( stats.mean_phase ) ? -stats.mean_phase : stats.mean_phase );
+  writer.value( "P_INPHASE" , stats.frac_inphase );
+  writer.unlevel( globals::signal2_strat );
+  writer.unlevel( globals::signal1_strat );
+}
+
+void write_ipc_summary_values( const ipc_stats_t & stats ,
+                               const bool flip_phase = false )
+{
+  writer.value( "N_TOT" , (int)stats.n_total );
+  writer.value( "N_USED" , (int)stats.n_used );
+  writer.value( "IPC" , stats.mean_ipc );
+  writer.value( "WIPC" , stats.mean_ipc_weighted );
+  writer.value( "PLV" , stats.plv );
+  writer.value( "PHASE" , flip_phase && std::isfinite( stats.mean_phase ) ? -stats.mean_phase : stats.mean_phase );
+  writer.value( "P_INPHASE" , stats.frac_inphase );
+}
+
+void write_ipc_epoch_row( const std::string & ch1 ,
+                          const std::string & ch2 ,
+                          const int epoch ,
+                          const ipc_stats_t & stats ,
+                          const bool flip_phase = false )
+{
+  writer.epoch( epoch );
+  writer.level( ch1 , globals::signal1_strat );
+  writer.level( ch2 , globals::signal2_strat );
+  write_ipc_summary_values( stats , flip_phase );
+  writer.unlevel( globals::signal2_strat );
+  writer.unlevel( globals::signal1_strat );
+}
+
+}
 
 void dsptools::ipc( edf_t & edf , param_t & param )
 {
@@ -76,6 +172,7 @@ void dsptools::ipc( edf_t & edf , param_t & param )
   // check all signals have hilbert phase & amp ( sig_ht_mag and sig_ht_phase ) 
   //
 
+  std::vector<int> slots1_mag, slots1_phase;
   int sr = 0;
   for (int s=0; s<ns1; s++)
     {
@@ -84,10 +181,15 @@ void dsptools::ipc( edf_t & edf , param_t & param )
       if ( ! edf.header.has_signal( s_mag ) ) Helper::halt( "could not find " + s_mag );
       if ( ! edf.header.has_signal( s_phase ) ) Helper::halt( "could not find " + s_phase );
       int slot = edf.header.signal( s_mag );
+      int phase_slot = edf.header.signal( s_phase );
+      slots1_mag.push_back( slot );
+      slots1_phase.push_back( phase_slot );
       if ( sr == 0 )
 	sr = edf.header.sampling_freq( slot );
       else if (  edf.header.sampling_freq( slot ) != sr )
 	Helper::halt( "requires uniform sampling rate across signals" );      
+      else if (  edf.header.sampling_freq( phase_slot ) != sr )
+	Helper::halt( "requires uniform sampling rate across signals" );
     }
 
 
@@ -122,6 +224,30 @@ void dsptools::ipc( edf_t & edf , param_t & param )
   //
   
   ipc_param_t ipc_param;
+  if ( param.has( "no-weights" ) ) ipc_param.amplitude_weighting = false;
+  if ( param.has( "no-gate" ) ) ipc_param.gate_low_amp = false;
+  if ( param.has( "q" ) )
+    {
+      ipc_param.gate_use_quantile = true;
+      ipc_param.gate_quantile = param.requires_dbl( "q" );
+      if ( ipc_param.gate_quantile < 0.0 || ipc_param.gate_quantile > 1.0 )
+        Helper::halt( "q must be between 0 and 1" );
+    }
+  if ( param.has( "th" ) )
+    {
+      ipc_param.gate_use_quantile = false;
+      ipc_param.gate_abs = param.requires_dbl( "th" );
+    }
+  if ( param.has( "edge" ) )
+    {
+      ipc_param.edge_drop_sec = param.requires_dbl( "edge" );
+      if ( ipc_param.edge_drop_sec < 0.0 )
+        Helper::halt( "edge must be non-negative" );
+    }
+
+  const bool lag_output = param.has( "w" );
+  const bool epoch_output = param.has( "epoch" );
+  const int max_lag = lag_output ? (int)std::llround( param.requires_dbl( "w" ) * sr ) : 0;
 
   // channel(s) to add
   const bool add_channels = param.has( "add-channels" );
@@ -133,6 +259,68 @@ void dsptools::ipc( edf_t & edf , param_t & param )
   
   const std::string ch_prefix = param.has( "prefix" ) ?
     param.value( "prefix" ) : "IPC_" ; 
+
+  const bool use_existing_epochs = epoch_output && edf.timeline.epoched();
+  const int ne = epoch_output ? edf.timeline.first_epoch()
+                              : edf.timeline.calc_epochs_contig();
+  logger << "  IPC settings: weights="
+         << ( ipc_param.amplitude_weighting ? "T" : "F" )
+         << ", gate=" << ( ipc_param.gate_low_amp ? "T" : "F" );
+  if ( ipc_param.gate_low_amp )
+    logger << ", gate-mode=" << ( ipc_param.gate_use_quantile ? "quantile" : "absolute" )
+           << ", gate-th=" << ( ipc_param.gate_use_quantile ? ipc_param.gate_quantile : ipc_param.gate_abs );
+  logger << ", edge=" << ipc_param.edge_drop_sec << "s\n";
+  logger << "  iterating over " << ne << " "
+         << ( epoch_output ? ( use_existing_epochs ? "existing" : "default" )
+                           : "contig-based" )
+         << " epochs\n";
+
+  if ( all_by_all && ! lag_output && ! add_channels )
+    {
+      std::vector<std::vector<std::vector<ipc_stats_t> > > pair_stats(
+        ns1 , std::vector<std::vector<ipc_stats_t> >( ns1 ) );
+
+      while ( 1 )
+        {
+          int epoch = edf.timeline.next_epoch();
+          if ( epoch == -1 ) break;
+          interval_t interval = edf.timeline.epoch( epoch );
+          const int display_epoch = edf.timeline.display_epoch( epoch );
+
+          std::vector<ipc_phaseamp_t> dat( ns1 );
+          for (int s=0; s<ns1; s++)
+            {
+              slice_t slice_mag( edf , slots1_mag[s] , interval );
+              slice_t slice_phase( edf , slots1_phase[s] , interval );
+              dat[s].amp = *slice_mag.nonconst_pdata();
+              dat[s].phase = *slice_phase.nonconst_pdata();
+            }
+
+          for (int s=0; s<ns1; s++)
+            for (int s2=s+1; s2<ns1; s2++)
+              {
+                ipc_stats_t stats = ipc_t::compute_ipc( dat[s] , dat[s2] , sr , ipc_param , false ).summary;
+                pair_stats[s][s2].push_back( stats );
+                if ( epoch_output )
+                  {
+                    write_ipc_epoch_row( signals1.label(s) , signals1.label(s2) , display_epoch , stats , false );
+                    write_ipc_epoch_row( signals1.label(s2) , signals1.label(s) , display_epoch , stats , true );
+                  }
+              }
+        }
+
+      if ( epoch_output ) writer.unepoch();
+
+      for (int s=0; s<ns1; s++)
+        for (int s2=s+1; s2<ns1; s2++)
+          {
+            ipc_stats_t stats = average_ipc_stats( pair_stats[s][s2] );
+            write_ipc_summary_row( signals1.label(s) , signals1.label(s2) , stats , false );
+            write_ipc_summary_row( signals1.label(s2) , signals1.label(s) , stats , true );
+          }
+
+      return;
+    }
   
   //
   // for each seed signal
@@ -151,14 +339,11 @@ void dsptools::ipc( edf_t & edf , param_t & param )
 
       const int seed_mag   = edf.header.signal( s_mag );
       const int seed_phase = edf.header.signal( s_phase );
-            
-      const int ne = edf.timeline.calc_epochs_contig();
-      logger << "  iterating over " << ne << " contig-based epochs\n";
       
       // track results (over epochs)
       std::vector<ipc_batch_result_t> results;
-      
-      edf.timeline.first_epoch();
+      std::vector<int> epoch_display;
+      std::map<int,std::map<int,std::map<int,std::vector<ipc_stats_t> > > > lagged_results;
 
       // iterate over epochs      
       while ( 1 ) 
@@ -167,6 +352,7 @@ void dsptools::ipc( edf_t & edf , param_t & param )
 	  int epoch = edf.timeline.next_epoch();
 	  if ( epoch == -1 ) break;	  
 	  interval_t interval = edf.timeline.epoch( epoch );
+          epoch_display.push_back( edf.timeline.display_epoch( epoch ) );
 	  
 	  // seed channel
 	  slice_t slice_seed_mag( edf , seed_mag , interval );
@@ -202,6 +388,18 @@ void dsptools::ipc( edf_t & edf , param_t & param )
 								ipc_param , ctype );
 	  
 	  results.push_back( res );
+
+          if ( lag_output )
+            {
+              for (int i=1; i<=ns2; i++)
+                {
+                  if ( all_by_all && signals1.label(s) == signals2.label(i-1) ) continue;
+                  ipc_lag_output_t lagged = ipc.compute_ipc_lagged( dat[0] , dat[i] , sr ,
+                                                                    ipc_param , max_lag );
+                  for (int li=0; li<lagged.rows.size(); li++)
+                    lagged_results[0][i][ lagged.rows[li].lag ].push_back( lagged.rows[li].summary );
+                }
+            }
 	  
 	  // next epoch
 	}
@@ -212,6 +410,8 @@ void dsptools::ipc( edf_t & edf , param_t & param )
       // summarize output, iterating over pairs of channels
       //
       
+      if ( epoch_output ) writer.unepoch();
+
       writer.level( signals1.label(s) , globals::signal1_strat );	  
       
       const std::vector<ipc_pair_summary_row_t> & p = results[0].summaries;
@@ -230,47 +430,49 @@ void dsptools::ipc( edf_t & edf , param_t & param )
 	  writer.level( signals2.label( tgt_idx - 1 ) , globals::signal2_strat );
 	  
 	  // get average over epochs
-	  ipc_stats_t stats;
-	  stats.plv = stats.mean_ipc = stats.mean_ipc_weighted = stats.frac_inphase = 0.0;
-	  std::vector<double> phases;
+	  std::vector<ipc_stats_t> epoch_stats;
 	  const int n1 = results.size();
+          epoch_stats.reserve( n1 );
 
 	  for (int i=0; i < n1; i++)
-	    {
-	      ipc_stats_t & stat1 = results[i].summaries[j].summary;
-	      stats.n_total += stat1.n_total;
-	      stats.n_used += stat1.n_used;
-	      stats.mean_ipc += stat1.mean_ipc;
-	      stats.mean_ipc_weighted += stat1.mean_ipc_weighted;
-	      stats.plv += stat1.plv;
-	      stats.frac_inphase += stat1.frac_inphase;
-	      phases.push_back( stat1.mean_phase );
-	    }
+	    epoch_stats.push_back( results[i].summaries[j].summary );
 
-	  // means
-	  stats.mean_ipc /= (double)n1;
-	  stats.mean_ipc_weighted /= (double)n1;
-	  stats.plv /= (double)n1;	  
-	  stats.frac_inphase /= (double)n1;
+          if ( epoch_output )
+            for (int i=0; i < n1; i++)
+              write_ipc_epoch_row( signals1.label(s) ,
+                                   signals2.label( tgt_idx - 1 ) ,
+                                   epoch_display[i] ,
+                                   results[i].summaries[j].summary );
 
-	  // special case: circular mean for phases
-	  ipc_t::circ_stats_t cs = ipc_t::circular_mean( phases );
-	  stats.mean_phase = cs.mean_phase;
+          ipc_stats_t stats = average_ipc_stats( epoch_stats );
+          write_ipc_summary_values( stats );
 
-	  // n.b. circ_stats_t::R not that meaningful if only averaging over a small number
-	  // of epochs
+          if ( lag_output )
+            {
+              std::map<int,std::vector<ipc_stats_t> > & lag_profiles = lagged_results[seed_idx][tgt_idx];
+              std::map<int,std::vector<ipc_stats_t> >::iterator ll = lag_profiles.begin();
+              while ( ll != lag_profiles.end() )
+                {
+                  ipc_stats_t lag_stat = average_ipc_stats( ll->second );
+                  writer.level( ll->first , "D" );
+                  writer.value( "T" , ll->first / (double)sr );
+                  writer.value( "N_TOT" , (int)lag_stat.n_total );
+                  writer.value( "N_USED" , (int)lag_stat.n_used );
+                  writer.value( "IPC" , lag_stat.mean_ipc );
+                  writer.value( "WIPC" , lag_stat.mean_ipc_weighted );
+                  writer.value( "PLV" , lag_stat.plv );
+                  writer.value( "PHASE" , lag_stat.mean_phase );
+                  writer.value( "P_INPHASE" , lag_stat.frac_inphase );
+                  writer.unlevel( "D" );
+                  ++ll;
+                }
+            }
 
-	  writer.value( "N_TOT" , (int)stats.n_total );
-	  writer.value( "N_USED" , (int)stats.n_used );
-	  writer.value( "IPC" , stats.mean_ipc );
-	  writer.value( "WIPC" , stats.mean_ipc_weighted );
-	  writer.value( "PLV" , stats.plv );
-	  writer.value( "PHASE" , cs.mean_phase );
-	  writer.value( "P_INPHASE" , stats.frac_inphase );
+          writer.unlevel( globals::signal2_strat );
 	  
 	}
 
-      writer.unlevel( globals::signal2_strat );
+      writer.unlevel( globals::signal1_strat );
       
       
       //
@@ -457,6 +659,50 @@ ipc_output_t ipc_t::compute_ipc(const ipc_phaseamp_t & seed ,
     }
   }
   
+  return out;
+}
+
+ipc_lag_output_t ipc_t::compute_ipc_lagged(const ipc_phaseamp_t & seed,
+					   const ipc_phaseamp_t & tgt,
+					   double sr,
+					   const ipc_param_t & P,
+					   int max_lag)
+{
+  ipc_lag_output_t out;
+
+  const size_t N = seed.amp.size();
+  if ( N == 0 || tgt.amp.size() != N || seed.phase.size() != N || tgt.phase.size() != N )
+    return out;
+
+  if ( max_lag < 0 ) max_lag = -max_lag;
+
+  for ( int lag = -max_lag ; lag <= max_lag ; ++lag )
+    {
+      const size_t seed_start = lag < 0 ? 0 : (size_t)lag;
+      const size_t tgt_start = lag < 0 ? (size_t)(-lag) : 0;
+      const size_t offset = seed_start > tgt_start ? seed_start : tgt_start;
+      const size_t span = N > offset ? N - offset : 0;
+
+      ipc_lag_row_t row;
+      row.lag = lag;
+
+      if ( span == 0 )
+        {
+          out.rows.push_back( row );
+          continue;
+        }
+
+      ipc_phaseamp_t seed_shifted;
+      ipc_phaseamp_t tgt_shifted;
+      seed_shifted.phase.assign( seed.phase.begin() + seed_start , seed.phase.begin() + seed_start + span );
+      seed_shifted.amp.assign( seed.amp.begin() + seed_start , seed.amp.begin() + seed_start + span );
+      tgt_shifted.phase.assign( tgt.phase.begin() + tgt_start , tgt.phase.begin() + tgt_start + span );
+      tgt_shifted.amp.assign( tgt.amp.begin() + tgt_start , tgt.amp.begin() + tgt_start + span );
+
+      row.summary = compute_ipc( seed_shifted , tgt_shifted , sr , P , false ).summary;
+      out.rows.push_back( row );
+    }
+
   return out;
 }
 

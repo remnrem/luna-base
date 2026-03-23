@@ -5867,14 +5867,31 @@ void cmddefs_t::init()
 	    "value, mean phase offset, and the fraction of samples that are\n"
 	    "in phase.\n"
 	    "\n"
-	    "Unlike TSYNC, IPC does not scan over lags: it summarizes coupling\n"
-	    "at the observed alignment of the two signals. Unlike SYNC, it is\n"
+	    "The default IPC/WIPC/PLV summaries describe coupling at the\n"
+	    "observed sample-to-sample alignment only. In particular, WIPC\n"
+	    "and PHASE reflect zero-lag coupling and phase offset, not an\n"
+	    "estimated time delay between signals.\n"
+	    "\n"
+	    "Optionally, IPC can also scan over lags and report the same\n"
+	    "phase-coupling summaries as a delay profile. Unlike SYNC, it is\n"
 	    "a pairwise measure rather than a global synchrony index across\n"
-	    "many channels." );
+	    "many channels.\n"
+            "\n"
+            "By default IPC summarizes over contig-based segments. Adding\n"
+            "`epoch` requests per-epoch output; in that mode IPC respects any\n"
+            "current epoching, or falls back to the default epoching if none\n"
+            "has been set." );
 
   add_param( "IPC" , "sig" , "C3,C4,F3,F4" , "Optionally specify channels (defaults to all)" );
   add_param( "IPC" , "sig1" , "C3" , "Alternatively specify seed channels" );
   add_param( "IPC" , "sig2" , "C4,F3,F4" , "Alternatively specify non-seed channels" );
+  add_param( "IPC" , "epoch" , "" , "Emit per-epoch IPC output and respect current epoching" );
+  add_param( "IPC" , "w" , "0.25" , "Optional half-window in seconds for lag-resolved IPC outputs" );
+  add_param( "IPC" , "no-weights" , "" , "Disable amplitude weighting" );
+  add_param( "IPC" , "no-gate" , "" , "Disable low-amplitude gating" );
+  add_param( "IPC" , "q" , "0.30" , "Quantile for low-amplitude gating (default: discard bottom 30%)" );
+  add_param( "IPC" , "th" , "0" , "Absolute low-amplitude gating threshold (overrides q)" );
+  add_param( "IPC" , "edge" , "0" , "Drop this many seconds from each epoch edge before summarizing" );
 
   add_param( "IPC" , "add-channels" , "" , "Add channels (default pairwise, unless set to = 'seed'" );
   add_param( "IPC" , "prefix" , "" , "Label for new channels, defaults to IPC_" );
@@ -5887,6 +5904,25 @@ void cmddefs_t::init()
   add_var( "IPC" , "CH1,CH2" , "PLV" , "Phase-locking value" );
   add_var( "IPC" , "CH1,CH2" , "PHASE" , "Circular mean phase difference" );
   add_var( "IPC" , "CH1,CH2" , "P_INPHASE" , "Fraction of samples with positive phase coherence" );
+
+  add_table( "IPC" , "CH1,CH2,E" , "Per-epoch IPC output" );
+  add_var( "IPC" , "CH1,CH2,E" , "N_TOT" , "Total number of sample points considered in this epoch" );
+  add_var( "IPC" , "CH1,CH2,E" , "N_USED" , "Number of valid sample points used in this epoch" );
+  add_var( "IPC" , "CH1,CH2,E" , "IPC" , "Mean signed instantaneous phase coherence in this epoch" );
+  add_var( "IPC" , "CH1,CH2,E" , "WIPC" , "Weighted mean instantaneous phase coherence in this epoch" );
+  add_var( "IPC" , "CH1,CH2,E" , "PLV" , "Phase-locking value in this epoch" );
+  add_var( "IPC" , "CH1,CH2,E" , "PHASE" , "Circular mean phase difference in this epoch" );
+  add_var( "IPC" , "CH1,CH2,E" , "P_INPHASE" , "Fraction of samples with positive phase coherence in this epoch" );
+
+  add_table( "IPC" , "CH1,CH2,D" , "Lag-resolved IPC output" );
+  add_var( "IPC" , "CH1,CH2,D" , "T" , "Lag time (seconds)" );
+  add_var( "IPC" , "CH1,CH2,D" , "N_TOT" , "Total number of sample points considered at this lag" );
+  add_var( "IPC" , "CH1,CH2,D" , "N_USED" , "Number of valid sample points used at this lag" );
+  add_var( "IPC" , "CH1,CH2,D" , "IPC" , "Mean signed instantaneous phase coherence at this lag" );
+  add_var( "IPC" , "CH1,CH2,D" , "WIPC" , "Weighted mean instantaneous phase coherence at this lag" );
+  add_var( "IPC" , "CH1,CH2,D" , "PLV" , "Phase-locking value at this lag" );
+  add_var( "IPC" , "CH1,CH2,D" , "PHASE" , "Circular mean phase difference at this lag" );
+  add_var( "IPC" , "CH1,CH2,D" , "P_INPHASE" , "Fraction of samples in phase at this lag" );
 
   //
   // CC

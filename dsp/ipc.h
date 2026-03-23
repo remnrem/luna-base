@@ -106,6 +106,15 @@ struct ipc_output_t {
   ipc_stats_t summary;
 };
 
+struct ipc_lag_row_t {
+  int lag = 0;
+  ipc_stats_t summary;
+};
+
+struct ipc_lag_output_t {
+  std::vector<ipc_lag_row_t> rows;
+};
+
 
 struct ipc_phaseamp_t {
   std::vector<double> phase;
@@ -121,6 +130,12 @@ struct ipc_t
 				  double sr,
 				  const ipc_param_t & param,
 				  bool return_timeseries = false) ;
+
+  static ipc_lag_output_t compute_ipc_lagged(const ipc_phaseamp_t & seed,
+					     const ipc_phaseamp_t & tgt,
+					     double sr,
+					     const ipc_param_t & param,
+					     int max_lag);
   
   static ipc_batch_result_t compute_ipc_seed_to_set(const std::vector<ipc_phaseamp_t>& signals,
 						    const std::vector<int>& s1,

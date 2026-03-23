@@ -34,6 +34,8 @@
 #include "lunapi/lunapi.h"
 #include "lunapi/segsrv.h"
 #include "miscmath/crandom.h"
+#include "dsp/ipc.h"
+#include "dsp/tsync.h"
 
 #include <cmath>
 #include <cstdio>
@@ -189,6 +191,35 @@ static std::vector<double> make_slow_wave( int sr, double dur_sec,
 					   double freq_hz = 0.75, double amp = 100.0 )
 {
   return make_sine( sr, dur_sec, freq_hz, amp );
+}
+
+static std::vector<double> make_chirp_phase( int sr, double dur_sec,
+					     double f0_hz, double f1_hz )
+{
+  const int n = (int)std::round( sr * dur_sec );
+  std::vector<double> phase(n);
+  const double T = dur_sec > 0 ? dur_sec : 1.0;
+  const double k = (f1_hz - f0_hz) / T;
+  for (int i = 0; i < n; i++)
+    {
+      const double t = i / (double)sr;
+      phase[i] = 2.0 * M_PI * ( f0_hz * t + 0.5 * k * t * t );
+    }
+  return phase;
+}
+
+static std::vector<double> shift_with_edge_hold( const std::vector<double> & x, int delay )
+{
+  const int n = (int)x.size();
+  std::vector<double> y(n);
+  for (int i = 0; i < n; i++)
+    {
+      int src = i - delay;
+      if ( src < 0 ) src = 0;
+      if ( src >= n ) src = n - 1;
+      y[i] = x[src];
+    }
+  return y;
 }
 
 // Stage annotation intervals (full night of all-N2, 30s epochs)
@@ -444,6 +475,84 @@ static void test_signal( lunapi_t * eng,
     m << "SD before=" << sd_before << " after=" << sd_after << " (exp≈0)";
     record(R,"signal/update-signal", sd_before > 0.1 && approx_equal(sd_after,0.0,1e-6), m.str(), V);
   } catch(std::exception & e) { record(R,"signal/update-signal",false,e.what(),V); }
+
+  // A6 — lagged IPC should track the same delayed-coupling use-case as TSYNC HT
+  try {
+    const int sr = 128;
+    const double dur_sec = 20.0;
+    const int n = (int)std::round( sr * dur_sec );
+    const int delay = 8;
+    const int max_lag = 16;
+
+    std::vector<double> phase1 = make_chirp_phase( sr, dur_sec, 6.0, 12.0 );
+    std::vector<double> amp1(n), amp2(n);
+    for (int i = 0; i < n; i++)
+      {
+        const double t = i / (double)sr;
+        amp1[i] = 1.0 + 0.25 * std::sin( 2.0 * M_PI * 0.35 * t );
+      }
+    std::vector<double> phase2 = shift_with_edge_hold( phase1, delay );
+    amp2 = shift_with_edge_hold( amp1, delay );
+
+    Eigen::MatrixXd P(n,2), A(n,2);
+    for (int i = 0; i < n; i++)
+      {
+        P(i,0) = phase1[i];
+        P(i,1) = phase2[i];
+        A(i,0) = amp1[i];
+        A(i,1) = amp2[i];
+      }
+
+    tsync_t tsync( P, A, sr, max_lag );
+    ipc_phaseamp_t seed, tgt;
+    seed.phase = phase1; seed.amp = amp1;
+    tgt.phase = phase2;  tgt.amp  = amp2;
+    ipc_param_t ipc_param;
+    ipc_lag_output_t lagged = ipc_t::compute_ipc_lagged( seed, tgt, sr, ipc_param, max_lag );
+
+    int best_tsync_lag = 0;
+    double best_tsync_val = -1.0;
+    double tsync_zero = std::numeric_limits<double>::quiet_NaN();
+    for (std::map<int,double>::const_iterator it = tsync.phase_lock[0][1].begin();
+         it != tsync.phase_lock[0][1].end(); ++it)
+      {
+        if ( it->second > best_tsync_val )
+          {
+            best_tsync_val = it->second;
+            best_tsync_lag = it->first;
+          }
+        if ( it->first == 0 ) tsync_zero = it->second;
+      }
+
+    int best_ipc_lag = 0;
+    double best_ipc_val = -1.0;
+    double ipc_zero = std::numeric_limits<double>::quiet_NaN();
+    for (int i = 0; i < lagged.rows.size(); i++)
+      {
+        const double v = lagged.rows[i].summary.mean_ipc;
+        if ( std::isfinite(v) && v > best_ipc_val )
+          {
+            best_ipc_val = v;
+            best_ipc_lag = lagged.rows[i].lag;
+          }
+        if ( lagged.rows[i].lag == 0 ) ipc_zero = v;
+      }
+
+    const bool lag_match = best_tsync_lag == best_ipc_lag;
+    const bool delay_recovered = best_ipc_lag == -delay;
+    const bool both_peak_over_zero = best_tsync_val > tsync_zero + 0.05 &&
+                                     best_ipc_val > ipc_zero + 0.05;
+    const bool both_peaks_high = best_tsync_val > 0.95 && best_ipc_val > 0.95;
+
+    std::ostringstream m;
+    m << "TSYNC lag=" << best_tsync_lag << " PHL=" << best_tsync_val
+      << " zero=" << tsync_zero
+      << " | IPC lag=" << best_ipc_lag << " IPC=" << best_ipc_val
+      << " zero=" << ipc_zero;
+    record(R,"signal/ipc-lag-vs-tsync-ht",
+           lag_match && delay_recovered && both_peak_over_zero && both_peaks_high,
+           m.str(), V);
+  } catch(std::exception & e) { record(R,"signal/ipc-lag-vs-tsync-ht",false,e.what(),V); }
 }
 
 // ============================================================

@@ -1192,6 +1192,15 @@ void dsptools::hrv( edf_t & edf , param_t & param )
       
       const int sr = edf.header.sampling_freq( signals(s) );
 
+      // Detect R-peaks once over the full retained trace for this channel.
+      // Re-running the detector independently in each epoch creates boundary
+      // artifacts because the filter/threshold state resets on every window.
+      const interval_t whole_interval = edf.timeline.wholetrace();
+      slice_t whole_slice( edf , signals(s) , whole_interval );
+      const std::vector<double> * whole_ecg = whole_slice.pdata();
+      const std::vector<uint64_t> * whole_tp = whole_slice.ptimepoints();
+      rpeaks_t whole_peaks = mpeakdetect2( whole_ecg , whole_tp , sr , ropt );
+
       //
       // Add annotations?
       //
@@ -1215,6 +1224,21 @@ void dsptools::hrv( edf_t & edf , param_t & param )
       //
 
       std::set<uint64_t> tps;
+      if ( opt.annot_stratify )
+        for (int i=0; i<whole_peaks.R_t.size(); i++)
+          tps.insert( whole_peaks.R_t[i] );
+
+      if ( annotate )
+        {
+          const int npeaks = whole_peaks.R_t.size();
+          for (int i=0; i<npeaks; i++)
+            r_annot->add( "." , interval_t( whole_peaks.R_t[i] , whole_peaks.R_t[i] ) ,
+                          signals.label(s) );
+
+          // For RR annotations
+          opt.annot = rr_annot;
+          opt.chlabel = signals.label(s);
+        }
       
       //
       // Iterate over epochs
@@ -1235,50 +1259,24 @@ void dsptools::hrv( edf_t & edf , param_t & param )
 
 	  if ( by_epoch ) 
 	    writer.epoch( edf.timeline.display_epoch( epoch ) );
-	  
-	  //
-	  // Get ECG signal and time-points
-	  //
 
-	  slice_t slice( edf , signals(s) , interval );
-	  
-	  const std::vector<double> * ecg = slice.pdata();
-
-	  const std::vector<uint64_t> * tp = slice.ptimepoints();
-      
-	  //
-	  // Detect R-peaks
-	  //
-	  
-	  rpeaks_t peaks = mpeakdetect2( ecg , tp , sr , ropt );
-
-	  //
-	  // Track?
-	  //
-
-	  if ( opt.annot_stratify )
-	    for (int i=0; i<peaks.R_t.size(); i++)
-	      tps.insert( peaks.R_t[i] );
-			
-	  //
-	  // Add annotations
-	  //
-	  
-	  if ( annotate )
+	  rpeaks_t peaks;
+	  if ( by_epoch )
 	    {
-	      const int npeaks = peaks.R_t.size();
-	      
-	      for (int i=0; i<npeaks; i++)
-		r_annot->add( "." , interval_t( peaks.R_t[i] , peaks.R_t[i] ) , signals.label(s) );
-
-	      //
-	      // For RR annotations
-	      //
-	      
-	      opt.annot = rr_annot;
-	      opt.chlabel = signals.label(s) ;
-	      
+	      for (int i=0; i<whole_peaks.R_t.size(); i++)
+		{
+		  if ( whole_peaks.R_t[i] < interval.start ) continue;
+		  if ( whole_peaks.R_t[i] > interval.stop ) break;
+		  peaks.R_t.push_back( whole_peaks.R_t[i] );
+		  if ( whole_peaks.R_i.size() == whole_peaks.R_t.size() )
+		    peaks.R_i.push_back( whole_peaks.R_i[i] );
+		}
+	      peaks.npks = peaks.R_t.size();
+	      peaks.p_inverted = whole_peaks.p_inverted;
+	      peaks.inverted = whole_peaks.inverted;
 	    }
+	  else
+	    peaks = whole_peaks;
 	  
 	  
 	  //
