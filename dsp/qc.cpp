@@ -79,7 +79,6 @@ dsptools::qc_t::qc_t( edf_t & edf1 , param_t & param ) : edf(edf1)
   resp_window_inc = param.has( "resp-inc" ) ? param.requires_dbl( "resp-inc" ) : 10 ;
 
   // allow 10% of night to be 'bad' (noise-level 2 or worse) 
-  resp_prop_th = param.has( "resp-th" ) ? param.requires_dbl( "resp-th" ) : 0.1;  
   
   resp_p1_lwr = param.has( "resp-p1-lwr" ) ? param.requires_dbl( "resp-p1-lwr" ) : 0.1 ;
   resp_p1_upr = param.has( "resp-p1-upr" ) ? param.requires_dbl( "resp-p1-upr" ) : 1 ;
@@ -385,18 +384,17 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 	 << "     noise range (Hz)           = " << resp_p2_lwr << " - " << resp_p2_upr
 	                                                                  << "  (resp-p2-lwr, resp-p2-upr)\n"
 	 << "     SNR threshold              = " << resp_th            << "  (resp-snr-th)\n"
-	 << "     max noise prop.            = " << resp_prop_th       << "  (resp-th)\n"
 	 << "     minimum SR (Hz)            = " << resp_min_sr        << "  (resp-min-sr)\n"
 	 << "     flatline floor             = " << resp_flatline_floor << "  (resp-flat-floor)\n"
 	 << "     flatline prop. threshold   = " << resp_flatline_prop << "  (resp-flat-prop)\n"
 	 << "     clip prop. threshold       = " << resp_clip_prop     << "  (resp-clip-prop)\n"
-	 << "     jump MAD multiplier        = " << resp_jump_mad_th   << "  (resp-jump-th)\n"
+	 << "     jump p95-p05 multiplier    = " << resp_jump_mad_th   << "  (resp-jump-th)\n"
 	 << "     bad epoch proportion       = " << resp_flag_prop << "  (resp-flag-prop)\n"
 	 << "     bad contiguous run (sec)   = " << resp_flag_run   << "  (resp-flag-run)\n"
 	 << "  outputs:\n"
 	 << "     add noise waveform channel = " << ( resp_add_channel ? resp_channel_label : "no" )
 	                                                                  << "  (resp-add-channel)\n"
-	 << "     annotations               = " << ( add_annots
+	 << "     annotations                = " << ( add_annots
 	                                               ? annot_prefix
 	                                                 + ( annot_show_domain ? "_RESP" : "" )
 	                                                 + ( annot_by_channel  ? "_<CH>" : "" )
@@ -527,18 +525,25 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 	  const double clip_p = MiscMath::clipped( *d );
 	  const bool flag_clip_e = (clip_p >= resp_clip_prop);
 
-	  // 3. Step / jump artifact: any consecutive diff > jump_mad_th * epoch MAD
+	  // 3. Step / jump artifact: any consecutive diff > jump_mad_th * epoch p95-p05 range
+	  //    p95-p05 range is used instead of MAD/IQR to avoid false positives on
+	  //    non-stationary resp/effort signals (e.g. nasal pressure flat during
+	  //    apnea then recovering): MAD and IQR are suppressed when the flat/apneic
+	  //    fraction exceeds 50% or 75% respectively, making the threshold
+	  //    hypersensitive to normal physiological transitions.  The p95-p05 range
+	  //    remains non-zero as long as at least ~5% of the epoch contains signal
+	  //    (i.e. ~6s of breathing in a 120s window).
 	  bool flag_jump_e = false;
-	  double epoch_mad = 0;
+	  double epoch_range = 0;
 	  {
 	    std::vector<double> tmp = *d;
-	    const double epoch_med = MiscMath::percentile( tmp , 0.5 );
-	    std::vector<double> abs_dev( n );
-	    for (int i = 0; i < n; i++) abs_dev[i] = fabs( (*d)[i] - epoch_med );
-	    epoch_mad = MiscMath::percentile( abs_dev , 0.5 );
-	    if ( epoch_mad > 0 )
+	    const double p05 = MiscMath::percentile( tmp , 0.05 );
+	    std::vector<double> tmp2 = *d;
+	    const double p95 = MiscMath::percentile( tmp2 , 0.95 );
+	    epoch_range = p95 - p05;
+	    if ( epoch_range > 0 )
 	      for (int i = 1; i < n; i++)
-		if ( fabs( (*d)[i] - (*d)[i-1] ) > resp_jump_mad_th * epoch_mad )
+		if ( fabs( (*d)[i] - (*d)[i-1] ) > resp_jump_mad_th * epoch_range )
 		  { flag_jump_e = true; break; }
 	  }
 
@@ -750,35 +755,68 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
       f2 /= (double)n;
       f3 /= (double)n;
       
-      // take 'f2' as the noise estimate (by default, cannot have more
-      // than 0.1 of record as 'bad' based on the F2 noise level
-
-      const bool bad_signal = f2 > resp_prop_th;
-
       //
-      // Channel-level bad rules derived from per-epoch artifact flags
+      // Score 30s epochs: a 30s epoch is bad if bad 120s windows
+      // (flat/clip/jump OR poor spectral SNR) cover >= half of it.
+      // FLAGGED, N_FLAG_EPOCH and MAX_FLAG_RUN are derived from these counts.
       //
 
-      int n_bad_epoch = 0;
-      int max_consec = 0, cur_consec = 0;
-      for (int e=0; e<total_epochs; e++)
+      std::vector<interval_t> bad_win_intervals;
+      for (int e = 0; e < total_epochs; e++)
+	if ( flag_bad_epoch[e] || criteria[e] < fac[1] )
+	  bad_win_intervals.push_back( epoch_intervals[e] );
+
+      int n_bad_30 = 0, total_30 = 0;
+      int max_consec_30 = 0, cur_consec_30 = 0;
+      const uint64_t half_epoch_tp = 15LLU * globals::tp_1sec;
+      std::vector<interval_t> bad_30_epochs;
+
+      edf.timeline.set_epochs_to_span_gaps( false );
+      edf.timeline.set_epoch( 30.0 , 30.0 );
+      edf.timeline.first_epoch();
+      while ( 1 )
 	{
-	  if ( flag_bad_epoch[e] || criteria[e] < fac[1] )
+	  int epoch30 = edf.timeline.next_epoch();
+	  if ( epoch30 == -1 ) break;
+	  ++total_30;
+	  interval_t iv = edf.timeline.epoch( epoch30 );
+
+	  uint64_t covered = 0LLU;
+	  uint64_t union_start = 0LLU , union_stop = 0LLU;
+	  bool in_union = false;
+	  for ( const auto & bw : bad_win_intervals )
 	    {
-	      ++n_bad_epoch;
-	      if ( ++cur_consec > max_consec ) max_consec = cur_consec;
+	      if ( bw.start >= iv.stop  ) break;
+	      if ( bw.stop  <= iv.start ) continue;
+	      uint64_t cs = bw.start > iv.start ? bw.start : iv.start;
+	      uint64_t ce = bw.stop  < iv.stop  ? bw.stop  : iv.stop;
+	      if ( !in_union )
+		{ union_start = cs; union_stop = ce; in_union = true; }
+	      else if ( cs <= union_stop )
+		{ if ( ce > union_stop ) union_stop = ce; }
+	      else
+		{ covered += union_stop - union_start; union_start = cs; union_stop = ce; }
 	    }
-	  else cur_consec = 0;
+	  if ( in_union ) covered += union_stop - union_start;
+
+	  if ( covered >= half_epoch_tp )
+	    {
+	      ++n_bad_30;
+	      if ( ++cur_consec_30 > max_consec_30 ) max_consec_30 = cur_consec_30;
+	      bad_30_epochs.push_back( iv );
+	    }
+	  else
+	    cur_consec_30 = 0;
 	}
 
-      const double p_bad_epoch = total_epochs > 0 ? (double)n_bad_epoch / total_epochs : 0 ;
-      // contiguous run length: (steps × step_size) gives elapsed start-to-start seconds
-      const double max_bad_run_sec = max_consec * resp_window_inc;
+      edf.timeline.set_epochs_to_span_gaps( true );
+      edf.timeline.set_epoch( resp_window_dur , resp_window_inc );
 
-      const bool bad_from_epochs = (p_bad_epoch >= resp_flag_prop) ||
-	                             (max_bad_run_sec >= resp_flag_run);
+      const double p_bad_30 = total_30 > 0 ? (double)n_bad_30 / total_30 : 0;
+      const double max_bad_run_30_sec = max_consec_30 * 30.0;
 
-      const bool bad = bad_signal || bad_from_epochs;
+      const bool bad = ( p_bad_30          >= resp_flag_prop ) ||
+	               ( max_bad_run_30_sec >= resp_flag_run  );
 
 
       //
@@ -799,7 +837,8 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 	  if ( flag_clip[e]  ) ++nc_r;
 	  if ( flag_jump[e]  ) ++nj_r;
 	}
-      writer.value( "P_FLAG_EPOCH" , p_bad_epoch );
+      writer.value( "N_EPOCH"     , total_30 );
+      writer.value( "P_FLAG_EPOCH" , p_bad_30 );
       writer.value( "P_FLAT"      , total_epochs > 0 ? (double)nf_r / total_epochs : 0 );
       writer.value( "P_CLIP"      , total_epochs > 0 ? (double)nc_r / total_epochs : 0 );
       writer.value( "P_JUMP"      , total_epochs > 0 ? (double)nj_r / total_epochs : 0 );
@@ -811,9 +850,9 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
       //
 
       writer.level( "RESP" , "DOMAIN" );
-      writer.value( "FLAGGED"         , (int)(bad) );
-      writer.value( "N_FLAG_EPOCH" , n_bad_epoch );
-      writer.value( "MAX_FLAG_RUN" , max_bad_run_sec );
+      writer.value( "FLAGGED"      , (int)(bad) );
+      writer.value( "N_FLAG_EPOCH" , n_bad_30 );
+      writer.value( "MAX_FLAG_RUN" , max_bad_run_30_sec );
       writer.unlevel( "DOMAIN" );
 
       
@@ -840,93 +879,27 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 
 	  annot_t * a = edf.annotations->add( alab );
 
-	  // Collect bad 120s window intervals: flat/clip/jump OR SNR noise level 2
-	  std::vector<interval_t> bad_win_intervals;
-	  for (int e = 0; e < total_epochs; e++)
-	    if ( flag_bad_epoch[e] || criteria[e] < fac[1] )
-	      bad_win_intervals.push_back( epoch_intervals[e] );
-
-	  // Re-epoch to standard 30s epochs (not spanning gaps) to generate
-	  // per-epoch annotations consistent with EEG/ECG/EMG domains.
-	  // A 30s epoch is bad if bad 120s windows cover >= 50% (15s) of it.
-	  // Union overlapping windows before summing to avoid double-counting.
-	  edf.timeline.set_epochs_to_span_gaps( false );
-	  edf.timeline.set_epoch( 30.0 , 30.0 );
-
-	  const uint64_t half_epoch_tp = 15LLU * globals::tp_1sec;
-
-	  bool in_bad = false;
-	  uint64_t bad_start = 0LLU , bad_stop = 0LLU;
-	  int n_bad_30 = 0;
-
-	  edf.timeline.first_epoch();
-	  while ( 1 )
+	  // Emit merged runs of consecutive bad 30s epochs as annotations
+	  bool in_run = false;
+	  uint64_t run_start = 0LLU , run_stop = 0LLU;
+	  for ( const auto & iv : bad_30_epochs )
 	    {
-	      int epoch30 = edf.timeline.next_epoch();
-	      if ( epoch30 == -1 ) break;
-
-	      interval_t iv = edf.timeline.epoch( epoch30 );
-
-	      // Compute union coverage of bad 120s windows clipped to this 30s epoch.
-	      // bad_win_intervals is time-ordered; windows may overlap, so we merge
-	      // intersections on the fly to avoid double-counting.
-	      uint64_t covered = 0LLU;
-	      uint64_t union_start = 0LLU , union_stop = 0LLU;
-	      bool in_union = false;
-	      for ( const auto & bw : bad_win_intervals )
+	      if ( !in_run )
+		{ run_start = iv.start; run_stop = iv.stop; in_run = true; }
+	      else if ( iv.start <= run_stop )
+		{ if ( iv.stop > run_stop ) run_stop = iv.stop; }
+	      else
 		{
-		  if ( bw.start >= iv.stop  ) break;  // past this epoch, done
-		  if ( bw.stop  <= iv.start ) continue; // before this epoch
-		  // clip intersection to [iv.start, iv.stop)
-		  uint64_t cs = bw.start > iv.start ? bw.start : iv.start;
-		  uint64_t ce = bw.stop  < iv.stop  ? bw.stop  : iv.stop;
-		  // merge into running union
-		  if ( ! in_union )
-		    { union_start = cs; union_stop = ce; in_union = true; }
-		  else if ( cs <= union_stop )
-		    { if ( ce > union_stop ) union_stop = ce; }
-		  else
-		    { covered += union_stop - union_start; union_start = cs; union_stop = ce; }
-		}
-	      if ( in_union ) covered += union_stop - union_start;
-	      const bool is_bad = ( covered >= half_epoch_tp );
-
-	      if ( is_bad )
-		{
-		  ++n_bad_30;
-		  if ( ! in_bad )
-		    {
-		      bad_start = iv.start;
-		      bad_stop  = iv.stop;
-		      in_bad = true;
-		    }
-		  else
-		    {
-		      if ( iv.start > bad_stop )
-			{
-			  a->add( "." , interval_t( bad_start , bad_stop ) , signals.label(s) );
-			  bad_start = iv.start;
-			}
-		      if ( iv.stop > bad_stop ) bad_stop = iv.stop;
-		    }
-		}
-	      else if ( in_bad )
-		{
-		  a->add( "." , interval_t( bad_start , bad_stop ) , signals.label(s) );
-		  in_bad = false;
+		  a->add( "." , interval_t( run_start , run_stop ) , signals.label(s) );
+		  run_start = iv.start; run_stop = iv.stop;
 		}
 	    }
-
-	  if ( in_bad )
-	    a->add( "." , interval_t( bad_start , bad_stop ) , signals.label(s) );
+	  if ( in_run )
+	    a->add( "." , interval_t( run_start , run_stop ) , signals.label(s) );
 
 	  logger << "  " << signals.label(s) << " : " << n_bad_30
 		 << " bad 30s epochs flagged (" << (int)bad_win_intervals.size()
 		 << " bad 120s windows)\n";
-
-	  // Restore resp window epochs for next signal's 120s QC iteration
-	  edf.timeline.set_epochs_to_span_gaps( true );
-	  edf.timeline.set_epoch( resp_window_dur , resp_window_inc );
 	}
       
     } // next signal
@@ -955,7 +928,7 @@ void dsptools::qc_t::do_eeg( signal_list_t & signals )
 	 << "     clip proportion             = " << eeg_clip_prop      << "  (eeg-clip-prop)\n"
 	 << "     amplitude threshold (µV)    = " << eeg_amp_th         << "  (eeg-amp-th)\n"
 	 << "     amplitude proportion        = " << eeg_amp_prop       << "  (eeg-amp-prop)\n"
-	 << "     HF band (Hz)                = " << eeg_hf_lo << " - " << eeg_hf_hi
+	 << "     HF band (Hz)               = " << eeg_hf_lo << " - " << eeg_hf_hi
                                                                           << "  (eeg-hf-lo, eeg-hf-hi)\n"
 	 << "     signal band (Hz)            = " << eeg_sig_lo << " - " << eeg_sig_hi
                                                                           << "  (eeg-sig-lo, eeg-sig-hi)\n"
@@ -964,7 +937,7 @@ void dsptools::qc_t::do_eeg( signal_list_t & signals )
 	 << "     line noise broad range (Hz) = " << eeg_ln_lo << " - " << eeg_ln_hi
                                                                           << "  (eeg-ln-lo, eeg-ln-hi)\n"
 	 << "     line noise ratio threshold  = " << eeg_ln_ratio_th    << "  (eeg-ln-th)\n"
-	 << "     spectral peakedness (SPK)    = " << eeg_spectral_peakedness_th << "  (eeg-peak-th)\n"
+	 << "     spectral peakedness (SPK)   = " << eeg_spectral_peakedness_th << "  (eeg-peak-th)\n"
 	 << "     spectral kurtosis (KURT)    = " << eeg_spectral_skewness_th   << "  (eeg-kurt-th)\n"
 	 << "     Hjorth pre-filter (Hz)      = " << eeg_hjorth_lo << " - " << eeg_hjorth_hi
                                                                           << "  (eeg-hjorth-lo, eeg-hjorth-hi)\n"
@@ -1431,7 +1404,7 @@ void dsptools::qc_t::do_spo2( signal_list_t & signals )
 	 << "     bad contiguous run (sec)   = " << spo2_flag_run    << "  (oxy-flag-run)\n"
 	 << "  scale detection: auto (0-1 → 0-100 if max <= 1.5)\n"
 	 << "  outputs:\n"
-	 << "     annotations               = " << ( add_annots
+	 << "     annotations                = " << ( add_annots
 	                                               ? annot_prefix
 	                                                 + ( annot_show_domain ? "_OXY" : "" )
 	                                                 + ( annot_by_channel  ? "_<CH>" : "" )

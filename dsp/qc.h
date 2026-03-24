@@ -54,7 +54,6 @@ namespace dsptools
     int resp_min_sr;
     int resp_hard_min_sr;
     double resp_th;
-    double resp_prop_th;
     double resp_window_dur;
     double resp_window_inc;
     double resp_p1_lwr;
