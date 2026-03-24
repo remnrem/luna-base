@@ -914,6 +914,12 @@ void lunapi_inst_t::refresh()
   
 }
 
+void lunapi_inst_t::refresh_channel_vars()
+{
+  if ( state == 1 )
+    cmd_t::define_channel_type_variables( edf );
+}
+
 void lunapi_inst_t::drop()
 {
   // Reset in place. Avoid assigning from a temporary edf_t, which

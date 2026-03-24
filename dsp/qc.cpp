@@ -763,7 +763,7 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
       int max_consec = 0, cur_consec = 0;
       for (int e=0; e<total_epochs; e++)
 	{
-	  if ( flag_bad_epoch[e] )
+	  if ( flag_bad_epoch[e] || criteria[e] < fac[1] )
 	    {
 	      ++n_bad_epoch;
 	      if ( ++cur_consec > max_consec ) max_consec = cur_consec;
@@ -840,50 +840,93 @@ void dsptools::qc_t::do_resp( signal_list_t & signals )
 
 	  annot_t * a = edf.annotations->add( alab );
 
+	  // Collect bad 120s window intervals: flat/clip/jump OR SNR noise level 2
+	  std::vector<interval_t> bad_win_intervals;
+	  for (int e = 0; e < total_epochs; e++)
+	    if ( flag_bad_epoch[e] || criteria[e] < fac[1] )
+	      bad_win_intervals.push_back( epoch_intervals[e] );
+
+	  // Re-epoch to standard 30s epochs (not spanning gaps) to generate
+	  // per-epoch annotations consistent with EEG/ECG/EMG domains.
+	  // A 30s epoch is bad if bad 120s windows cover >= 50% (15s) of it.
+	  // Union overlapping windows before summing to avoid double-counting.
+	  edf.timeline.set_epochs_to_span_gaps( false );
+	  edf.timeline.set_epoch( 30.0 , 30.0 );
+
+	  const uint64_t half_epoch_tp = 15LLU * globals::tp_1sec;
+
 	  bool in_bad = false;
 	  uint64_t bad_start = 0LLU , bad_stop = 0LLU;
-	  int ac = 0;
+	  int n_bad_30 = 0;
 
-	  for (int e=0; e<total_epochs; e++)
+	  edf.timeline.first_epoch();
+	  while ( 1 )
 	    {
-	      if ( flag_bad_epoch[e] )
+	      int epoch30 = edf.timeline.next_epoch();
+	      if ( epoch30 == -1 ) break;
+
+	      interval_t iv = edf.timeline.epoch( epoch30 );
+
+	      // Compute union coverage of bad 120s windows clipped to this 30s epoch.
+	      // bad_win_intervals is time-ordered; windows may overlap, so we merge
+	      // intersections on the fly to avoid double-counting.
+	      uint64_t covered = 0LLU;
+	      uint64_t union_start = 0LLU , union_stop = 0LLU;
+	      bool in_union = false;
+	      for ( const auto & bw : bad_win_intervals )
 		{
+		  if ( bw.start >= iv.stop  ) break;  // past this epoch, done
+		  if ( bw.stop  <= iv.start ) continue; // before this epoch
+		  // clip intersection to [iv.start, iv.stop)
+		  uint64_t cs = bw.start > iv.start ? bw.start : iv.start;
+		  uint64_t ce = bw.stop  < iv.stop  ? bw.stop  : iv.stop;
+		  // merge into running union
+		  if ( ! in_union )
+		    { union_start = cs; union_stop = ce; in_union = true; }
+		  else if ( cs <= union_stop )
+		    { if ( ce > union_stop ) union_stop = ce; }
+		  else
+		    { covered += union_stop - union_start; union_start = cs; union_stop = ce; }
+		}
+	      if ( in_union ) covered += union_stop - union_start;
+	      const bool is_bad = ( covered >= half_epoch_tp );
+
+	      if ( is_bad )
+		{
+		  ++n_bad_30;
 		  if ( ! in_bad )
 		    {
-		      bad_start = epoch_intervals[e].start;
-		      bad_stop  = epoch_intervals[e].stop;
+		      bad_start = iv.start;
+		      bad_stop  = iv.stop;
 		      in_bad = true;
 		    }
 		  else
 		    {
-		      // gap check: start of next epoch beyond current stop → close and restart
-		      if ( epoch_intervals[e].start > bad_stop )
+		      if ( iv.start > bad_stop )
 			{
 			  a->add( "." , interval_t( bad_start , bad_stop ) , signals.label(s) );
-			  ++ac;
-			  bad_start = epoch_intervals[e].start;
+			  bad_start = iv.start;
 			}
-		      if ( epoch_intervals[e].stop > bad_stop )
-			bad_stop = epoch_intervals[e].stop;
+		      if ( iv.stop > bad_stop ) bad_stop = iv.stop;
 		    }
 		}
 	      else if ( in_bad )
 		{
 		  a->add( "." , interval_t( bad_start , bad_stop ) , signals.label(s) );
-		  ++ac;
 		  in_bad = false;
 		}
 	    }
 
-	  // flush final region
 	  if ( in_bad )
-	    {
-	      a->add( "." , interval_t( bad_start , bad_stop ) , signals.label(s) );
-	      ++ac;
-	    }
+	    a->add( "." , interval_t( bad_start , bad_stop ) , signals.label(s) );
 
-	  logger << "  added " << ac << " " << alab << " annotations for "
-		 << signals.label(s) << "\n";
+	  logger << "  " << signals.label(s) << " : " << n_bad_30
+		 << " bad 30s epochs flagged (" << (int)bad_win_intervals.size()
+		 << " bad 120s windows)\n";
+
+	  // Restore resp window epochs for next signal's 120s QC iteration
+	  edf.timeline.set_epochs_to_span_gaps( true );
+	  edf.timeline.set_epoch( resp_window_dur , resp_window_inc );
 	}
       
     } // next signal

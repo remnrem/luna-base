@@ -290,6 +290,9 @@ public:
   // reload an EDF
   void refresh();
 
+  // re-populate channel-type variables (e.g. ${eeg}) without re-reading from disk
+  void refresh_channel_vars();
+
   // drop an EDF, all annotations, etc
   void drop();
   
