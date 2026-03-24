@@ -982,6 +982,7 @@ void dsptools::qc_t::do_eeg( signal_list_t & signals )
   const double peak_maxf          = 28.0;
   const int    peak_median_filt_n = 11;
 
+  edf.timeline.set_epochs_to_span_gaps( false );
   edf.timeline.set_epoch( eeg_window_dur , eeg_window_inc );
 
   for ( int s = 0; s < ns; s++ )
@@ -1437,7 +1438,7 @@ void dsptools::qc_t::do_spo2( signal_list_t & signals )
 	                                               : "none" )
 	                                                                   << "  (annot=X, annot-domain=X, annot-show=F)\n";
 
-  edf.timeline.set_epochs_to_span_gaps( true );
+  edf.timeline.set_epochs_to_span_gaps( false );
   edf.timeline.set_epoch( spo2_window_dur , spo2_window_inc );
 
 
@@ -1826,6 +1827,7 @@ void dsptools::qc_t::do_emg( signal_list_t & signals )
 	 << "     channel bad run (sec)       = " << emg_flag_run    << "  (emg-flag-run)\n";
 
   // set epoch grid
+  edf.timeline.set_epochs_to_span_gaps( false );
   edf.timeline.set_epoch( emg_window_dur , emg_window_inc );
 
   //
@@ -2137,6 +2139,7 @@ void dsptools::qc_t::do_ecg( signal_list_t & signals )
 	 << "     channel bad epoch prop.     = " << ecg_flag_prop  << "  (ecg-flag-prop)\n"
 	 << "     channel bad run (sec)       = " << ecg_flag_run     << "  (ecg-flag-run)\n";
 
+  edf.timeline.set_epochs_to_span_gaps( false );
   edf.timeline.set_epoch( ecg_window_dur , ecg_window_inc );
 
   for ( int s = 0; s < ns; s++ )
@@ -2546,6 +2549,7 @@ void dsptools::qc_t::do_eog( signal_list_t & signals )
 	 << "     channel bad epoch prop.     = " << eog_flag_prop << "  (eog-flag-prop)\n"
 	 << "     channel bad run (sec)       = " << eog_flag_run    << "  (eog-flag-run)\n";
 
+  edf.timeline.set_epochs_to_span_gaps( false );
   edf.timeline.set_epoch( eog_window_dur , eog_window_inc );
 
   for ( int s = 0; s < ns; s++ )
