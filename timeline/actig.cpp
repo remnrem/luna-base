@@ -354,6 +354,185 @@ static void find_window_fine( const std::vector<double> & profile ,
 
 // -----------------------------------------------------------------------
 //
+// PSG comparison helpers
+//
+// -----------------------------------------------------------------------
+
+// Per-epoch PSG state codes
+static const int PSG_NONE  = 0;   // no PSG annotation covering this epoch
+static const int PSG_WAKE  = 1;   // PSG wake
+static const int PSG_N1    = 2;   // PSG N1 (ambiguous; optionally excluded)
+static const int PSG_SLEEP = 3;   // PSG sleep (N2, N3, or REM)
+
+// 2×2 confusion table (positive = sleep) with derived metrics
+struct psg_stats_t
+{
+  int tp = 0, fp = 0, tn = 0, fn = 0;   // TP/FP/TN/FN
+  int n_n1_excl = 0;                     // N1 epochs excluded from table
+  int n() const { return tp + fp + tn + fn; }
+  double sensitivity()  const { return (tp+fn)>0 ? (double)tp/(tp+fn)   : 0.0; }
+  double specificity()  const { return (tn+fp)>0 ? (double)tn/(tn+fp)   : 0.0; }
+  double accuracy()     const { return n()>0     ? (double)(tp+tn)/n()   : 0.0; }
+  double balanced_acc() const { return 0.5*(sensitivity()+specificity()); }
+  double kappa() const {
+    const int N = n(); if (N == 0) return 0.0;
+    const double po = (double)(tp+tn)/N;
+    const double pe = ((double)(tp+fn)/N) * ((double)(tp+fp)/N)
+                    + ((double)(tn+fp)/N) * ((double)(tn+fn)/N);
+    return pe < 1.0 ? (po - pe) / (1.0 - pe) : 0.0;
+  }
+  double psg_tst_min(double es)   const { return (tp+fn) * es / 60.0; }
+  double actig_tst_min(double es) const { return (tp+fp) * es / 60.0; }
+  double tst_diff_min(double es)  const { return actig_tst_min(es) - psg_tst_min(es); }
+};
+
+// Run the Luna sleep/wake scoring algorithm on pre-binned epoch data,
+// returning is_wake[].  Replicates the luna method in actig::actig();
+// used only for PSG parameter tuning (grid search).
+static std::vector<bool> luna_score_ep(
+    const std::vector<double> & epochs ,
+    const std::vector<bool>   & is_gap ,
+    double epoch_sec ,
+    double smooth_min , double burst_min , double burst_z ,
+    double quiet_z    , double active_frac ,
+    double min_sleep_min , double max_gap_min , double min_wake_min )
+{
+  const int n = (int)epochs.size();
+  std::vector<bool> is_wake( n , true );
+
+  const int n_smooth     = std::max( 1, (int)std::round( smooth_min    * 60.0 / epoch_sec ) );
+  const int n_burst_w    = std::max( 1, (int)std::round( burst_min     * 60.0 / epoch_sec ) );
+  const int n_min_sleep  = std::max( 1, (int)std::round( min_sleep_min * 60.0 / epoch_sec ) );
+  const int n_gap_fill   = std::max( 0, (int)std::round( max_gap_min   * 60.0 / epoch_sec ) );
+  const int n_wake_break = std::max( 1, (int)std::round( min_wake_min  * 60.0 / epoch_sec ) );
+
+  // Contiguous blocks
+  std::vector<std::pair<int,int>> blocks;
+  { int i = 0;
+    while ( i < n ) {
+      if ( is_gap[i] ) { i++; continue; }
+      int j = i; while ( j < n && !is_gap[j] ) j++;
+      blocks.push_back( { i, j-1 } ); i = j;
+    }
+  }
+
+  for ( auto & blk : blocks )
+    {
+      const int bs = blk.first, be = blk.second, bsz = be - bs + 1;
+
+      // Log transform
+      std::vector<double> y( bsz );
+      for ( int i = 0; i < bsz; i++ ) y[i] = std::log( 1.0 + epochs[bs+i] );
+
+      // Robust normalisation (median/MAD), matching zero-inflation handling
+      // (see Step 3 comment in actig::actig for full explanation)
+      double med = vec_median( y );
+      {
+	std::vector<double> tmp( bsz );
+	for ( int i = 0; i < bsz; i++ ) tmp[i] = std::fabs( y[i] - med );
+	if ( vec_median( tmp ) < 1e-9 )
+	  {
+	    const double floor_val = med;
+	    std::vector<double> act;
+	    for ( double v : y ) if ( v > floor_val + 1e-9 ) act.push_back( v );
+	    if ( !act.empty() ) med = vec_median( act );
+	  }
+      }
+      std::vector<double> abs_dev( bsz );
+      for ( int i = 0; i < bsz; i++ ) abs_dev[i] = std::fabs( y[i] - med );
+      double mad = vec_median( abs_dev );
+      if ( mad < 1e-9 ) {
+	std::vector<double> sy = y; std::sort( sy.begin(), sy.end() );
+	double iqr = sy[std::min(bsz-1, 3*bsz/4)] - sy[bsz/4];
+	if ( iqr > 1e-9 ) mad = iqr / 1.3489795;
+	else {
+	  double mn = 0; for ( double v : y ) mn += v; mn /= bsz;
+	  double var = 0; for ( double v : y ) { double d = v-mn; var += d*d; }
+	  double sd = bsz > 1 ? std::sqrt( var/(bsz-1) ) : 0.0;
+	  mad = sd > 1e-9 ? sd : 1e-9;
+	}
+      }
+      std::vector<double> z( bsz );
+      for ( int i = 0; i < bsz; i++ ) z[i] = ( y[i] - med ) / mad;
+
+      // Moving-median smoothing → L
+      std::vector<double> L( bsz );
+      { const int half = n_smooth / 2;
+	for ( int i = 0; i < bsz; i++ ) {
+	  const int lo = std::max(0, i-half), hi = std::min(bsz-1, i+half);
+	  std::vector<double> win( z.begin()+lo, z.begin()+hi+1 );
+	  L[i] = vec_median( win );
+	}
+      }
+
+      // Burst density → D
+      std::vector<double> D( bsz );
+      { const int half = n_burst_w / 2;
+	for ( int i = 0; i < bsz; i++ ) {
+	  const int lo = std::max(0, i-half), hi = std::min(bsz-1, i+half);
+	  int nb = 0; for ( int j = lo; j <= hi; j++ ) if ( z[j] > burst_z ) nb++;
+	  D[i] = (double)nb / (hi - lo + 1);
+	}
+      }
+
+      // Candidate sleep
+      std::vector<bool> cand( bsz );
+      for ( int i = 0; i < bsz; i++ )
+	cand[i] = ( L[i] < quiet_z ) && ( D[i] < active_frac );
+
+      // Pass 1: gap fill
+      std::vector<bool> filled = cand;
+      { int i = 0;
+	while ( i < bsz ) {
+	  if ( !filled[i] ) {
+	    int j = i; while ( j < bsz && !filled[j] ) j++;
+	    const bool before = ( i > 0 && filled[i-1] ), after = ( j < bsz && filled[j] );
+	    if ( j-i <= n_gap_fill && before && after )
+	      for ( int k = i; k < j; k++ ) filled[k] = true;
+	    i = j;
+	  } else i++;
+	}
+      }
+
+      // Pass 2: min sleep duration
+      { int i = 0;
+	while ( i < bsz ) {
+	  if ( filled[i] ) {
+	    int j = i; while ( j < bsz && filled[j] ) j++;
+	    if ( j-i < n_min_sleep ) for ( int k = i; k < j; k++ ) filled[k] = false;
+	    i = j;
+	  } else i++;
+	}
+      }
+
+      // Pass 3: wake-persistence state machine
+      std::vector<bool> final_sleep( bsz, false );
+      { bool in_sleep = false; int wake_run_start = -1;
+	for ( int i = 0; i <= bsz; i++ ) {
+	  const bool cur = ( i < bsz ) && filled[i];
+	  const bool at_end = ( i >= bsz );
+	  if ( cur ) {
+	    in_sleep = true; wake_run_start = -1; final_sleep[i] = true;
+	  } else if ( in_sleep ) {
+	    if ( wake_run_start < 0 ) wake_run_start = i;
+	    const int rlen = ( i < bsz ? i : bsz-1 ) - wake_run_start + 1;
+	    if ( rlen >= n_wake_break || at_end ) {
+	      for ( int k = wake_run_start; k < i && k < bsz; k++ ) final_sleep[k] = false;
+	      in_sleep = false; wake_run_start = -1;
+	    } else if ( i < bsz ) { final_sleep[i] = true; }
+	  }
+	}
+      }
+
+      for ( int i = 0; i < bsz; i++ ) is_wake[bs+i] = !final_sleep[i];
+    }
+
+  return is_wake;
+}
+
+
+// -----------------------------------------------------------------------
+//
 // ACTIG : nonparametric circadian metrics and wake/sleep scoring
 //
 //  Gap handling: gaps are identified via timestamp discontinuities in
@@ -567,6 +746,24 @@ void actig::actig( edf_t & edf , param_t & param )
 
   // add diagnostic channels (_Z, _L, _D, _CS, _SW) to the EDF (luna method only)
   const bool do_channels = param.has( "channels" );
+
+  // PSG comparison: compare actigraphy scoring against concurrent PSG stages
+  //   psg              : enable PSG comparison
+  //   psg-prefix=p     : prefix for all stage labels (e.g. p -> pN1,pN2,pN3,pR,pW)
+  //   psg-n1/n2/n3/rem/wake : override individual labels (takes priority over prefix)
+  //   psg-exclude-n1   : exclude N1 epochs from metrics (default: count N1 as sleep)
+  //   tune             : grid-search over quiet-z, active-frac, min-wake to maximise
+  //                      balanced accuracy vs PSG; requires score luna
+  const bool        do_psg          = param.has( "psg" );
+  const std::string psg_prefix      = param.has( "psg-prefix" ) ? param.value( "psg-prefix" ) : "";
+  const std::string psg_n1_label    = param.has( "psg-n1"  ) ? param.value( "psg-n1"  ) : psg_prefix + "N1";
+  const std::string psg_n2_label    = param.has( "psg-n2"  ) ? param.value( "psg-n2"  ) : psg_prefix + "N2";
+  const std::string psg_n3_label    = param.has( "psg-n3"  ) ? param.value( "psg-n3"  ) : psg_prefix + "N3";
+  const std::string psg_rem_label   = param.has( "psg-rem" ) ? param.value( "psg-rem" ) : psg_prefix + "R";
+  const std::string psg_wake_label  = param.has( "psg-wake") ? param.value( "psg-wake") : psg_prefix + "W";
+  const bool        psg_exclude_n1  = param.has( "psg-exclude-n1" );
+  const bool        do_tune         = param.has( "tune" );
+  const bool        do_tune_grid    = param.has( "tune-grid" );  // output full grid surface
 
   // Local sleep debt
   const bool        do_debt          = param.has( "debt" );
@@ -1695,24 +1892,29 @@ void actig::actig( edf_t & edf , param_t & param )
 
 	  // Step 3: Robust normalisation (median / MAD)
 	  //
-	  // When ≥50% of epochs have zero activity (non-wear or heavily
-	  // inactive periods dominate the block), the global median collapses
-	  // to zero.  Because log(1+x) ≥ 0 always, every z-score would then
-	  // be ≥ 0 and no epoch could ever pass the quiet-z < 0 criterion.
-	  // Fix: if the global median is effectively zero, centre instead on
-	  // the median of strictly positive log-values (the "active sub-
-	  // distribution").  This automatically equals the P(f_zero × 100)
-	  // percentile of all data — the higher the zero fraction f_zero,
-	  // the higher the reference percentile — so quiet/sleep epochs
-	  // always receive negative z-scores regardless of zero-inflation.
+	  // When ≥50% of epochs sit at a common floor value (zero or a
+	  // non-zero device baseline), the global MAD collapses to zero and
+	  // the global median equals the floor.  Because all floor epochs
+	  // then get z = 0, none can pass a quiet-z < 0 criterion and the
+	  // algorithm detects no sleep.
+	  // Fix: detect a floor-dominated block by computing a trial MAD; if
+	  // it is effectively zero, re-centre on the median of epochs strictly
+	  // above the floor (the "active sub-distribution").  Floor epochs
+	  // then receive negative z-scores and qualify as sleep candidates.
+	  // This generalises the original zero-only fix to any device floor.
 	  double med = vec_median( y );
-	  if ( med < 1e-9 )
-	    {
-	      std::vector<double> act_y;
-	      act_y.reserve( bsz );
-	      for ( double v : y ) if ( v > 1e-9 ) act_y.push_back( v );
-	      if ( ! act_y.empty() ) med = vec_median( act_y );
-	    }
+	  {
+	    std::vector<double> tmp( bsz );
+	    for ( int i = 0; i < bsz; i++ ) tmp[i] = std::fabs( y[i] - med );
+	    if ( vec_median( tmp ) < 1e-9 )
+	      {
+		const double floor_val = med;
+		std::vector<double> act_y;
+		act_y.reserve( bsz );
+		for ( double v : y ) if ( v > floor_val + 1e-9 ) act_y.push_back( v );
+		if ( ! act_y.empty() ) med = vec_median( act_y );
+	      }
+	  }
 
 	  std::vector<double> abs_dev( bsz );
 	  for ( int i = 0; i < bsz; i++ )
@@ -1980,6 +2182,272 @@ void actig::actig( edf_t & edf , param_t & param )
       Helper::halt( "ACTIG: unknown scoring method '" + method
 		    + "' (use: luna, cole, threshold)" );
     }
+
+
+  // -----------------------------------------------------------------------
+  //
+  // PSG comparison (and optional parameter tuning)
+  //
+  //  Reads N1/N2/N3/R/W stage annotations, aligns them to actigraphy
+  //  epochs by timepoint, and computes a 2×2 confusion table (sleep/wake)
+  //  along with kappa, sensitivity, specificity, and TST difference.
+  //
+  //  If tune is set (luna method only), runs a grid search over the three
+  //  most influential parameters — quiet-z, active-frac, min-wake — to
+  //  maximise balanced accuracy, then re-scores is_wake[] with the best
+  //  parameters so that downstream annotations and metrics use them.
+  //
+  // -----------------------------------------------------------------------
+
+  if ( do_psg )
+    {
+      if ( !do_any_score && !do_prescored )
+	logger << "  psg: warning: no scoring mode active; metrics compare PSG against "
+               << "all-wake actigraphy\n";
+
+      // Locate PSG annotation objects (NULL = not present)
+      annot_t * a_n1   = edf.timeline.annotations->find( psg_n1_label  );
+      annot_t * a_n2   = edf.timeline.annotations->find( psg_n2_label  );
+      annot_t * a_n3   = edf.timeline.annotations->find( psg_n3_label  );
+      annot_t * a_rem  = edf.timeline.annotations->find( psg_rem_label );
+      annot_t * a_psgw = edf.timeline.annotations->find( psg_wake_label);
+
+      if ( a_n1 == NULL && a_n2 == NULL && a_n3 == NULL
+	   && a_rem == NULL && a_psgw == NULL )
+	{
+	  logger << "  psg: no PSG stage annotations found ("
+		 << psg_n1_label << "/" << psg_n2_label << "/" << psg_n3_label
+		 << "/" << psg_rem_label << "/" << psg_wake_label << "); skipping\n";
+	}
+      else
+	{
+
+	  // Build per-epoch PSG state vector
+	  std::vector<int> psg_ep( n_epochs, PSG_NONE );
+	  int n_psg_w = 0, n_psg_n1 = 0, n_psg_sleep = 0;
+
+	  for ( int i = 0; i < n_epochs; i++ )
+	    {
+	      if ( is_gap[i] ) continue;
+	      const double start_sec = i * epoch_sec;
+	      double stop_sec = (i+1) * epoch_sec;
+	      if ( stop_sec > total_sec ) stop_sec = total_sec;
+	      const interval_t ival( Helper::sec2tp(start_sec), Helper::sec2tp(stop_sec) );
+
+	      const bool hw  = a_psgw != NULL && !a_psgw->extract(ival).empty();
+	      const bool hn1 = a_n1   != NULL && !a_n1->extract(ival).empty();
+	      const bool hn2 = a_n2   != NULL && !a_n2->extract(ival).empty();
+	      const bool hn3 = a_n3   != NULL && !a_n3->extract(ival).empty();
+	      const bool hr  = a_rem  != NULL && !a_rem->extract(ival).empty();
+
+	      // Wake takes priority; then definite sleep; then N1 (ambiguous)
+	      if      ( hw )              { psg_ep[i] = PSG_WAKE;  n_psg_w++; }
+	      else if ( hn2 || hn3 || hr ){ psg_ep[i] = PSG_SLEEP; n_psg_sleep++; }
+	      else if ( hn1 )             { psg_ep[i] = PSG_N1;   n_psg_n1++; }
+	    }
+
+	  const int n_psg_total = n_psg_w + n_psg_n1 + n_psg_sleep;
+	  logger << "  psg: " << n_psg_total << " PSG-covered actigraphy epochs ("
+		 << n_psg_w << " W, " << n_psg_n1 << " N1, "
+		 << n_psg_sleep << " N2/N3/R)"
+		 << ( psg_exclude_n1 ? "; N1 epochs will be excluded from metrics" : "" )
+		 << "\n";
+
+	  // -----------------------------------------------------------
+	  // Alignment metric: for each PSG annotation start timepoint,
+	  // find the nearest actigraphy epoch boundary (by binary search
+	  // into the empirical epoch start TP table) and record the
+	  // distance in seconds.
+	  // Mean/SD near 0 = well-aligned; near epoch_sec/2 = half-epoch
+	  // systematic offset.
+	  // -----------------------------------------------------------
+	  {
+	    // Build sorted table of epoch start TPs from the actual epoch
+	    // grid used by ACTIG (includes gap epochs so the boundary
+	    // positions are correct even across non-wear holes).
+	    std::vector<uint64_t> ep_starts;
+	    ep_starts.reserve( n_epochs );
+	    for ( int i = 0; i < n_epochs; i++ )
+	      ep_starts.push_back( recording_start_tp + (uint64_t)i * epoch_tp );
+	    // ep_starts is already sorted (monotone increasing)
+
+	    std::vector<double> dists;
+	    for ( annot_t * a : { a_n1, a_n2, a_n3, a_rem, a_psgw } )
+	      {
+		if ( a == NULL ) continue;
+		for ( auto & kv : a->interval_events )
+		  {
+		    const uint64_t t = kv.first.interval.start;
+		    // binary search: first epoch start >= t
+		    auto it = std::lower_bound( ep_starts.begin(), ep_starts.end(), t );
+		    uint64_t best = UINT64_MAX;
+		    if ( it != ep_starts.end() )
+		      best = std::min( best, *it - t );         // dist to next boundary
+		    if ( it != ep_starts.begin() )
+		      best = std::min( best, t - *std::prev(it) ); // dist to prev boundary
+		    if ( best != UINT64_MAX )
+		      dists.push_back( best / (double)globals::tp_1sec );
+		  }
+	      }
+	    if ( !dists.empty() )
+	      {
+		const double mn = vec_mean( dists );
+		writer.value( "PSG_ALIGN_N",    (int)dists.size() );
+		writer.value( "PSG_ALIGN_MEAN", mn );
+		if ( dists.size() > 1 )
+		  writer.value( "PSG_ALIGN_SD", vec_sd( dists ) );
+		logger << "  psg: boundary alignment: mean dist to nearest epoch boundary = "
+		       << mn << " sec (n=" << dists.size() << " PSG annotation starts)\n";
+	      }
+	  }
+
+	  if ( n_psg_total == 0 )
+	    {
+	      logger << "  psg: no PSG-covered epochs overlap valid actigraphy epochs; "
+		     << "skipping metrics\n";
+	    }
+	  else
+	    {
+	      // -----------------------------------------------------------
+	      // Helper: build 2×2 table from an is_wake[] vector vs psg_ep
+	      // Positive class = sleep.
+	      // N1 is counted as sleep unless psg-exclude-n1 is set.
+	      // -----------------------------------------------------------
+	      auto eval_psg = [&]( const std::vector<bool> & iw ) -> psg_stats_t
+	      {
+		psg_stats_t st;
+		for ( int i = 0; i < n_epochs; i++ )
+		  {
+		    if ( psg_ep[i] == PSG_NONE ) continue;
+		    if ( psg_ep[i] == PSG_N1 && psg_exclude_n1 )
+		      { st.n_n1_excl++; continue; }
+		    const int psg_is_sleep = ( psg_ep[i] == PSG_SLEEP
+					       || ( !psg_exclude_n1 && psg_ep[i] == PSG_N1 ) )
+		                             ? 1 : 0;
+		    const int actig_is_sleep = iw[i] ? 0 : 1;
+		    if      (  psg_is_sleep &&  actig_is_sleep ) st.tp++;
+		    else if ( !psg_is_sleep &&  actig_is_sleep ) st.fp++;
+		    else if ( !psg_is_sleep && !actig_is_sleep ) st.tn++;
+		    else                                         st.fn++;
+		  }
+		return st;
+	      };
+
+	      // -----------------------------------------------------------
+	      // Helper: write metrics with a given variable-name prefix
+	      // -----------------------------------------------------------
+	      auto report_psg = [&]( const psg_stats_t & st , const std::string & pfx )
+	      {
+		writer.value( pfx + "N",        st.n() );
+		writer.value( pfx + "TP",       st.tp );
+		writer.value( pfx + "FP",       st.fp );
+		writer.value( pfx + "TN",       st.tn );
+		writer.value( pfx + "FN",       st.fn );
+		writer.value( pfx + "SENS",     st.sensitivity() );
+		writer.value( pfx + "SPEC",     st.specificity() );
+		writer.value( pfx + "ACC",      st.accuracy() );
+		writer.value( pfx + "BAL_ACC",  st.balanced_acc() );
+		writer.value( pfx + "KAPPA",    st.kappa() );
+		writer.value( pfx + "TST",      st.psg_tst_min(epoch_sec) );
+		writer.value( pfx + "ACTIG_TST",st.actig_tst_min(epoch_sec) );
+		writer.value( pfx + "TST_DIFF", st.tst_diff_min(epoch_sec) );
+		if ( psg_exclude_n1 && st.n_n1_excl > 0 )
+		  writer.value( pfx + "N1_EXCL", st.n_n1_excl );
+	      };
+
+	      // -----------------------------------------------------------
+	      // Metrics for current (default/user-specified) scoring
+	      // -----------------------------------------------------------
+	      const psg_stats_t st_def = eval_psg( is_wake );
+	      report_psg( st_def, "PSG_" );
+
+	      logger << "  psg: kappa=" << st_def.kappa()
+		     << " sens=" << st_def.sensitivity()
+		     << " spec=" << st_def.specificity()
+		     << " bal_acc=" << st_def.balanced_acc()
+		     << " tst_diff=" << st_def.tst_diff_min(epoch_sec) << " min\n";
+
+	      // -----------------------------------------------------------
+	      // Grid-search tuning (luna method only)
+	      // Tunes quiet-z, active-frac, min-wake-min to maximise
+	      // balanced accuracy.  smooth and burst windows are held fixed
+	      // at their current (user/default) values.
+	      // -----------------------------------------------------------
+	      if ( do_tune )
+		{
+		  if ( !do_any_score || method != "luna" )
+		    {
+		      logger << "  psg tune: skipped (requires score luna)\n";
+		    }
+		  else
+		    {
+		      const std::vector<double> grid_qz = { -1.5, -1.0, -0.75, -0.5, -0.25,  0.0,  0.25 };
+		      const std::vector<double> grid_af = {  0.05, 0.10,  0.20, 0.30,  0.40 };
+		      const std::vector<double> grid_mw = {  1.0,  2.0,   5.0, 10.0, 20.0  };
+
+		      const int n_grid = (int)(grid_qz.size() * grid_af.size() * grid_mw.size());
+		      logger << "  psg tune: searching " << n_grid << " combinations "
+			     << "(quiet-z x active-frac x min-wake)\n";
+
+		      double best_ba = -1.0;
+		      double best_qz = luna_quiet_z, best_af = luna_active_frac, best_mw = luna_min_wake_min;
+		      psg_stats_t best_st = st_def;
+
+		      for ( double qz : grid_qz )
+			for ( double af : grid_af )
+			  for ( double mw : grid_mw )
+			    {
+			      const std::vector<bool> iw_try = luna_score_ep(
+				epochs, is_gap, epoch_sec,
+				luna_smooth_min, luna_burst_min, luna_burst_z,
+				qz, af,
+				luna_min_sleep_min, luna_max_gap_min, mw );
+			      const psg_stats_t st_try = eval_psg( iw_try );
+			      const double ba = st_try.balanced_acc();
+			      if ( ba > best_ba )
+				{ best_ba = ba; best_qz = qz; best_af = af;
+				  best_mw = mw; best_st = st_try; }
+			      if ( do_tune_grid )
+				{
+				  writer.level( qz, "QZ" );
+				  writer.level( af, "AF" );
+				  writer.level( mw, "MW" );
+				  writer.value( "GRID_BAL_ACC",  ba );
+				  writer.value( "GRID_KAPPA",    st_try.kappa() );
+				  writer.value( "GRID_SENS",     st_try.sensitivity() );
+				  writer.value( "GRID_SPEC",     st_try.specificity() );
+				  writer.value( "GRID_TST_DIFF", st_try.tst_diff_min(epoch_sec) );
+				  writer.unlevel( "MW" );
+				  writer.unlevel( "AF" );
+				  writer.unlevel( "QZ" );
+				}
+			    }
+
+		      logger << "  psg tune: best params: quiet-z=" << best_qz
+			     << " active-frac=" << best_af
+			     << " min-wake=" << best_mw << " min"
+			     << " (bal_acc=" << best_ba << ")\n";
+
+		      writer.value( "TUNE_QUIET_Z",    best_qz );
+		      writer.value( "TUNE_ACTIVE_FRAC", best_af );
+		      writer.value( "TUNE_MIN_WAKE_MIN", best_mw );
+		      report_psg( best_st, "TUNE_" );
+
+		      // Re-score is_wake[] with tuned parameters so that all
+		      // downstream annotations and per-day stats use them
+		      is_wake = luna_score_ep( epochs, is_gap, epoch_sec,
+					       luna_smooth_min, luna_burst_min, luna_burst_z,
+					       best_qz, best_af,
+					       luna_min_sleep_min, luna_max_gap_min, best_mw );
+		      logger << "  psg tune: re-scored with tuned parameters\n";
+		    }
+		}
+
+	    }  // end if n_psg_total > 0
+
+	}  // end if any PSG annotations found
+
+    }  // end do_psg
 
 
   //
