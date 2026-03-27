@@ -37,11 +37,18 @@
 #include "fftw/fftwrap.h"
 #include "pdc/pdc.h"
 #include <cmath>
+#include <numeric>
 
 extern logger_t logger;
 extern writer_t writer;
 
   
+pops_indiv_t::pops_indiv_t( edf_t * pedf_ )
+  : pedf( pedf_ ) , trainer( false ) , has_staging( false ) , ne( 0 ) , ne_total( 0 )
+{
+}
+
+
 pops_indiv_t::pops_indiv_t( edf_t & edf ,
 			    param_t & param )
 {
@@ -799,6 +806,18 @@ void pops_indiv_t::level1( edf_t & edf )
 
   ne = ne_total = edf.timeline.first_epoch();
 
+  // Standard POPS prediction/training populates S/E via staging() before level1().
+  // Hypnodensity mode skips staging() and calls level1() directly, so seed a
+  // default all-WAKE epoch scaffold here to keep the per-epoch loop safe.
+  if ( S.size() != ne || E.size() != ne )
+    {
+      S.assign( ne , POPS_WAKE );
+      E.resize( ne );
+      std::iota( E.begin() , E.end() , 0 );
+      if ( Sorig.size() != ne )
+	Sorig.assign( ne , POPS_WAKE );
+    }
+
   //
   // score level-1 factors --> X1
   //
@@ -843,7 +862,6 @@ void pops_indiv_t::level1( edf_t & edf )
   std::map<std::string,pops_channel_t>::const_iterator ss =  pops_t::specs.chs.begin(); 
   while ( ss != pops_t::specs.chs.end() )
     {
-      
       // primary?
       int slot = edf.header.signal( ss->first , silent_signal_search );
 
@@ -1063,7 +1081,6 @@ void pops_indiv_t::level1( edf_t & edf )
 
       for (int s = 0 ; s < ns; s++ )
 	{
-
 	  //
 	  // Skip if flagged for a prior channel?
 	  //
@@ -2751,6 +2768,3 @@ void pops_indiv_t::add_annots( edf_t & edf , const std::string & prefix )
 }
 
 #endif
-
-
-

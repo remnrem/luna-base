@@ -4031,7 +4031,13 @@ void cmddefs_t::init()
             "command.\n\n"
             "RUN-POPS copies the requested signals, optionally re-references them, "
             "resamples to 128 Hz, band-pass filters, normalizes, optionally runs "
-            "EDGER, and then invokes POPS with the assembled temporary signals." );
+            "EDGER, and then invokes POPS with the assembled temporary signals.\n\n"
+            "Hypnodensity mode (hypnodensity=N): instead of epoch-level stage calls, "
+            "emits per-stage posterior probability signals at 1/(30/N) Hz by running "
+            "N independent POPS predictions with staggered epoch offsets (0, 30/N, "
+            "2*30/N, ... seconds).  Edge regions are filled by zero-order hold and "
+            "marked with an annotation.  Requires a 5-class model; EDGER is disabled "
+            "by default in this mode (set edger=T to override)." );
   add_param( "RUN-POPS" , "sig" , "C3,C4" , "Primary EEG signal(s)" );
   add_param( "RUN-POPS" , "ref" , "M2,M1" , "Reference signal(s), matching sig length" );
   add_param( "RUN-POPS" , "args" , "trim=10 3-class" , "Additional arguments passed to POPS" );
@@ -4039,7 +4045,11 @@ void cmddefs_t::init()
   add_param( "RUN-POPS" , "lib" , "s2" , "POPS library root" );
   add_param( "RUN-POPS" , "path" , "." , "Base path for POPS resources" );
   add_param( "RUN-POPS" , "filter" , "T" , "Band-pass filter copied signals before POPS" );
-  add_param( "RUN-POPS" , "edger" , "T" , "Run EDGER on the copied signals" );
+  add_param( "RUN-POPS" , "edger" , "T" , "Run EDGER on the copied signals (default F in hypnodensity mode)" );
+  add_param( "RUN-POPS" , "hypnodensity" , "6" , "Hypnodensity mode: N strides over 30s window, default 6 (1/5 Hz)" );
+  add_param( "RUN-POPS" , "prefix" , "PP" , "Channel prefix for hypnodensity output signals" );
+  add_param( "RUN-POPS" , "add-nrem123" , "T" , "Add individual N1/N2/N3 posterior channels (hypnodensity)" );
+  add_param( "RUN-POPS" , "add-nrem" , "F" , "Add summed NR=N1+N2+N3 posterior channel (hypnodensity)" );
 
   //
   // EVAL-STAGES
@@ -4054,6 +4064,100 @@ void cmddefs_t::init()
             "agreement metrics, stage summaries, confusion tables, and related "
             "diagnostics without rerunning a full staging model." );
   add_param( "EVAL-STAGES" , "file" , "stages.eannot" , "Reference stage file to compare against" );
+
+  //
+  // HDSTATS
+  //
+
+  add_cmd( "stage" , "HDSTATS" , "Hypnodensity signal analysis" );
+  add_verb( "HDSTATS" ,
+	    "Analyze hypnodensity signals (posterior-probability EDF channels) along four "
+	    "conceptual domains: (A) mixedness/spread of the posterior, (B) instability/"
+	    "motion over time, (C) transition structure near likely state boundaries, and "
+	    "(D) context via user-defined annotation strata.  The primary distinction "
+	    "preserved is stable mixed/intermediate states vs. transient instability." );
+  add_param( "HDSTATS" , "W"          , "PP_W"   , "Channel name for wake posterior" );
+  add_param( "HDSTATS" , "N1"         , "PP_N1"  , "Channel name for N1 posterior" );
+  add_param( "HDSTATS" , "N2"         , "PP_N2"  , "Channel name for N2 posterior" );
+  add_param( "HDSTATS" , "N3"         , "PP_N3"  , "Channel name for N3 posterior" );
+  add_param( "HDSTATS" , "R"          , "PP_R"   , "Channel name for REM posterior" );
+  add_param( "HDSTATS" , "3state"     , ""       , "Also compute 3-state (W/NREM/R) summaries" );
+  add_param( "HDSTATS" , "transition" , "motion" , "Transition detection method: hard, motion, or both" );
+  add_param( "HDSTATS" , "motion-th"  , "0.1"    , "TV threshold for motion-based transition detection" );
+  add_param( "HDSTATS" , "window"     , "60"     , "Transition window half-width (seconds)" );
+  add_param( "HDSTATS" , "lag"        , "30"     , "Lag for longer-lag TV metric (seconds)" );
+  add_param( "HDSTATS" , "stable-min" , "60"     , "Min seconds from any transition to qualify as stable-core" );
+  add_param( "HDSTATS" , "conf-th"    , "0.8"    , "Confidence threshold for FRAC_C_LT metric" );
+  add_param( "HDSTATS" , "annot"      , ""       , "Annotation class to stratify output by" );
+  add_param( "HDSTATS" , "min-events" , "3"      , "Minimum events required to emit aligned transition profile" );
+  add_param( "HDSTATS" , "verbose"    , ""       , "Emit per-sample HDSIG time-series table" );
+
+  add_table( "HDSTATS" , "REGION"           , "Mixedness and instability by region (ALL/STABLE/TRANS)" );
+  add_table( "HDSTATS" , "REGION,ANNOT"     , "Same, stratified by annotation level" );
+  add_table( "HDSTATS" , "REGION,STATE"     , "Same, by state representation (5/3); only with 3state option" );
+  add_var(   "HDSTATS" , "REGION"           , "N"           , "Number of samples in region" );
+  add_var(   "HDSTATS" , "REGION"           , "MEAN_H"      , "Mean entropy" );
+  add_var(   "HDSTATS" , "REGION"           , "SD_H"        , "SD entropy" );
+  add_var(   "HDSTATS" , "REGION"           , "P90_H"       , "90th percentile entropy" );
+  add_var(   "HDSTATS" , "REGION"           , "MEAN_C"      , "Mean confidence (max posterior)" );
+  add_var(   "HDSTATS" , "REGION"           , "FRAC_C_LT"   , "Fraction of samples with confidence below conf-th" );
+  add_var(   "HDSTATS" , "REGION"           , "MEAN_MG"     , "Mean margin (1st minus 2nd largest posterior)" );
+  add_var(   "HDSTATS" , "REGION"           , "MEAN_TV"     , "Mean total-variation step" );
+  add_var(   "HDSTATS" , "REGION"           , "SD_TV"       , "SD total-variation step" );
+  add_var(   "HDSTATS" , "REGION"           , "P90_TV"      , "90th percentile total-variation step" );
+  add_var(   "HDSTATS" , "REGION"           , "MEAN_TV_LAG" , "Mean total-variation at longer lag" );
+  add_var(   "HDSTATS" , "REGION"           , "CORR_H_TV"   , "Pearson correlation between entropy and TV" );
+  add_var(   "HDSTATS" , "REGION"           , "MEAN_MIX_A"  , "Mean W/N1 pairwise mixing (5-state) or W/NREM (3-state)" );
+  add_var(   "HDSTATS" , "REGION"           , "MEAN_MIX_B"  , "Mean N2/N3 pairwise mixing (5-state only)" );
+  add_var(   "HDSTATS" , "REGION"           , "MEAN_MIX_C"  , "Mean R/N1 pairwise mixing (5-state) or NREM/R (3-state)" );
+  add_var(   "HDSTATS" , ""                 , "H_RATIO_TR_ST"  , "Entropy ratio: transition / stable" );
+  add_var(   "HDSTATS" , ""                 , "CONF_DIFF_TR_ST" , "Confidence difference: transition - stable" );
+  add_var(   "HDSTATS" , ""                 , "TV_RATIO_TR_ST"  , "TV ratio: transition / stable" );
+  add_var(   "HDSTATS" , ""                 , "N_TRANS"         , "Number of transition events detected" );
+  add_var(   "HDSTATS" , ""                 , "TRANS_DENS"      , "Transition density (events per hour)" );
+  add_var(   "HDSTATS" , ""                 , "MEAN_TRANS_W"    , "Mean transition width (seconds)" );
+  add_var(   "HDSTATS" , ""                 , "MEAN_PEAK_H"     , "Mean peak entropy in transition window" );
+  add_var(   "HDSTATS" , ""                 , "MEAN_MIN_C"      , "Mean minimum confidence in transition window" );
+  add_var(   "HDSTATS" , ""                 , "MEAN_TV_AREA"    , "Mean TV area under curve in transition window (seconds)" );
+  add_table( "HDSTATS" , "TRANS"            , "Transition-pair-specific summary statistics" );
+  add_table( "HDSTATS" , "STATE,TRANS"      , "Transition-pair-specific summary statistics by state representation" );
+  add_var(   "HDSTATS" , "TRANS"            , "N_TRANS"         , "Number of transition events detected" );
+  add_var(   "HDSTATS" , "TRANS"            , "TRANS_DENS"      , "Transition density (events per hour)" );
+  add_var(   "HDSTATS" , "TRANS"            , "MEAN_TRANS_W"    , "Mean transition width (seconds)" );
+  add_var(   "HDSTATS" , "TRANS"            , "MEAN_PEAK_H"     , "Mean peak entropy in transition window" );
+  add_var(   "HDSTATS" , "TRANS"            , "MEAN_MIN_C"      , "Mean minimum confidence in transition window" );
+  add_var(   "HDSTATS" , "TRANS"            , "MEAN_TV_AREA"    , "Mean TV area under curve in transition window (seconds)" );
+
+  add_table( "HDSTATS" , "OFFSET"           , "Transition-aligned mean profiles (HDTRANS_PROFILE)" );
+  add_var(   "HDSTATS" , "OFFSET"           , "H"      , "Mean entropy at offset" );
+  add_var(   "HDSTATS" , "OFFSET"           , "C"      , "Mean confidence at offset" );
+  add_var(   "HDSTATS" , "OFFSET"           , "MG"     , "Mean margin at offset" );
+  add_var(   "HDSTATS" , "OFFSET"           , "TV"     , "Centered mean TV at offset" );
+  add_table( "HDSTATS" , "TRANS,OFFSET"     , "Transition-pair-specific aligned profiles" );
+  add_table( "HDSTATS" , "STATE,TRANS,OFFSET" , "Transition-pair-specific aligned profiles by state representation" );
+  add_var(   "HDSTATS" , "TRANS,OFFSET"     , "H"      , "Mean entropy at offset" );
+  add_var(   "HDSTATS" , "TRANS,OFFSET"     , "C"      , "Mean confidence at offset" );
+  add_var(   "HDSTATS" , "TRANS,OFFSET"     , "MG"     , "Mean margin at offset" );
+  add_var(   "HDSTATS" , "TRANS,OFFSET"     , "TV"     , "Centered mean TV at offset" );
+  add_var(   "HDSTATS" , "TRANS,OFFSET"     , "P_W"    , "Mean wake posterior at offset" );
+  add_var(   "HDSTATS" , "TRANS,OFFSET"     , "P_NR"   , "Mean NREM posterior at offset (3-state only)" );
+  add_var(   "HDSTATS" , "TRANS,OFFSET"     , "P_N1"   , "Mean N1 posterior at offset (5-state only)" );
+  add_var(   "HDSTATS" , "TRANS,OFFSET"     , "P_N2"   , "Mean N2 posterior at offset (5-state only)" );
+  add_var(   "HDSTATS" , "TRANS,OFFSET"     , "P_N3"   , "Mean N3 posterior at offset (5-state only)" );
+  add_var(   "HDSTATS" , "TRANS,OFFSET"     , "P_R"    , "Mean REM posterior at offset" );
+
+  add_table( "HDSTATS" , "TIME"             , "Per-sample time-series (verbose only)" );
+  add_var(   "HDSTATS" , "TIME"             , "H"           , "Entropy" );
+  add_var(   "HDSTATS" , "TIME"             , "C"           , "Confidence" );
+  add_var(   "HDSTATS" , "TIME"             , "MG"          , "Margin" );
+  add_var(   "HDSTATS" , "TIME"             , "TV"          , "Total-variation step" );
+  add_var(   "HDSTATS" , "TIME"             , "TV_LAG"      , "Total-variation at longer lag" );
+  add_var(   "HDSTATS" , "TIME"             , "MIX_A"       , "W/N1 mixing" );
+  add_var(   "HDSTATS" , "TIME"             , "MIX_B"       , "N2/N3 mixing" );
+  add_var(   "HDSTATS" , "TIME"             , "MIX_C"       , "R/N1 mixing" );
+  add_var(   "HDSTATS" , "TIME"             , "ARGMAX"      , "Argmax state index (0=W 1=N1 2=N2 3=N3 4=R)" );
+  add_var(   "HDSTATS" , "TIME"             , "IS_TRANS"    , "1 if sample is in a transition zone" );
+  add_var(   "HDSTATS" , "TIME"             , "IS_STABLE"   , "1 if sample is in stable-core" );
 
   /////////////////////////////////////////////////////////////////////////////////
   //

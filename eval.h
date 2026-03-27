@@ -342,6 +342,7 @@ void proc_ctypes( edf_t & , param_t & );
 void proc_runpops( edf_t & , param_t & );
 void proc_pops( edf_t & , param_t & );
 void proc_eval_stages( edf_t & , param_t & );
+void proc_hdstats( edf_t & , param_t & );
 
 void proc_copy_suds_cmdline();
 void proc_combine_suds_cmdline();

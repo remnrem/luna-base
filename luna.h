@@ -108,6 +108,8 @@
 #include "lgbm/lgbm.h"
 
 #include "pops/pops.h"
+#include "pops/hypnodensity.h"
+#include "pops/hdstats.h"
 
 #include "assoc/assoc.h"
 #include "assoc/massoc.h"

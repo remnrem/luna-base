@@ -390,7 +390,23 @@ int timeline_t::calc_epochs()
       
       // epochs have to be continuous in clocktime
       // putative start (i.e. start of record)
-      uint64_t estart = rec2tp[r];
+      //
+      // ORIGINAL (epoch_offset_tp was silently ignored for EDF+D):
+      //   uint64_t estart = rec2tp[r];
+      //
+      // CHANGED: apply epoch_offset_tp within each segment, mirroring the continuous-EDF
+      // behaviour (see 'if ( edf->header.continuous )' branch above).  This means that
+      // for a recording with segments at [T0..T1], [T2..T3], ..., epochs within each
+      // segment start at T_seg + offset, T_seg + offset + inc, ...
+      // To revert: replace the line below with the commented-out original above.
+      //
+      // CAVEAT: if epoch_offset_tp >= record_duration_tp, the first record of each segment
+      // will be spuriously included in the epoch->record mapping (the epoch actually starts
+      // in a later record within the segment).  For the primary use-case that motivated this
+      // change (POPS hypnodensity, offsets always < 15 s with 30 s records) this cannot
+      // arise.  A proper fix would advance 'r' past any records that precede 'estart' before
+      // entering the epoch loop -- left for a later revision.
+      uint64_t estart = rec2tp[r] + epoch_offset_tp;
 
       // but, if we are allowing annot offset alignment, we may need to skip ahead a bit? (i.e. will go the 
       // the start of the next valid annot
@@ -654,10 +670,16 @@ int timeline_t::calc_epochs()
 	      // epoch, and start adding one now for this next record
 	      //
 	      
-	      if ( rec2_start - rec_end != 1 ) 
-		{		  
-		  estart = rec2_start;
-		  
+	      if ( rec2_start - rec_end != 1 )
+		{
+		  // ORIGINAL (epoch_offset_tp ignored at each new-segment restart):
+		  //   estart = rec2_start;
+		  //
+		  // CHANGED: apply the same offset used at the initial segment start (above).
+		  // To revert: replace the line below with the commented-out original above.
+		  // See caveat above re: offset >= record_duration_tp.
+		  estart = rec2_start + epoch_offset_tp;
+
 		  //
 		  // Any annot-alignment?
 		  //

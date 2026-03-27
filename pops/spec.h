@@ -206,6 +206,9 @@ struct pops_specs_t {
   int total_cols() const;
   int select_cols() const;
 
+  // emit POPS feature-definition rows when reading the spec
+  bool emit_feature_defs = true;
+
   // get feature labels
   //  std::vector<std::string> total_labels();
   std::vector<std::string> select_labels();

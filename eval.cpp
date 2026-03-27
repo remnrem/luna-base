@@ -942,6 +942,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "RUN-POPS" ) )     { fnd = true; proc_runpops( edf , param(c) ); } // wrapper
       if ( (!fnd) && is( c, "POPS" ) )         { fnd = true; proc_pops( edf , param(c) ); }
       if ( (!fnd) && is( c, "EVAL-STAGES" ) )  { fnd = true; proc_eval_stages( edf , param(c) ); }
+      if ( (!fnd) && is( c, "HDSTATS" ) )      { fnd = true; proc_hdstats( edf , param(c) ); }
       if ( (!fnd) && is( c, "SOAP" ) )         { fnd = true; proc_self_suds( edf , param(c) ); }
       if ( (!fnd) && is( c, "COMPLETE" ) )     { fnd = true; proc_resoap( edf , param(c) ); }
       if ( (!fnd) && is( c, "REBASE" ) )       { fnd = true; proc_rebase_soap( edf , param(c) ); } // e.g. 20->30s epochs using SOAP
@@ -1676,10 +1677,15 @@ void proc_runpops( edf_t & edf , param_t & param )
   // optional path
   const std::string pops_path = param.has( "path" ) ? param.value( "path" ) : "." ; 
 
+  // hypnodensity mode
+  const bool do_hypnodensity = param.has( "hypnodensity" );
+  const int  hypnodensity_n  = do_hypnodensity ? ( param.value( "hypnodensity" ) != "" ? param.requires_int( "hypnodensity" ) : 6 ) : 0;
+
   // other options
   const bool do_filter = param.has( "filter" ) ? param.yesno( "filter" ) : true ;
 
-  const bool do_edger  = param.has( "edger" ) ? param.yesno( "edger" ) : true;  
+  // edger defaults to off in hypnodensity mode (ZOH handles edges; trim would distort output)
+  const bool do_edger  = param.has( "edger" ) ? param.yesno( "edger" ) : ( do_hypnodensity ? false : true );
 
 
   // xsigs handles
@@ -1817,6 +1823,19 @@ void proc_runpops( edf_t & edf , param_t & param )
   if ( ignore_obs_staging )
     pops_param.add( "ignore-obs-staging" );
 
+  // hypnodensity: forward trigger and output-control params to POPS
+  if ( do_hypnodensity )
+    {
+      pops_param.add( "hypnodensity" , Helper::int2str( hypnodensity_n ) );
+      pops_param.add( "ignore-obs-staging" ); // always implied in hypnodensity mode
+      if ( param.has( "prefix" ) )
+	pops_param.add( "prefix" , param.value( "prefix" ) );
+      if ( param.has( "add-nrem123" ) )
+	pops_param.add( "add-nrem123" , param.value( "add-nrem123" ) );
+      if ( param.has( "add-nrem" ) )
+	pops_param.add( "add-nrem" , param.value( "add-nrem" ) );
+    }
+
   if ( opt_args != "" )
     {
       logger << "  adding additional args to POPS: " << opt_args << "\n";
@@ -1885,12 +1904,23 @@ void proc_pops( edf_t & edf , param_t & param )
       return; 
     }
   
+  pops_t::specs.emit_feature_defs = ! param.has( "hypnodensity" );
   pops_t::specs.read( feature_file );
- 
+
+  //
+  // hypnodensity mode: separate pathway, does not use the standard pops_indiv_t flow
+  //
+
+  if ( param.has( "hypnodensity" ) )
+    {
+      pops_hypnodensity( edf , param );
+      return;
+    }
+
   //
   // process individual (either trainer, or target)
   //
-  
+
   pops_indiv_t indiv( edf , param );
 
 #else

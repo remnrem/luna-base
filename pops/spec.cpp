@@ -750,20 +750,23 @@ void pops_specs_t::build_colmap()
       // dump to output
       //
 
-      writer.level( f+1 , globals::feature_strat );
-      writer.value( "BLOCK" , col_block[f]  );
-      writer.value( "INC" , (int)col_select[f] );
-      if ( col_select[f] )
+      if ( this->emit_feature_defs )
 	{
-	  writer.value( "FINAL" , orig2final[ f ] + 1 );
-	  //writer.value( "ORIG" , final2orig[ orig2final[ f ] ] + 1 );
-	}      
-      writer.value( "LEVEL" , col_level[f] );
-      writer.value( "LABEL" , col_label[f] );
-      writer.value( "LABEL_ORIG" , col_original_label[f] );
-      writer.value( "ROOT" ,  col_root[f] );
-      
-      writer.unlevel( globals::feature_strat );
+	  writer.level( f+1 , globals::feature_strat );
+	  writer.value( "BLOCK" , col_block[f]  );
+	  writer.value( "INC" , (int)col_select[f] );
+	  if ( col_select[f] )
+	    {
+	      writer.value( "FINAL" , orig2final[ f ] + 1 );
+	      //writer.value( "ORIG" , final2orig[ orig2final[ f ] ] + 1 );
+	    }
+	  writer.value( "LEVEL" , col_level[f] );
+	  writer.value( "LABEL" , col_label[f] );
+	  writer.value( "LABEL_ORIG" , col_original_label[f] );
+	  writer.value( "ROOT" ,  col_root[f] );
+	  
+	  writer.unlevel( globals::feature_strat );
+	}
 
     }
 

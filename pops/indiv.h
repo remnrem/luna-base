@@ -51,6 +51,9 @@ struct pops_indiv_t {
   // special case #2: to eval two external files:: no attached EDFs
   pops_indiv_t( param_t & , const std::string & f1 , const std::string & f2 );
 
+  // minimal constructor for hypnodensity mode: sets pedf only; caller populates fields per stride
+  pops_indiv_t( edf_t * pedf_ );
+
   bool staging( edf_t & , param_t & );
   
   void save1( const std::string & , const std::string & );
