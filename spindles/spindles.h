@@ -40,6 +40,8 @@ struct spindle_t
     : start_sp( asp) , stop_sp( bsp ), tp( interval_t( a , b ) ) 
   { 
     include = true;
+    max_p2p_trough_sp = -1;
+    max_p2p_peak_sp = -1;
   } 
 
   // have start and stop in sample-points as well as time-points
@@ -74,6 +76,10 @@ struct spindle_t
   // max trough (for spindle temporal alignment)
   int max_trough_sp;
   double max_trough_rel; //(0..1)
+
+  // max peak-to-peak pair, anchored on the negative trough
+  int max_p2p_trough_sp;
+  int max_p2p_peak_sp;
   
   // max amplitude (based on CWT)
   int peak_amp_sp;

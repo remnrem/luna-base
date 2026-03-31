@@ -138,11 +138,13 @@ slow_wave_param_t::slow_wave_param_t( const param_t & param )
   // annotations -- first check so-annot then annot (i.e. if called from SPINDLES)
   astr = ".";
   output_halfwave_annots = false;
+  output_peak_annots = false;
 
   if ( param.has( "so-annot" ) )
     {
       astr = param.value( "so-annot" );
       output_halfwave_annots = param.yesno( "so-annot-halfwaves" , false , true );
+      output_peak_annots = param.yesno( "so-annot-peaks" , true , true );
     }
   
   // do not skip SO detection
@@ -481,12 +483,16 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
       logger << "  writing SO annotations to " << astr ;
       if ( output_halfwave_annots )
 	logger << " (also half-waves: " << astr << "_pos and " << astr << "_neg) ";	  
+      if ( output_peak_annots )
+	logger << " (also peaks: " << astr << "_pos_pk and " << astr << "_neg_pk) ";
       logger << " for " << ch << "\n";
       
       annot_t * a = edf->annotations->add( astr );
       
       annot_t * apos = output_halfwave_annots ? edf->annotations->add( astr + "_pos" ) : NULL ; 
       annot_t * aneg = output_halfwave_annots ? edf->annotations->add( astr + "_neg" ) : NULL ; 
+      annot_t * apos_pk = output_peak_annots ? edf->annotations->add( astr + "_pos_pk" ) : NULL ;
+      annot_t * aneg_pk = output_peak_annots ? edf->annotations->add( astr + "_neg_pk" ) : NULL ;
       
       for (int i=0;i<sw.size();i++)
 	{
@@ -513,6 +519,12 @@ void slow_waves_t::display_slow_waves( bool verbose , edf_t * edf  )
 	    {
 	      aneg->add( "." , interval_t( w.interval_tp.start, w.zero_crossing_tp ) , ch );
 	      apos->add( "." , interval_t( w.zero_crossing_tp , w.interval_tp.stop ) , ch );
+	    }
+
+	  if ( output_peak_annots )
+	    {
+	      aneg_pk->add( "." , interval_t( w.down_peak , w.down_peak ) , ch );
+	      apos_pk->add( "." , interval_t( w.up_peak , w.up_peak ) , ch );
 	    }
 	}
       
@@ -789,6 +801,7 @@ slow_waves_t::slow_waves_t( const std::vector<double> & unfiltered ,
   report_median_stats = false;
 
   output_halfwave_annots = false;
+  output_peak_annots = false;
   
   detect_slow_waves( unfiltered, tp , sr , par, 
 		     cache_name_neg, cache_name_pos , edf );
@@ -822,8 +835,8 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
   // annotations
   astr = par.astr;
   output_halfwave_annots = par.output_halfwave_annots;
+  output_peak_annots = par.output_peak_annots;
   ch = par.ch;
-  output_halfwave_annots = false; // can allow a param to set this
   
   // cache peaks?
   bool cache_neg = cache_name_neg != NULL ;

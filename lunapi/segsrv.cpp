@@ -1784,23 +1784,27 @@ void sigmod_t::make_mod( const std::string & mod_label ,
   // given a filter to apply (presumably for filter-Hilbert but allow for 'raw' amplitude too)
   const bool has_filter = sos.size() != 0 ;
   
+  // strip optional _pct suffix (e.g. "raw_pct", "amp_pct")
+  const bool use_pct = type.size() > 4 && type.compare( type.size()-4, 4, "_pct" ) == 0;
+  const std::string base_type = use_pct ? type.substr( 0, type.size()-4 ) : type;
+
   // type of modulation
-  const bool mod_raw = type == "raw";  // take signal as is
-  const bool mod_amp = type == "amp";  // filter-Hilbert --> amplitude
-  const bool mod_pha = type == "phase"; // filter-Hilbert --> magnitude
+  const bool mod_raw = base_type == "raw";   // take signal as is
+  const bool mod_amp = base_type == "amp";   // filter-Hilbert --> amplitude
+  const bool mod_pha = base_type == "phase"; // filter-Hilbert --> phase
   if ( ! ( mod_raw || mod_amp || mod_pha ) )
     return;
-  
+
   // get original mod-sig
   std::map<std::string,Eigen::VectorXf>::const_iterator ss = parent->sigmap.find( mod_ch );
   if ( ss == parent->sigmap.end() ) return;
 
-  // get entire signal 
+  // get entire signal
   Eigen::VectorXf s = parent->sigmap[ mod_ch ];
-  
+
   // filter?
-  if ( has_filter ) 
-    {            
+  if ( has_filter )
+    {
       sos_filter_t f( sos );
       std::size_t M = sos.size() / 6;
       int pad = std::min(std::max(32, (int)(16*M) ), (int)(s.size() /8 ) );
@@ -1808,46 +1812,67 @@ void sigmod_t::make_mod( const std::string & mod_label ,
       f.process( s );
     }
 
-  // currently, yscale not used
-  
-  // upper limit of each bin
-  std::vector<double> cuts( nbins );
-  
-  // Hilbert transform?
+  // Hilbert transform (amp and phase modes)?
   if ( ! mod_raw )
     {
-      std::vector<double> d(s.data(), s.data() + s.size());      
+      std::vector<double> d(s.data(), s.data() + s.size());
       hilbert_t h( d );
       const std::vector<double> * out;
       if ( mod_amp ) out = h.magnitude();
-      else if ( mod_pha ) out = h.phase();
-      
+      else out = h.phase();
+
       if ( out->size() != s.size() )
 	Helper::halt( "internal error: hilbert output size" );
       for (int i = 0; i < s.size(); ++i)
 	s[i] = static_cast<float>((*out)[i]);
-      
     }
-  
-  // get range
-  double smin = s.minCoeff();
-  double smax = s.maxCoeff();
 
-  // find segments
-  const float span = smax - smin;
-  if (span <= 0) return;  
-  const float inv_span = nbins / span;
-  
-  // compute bin indices for all s
-  Eigen::ArrayXf t = (s.array() - smin) * inv_span;
-  Eigen::ArrayXi b = t.floor().cast<int>();
-  b = b.min(nbins - 1); // clamp right edge
-  
-  // save modulator: a) need bins, b) time-track, both for entire recording
-  mod_bins[ mod_label ] = b;
-  
-  //  pull entire signal
-  mod_tt[ mod_label ] = parent->tmap.find( parent->srmap[ mod_ch ] )->second; 
+  // Bin the signal: equal-width (abs) or equal-count (pct)
+  const int n = s.size();
+  Eigen::ArrayXi b( n );
+
+  if ( use_pct )
+    {
+      // Percentile-based equal-count binning: sort a copy, find nbins-1 cut points
+      std::vector<float> sv( s.data(), s.data() + n );
+      std::sort( sv.begin(), sv.end() );
+
+      std::vector<float> cuts( nbins - 1 );
+      for ( int k = 1; k < nbins; ++k )
+        {
+          double pos = (double)k / nbins * n;
+          int lo = (int)pos;
+          if ( lo >= n ) lo = n - 1;
+          int hi = std::min( lo + 1, n - 1 );
+          cuts[k-1] = sv[lo] + ( sv[hi] - sv[lo] ) * (float)( pos - lo );
+        }
+
+      for ( int i = 0; i < n; ++i )
+        {
+          auto it = std::upper_bound( cuts.begin(), cuts.end(), s[i] );
+          b[i] = (int)( it - cuts.begin() );
+        }
+    }
+  else
+    {
+      // Absolute range: equal-width bins from min to max
+      const double smin = s.minCoeff();
+      const double smax = s.maxCoeff();
+      const float span = smax - smin;
+      if ( span <= 0 ) return;
+      const float inv_span = nbins / span;
+
+      Eigen::ArrayXf t = (s.array() - smin) * inv_span;
+      b = t.floor().cast<int>();
+      b = b.min( nbins - 1 );
+    }
+
+  // save modulator bins and matching time-track
+  // guard against channel sample-count mismatch (e.g. SIGGEN vs EDF channels at same SR)
+  Eigen::VectorXf tt = parent->tmap.find( parent->srmap[ mod_ch ] )->second;
+  const int min_n = std::min( (int)b.size(), (int)tt.size() );
+  mod_bins[ mod_label ] = b.head( min_n );
+  mod_tt[ mod_label ] = tt.head( min_n );
 
 }
 

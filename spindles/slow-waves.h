@@ -41,7 +41,7 @@ enum slow_wave_type { SO_FULL , SO_HALF, SO_NEGATIVE_HALF , SO_POSITIVE_HALF } ;
 
 struct slow_wave_param_t {
 
-  slow_wave_param_t() { } ;
+  slow_wave_param_t() { output_halfwave_annots = false; output_peak_annots = false; } ;
   
   slow_wave_param_t( const param_t & param );
   
@@ -111,6 +111,7 @@ struct slow_wave_param_t {
   // annotations
   std::string astr;
   bool output_halfwave_annots;
+  bool output_peak_annots;
   
   // current channel
   std::string ch;
@@ -228,6 +229,8 @@ struct slow_waves_t
 
   slow_waves_t() {
     report_median_stats = false;
+    output_halfwave_annots = false;
+    output_peak_annots = false;
   } ;
 
   slow_waves_t( edf_t & , const param_t & );
@@ -337,6 +340,7 @@ private:
   // annotations
   std::string astr;
   bool output_halfwave_annots;
+  bool output_peak_annots;
 
   // current channel label
   std::string ch;

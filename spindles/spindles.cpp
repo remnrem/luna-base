@@ -63,6 +63,14 @@ int  prune_n;
 extern writer_t writer;
 extern logger_t logger;
 
+static uint64_t spindle_relsp_to_tp( const spindle_t & spindle , const int rel_sp )
+{
+  if ( spindle.stop_sp <= spindle.start_sp ) return spindle.tp.start;
+  return spindle.tp.start
+    + ( rel_sp / (double)( spindle.stop_sp - spindle.start_sp ) )
+    * ( spindle.tp.stop - spindle.tp.start );
+}
+
 
 annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 {
@@ -509,6 +517,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	sp_label = param.value( "annot" );       
     }
 
+
   
   //
   // Add new channels?
@@ -522,6 +531,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   //
 
   bool characterize = ! param.has( "no-spindle-stats" );   
+  const bool save_annot_peaks = save_annots && characterize && param.yesno( "annot-peaks" , true , true );
 
 
   //
@@ -2917,10 +2927,15 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      
 	      annot_t * a = edf.annotations->add( aname );
 	      a->description = "Spindle intervals";
+	      annot_t * a_neg_pk = save_annot_peaks ? edf.annotations->add( aname + "_neg_pk" ) : NULL;
+	      annot_t * a_pos_pk = save_annot_peaks ? edf.annotations->add( aname + "_pos_pk" ) : NULL;
 	      
 	      logger << "  creating annotation class: " << aname 
 		     << ", instance: " << analysis_label 
 		     << ", channel: " << signals.label(s) << "\n";
+	      if ( save_annot_peaks )
+		logger << "    plus spindle peak anchors: "
+		       << aname << "_neg_pk and " << aname << "_pos_pk\n";
 	      
 
 	      // use F_C as instance label
@@ -2945,6 +2960,14 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  //instance->set( "mid", "tp:" + Helper::int2str( spindle.tp_mid ) );
 		  instance->set( "rp_mid", (double)( spindle.tp_mid - spindle.tp.start )
 				 / double( spindle.tp.stop - spindle.tp.start ) );
+
+		  if ( save_annot_peaks )
+		    {
+		      const uint64_t neg_pk_tp = spindle_relsp_to_tp( spindle , spindle.max_p2p_trough_sp );
+		      const uint64_t pos_pk_tp = spindle_relsp_to_tp( spindle , spindle.max_p2p_peak_sp );
+		      a_neg_pk->add( analysis_label , interval_t( neg_pk_tp , neg_pk_tp ) , signals.label(s) );
+		      a_pos_pk->add( analysis_label , interval_t( pos_pk_tp , pos_pk_tp ) , signals.label(s) );
+		    }
 		  
 		}
 	      
@@ -4082,6 +4105,8 @@ void characterize_spindles( edf_t & edf ,
       
       double max_p2p = 0;
       double max_p2p_idx = 0;
+      int max_p2p_trough_idx = 0;
+      int max_p2p_peak_idx = 0;
 
       
       //
@@ -4101,6 +4126,8 @@ void characterize_spindles( edf_t & edf ,
 	    {
 	      max_p2p = t;
 	      max_p2p_idx = ( (peak[k]+peak[k-1] )/(double)2.0) / (double)npoints; // mean, standardarized	      
+	      max_p2p_trough_idx = d[ peak[k] ] < d[ peak[k-1] ] ? peak[k] : peak[k-1];
+	      max_p2p_peak_idx = d[ peak[k] ] < d[ peak[k-1] ] ? peak[k-1] : peak[k];
 	    }
 	  
 	  if ( d[ peak[k] ] < lowest )
@@ -4114,6 +4141,8 @@ void characterize_spindles( edf_t & edf ,
       // spindle 'peak' defined as lowest trough 
       // 0-based sp offset, similar to spindle->peak_amp_sp
       spindle->max_trough_sp = lowest_idx; 
+      spindle->max_p2p_trough_sp = max_p2p_trough_idx;
+      spindle->max_p2p_peak_sp = max_p2p_peak_idx;
       
       // track tp of spindle max neg-trough 
       spindle->max_trough_rel = spindle->max_trough_sp / (double)( spindle->stop_sp - spindle->start_sp ) ;      
@@ -5032,4 +5061,3 @@ void spindle_stats( const std::vector<spindle_t> & spindles ,
 
  
 }
-
