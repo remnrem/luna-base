@@ -1802,7 +1802,7 @@ void sigmod_t::make_mod( const std::string & mod_label ,
   // get entire signal
   Eigen::VectorXf s = parent->sigmap[ mod_ch ];
 
-  // filter?
+  // filter? (forward-backward / filtfilt for zero phase)
   if ( has_filter )
     {
       sos_filter_t f( sos );
@@ -1810,6 +1810,10 @@ void sigmod_t::make_mod( const std::string & mod_label ,
       int pad = std::min(std::max(32, (int)(16*M) ), (int)(s.size() /8 ) );
       sos_filter_prime_with_reflection( f , s , pad );
       f.process( s );
+      s.reverseInPlace();
+      sos_filter_prime_with_reflection( f , s , pad );
+      f.process( s );
+      s.reverseInPlace();
     }
 
   // Hilbert transform (amp and phase modes)?
@@ -2050,12 +2054,16 @@ void segsrv_t::apply_filter( const std::string & ch , const std::vector<double> 
   sigmap_f[ ch ] = sigmap[ ch ];
   Eigen::VectorXf & data = sigmap_f[ ch ];
   
-  // filter
+  // filter (forward-backward / filtfilt for zero phase)
   sos_filter_t f( sos );
   std::size_t M = sos.size() / 6;
   int pad = std::min(std::max(32, (int)(16*M) ), (int)(data.size() /8 ) );
   sos_filter_prime_with_reflection( f , data, pad );
   f.process( data );
+  data.reverseInPlace();
+  sos_filter_prime_with_reflection( f , data, pad );
+  f.process( data );
+  data.reverseInPlace();
   
   // reset 5/95 percentiles
   empirical_phys_ranges_orig[ ch ] = empirical_phys_ranges[ ch ];
