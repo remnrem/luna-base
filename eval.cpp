@@ -620,6 +620,12 @@ bool cmd_t::read( const std::string * str , bool silent )
   // take everything
   line = allinput.str();
   allinput.clear();
+
+  if ( line.empty() )
+    {
+      quit(true);
+      return false;
+    }
   
   // change any '&' (back) to '\n', unless they are quoted (" or #)
   bool inquote = false;
@@ -634,13 +640,20 @@ bool cmd_t::read( const std::string * str , bool silent )
 
   // skip comments between commands if line starts with '%' (or '\n')
   bool recheck = true;
-  while (recheck)
+  while ( recheck && ! line.empty() )
     {     
       if ( line[0] == '%' || line[0] == '\n' ) 
 	{
-	  line = line.substr( line.find("\n")+1);
+	  const std::string::size_type p = line.find("\n");
+	  line = p == std::string::npos ? "" : line.substr( p + 1 );
 	}
       else recheck = false;
+    }
+
+  if ( line.empty() )
+    {
+      quit(true);
+      return false;
     }
   
 
@@ -963,6 +976,8 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "EPOCH-ANNOT" ) )  { fnd = true; proc_file_annot( edf , param(c) ); }
       if ( (!fnd) && is( c, "EPOCH-MASK" ) )   { fnd = true; proc_epoch_mask( edf, param(c) ); }
       if ( (!fnd) && is( c, "HB" ) )           { fnd = true; proc_hypoxic_burden( edf, param(c) ); }
+      if ( (!fnd) && is( c, "DESAT" ) )        { fnd = true; proc_desat( edf, param(c) ); }
+      if ( (!fnd) && is( c, "RESPBREATH" ) )  { fnd = true; proc_respbreath( edf, param(c) ); }
       if ( (!fnd) && is( c, "FILTER" ) )       { fnd = true; proc_filter( edf, param(c) ); }
       if ( (!fnd) && is( c, "FILTER-DESIGN" )) { fnd = true; proc_filter_design( edf, param(c) ); }
       if ( (!fnd) && is( c, "MEDIAN-FILTER" ) ) { fnd = true; proc_median_filter( edf , param(c) ) ; } 
@@ -1007,6 +1022,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "L1OUT" ) )        { fnd = true; proc_leave_one_out( edf , param(c) ); }
       if ( (!fnd) && is( c, "INTERPOLATE" ) )  { fnd = true; proc_chep_based_interpolation( edf, param(c) ); }
       if ( (!fnd) && is( c, "SL" ) )           { fnd = true; proc_surface_laplacian( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SSA" ) )          { fnd = true; proc_ssa( edf , param(c) ); }
       if ( (!fnd) && is( c, "EMD" ) )          { fnd = true; proc_emd( edf , param(c) ); }
       if ( (!fnd) && is( c, "DFA" ) )          { fnd = true; proc_dfa( edf , param(c) ); }
       if ( (!fnd) && is( c, "MI" ) )           { fnd = true; proc_mi( edf, param(c) ); }
@@ -3732,6 +3748,12 @@ void proc_svd( edf_t & edf , param_t & param )
   dsptools::svd_wrapper( edf , param );
 }
 
+// SSA : singular spectrum analysis on signals
+void proc_ssa( edf_t & edf , param_t & param )
+{
+  dsptools::ssa_wrapper( edf , param );
+}
+
 // IPC: instantaneous phase coherence
 void proc_ipc( edf_t & edf , param_t & param )
 {
@@ -3994,6 +4016,18 @@ void proc_cfc( edf_t & edf , param_t & param )
 void proc_hypoxic_burden( edf_t & edf , param_t & param )
 {
   hb_t hb( edf , param );
+}
+
+// DESAT : Oxygen desaturation detector
+void proc_desat( edf_t & edf , param_t & param )
+{
+  desat_t ds( edf , param );
+}
+
+// RESPBREATH : Respiratory breath segmentation
+void proc_respbreath( edf_t & edf , param_t & param )
+{
+  respbreath_t rb( edf , param );
 }
 
 // SUPPRESS-ECG : ECG supression
@@ -6815,6 +6849,9 @@ std::vector<std::string> cmd_t::proc_all( const std::vector<std::string> & lines
 	}      	      
     }
 
+  if ( ! fdep.empty() ) Helper::halt( "unbalanced LOOP/END-LOOP pairs" );
+  if ( ! idep.empty() ) Helper::halt( "unbalanced IF/FI pairs" );
+
 
   //
   // count loops and ifs
@@ -7124,6 +7161,12 @@ std::vector<std::string> cmd_t::proc_all( const std::vector<std::string> & lines
 
   if ( globals::mirror )
     logger << "\n ------------------------------------------------------------\n\n";
+
+  if ( loop_count != 0 || ! keys.empty() || inner != "" )
+    Helper::halt( "unbalanced LOOP/END-LOOP pairs" );
+
+  if ( if_count != 0 || excise )
+    Helper::halt( "unbalanced IF/FI pairs" );
   
   return r;
 

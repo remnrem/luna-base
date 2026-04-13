@@ -366,7 +366,8 @@ public:
 
   lannot_t fetch_annots( const std::vector<std::string> & anns , const double interp = -1 ) const;
 
-  lannot_full_t fetch_full_annots( const std::vector<std::string> & anns ) const;
+  lannot_full_t fetch_full_annots( const std::vector<std::string> & anns ,
+                                   const bool add_keys = false ) const;
 
   
   //

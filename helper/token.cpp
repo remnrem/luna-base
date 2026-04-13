@@ -3058,7 +3058,14 @@ Token TokenFunctions::fn_vec_extract( const Token & tok , const Token & idx ) co
 
   if ( idx.is_int() )
     {
-      ve.push_back( tokve[ idx.as_int() - 1 ] );
+      const int ix = idx.as_int() - 1;
+      if ( ix < 0 || ix >= tokve.size() )
+	Helper::halt( "out of range for "
+		      + tok.name()
+		      + " (" + Helper::int2str( idx.as_int() )
+		      + " of "
+		      + Helper::int2str( tok.size() ) + ")" );
+      ve.push_back( tokve[ ix ] );
     }
   else if ( idx.is_int_vector() )
     {

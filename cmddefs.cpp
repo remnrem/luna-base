@@ -4190,6 +4190,58 @@ void cmddefs_t::init()
   add_param( "EMD" , "imf" , "10" , "Maximum number of IMF to extract" );
 
   //
+  // SSA
+  //
+
+  add_cmd( "power" , "SSA" , "Singular spectrum analysis" );
+  add_verb( "SSA" ,
+            "Decompose each selected signal with univariate singular spectrum\n"
+            "analysis (SSA). Luna embeds the signal into a Hankel trajectory\n"
+            "matrix, performs an SVD, reconstructs the elementary time-series\n"
+            "components by diagonal averaging, and can optionally report the\n"
+            "weighted-correlation matrix used to assess component separability.\n"
+            "\n"
+            "SSA is useful for separating trend-like structure, oscillatory pairs,\n"
+            "and residual noise in EEG/PSG channels. The command can also add the\n"
+            "leading reconstructed components or user-defined grouped\n"
+            "reconstructions back into the EDF as new channels." );
+  add_param( "SSA" , "sig" , "C3,C4" , "Signals to analyze independently with SSA" );
+  add_param( "SSA" , "L" , "128" , "Embedding window length in samples; must be between 2 and N/2" );
+  add_param( "SSA" , "sec" , "1.0" , "Alternative to L: embedding window length in seconds" );
+  add_param( "SSA" , "nc" , "10" , "Number of leading elementary reconstructed components to retain or export" );
+  add_param( "SSA" , "tag" , "SSA_" , "Prefix for any newly added SSA channels" );
+  add_param( "SSA" , "grp" , "1,2;3,4" , "Optional semicolon-separated component groups to reconstruct as grouped channels" );
+  add_param( "SSA" , "center" , "T" , "Robustly median-center the signal before SSA; default is T" );
+  add_param( "SSA" , "norm" , "F" , "Robustly variance-normalize the signal before SSA" );
+  add_param( "SSA" , "winsor" , "0.01" , "Optional winsorization tail proportion before decomposition" );
+  add_param( "SSA" , "detrend" , "F" , "Remove a linear trend before SSA" );
+  add_param( "SSA" , "wcorr" , "F" , "Report the weighted-correlation matrix for the leading reconstructed components" );
+  add_param( "SSA" , "wcorr-n" , "10" , "Maximum number of components per dimension to include in the wcorr table" );
+  add_param( "SSA" , "no-new-channels" , "" , "Do not add reconstructed component channels back into the EDF" );
+
+  add_table( "SSA" , "CH" , "Per-signal SSA summaries" );
+  add_var( "SSA" , "CH" , "N" , "Signal length in samples" );
+  add_var( "SSA" , "CH" , "L" , "SSA embedding window length" );
+  add_var( "SSA" , "CH" , "K" , "Number of columns in the trajectory matrix" );
+  add_var( "SSA" , "CH" , "D" , "Number of elementary components retained by the decomposition" );
+
+  add_table( "SSA" , "CH,C" , "Per-component SSA summaries" );
+  add_var( "SSA" , "CH,C" , "SIGMA" , "Singular value of that elementary SSA component" );
+  add_var( "SSA" , "CH,C" , "LAMBDA" , "Component eigenvalue (SIGMA squared)" );
+  add_var( "SSA" , "CH,C" , "VE" , "Variance-explained fraction based on LAMBDA" );
+  add_var( "SSA" , "CH,C" , "CVE" , "Cumulative variance explained" );
+  add_var( "SSA" , "CH,C" , "RC_SD" , "Standard deviation of the reconstructed elementary component" );
+  add_var( "SSA" , "CH,C" , "INC" , "Whether the component falls in the requested nc set" );
+
+  add_table( "SSA" , "CH,G" , "Grouped reconstruction summaries" );
+  add_var( "SSA" , "CH,G" , "NCOMP" , "Number of elementary components in that grouped reconstruction" );
+  add_var( "SSA" , "CH,G" , "LABEL" , "Added EDF channel label for that grouped reconstruction, if written" );
+  add_var( "SSA" , "CH,G" , "SD" , "Standard deviation of the grouped reconstruction when not written as a channel" );
+
+  add_table( "SSA" , "CH,C1,C2" , "Weighted-correlation matrix between reconstructed SSA components" );
+  add_var( "SSA" , "CH,C1,C2" , "WCORR" , "Absolute weighted correlation between reconstructed components" );
+
+  //
   // ACF
   //
 
@@ -7168,6 +7220,178 @@ void cmddefs_t::init()
   add_var( "AROUSALS" , "CLS" , "CMPLX" , "Mean complexity feature for this class" );
 
   //
+  // DESAT
+  //
+
+  add_cmd( "physio" , "DESAT" , "Oxygen desaturation (SpO2) event detection" );
+  add_url( "DESAT" , "resp/#desat" );
+  add_verb( "DESAT" ,
+            "DESAT detects oxygen desaturation events from a SpO2 signal, using a "
+            "forward-scanning algorithm with a rolling median baseline. The method is "
+            "designed to be robust to the noise characteristics typical of overnight "
+            "oximetry: heavy integer quantization, ~1 Hz sampling, dropouts, transient "
+            "spikes, and slow drift.\n\n"
+            "Processing steps:\n"
+            "  1. Flag hard-artifact samples (SpO2 outside [low, 100]).\n"
+            "  2. Flag spike samples (|delta| > spike threshold between consecutive valid samples).\n"
+            "  3. Process each contiguous EDF segment independently.\n"
+            "  4. Scan forward maintaining a rolling median baseline from the prior\n"
+            "     'baseline' seconds of valid, non-artifact, non-desat samples.\n"
+            "  5. A desaturation event starts when SpO2 drops >= 'drop' units below baseline.\n"
+            "  6. The event ends when SpO2 recovers to >= baseline - drop * recovery_frac.\n"
+            "  7. Events with duration >= 'dur' seconds are recorded.\n\n"
+            "Artifact regions are annotated as 'spo2-artifact' (default). "
+            "Desaturation events are annotated as 'desat' (default) with metadata fields "
+            "nadir, baseline, drop and dur. "
+            "Summary statistics are written at the individual level and per-event level." );
+
+  // --- Required ---
+  add_param( "DESAT" , "sig" , "SpO2" , "Signal label (required); expected on 0-100 % scale" );
+
+  // --- Artifact thresholds ---
+  add_param( "DESAT" , "low"      , "50"  , "Low artifact threshold: SpO2 below this value is flagged as hard artifact (default 50)" );
+  add_param( "DESAT" , "spike"    , "10"  , "Spike threshold: |delta| > this value (SpO2 units) between consecutive valid samples flags as artifact (default 10)" );
+
+  // --- Desaturation detection ---
+  add_param( "DESAT" , "drop"     , "3"   , "Drop threshold: SpO2 must fall >= this many units below baseline to trigger event (default 3)" );
+  add_param( "DESAT" , "dur"      , "10"  , "Minimum event duration in seconds (default 10)" );
+  add_param( "DESAT" , "baseline" , "120" , "Baseline window: median computed from prior N seconds of valid signal (default 120)" );
+  add_param( "DESAT" , "min-bsln" , "30"  , "Minimum number of valid samples required in baseline window before detection begins (default 30)" );
+  add_param( "DESAT" , "recovery" , "0.5" , "Recovery fraction: event ends when SpO2 >= baseline - drop * recovery (default 0.5)" );
+
+  // --- Output options ---
+  add_param( "DESAT" , "pct-th"   , "90,88,85,80" , "Comma-separated list of SpO2 thresholds for time-below % metrics (default 90,88,85,80)" );
+  add_param( "DESAT" , "annot"    , "desat"        , "Annotation label for desaturation events (default 'desat')" );
+  add_param( "DESAT" , "art-annot", "spo2-artifact", "Annotation label for artifact regions (default 'spo2-artifact')" );
+
+  // --- Individual-level output ---
+  add_table( "DESAT" , "" , "Individual-level summary" );
+  add_var( "DESAT" , "" , "N"         , "Number of desaturation events detected" );
+  add_var( "DESAT" , "" , "T_VALID"   , "Total valid (non-artifact) signal duration (seconds)" );
+  add_var( "DESAT" , "" , "T_ART"     , "Total artifact duration (seconds)" );
+  add_var( "DESAT" , "" , "T_DESAT"   , "Total time spent in desaturation events (seconds)" );
+  add_var( "DESAT" , "" , "MEAN_SPO2" , "Mean SpO2 over all valid samples (%)" );
+  add_var( "DESAT" , "" , "NADIR_MEAN", "Mean nadir (minimum SpO2) across all events (%)" );
+  add_var( "DESAT" , "" , "NADIR_MIN" , "Lowest SpO2 nadir across all events (%)" );
+  add_var( "DESAT" , "" , "DROP_MEAN" , "Mean drop magnitude (baseline - nadir) across events (SpO2 units)" );
+  add_var( "DESAT" , "" , "DUR_MEAN"  , "Mean event duration (seconds)" );
+  add_var( "DESAT" , "" , "DUR_TOTAL" , "Total event duration (seconds)" );
+  add_var( "DESAT" , "" , "PCT_LT90"  , "% valid time with SpO2 < 90%" );
+  add_var( "DESAT" , "" , "PCT_LT88"  , "% valid time with SpO2 < 88%" );
+  add_var( "DESAT" , "" , "PCT_LT85"  , "% valid time with SpO2 < 85%" );
+  add_var( "DESAT" , "" , "PCT_LT80"  , "% valid time with SpO2 < 80%" );
+
+  // --- Event-level output ---
+  add_table( "DESAT" , "DESAT" , "Per-event desaturation output" );
+  add_var( "DESAT" , "DESAT" , "START"    , "Event start time (seconds from recording start)" );
+  add_var( "DESAT" , "DESAT" , "STOP"     , "Event stop time (seconds from recording start)" );
+  add_var( "DESAT" , "DESAT" , "DUR"      , "Event duration (seconds)" );
+  add_var( "DESAT" , "DESAT" , "NADIR"    , "Minimum SpO2 during event (%)" );
+  add_var( "DESAT" , "DESAT" , "BASELINE" , "Local median baseline SpO2 at event onset (%)" );
+  add_var( "DESAT" , "DESAT" , "DROP"     , "Magnitude of drop (baseline - nadir, SpO2 units)" );
+  add_var( "DESAT" , "DESAT" , "SEG"      , "Segment index (0-based) in which event occurred" );
+
+  //
+  // RESPBREATH
+  //
+
+  add_cmd( "physio" , "RESPBREATH" , "Respiratory breath segmentation for timing / phase-locking analyses" );
+  add_url( "RESPBREATH" , "resp/#respbreath" );
+  add_verb( "RESPBREATH" ,
+            "RESPBREATH detects individual breaths from one or more respiratory PSG channels "
+            "(nasal cannula, thermistor, effort belt) and emits breath-level timing annotations "
+            "plus summary statistics. The primary goal is robust breath timing for downstream "
+            "phase-locking / coupling analyses with EEG or other signals.\n\n"
+            "Processing:\n"
+            "  1. Each contiguous EDF segment is processed independently (no bridging across gaps).\n"
+            "  2. Each channel is bandpass-filtered (Butterworth IIR) and lightly smoothed.\n"
+            "  3. Signal polarity is auto-detected or user-specified so inspiration is upward.\n"
+            "  4. Alternating local extrema (troughs and peaks) are detected and filtered by\n"
+            "     prominence and physiologic timing constraints.\n"
+            "  5. Each accepted trough-peak-trough triplet defines one breath.\n"
+            "  6. Regions with no reliable timing are annotated as RESP_ART.\n"
+            "  7. With multiple channels, results are fused: the best-quality channel is primary\n"
+            "     and secondary channels boost confidence or rescue timing where the primary fails." );
+
+  // --- Required ---
+  add_param( "RESPBREATH" , "sig" , "NASAL,THOR" , "Comma-separated list of respiratory channel labels" );
+
+  // --- Preprocessing ---
+  add_param( "RESPBREATH" , "hp"     , "0.03" , "High-pass cutoff for bandpass filter (Hz)" );
+  add_param( "RESPBREATH" , "lp"     , "1.5"  , "Low-pass cutoff for bandpass filter (Hz)" );
+  add_param( "RESPBREATH" , "smooth" , "0.20" , "Box-car smoothing half-window (seconds) applied after filtering" );
+  add_param( "RESPBREATH" , "flip"   , "auto" , "Polarity: auto (inferred), yes (invert), no (keep as-is)" );
+
+  // --- Timing constraints ---
+  add_param( "RESPBREATH" , "min-half-cycle" , "0.40" , "Minimum inspiratory or expiratory half-cycle duration (s)" );
+  add_param( "RESPBREATH" , "max-half-cycle" , "6.00" , "Maximum inspiratory or expiratory half-cycle duration (s)" );
+  add_param( "RESPBREATH" , "min-cycle"      , "0.80" , "Minimum total breath cycle duration (s)" );
+  add_param( "RESPBREATH" , "max-cycle"      , "12.0" , "Maximum total breath cycle duration (s)" );
+
+  // --- Quality thresholds ---
+  add_param( "RESPBREATH" , "prom-z"  , "1.0"  , "Minimum extremum prominence (signal / local MAD)" );
+  add_param( "RESPBREATH" , "amp-rel" , "0.15" , "Minimum breath amplitude relative to recent-good-breath median" );
+  add_param( "RESPBREATH" , "conf"    , "0.40" , "Confidence threshold below which a breath is flagged low-confidence" );
+
+  // --- Artifact handling ---
+  add_param( "RESPBREATH" , "recover"   , "2.0" , "Artifact recovery window (s): breaths within this distance of artifact are flagged" );
+  add_param( "RESPBREATH" , "merge-art" , "1.0" , "Gap (s) between artifact intervals to merge into one" );
+  add_param( "RESPBREATH" , "min-art"   , "2.0" , "Minimum duration (s) for an artifact interval to be annotated" );
+  add_param( "RESPBREATH" , "min-seg"   , "5.0" , "Minimum segment duration (s) required to attempt breath detection" );
+
+  // --- Multi-channel fusion ---
+  add_param( "RESPBREATH" , "primary"     , "first" , "Primary channel: 'first', 'auto' (best quality), or a channel label" );
+  add_param( "RESPBREATH" , "fuse"        , "yes"   , "Perform multi-channel fusion when multiple sig= channels are given (yes/no)" );
+  add_param( "RESPBREATH" , "fuse-window" , "0.75"  , "Time window (s) for matching breath peaks across channels during fusion" );
+
+  // --- Optional features ---
+  add_param( "RESPBREATH" , "use-hilbert" , "no"  , "Use Hilbert envelope for amplitude/noise estimation (yes/no; currently placeholder)" );
+  add_param( "RESPBREATH" , "verbose"     , "no"  , "Verbose logging (yes/no)" );
+
+  // --- Annotation labels ---
+  add_param( "RESPBREATH" , "annot-breath" , "BREATH"   , "Annotation label for breath intervals" );
+  add_param( "RESPBREATH" , "annot-insp"   , "INSP"     , "Annotation label for inspiratory sub-intervals (omit to suppress)" );
+  add_param( "RESPBREATH" , "annot-exp"    , "EXP"      , "Annotation label for expiratory sub-intervals (omit to suppress)" );
+  add_param( "RESPBREATH" , "annot-art"    , "RESP_ART" , "Annotation label for artifact/unusable intervals" );
+
+  // --- Individual-level output ---
+  add_table( "RESPBREATH" , "" , "Individual-level summary (all segments combined)" );
+  add_var( "RESPBREATH" , "" , "N_BREATH"    , "Total number of detected breaths" );
+  add_var( "RESPBREATH" , "" , "BREATH_RATE" , "Breaths per minute (over total valid recording time)" );
+  add_var( "RESPBREATH" , "" , "MEAN_TTOT"   , "Mean total cycle duration (s)" );
+  add_var( "RESPBREATH" , "" , "MEDIAN_TTOT" , "Median total cycle duration (s)" );
+  add_var( "RESPBREATH" , "" , "SD_TTOT"     , "SD of total cycle duration (s)" );
+  add_var( "RESPBREATH" , "" , "CV_TTOT"     , "CV of total cycle duration (SD/mean)" );
+  add_var( "RESPBREATH" , "" , "MEDIAN_TINSP", "Median inspiratory duration (s)" );
+  add_var( "RESPBREATH" , "" , "MEDIAN_TEXP" , "Median expiratory duration (s)" );
+  add_var( "RESPBREATH" , "" , "IE_RATIO"    , "Median I:E ratio (TINSP / TEXP)" );
+  add_var( "RESPBREATH" , "" , "MEDIAN_AMP"  , "Median breath amplitude (symmetric: peak - mean adjacent troughs)" );
+  add_var( "RESPBREATH" , "" , "LOWCONF_PCT" , "Percentage of breaths flagged as low confidence" );
+  add_var( "RESPBREATH" , "" , "ARTIFACT_PCT", "Percentage of recording time covered by RESP_ART" );
+  add_var( "RESPBREATH" , "" , "FUSED_PCT"   , "Percentage of breaths supported by multiple channels" );
+
+  // --- Per-breath output ---
+  add_table( "RESPBREATH" , "CH,N" , "Per-breath event table (source channel x breath number)" );
+  add_var( "RESPBREATH" , "CH,N" , "START"    , "Breath start (preceding trough) in seconds from recording start" );
+  add_var( "RESPBREATH" , "CH,N" , "PEAK"     , "Inspiratory peak time (seconds from recording start)" );
+  add_var( "RESPBREATH" , "CH,N" , "END"      , "Breath end (following trough) in seconds from recording start" );
+  add_var( "RESPBREATH" , "CH,N" , "TINSP"    , "Inspiratory duration (s)" );
+  add_var( "RESPBREATH" , "CH,N" , "TEXP"     , "Expiratory duration (s)" );
+  add_var( "RESPBREATH" , "CH,N" , "TTOT"     , "Total cycle duration (s)" );
+  add_var( "RESPBREATH" , "CH,N" , "AMP_INSP" , "Inspiratory amplitude (peak - preceding trough)" );
+  add_var( "RESPBREATH" , "CH,N" , "AMP_EXP"  , "Expiratory amplitude (peak - following trough)" );
+  add_var( "RESPBREATH" , "CH,N" , "AMP_SYM"  , "Symmetric amplitude (peak - mean adjacent troughs)" );
+  add_var( "RESPBREATH" , "CH,N" , "CONF"     , "Confidence score [0,1]" );
+  add_var( "RESPBREATH" , "CH,N" , "LOW_CONF" , "Low confidence flag (1=yes)" );
+  add_var( "RESPBREATH" , "CH,N" , "FUSED"    , "Multi-channel fusion flag (1=yes)" );
+  add_var( "RESPBREATH" , "CH,N" , "N_SUPPORT", "Number of channels supporting this breath" );
+
+
+  // --- Per-channel summary ---
+  add_table( "RESPBREATH" , "CH" , "Per-channel summary (multi-channel only)" );
+  add_var( "RESPBREATH" , "CH" , "PRIMARY_USED_PCT" , "% of total breaths sourced primarily from this channel" );
+
+  //
   // OTSU
   //
 
@@ -7303,7 +7527,7 @@ void cmddefs_t::init()
 
 
   // ICA   Independent component analysis
-  // EMD   Empirical mode decomposition  
+  // EMD   Empirical mode decomposition
   // ED    Diagnostic for electrical bridging
   // POL   Polarity check heuristic for sleep EEG
   // FIP   Frequency-interval plots
@@ -7311,6 +7535,114 @@ void cmddefs_t::init()
   // TSLIB Build library for SSS
   // SSS   Simple sleep stager
   // SLICE Short-time FFT for specified intervals
+
+
+  // -----------------------------------------------------------------------
+  // GED: Generalized Eigendecomposition
+  // -----------------------------------------------------------------------
+
+  add_cmd( "multi" , "GED" ,
+           "Generalized eigendecomposition" );
+  
+  add_verb( "GED" ,
+            "GED (Generalized Eigendecomposition) finds the multichannel spatial filter w "
+            "that maximizes wT*S*w / wT*R*w, where S is a 'signal' covariance matrix "
+            "(e.g. annotation-locked or narrowband) and R is a reference covariance "
+            "(e.g. broadband or whole-recording). The resulting components isolate "
+            "oscillatory sources, discriminate experimental conditions, or project "
+            "individuals into a pre-computed group space.\n\n"
+            "Two within-individual modes:\n"
+            "  Mode 1 (filter-based): input=nb or input=env, no a1= — builds S from "
+            "  a spectrally-transformed version of the data and R from the broadband signal.\n"
+            "  Mode 2 (annotation-locked): a1= required — S from timepoints around "
+            "  annotation events, R from whole trace or a second annotation.\n\n"
+            "Group mode: use save-cov= to accumulate per-individual S/R matrices across "
+            "a cohort, then luna --ged-group to average and solve, then load= to project "
+            "each individual through the group solution." );
+
+
+  // Core params
+  add_param( "GED" , "sig"       , "C3,C4,F3,F4" , "Channels to include (all must share same SR)" );
+  add_param( "GED" , "a1"        , "spindles"     , "Annotation label for S-matrix time-lock (mode 2)" );
+  add_param( "GED" , "w1"        , "0.5"          , "Half-window (s) around each a1 event" );
+  add_param( "GED" , "x1"        , ""             , "Flag: exclude (rather than include) a1 windows" );
+  add_param( "GED" , "a2"        , "NREM2"        , "Annotation for R-matrix (absent = whole trace)" );
+  add_param( "GED" , "w2"        , "0"            , "Half-window (s) around each a2 event" );
+  add_param( "GED" , "x2"        , ""             , "Flag: exclude a2 windows" );
+
+  // Input transform
+  add_param( "GED" , "input"     , "raw"          , "Input transform: raw (default), nb (narrowband), env (amplitude envelope)" );
+  add_param( "GED" , "nb-f"      , "13.5"         , "Narrowband center frequency (Hz); also accepts f1=" );
+  add_param( "GED" , "nb-fwhm"   , "2"            , "Narrowband Gaussian FWHM (Hz); also accepts fwhm1=" );
+  add_param( "GED" , "env-lwr"   , "12"           , "Envelope bandpass lower frequency (Hz)" );
+  add_param( "GED" , "env-upr"   , "15"           , "Envelope bandpass upper frequency (Hz)" );
+  add_param( "GED" , "env-ripple", "0.02"         , "Kaiser ripple for envelope bandpass FIR" );
+  add_param( "GED" , "env-tw"    , "1.0"          , "Transition width (Hz) for envelope bandpass FIR" );
+  add_param( "GED" , "z"         , ""             , "Flag: z-score each channel before covariance" );
+  add_param( "GED" , "reg"       , "0.01"         , "Tikhonov regularization alpha for R (0 = none)" );
+
+  // Output control
+  add_param( "GED" , "nc"        , "3"            , "Number of components to output (-1 = all)" );
+  add_param( "GED" , "ts"        , "GED_COMP"     , "Add top component time series as new EDF channel" );
+  add_param( "GED" , "ts-comp"   , "1"            , "Which component (1-based) to use for ts=" );
+  add_param( "GED" , "stages"    , ""             , "Flag: also run stage-stratified GED (requires prior STAGE command)" );
+  add_param( "GED" , "clocs"     , "locs.txt"     , "Channel locations file (label ap lat) for spatial indices" );
+
+  // Epoch power
+  add_param( "GED" , "win"       , "30"           , "Epoch window (s) for temporal instability; uses existing epochs if 0" );
+
+  // Group workflow
+  add_param( "GED" , "save-cov"  , "group.bin"    , "Append per-individual S/R covariance matrices to this binary file" );
+  add_param( "GED" , "load"      , "group.ged"    , "Load pre-computed group solution and project this individual" );
+
+  // --ged-group standalone command
+  add_cmd( "multi" , "--ged-group" ,
+           "Reads per-individual covariance matrices written by GED save-cov=, "
+           "computes group-average S and R, runs GED, and writes a group solution file." );
+  add_param( "--ged-group" , "dat"        , "group.bin" , "Binary accumulation file (from GED save-cov=)" );
+  add_param( "--ged-group" , "sol"        , "group.ged" , "Output group solution file" );
+  add_param( "--ged-group" , "trace-norm" , ""          , "Flag: trace-normalize each individual's covariance before averaging" );
+  add_param( "--ged-group" , "reg"        , "0.01"      , "Tikhonov regularization alpha for group R" );
+  add_param( "--ged-group" , "nc"         , "-1"        , "Number of components to save (-1 = all)" );
+  add_param( "--ged-group" , "min-n"      , "5"         , "Minimum number of individuals required" );
+
+  // Output variables — whole-recording scalars
+  add_table( "GED" , "" , "Whole-recording GED summaries" );
+  add_var( "GED" , "" , "N_S"       , "Timepoints used to build S covariance matrix" );
+  add_var( "GED" , "" , "N_R"       , "Timepoints used to build R covariance matrix" );
+  add_var( "GED" , "" , "EPOW_MEAN" , "Mean epoch-level discriminant power (temporal mean)" );
+  add_var( "GED" , "" , "EPOW_SD"   , "SD of epoch-level discriminant power (temporal instability index)" );
+  add_var( "GED" , "" , "EPOW_CV"   , "Coefficient of variation of epoch-level power" );
+
+  // Per-component outputs
+  add_table( "GED" , "COMP" , "Per-component GED outputs" );
+  add_var( "GED" , "COMP" , "LAMBDA"       , "Eigenvalue (S/R power ratio) for this component" );
+  add_var( "GED" , "COMP" , "LAMBDA_R"     , "Eigenvalue ratio: lambda / sum(lambda)" );
+  add_var( "GED" , "COMP" , "LAMBDA_RANK"  , "Rank of component (1 = largest eigenvalue)" );
+  add_var( "GED" , "COMP" , "FOC"          , "Spatial focality index (0=diffuse, 1=point-source)" );
+  add_var( "GED" , "COMP" , "AP"           , "Anterior-posterior spatial index (requires clocs=)" );
+  add_var( "GED" , "COMP" , "LAT"          , "Lateralization index (requires clocs=)" );
+
+  // Group projection outputs
+  add_var( "GED" , "COMP" , "POWER"        , "Individual power along group discriminant axis (wT*Ci*w)" );
+  add_var( "GED" , "COMP" , "POWER_R"      , "Individual power normalized by group eigenvalue" );
+
+  // Per-component × channel
+  add_table( "GED" , "COMP,CH" , "Per-component per-channel spatial outputs" );
+  add_var( "GED" , "COMP,CH" , "W"   , "Eigenvector (spatial filter) weight for this channel" );
+  add_var( "GED" , "COMP,CH" , "MAP" , "Forward model (topographic map) coefficient, sign-corrected" );
+
+  // Stage-stratified outputs
+  add_table( "GED" , "COMP,SS" , "Stage-stratified per-component outputs (requires stages flag)" );
+  add_var( "GED" , "COMP,SS" , "LAMBDA"      , "Stage-specific eigenvalue" );
+  add_var( "GED" , "COMP,SS" , "LAMBDA_R"    , "Stage-specific eigenvalue ratio" );
+  add_var( "GED" , "COMP,SS" , "N_S"         , "S timepoints within this stage" );
+  add_var( "GED" , "COMP,SS" , "N_R"         , "R timepoints within this stage" );
+
+  // Epoch-level outputs
+  add_table( "GED" , "E" , "Epoch-level discriminant power" );
+  add_var( "GED" , "E" , "EPOW"    , "Discriminant power of top component in this epoch (wT*C_epoch*w)" );
+  add_var( "GED" , "E" , "EPOW_SS" , "Sleep stage label for this epoch (if stages flag set)" );
 
 }
 

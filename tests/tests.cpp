@@ -24,7 +24,7 @@
 // Invocation: luna __LUNA_TESTS__ [group] [verbose]
 //
 // Groups: all, signal, epoch, mask, filter, resample, psd, spindles,
-//         hypno, annot, write, script, lunapi, segsrv
+//         hypno, annot, write, script, eval, lunapi, segsrv
 //
 // All tests use fully synthetic in-memory data (no external files needed).
 // Exit code: 0 = all pass, 1 = any failure.
@@ -33,8 +33,10 @@
 #include "luna.h"
 #include "lunapi/lunapi.h"
 #include "lunapi/segsrv.h"
+#include "helper/token-eval.h"
 #include "miscmath/crandom.h"
 #include "dsp/ipc.h"
+#include "dsp/ssa.h"
 #include "dsp/tsync.h"
 
 #include <cmath>
@@ -132,6 +134,11 @@ static std::string temp_base_path( const std::string & stem )
   if ( temp_dir == nullptr || *temp_dir == '\0' ) temp_dir = "/tmp";
 #endif
   return std::string(temp_dir) + "/luna_" + stem + "_" + std::to_string( current_pid() );
+}
+
+static bool contains_substr( const std::string & haystack, const std::string & needle )
+{
+  return haystack.find( needle ) != std::string::npos;
 }
 
 // ============================================================
@@ -476,7 +483,46 @@ static void test_signal( lunapi_t * eng,
     record(R,"signal/update-signal", sd_before > 0.1 && approx_equal(sd_after,0.0,1e-6), m.str(), V);
   } catch(std::exception & e) { record(R,"signal/update-signal",false,e.what(),V); }
 
-  // A6 — lagged IPC should track the same delayed-coupling use-case as TSYNC HT
+  // A6 — direct SSA reconstruction should sum back to the original series
+  try {
+    const int sr = 64;
+    const double dur = 8.0;
+    std::vector<double> x = make_sine( sr, dur, 10.0, 1.0 );
+    for (int i = 0; i < (int)x.size(); i++)
+      x[i] += 0.01 * i;
+    ssa_t ssa( &x , 32 );
+    std::vector<int> all( ssa.d );
+    for (int i = 0; i < ssa.d; i++) all[i] = i;
+    Eigen::VectorXd recon = ssa.reconstruct( all );
+    double max_abs_err = 0.0;
+    for (int i = 0; i < recon.size(); i++)
+      max_abs_err = std::max( max_abs_err , std::fabs( recon[i] - x[i] ) );
+    std::ostringstream m;
+    m << "rank=" << ssa.d << " max_abs_err=" << max_abs_err;
+    record(R,"signal/ssa-reconstructs-input", max_abs_err < 1e-8, m.str(), V);
+  } catch(std::exception & e) { record(R,"signal/ssa-reconstructs-input",false,e.what(),V); }
+
+  // A7 — SSA command smoke test: wired, reports summaries, adds channels
+  try {
+    const int sr = 64;
+    const int nr = 10;
+    const int rs = 1;
+    auto sig = make_two_sines( sr, (double)(nr * rs), 2.0, 1.0, 10.0, 0.5 );
+    auto p = make_inst( eng, sig, sr, nr, rs, "EEG", "T_ssa" );
+    p->eval("SSA sig=EEG L=32 nc=2 wcorr=T");
+    const double L = get_val_s( p, "SSA", "CH", "L" );
+    const double D = get_val_s( p, "SSA", "CH", "D" );
+    const double sigma1 = get_val( p, "SSA", "SIGMA" );
+    const auto chs = p->channels();
+    const bool has1 = std::find( chs.begin(), chs.end(), "SSA_EEG_1" ) != chs.end();
+    const bool has2 = std::find( chs.begin(), chs.end(), "SSA_EEG_2" ) != chs.end();
+    std::ostringstream m;
+    m << "L=" << L << " D=" << D << " sigma1=" << sigma1
+      << " has1=" << has1 << " has2=" << has2;
+    record(R,"signal/ssa-command-smoke", L == 32 && D >= 2 && std::isfinite(sigma1) && has1 && has2, m.str(), V);
+  } catch(std::exception & e) { record(R,"signal/ssa-command-smoke",false,e.what(),V); }
+
+  // A8 — lagged IPC should track the same delayed-coupling use-case as TSYNC HT
   try {
     const int sr = 128;
     const double dur_sec = 20.0;
@@ -1138,6 +1184,28 @@ static void test_annot( lunapi_t * eng,
     record(R,"annot/fetch-full", pass, m.str(), V);
   } catch(std::exception & e) { record(R,"annot/fetch-full",false,e.what(),V); }
 
+  // I4b — fetch_full_annots(add_keys=true) returns keyed meta-data
+  try {
+    const std::string tmp = temp_base_path("test_fetch_full_meta");
+    {
+      std::ofstream out(tmp + ".annot");
+      out << "class\tinstance\tchannel\tstart\tstop\tmeta\n";
+      out << "SigA\tinst1\tECG\t0\t30\tk1=v1;k2=v2\n";
+    }
+    auto p = eng->inst("T_ffm");
+    p->empty_edf("T_ffm", 720, 30, "01.01.85","22.00.00");
+    p->attach_annot( tmp + ".annot" );
+    auto fa0 = p->fetch_full_annots({"SigA"});
+    auto fa1 = p->fetch_full_annots({"SigA"}, true);
+    bool pass = fa0.size() == 1 && fa1.size() == 1
+      && std::get<3>(fa0[0]) == "v1|v2"
+      && std::get<3>(fa1[0]) == "k1=v1;k2=v2";
+    std::ostringstream m; m << "legacy=" << (fa0.empty() ? "?" : std::get<3>(fa0[0]))
+                            << " keyed=" << (fa1.empty() ? "?" : std::get<3>(fa1[0]));
+    record(R,"annot/fetch-full-add-keys", pass, m.str(), V);
+    std::remove( (tmp + ".annot").c_str() );
+  } catch(std::exception & e) { record(R,"annot/fetch-full-add-keys",false,e.what(),V); }
+
   // I5 — ANNOTS command output: COUNT matches inserted intervals
   try {
     auto p = make_sine_inst(eng);
@@ -1282,7 +1350,43 @@ static void test_script( lunapi_t * eng,
     record(R,"script/global-var", pass, m.str(), V);
   } catch(std::exception & e) { record(R,"script/global-var",false,e.what(),V); }
 
-  // K5 — bad command: should throw, not crash
+  // K5 — boolean assignment via ?{x=value} can drive IF blocks
+  try {
+    auto p = make_sine_inst(eng);
+    p->eval("?{emit=1}\nIF ${emit}\nSTATS sig=EEG\nFI");
+    double sd = get_val(p,"STATS","SD");
+    bool pass = sd > 0;
+    std::ostringstream m; m << "SD=" << sd << " after ?{emit=1}";
+    record(R,"script/bool-var-assignment", pass, m.str(), V);
+  } catch(std::exception & e) { record(R,"script/bool-var-assignment",false,e.what(),V); }
+
+  // K6 — missing FI must throw a parse error
+  try {
+    auto p = make_sine_inst(eng);
+    bool threw = false;
+    try {
+      p->eval("IF 1\nSTATS sig=EEG");
+    } catch (std::exception &) {
+      threw = true;
+    }
+    record(R,"script/missing-fi-throws", threw, threw ? "missing FI rejected" : "missing FI accepted", V);
+    globals::problem = false;
+  } catch(std::exception & e) { record(R,"script/missing-fi-throws",false,e.what(),V); }
+
+  // K7 — comment-only input should be ignored cleanly
+  try {
+    auto p = make_sine_inst(eng);
+    bool threw = false;
+    try {
+      p->eval("% comment only\n% another comment");
+    } catch (std::exception &) {
+      threw = true;
+    }
+    record(R,"script/comment-only-safe", !threw, threw ? "comment-only input threw" : "comment-only input ignored", V);
+    globals::problem = false;
+  } catch(std::exception & e) { record(R,"script/comment-only-safe",false,e.what(),V); }
+
+  // K8 — bad command: should throw, not crash
   try {
     auto p = make_sine_inst(eng);
     bool threw = false;
@@ -1296,6 +1400,81 @@ static void test_script( lunapi_t * eng,
     record(R,"script/unknown-command-no-crash", true, "no crash on unknown command", V);
     globals::problem = false;
   } catch(std::exception & e) { record(R,"script/unknown-command-no-crash",false,e.what(),V); }
+}
+
+// ============================================================
+// Group K2: direct eval parser/runtime behavior
+// ============================================================
+
+static void test_eval( lunapi_t * eng,
+		       std::vector<test_result_t> & R, bool V )
+{
+  (void)eng;
+
+  auto expect_eval_error = [&]( const std::string & name,
+				const std::string & expr,
+				const std::string & needle )
+  {
+    try {
+      std::map<std::string,annot_map_t> inputs;
+      instance_t out;
+      Eval tok( expr );
+      tok.bind( inputs , &out );
+      bool ok = tok.evaluate( false );
+      const std::string msg = tok.errmsg();
+      bool pass = !ok && contains_substr( msg , needle );
+      std::ostringstream m;
+      m << "expr='" << expr << "' ok=" << ok << " errmsg='" << msg << "'";
+      record( R, name, pass, m.str(), V );
+    } catch ( std::exception & e ) {
+      record( R, name, false, e.what(), V );
+    }
+  };
+
+  auto expect_eval_throw = [&]( const std::string & name,
+				const std::string & expr,
+				const std::string & needle )
+  {
+    try {
+      std::map<std::string,annot_map_t> inputs;
+      instance_t out;
+      Eval tok( expr );
+      tok.bind( inputs , &out );
+      (void)tok.evaluate( false );
+      record( R, name, false, "expression unexpectedly succeeded", V );
+    } catch ( std::exception & e ) {
+      record( R, name, contains_substr( e.what(), needle ), e.what(), V );
+    }
+  };
+
+  auto expect_eval_success = [&]( const std::string & name,
+				  const std::string & expr,
+				  const std::string & expected )
+  {
+    try {
+      std::map<std::string,annot_map_t> inputs;
+      instance_t out;
+      Eval tok( expr );
+      tok.bind( inputs , &out );
+      bool ok = tok.evaluate( false );
+      const std::string result = tok.result();
+      bool pass = ok && result == expected;
+      std::ostringstream m;
+      m << "expr='" << expr << "' ok=" << ok << " result='" << result << "'";
+      record( R, name, pass, m.str(), V );
+    } catch ( std::exception & e ) {
+      record( R, name, false, e.what(), V );
+    }
+  };
+
+  expect_eval_error( "eval/malformed-number", "1..2", "malformed numeric literal" );
+  expect_eval_error( "eval/unterminated-quote", "'abc", "unterminated single-quoted string" );
+  expect_eval_error( "eval/missing-bracket", "A[2", "missing closing ]" );
+  expect_eval_error( "eval/unary-minus-variable", "A=-B", "unary - before variables/functions is not supported" );
+  expect_eval_error( "eval/unary-minus-function", "A=-sqrt(2)", "unary - before variables/functions is not supported" );
+  expect_eval_error( "eval/undefined-operand", "A=int(1,2,3); A[2] + B", "undefined operand for +" );
+  expect_eval_success( "eval/tab-whitespace", "A=\t1;A", "1i" );
+  expect_eval_throw( "eval/index-zero-rejected", "A=int(1,2,3); A[0]", "out of range for A" );
 }
 
 // ============================================================
@@ -1684,6 +1863,7 @@ void proc_tests( const std::string & group, const bool verbose )
   RUN("annot",    test_annot)
   RUN("write",    test_write)
   RUN("script",   test_script)
+  RUN("eval",     test_eval)
   RUN("lunapi",   test_lunapi)
   RUN("segsrv",   test_segsrv)
 

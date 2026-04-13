@@ -2473,7 +2473,11 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		  
 		  // simple boolean vars
 		  if ( boolvar )
-		    evalue = Helper::yesno( evalue ) ? "1" : "0" ;		  
+		    {
+		      evalue = tok[1];
+		      Helper::expand_numerics( &evalue );
+		      evalue = Helper::yesno( evalue ) ? "1" : "0" ;
+		    }
 		  
 		  // standard expressions (Eval)
 		  if ( ! boolvar )
@@ -3034,5 +3038,4 @@ bool Helper::sl_slicer( const std::string & f , int n , int m , int * s1 , int *
     
   return true;
 }
-
 

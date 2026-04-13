@@ -348,6 +348,8 @@ void proc_copy_suds_cmdline();
 void proc_combine_suds_cmdline();
 
 void proc_hypoxic_burden( edf_t & , param_t & );
+void proc_desat( edf_t & , param_t & );
+void proc_respbreath( edf_t & , param_t & );
 
 void proc_annotate( edf_t & , param_t & );
 void proc_annot2signal( edf_t & , param_t & );
@@ -442,6 +444,7 @@ void proc_fiplot( edf_t & , param_t & );
 void proc_mi( edf_t & , param_t & );
 void proc_svd( edf_t & , param_t & );
 void proc_ica( edf_t & , param_t & );
+void proc_ssa( edf_t & , param_t & );
 void proc_emd( edf_t & , param_t & );
 void proc_dfa( edf_t & , param_t & );
 

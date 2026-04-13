@@ -1,4 +1,3 @@
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -30,16 +29,36 @@
 struct edf_t;
 struct param_t;
 
-namespace dsptools { 
+namespace dsptools {
   void ssa_wrapper( edf_t & edf , param_t & param ) ;
 }
 
 struct ssa_t {
+
+  ssa_t();
   ssa_t( const std::vector<double> * x , const int l );
   ssa_t( const Eigen::VectorXd & x , const int l );
+
   void fit( const Eigen::VectorXd & x , const int l );
+
+  Eigen::VectorXd reconstruct( const std::vector<int> & indices ) const;
+  Eigen::VectorXd reconstruct( const int index ) const;
+  Eigen::MatrixXd calc_wcorr() const;
+
+  static Eigen::VectorXd diagonal_average( const Eigen::MatrixXd & Y );
+
+  int n;
+  int l;
+  int k;
+  int d;
+
+  Eigen::VectorXd original;
   Eigen::MatrixXd X;
-  
+  Eigen::MatrixXd U;
+  Eigen::MatrixXd V;
+  Eigen::VectorXd sigma;
+  Eigen::VectorXd lambda;
+  Eigen::MatrixXd TS_comps;
 };
 
 #endif

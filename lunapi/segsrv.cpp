@@ -22,6 +22,7 @@
 
 #include "lunapi/segsrv.h"
 #include "lunapi/lunapi.h"
+#include "fftw/fftwrap.h"
 
 #include <algorithm>
 #include <limits>
@@ -714,7 +715,10 @@ bool segsrv_t::set_window( double a , double b )
   
   // track
   valid_window = all_okay;
-  
+
+  // invalidate PSD cache on any window change
+  psd_cache_.clear();
+
   return all_okay;
 }
 
@@ -1062,7 +1066,118 @@ bool segsrv_t::get_yscale_signal( const int n1 , double * lwr, double * upr ) co
 
 
 
-// get scaled signals (0-1 give other annots)                                
+// ---------------------------------------------------------------------------
+// Fast Welch PSD for visualization (called from get_scaled_signal when psd_mode_ is on)
+// ---------------------------------------------------------------------------
+
+void segsrv_t::compute_psd_( const std::string & ch,
+                              const Eigen::VectorXf & raw,
+                              const int sr )
+{
+  psd_result_t & res = psd_cache_[ ch ];
+  res.valid = false;
+
+  const int n = (int)raw.size();
+  if ( n < 8 || sr <= 0 ) return;
+
+  // Segment size: next power-of-2 >= 4 * sr (4-second segments at native SR),
+  // clamped to [64, 4096].  Always based on actual SR so the freq axis
+  // (0 .. sr/2) is consistent regardless of window duration.
+  int seg_n = 64;
+  {
+    int target = (int)( (double)sr * 4.0 );
+    while ( seg_n < target && seg_n < 4096 ) seg_n <<= 1;
+  }
+  const int step = seg_n / 2; // 50% overlap at full density
+
+  // Cap total FFT evaluations for speed on long windows.  We stride over
+  // segment *starts* rather than over samples, so each segment still uses
+  // contiguous native-SR data — no aliasing and freq axis stays fixed.
+  const int psd_max_segs = 256;
+
+  // Create ONE FFT plan reused across all segments.
+  real_FFT fft( seg_n, seg_n, sr, WINDOW_HANN );
+  const int nfreqs = fft.cutoff; // seg_n/2 + 1
+
+  std::vector<double> accum( nfreqs, 0.0 );
+  int total_segs = 0;
+
+  // Scan for NaN-delimited contiguous runs, then slide the FFT window
+  // over each run with adaptive overlap to honour psd_max_segs.
+  int i = 0;
+  while ( i < n )
+    {
+      // skip NaN
+      while ( i < n && std::isnan( raw[ i ] ) ) ++i;
+      if ( i >= n ) break;
+
+      // find end of contiguous run
+      int j = i;
+      while ( j < n && !std::isnan( raw[ j ] ) ) ++j;
+
+      const int run_len = j - i;
+
+      if ( run_len >= seg_n ) // need at least one full segment
+        {
+          // How many 50%-overlap segments does this run contain?
+          const int n_segs_full = ( run_len - seg_n ) / step + 1;
+          // Stride over segment starts so we process at most psd_max_segs total.
+          const int seg_stride = std::max( 1, n_segs_full / psd_max_segs );
+          const int actual_step = step * seg_stride;
+
+          int pos = 0;
+          while ( pos + seg_n <= run_len )
+            {
+              // Process one segment directly from the raw buffer — no copy.
+              std::vector<double> seg_buf( seg_n );
+              for ( int k = 0; k < seg_n; ++k )
+                seg_buf[ k ] = (double)raw[ i + pos + k ];
+
+              fft.apply( seg_buf.data(), seg_n );
+              for ( int f = 0; f < nfreqs; ++f )
+                accum[ f ] += fft.X[ f ];
+              ++total_segs;
+              pos += actual_step;
+            }
+        }
+
+      i = j;
+    }
+
+  if ( total_segs == 0 ) return;
+
+  // Average and store as float vectors
+  res.freqs.resize( nfreqs );
+  res.psd.resize( nfreqs );
+  for ( int f = 0; f < nfreqs; ++f )
+    {
+      res.freqs[ f ] = (float)fft.frq[ f ];
+      res.psd[ f ]   = (float)( accum[ f ] / total_segs );
+    }
+  res.valid = true;
+}
+
+
+Eigen::VectorXf segsrv_t::get_psd_freqs( const std::string & ch ) const
+{
+  auto it = psd_cache_.find( ch );
+  if ( it == psd_cache_.end() || !it->second.valid )
+    return Eigen::VectorXf::Zero(0);
+  const auto & v = it->second.freqs;
+  return Eigen::Map<const Eigen::VectorXf>( v.data(), (int)v.size() );
+}
+
+Eigen::VectorXf segsrv_t::get_psd_power( const std::string & ch ) const
+{
+  auto it = psd_cache_.find( ch );
+  if ( it == psd_cache_.end() || !it->second.valid )
+    return Eigen::VectorXf::Zero(0);
+  const auto & v = it->second.psd;
+  return Eigen::Map<const Eigen::VectorXf>( v.data(), (int)v.size() );
+}
+
+
+// get scaled signals (0-1 give other annots)
 Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int n1 )
 {
 
@@ -1073,7 +1188,26 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
   // set_scaling() multiple times after populate() [ which is only called once ]
   
   Eigen::VectorXf s = get_signal( ch );
-  
+
+  // if PSD mode is on, compute PSD on the pre-throttle window slice at native SR
+  // (same filtered/unfiltered signal that get_signal() uses, but before envelope reduction)
+  if ( psd_mode_ )
+    {
+      auto sri = srmap.find( ch );
+      if ( sri != srmap.end() )
+        {
+          const int sr = sri->second;
+          const bool is_filt = filtered.count( ch ) > 0;
+          const Eigen::VectorXf & data = is_filt
+            ? sigmap_f.find( ch )->second
+            : sigmap.find( ch )->second;
+          auto ai = aidx.find( sr );
+          auto bi = bidx.find( sr );
+          if ( ai != aidx.end() && bi != bidx.end() && bi->second > ai->second )
+            compute_psd_( ch, data.segment( ai->second, bi->second - ai->second ), sr );
+        }
+    }
+
   // fixed physical scaling, or auto-scaling?
   // if fixed scaling, optionally, clip if above/below
   
@@ -2046,7 +2180,9 @@ sigmod_segment_t sigmod_t::bin_X_by_Sbins(const Eigen::VectorXf& tS,
 
 // filtering
 void segsrv_t::apply_filter( const std::string & ch , const std::vector<double> & sos )
-{    
+{
+  psd_cache_.erase( ch );
+
   // indicate this channel is filtered
   filtered.insert( ch );
 
@@ -2072,6 +2208,7 @@ void segsrv_t::apply_filter( const std::string & ch , const std::vector<double> 
   
 void segsrv_t::clear_filter( const std::string & ch )
 {
+  psd_cache_.erase( ch );
 
   // indicate not filtered
   filtered.erase( ch );

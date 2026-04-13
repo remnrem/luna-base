@@ -124,6 +124,12 @@ struct Eval {
   bool previous_value;
   bool execute( const std::vector<Token> & );
   bool shunting_yard( const std::string & input, std::vector<Token> & );  
+
+  bool fail_parse( const std::string & msg ,
+		   const std::string * input = NULL ,
+		   int pos = -1 );
+  int parse_position( const std::string & original ,
+		      const std::string & remaining ) const;
   
   // helpers
   int op_preced(const Token & tok );
@@ -136,6 +142,7 @@ struct Eval {
   // keep track of state (errors?)
   bool is_valid;
   std::string errs;
+  bool parse_failed;
   
   // slot for final expression value
   Token e;
@@ -164,4 +171,3 @@ struct Eval {
 
 
 #endif
-

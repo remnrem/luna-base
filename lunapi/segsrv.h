@@ -493,7 +493,13 @@ public:
   auto sigmod_get_timetrack(const int bin) const { return sigmod.get_timetrack(bin); }
   
   auto sigmod_get_scaled_signal(const int bin) const { return sigmod.get_scaled_signal(bin); }
-  
+
+  // on-the-fly PSD (computed inside get_scaled_signal() when psd_mode_ is on)
+  void set_psd_mode( const bool b ) { psd_mode_ = b; if ( !b ) psd_cache_.clear(); }
+  bool get_psd_mode() const { return psd_mode_; }
+  Eigen::VectorXf get_psd_freqs( const std::string & ch ) const;
+  Eigen::VectorXf get_psd_power( const std::string & ch ) const;
+
 private:
   
   void init();
@@ -597,6 +603,20 @@ private:
   std::map<std::string,Eigen::MatrixXf> bands; // ch -> bands x epochs
   std::map<std::string,Eigen::MatrixXf> hjorth; // ch -> h1/h2/h3 x epochs
 
+  // on-the-fly PSD cache
+  bool psd_mode_ = false;
+
+  struct psd_result_t {
+    std::vector<float> freqs;
+    std::vector<float> psd;
+    bool valid = false;
+  };
+
+  std::map<std::string, psd_result_t> psd_cache_;
+
+  void compute_psd_( const std::string & ch,
+                     const Eigen::VectorXf & raw,
+                     const int sr );
 
   //
   // annotations

@@ -50,6 +50,7 @@
 #include "stats/cpt.h"
 #include "stats/nmf.h"
 #include "stats/gpa.h"
+#include "dsp/ged.h"
 #include "stats/catch22/catch22.h"
 
 #include "miscmath/miscmath.h"
@@ -125,6 +126,8 @@
 #include "sstore/sstore.h"
 
 #include "resp/hb.h"
+#include "resp/desat.h"
+#include "resp/respbreath.h"
 
 #include "models/predict.h"
 

@@ -27,6 +27,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <cctype>
 
 #include "token-eval.h"
 #include "annot/annot.h"
@@ -44,10 +45,34 @@ void Eval::init( bool na )
   no_assignments = na;
 
   errs = "";
+  parse_failed = false;
+}
+
+bool Eval::fail_parse( const std::string & msg ,
+		       const std::string * input ,
+		       int pos )
+{
+  std::stringstream ss;
+  ss << msg;
+
+  if ( input != NULL && pos > 0 )
+    ss << " at character " << pos;
+
+  errmsg( ss.str() );
+  parse_failed = true;
+  return false;
+}
+
+int Eval::parse_position( const std::string & original ,
+			  const std::string & remaining ) const
+{
+  return original.size() - remaining.size() + 1;
 }
 
 bool Eval::get_token( std::string & input ,  Token & tok )
 {
+
+  const std::string original_input = input;
 
   // no more input 
 
@@ -64,7 +89,7 @@ bool Eval::get_token( std::string & input ,  Token & tok )
   
   while ( 1 ) 
     {
-      if ( c == " " ) input = input.substr(1);
+      if ( std::isspace( static_cast<unsigned char>( c[0] ) ) ) input = input.substr(1);
       else break;
       if ( input.size() == 0 ) return false;	    
       c = input.substr(0,1);
@@ -81,6 +106,26 @@ bool Eval::get_token( std::string & input ,  Token & tok )
   std::map<std::string,Token::tok_type>::iterator i = 
     Token::tok_map.find( c ) ;
 
+  if ( ! previous_value && ( c == "-" || c == "+" ) )
+    {
+      unsigned int p = 1;
+      while ( p < input.size() && std::isspace( static_cast<unsigned char>( input[p] ) ) ) ++p;
+
+      if ( p == input.size() )
+	return fail_parse( "incomplete unary operator" , &original_input , parse_position( original_input , input ) );
+
+      const char d = input[p];
+      if ( ! ( ( d >= '0' && d <= '9' ) || d == '.' ) )
+	{
+	  std::string repl = c == "-" ? "-1*" : "+1*";
+	  return fail_parse( std::string("unary ") + c
+			     + " before variables/functions is not supported; use "
+			     + repl + "..." ,
+			     &original_input ,
+			     parse_position( original_input , input ) );
+	}
+    }
+
   // Numeric, allow to start with + or - or .
   
   if ( ( c >= "0" && c <= "9" ) || c == "." || ( (!previous_value) && ( c=="-" || c=="+" ) ) )
@@ -89,39 +134,71 @@ bool Eval::get_token( std::string & input ,  Token & tok )
       unsigned int p = 1;
       
       bool need_leading_zero = c == ".";
+      bool has_dot = c == ".";
+      bool has_exp = false;
+      bool digit_seen = ( c[0] >= '0' && c[0] <= '9' );
+      bool digit_after_exp = false;
+      bool invalid_numeric = false;
       
       while ( 1 ) 
 	{
 	  
 	  if ( p == input.size() ) break;
 	  char d = input[p];
-	  if ( d >= '0' && d <= '9' ) c += input.substr(p,1);
-	  else if ( d == '.' ) c += input.substr(p,1); 
-	  else if ( d == 'e' || d == 'E' ) c += input.substr(p,1);
-	  else if ( d == '+' || d == '-' ) {
-	    // + and - okay, if previous char was 'e' or 'E'
-	    if ( input.substr(p-1,1) == "E" || input.substr(p-1,1) == "e" )
+	  if ( d >= '0' && d <= '9' )
+	    {
 	      c += input.substr(p,1);
-	    else break;
+	      digit_seen = true;
+	      if ( has_exp ) digit_after_exp = true;
+	    }
+	  else if ( d == '.' )
+	    {
+	      c += input.substr(p,1);
+	      if ( has_dot || has_exp ) invalid_numeric = true;
+	      has_dot = true;
+	    }
+	  else if ( d == 'e' || d == 'E' )
+	    {
+	      c += input.substr(p,1);
+	      if ( has_exp || ! digit_seen ) invalid_numeric = true;
+	      has_exp = true;
+	      digit_after_exp = false;
+	    }
+	  else if ( d == '+' || d == '-' ) {
+	    c += input.substr(p,1);
+	    // + and - okay, if previous char was 'e' or 'E'
+	    if ( ! ( input.substr(p-1,1) == "E" || input.substr(p-1,1) == "e" ) )
+	      invalid_numeric = true;
 	  }
 	  else break;
 	  ++p;
 	}
 
+      if ( has_exp && ! digit_after_exp ) invalid_numeric = true;
+      if ( invalid_numeric )
+	return fail_parse( "malformed numeric literal '" + c + "'" ,
+			   &original_input ,
+			   parse_position( original_input , input ) );
+
       // a valid int or float? 
       int i;
       double d;
       bool err = false;
+      bool int_ok = Helper::from_string<int>( i , need_leading_zero ? "0"+c : c , std::dec );
+      bool dbl_ok = Helper::from_string<double>( d , need_leading_zero ? "0"+c : c , std::dec );
 
-      if ( ! Helper::from_string<int>( i , need_leading_zero ? "0"+c : c , std::dec ) ) err = true;
-      if ( ! Helper::from_string<double>( d , need_leading_zero ? "0"+c : c , std::dec ) ) err = true;
+      if ( ! dbl_ok ) err = true;
 
       if ( ! err ) 
 	{
-	  if ( i == d ) tok.set(i);
+	  if ( int_ok && i == d ) tok.set(i);
 	  else tok.set(d);
 	  previous_value = true;
 	}
+      else
+	return fail_parse( "malformed numeric literal '" + c + "'" ,
+			   &original_input ,
+			   parse_position( original_input , input ) );
       
     }
     
@@ -188,6 +265,11 @@ bool Eval::get_token( std::string & input ,  Token & tok )
 	  c += input.substr(p,1);
 	  ++p;
 	}
+
+      if ( ! found )
+	return fail_parse( "unterminated single-quoted string" ,
+			   &original_input ,
+			   parse_position( original_input , input ) );
       
       tok.set( c.substr(1,c.size()-2) ); 
       previous_value = true;
@@ -217,6 +299,11 @@ bool Eval::get_token( std::string & input ,  Token & tok )
 	  c += input.substr(p,1);
 	  ++p;
 	}      
+
+      if ( ! found )
+	return fail_parse( "unterminated brace-delimited string" ,
+			   &original_input ,
+			   parse_position( original_input , input ) );
 
       tok.set( c.substr(1,c.size()-2) ); 
 
@@ -267,7 +354,9 @@ bool Eval::get_token( std::string & input ,  Token & tok )
 	    Token::fn_map.find( c );
 	  
 	  if ( f == Token::fn_map.end() ) 
-	    Helper::halt( "did not recognize function " + c + "()" );
+	    return fail_parse( "did not recognize function " + c + "()" ,
+			       &original_input ,
+			       parse_position( original_input , input ) );
 	  
 	  // store function token
 	  tok.function( c );	    
@@ -286,6 +375,11 @@ bool Eval::get_token( std::string & input ,  Token & tok )
 	}
       previous_value = true;
     }
+
+  if ( ! tok.is_set() )
+    return fail_parse( "unexpected character '" + c + "'" ,
+		       &original_input ,
+		       parse_position( original_input , input ) );
   
   // remove this input
 
@@ -396,11 +490,14 @@ unsigned int Eval::op_arg_count( const Token & tok )
             
     case Token::FUNCTION : 
       if ( Token::fn_map.find( tok.name() ) == Token::fn_map.end() )
-	Helper::halt( "did not recognize function " + tok.name() );
+	{
+	  errmsg( "did not recognize function " + tok.name() );
+	  return 0;
+	}
       return Token::fn_map[ tok.name() ];
       
     default:
-      Helper::halt( "did not recognize operator " + tok.name() );
+      errmsg( "did not recognize operator " + tok.name() );
       break;
       
     }
@@ -428,6 +525,7 @@ bool Eval::shunting_yard( const std::string & oinput,
   unsigned int sl = 0;
   
   previous_value = false;
+  parse_failed = false;
   
   // Parse input string token by token
   
@@ -438,7 +536,11 @@ bool Eval::shunting_yard( const std::string & oinput,
       
       // get next token -- if end of input break
       
-      if ( ! get_token( input , c ) ) break;
+      if ( ! get_token( input , c ) )
+	{
+	  if ( parse_failed ) return false;
+	  break;
+	}
       
       // If the token is a number (identifier), then add it to output queue.
       
@@ -488,7 +590,7 @@ bool Eval::shunting_yard( const std::string & oinput,
 	  
 	  if( !pe )   
 	    {
-	      Helper::halt( "separator or parentheses mismatched: " + oinput );
+	      errmsg( "separator or parentheses mismatched in '" + oinput + "'" );
 	      return false;
 	    }
 	}
@@ -575,7 +677,7 @@ bool Eval::shunting_yard( const std::string & oinput,
 	    
 	    if( ! pe )  
 	      {
-		Helper::halt( "parentheses mismatched" );
+		errmsg( "parentheses mismatched in '" + oinput + "'" );
 		return false;
 	      }
 	    
@@ -604,7 +706,7 @@ bool Eval::shunting_yard( const std::string & oinput,
 	  }
 	else  
 	  {	    
-	    Helper::halt( "unknown token" ) ;
+	    errmsg( "unknown token while parsing '" + oinput + "'" ) ;
 	    return false; 
 	  }
       
@@ -621,7 +723,7 @@ bool Eval::shunting_yard( const std::string & oinput,
       
       if ( sc.is_left_paren() || sc.is_right_paren() )
 	{
-	  Helper::halt( "parentheses mismatched" );
+	  errmsg( "parentheses mismatched in '" + oinput + "'" );
 	  return false;
         }
       
@@ -636,6 +738,14 @@ bool Eval::shunting_yard( const std::string & oinput,
 
 bool Eval::execute( const std::vector<Token> & input )
 {
+
+  auto token_label = []( const Token & tok ) -> std::string
+  {
+    if ( tok.name() != "" ) return tok.name();
+    std::stringstream ss;
+    ss << tok;
+    return ss.str();
+  };
 
   Token sc;
   
@@ -686,12 +796,13 @@ bool Eval::execute( const std::vector<Token> & input )
 	  // It is known a priori that the operator takes n arguments.
 	  
 	  int nargs = op_arg_count(c);
+	  if ( ! errs.empty() ) return false;
 	  
 	  // If there are fewer than n values on the stack
 	  
 	  if ( (int)sl < nargs && nargs != -1 ) 
 	    {
-	      Helper::halt( "not enough arguments for " + c.name() ) ;
+	      errmsg( "not enough arguments for " + ( c.is_function() ? c.name() + "()" : Token::tok_unmap[ c.type() ] ) ) ;
 	      return false;
 	    }
 	  
@@ -727,6 +838,14 @@ bool Eval::execute( const std::vector<Token> & input )
 		  if ( verbose )
 		    std::cout << "  popping argument off stack: " << sc << "\n";
 		}
+
+	      for (int a = 0; a < args.size(); a++)
+		if ( ! args[a].is_set() )
+		  {
+		    errmsg( "undefined argument '" + token_label( args[a] )
+			    + "' passed to " + c.name() + "()" );
+		    return false;
+		  }
 	      
 
 	      //
@@ -739,7 +858,7 @@ bool Eval::execute( const std::vector<Token> & input )
 	      const int nargs = Token::fn_map[ c.name() ]; 
 	      if ( args.size() != nargs && nargs != -1 ) 
 		{
-		  Helper::halt( "wrong number of arguments for " + c.name() );
+		  errmsg( "wrong number of arguments for " + c.name() + "()" );
 		  return false;
 		}
 
@@ -792,10 +911,14 @@ bool Eval::execute( const std::vector<Token> & input )
 	      else if ( c.name() == "contains" )  res = func.fn_vec_any( args[1] , args[0] );
 	      else if ( c.name() == "countif" )   res = func.fn_vec_count( args[1] , args[0] );
 	      	    	      
-	      else Helper::halt( "did not recognize function " + c.name() );
+	      else
+		{
+		  errmsg( "did not recognize function " + c.name() + "()" );
+		  return false;
+		}
 
-	      
-	    }
+		      
+		    }
 	  else
 	    {
 	      
@@ -833,7 +956,10 @@ bool Eval::execute( const std::vector<Token> & input )
 		    {
 		      
 		      if ( no_assignments ) 
-			Helper::halt( "no A = B assigments allowed in this expression" );
+			{
+			  errmsg( "no A = B assignments allowed in this expression" );
+			  return false;
+			}
 		      
 		      res = func.fn_assign( sc, t0 );  // res==T
 
@@ -842,7 +968,17 @@ bool Eval::execute( const std::vector<Token> & input )
 
 		    }		  
 		  else
-		    res = c.operands( t0 , sc );
+		    {
+		      if ( ! sc.is_set() || ! t0.is_set() )
+			{
+			  errmsg( "undefined operand for "
+				  + Token::tok_unmap[ c.type() ]
+				  + ": left='" + token_label( sc )
+				  + "', right='" + token_label( t0 ) + "'" );
+			  return false;
+			}
+		      res = c.operands( t0 , sc );
+		    }
 		  		  
 		}
 	    }
@@ -872,13 +1008,16 @@ bool Eval::execute( const std::vector<Token> & input )
   
   if ( sl != 1 || stack.size() != 1 ) 
     {
-      std::cout << " problem:: expecting a single value on the stack to return...\n";
-      std::cout << " current stack size n=" << stack.size() << "\n";
-      for (int ss = 0 ; ss < stack.size() ; ss++ )
-	std::cout << "  " << stack[ss] << "\n";
-      std::cout << "\n\n";
+      if ( verbose )
+	{
+	  std::cout << " problem:: expecting a single value on the stack to return...\n";
+	  std::cout << " current stack size n=" << stack.size() << "\n";
+	  for (int ss = 0 ; ss < stack.size() ; ss++ )
+	    std::cout << "  " << stack[ss] << "\n";
+	  std::cout << "\n\n";
+	}
 
-      Helper::halt( "badly formed eval expression" );
+      errmsg( "badly formed eval expression" );
       return false;
     }
   
@@ -905,7 +1044,7 @@ bool Eval::execute( const std::vector<Token> & input )
   // If there are more values in the stack
   // (Error) The user input has too many values.
   
-  Helper::halt( "badly formed expression: too many values" );
+  errmsg( "badly formed expression: too many values" );
   return false;
 }
 
@@ -915,6 +1054,9 @@ bool Eval::parse( const std::string & input )
   delete_symbols();    
   
   std::string input2 = input;
+
+  errs = "";
+  parse_failed = false;
 
   if ( ! expand_indices( &input2 ) ) return false;
 
@@ -949,8 +1091,6 @@ bool Eval::parse( const std::string & input )
   for (int i=0; i<etok.size(); i++)
     {      
       output[i].clear();    
-
-      errs = "";
 
       if ( ! shunting_yard( etok[i], output[i] ) )
 	is_valid = false;
@@ -1331,6 +1471,8 @@ bool Eval::evaluate( const bool v )
       if ( is_valid ) 
 	is_valid = execute( output[i] );
 
+      if ( ! is_valid ) e.set();
+
       if ( verbose )
 	std::cerr << " Post to expression " << i+1 << " status = " << ( is_valid ? "VALID" : "INVALID" ) << "\n";
 
@@ -1514,7 +1656,10 @@ bool Eval::expand_vargs( std::string * s )
 	      {
 		
 		// gone past end of string?
-		if ( q == s->size() ) return false;
+		if ( q == s->size() )
+		  return fail_parse( "unterminated function call while expanding " + fname[f] ,
+				     s ,
+				     p + 1 );
 		
 		char c = s->substr(q,1)[0];
 		
@@ -1581,7 +1726,7 @@ bool Eval::expand_indices( std::string * s )
 
       while ( --q )
 	{
-	  if ( q < 0 ) return false;
+	  if ( q < 0 ) return fail_parse( "bad vector subscript syntax" , s , p + 1 );
 	  if ( q == 0 ) { ++q; break; }
 	  char c = s->substr(q,1)[0];
 	  
@@ -1592,6 +1737,7 @@ bool Eval::expand_indices( std::string * s )
 	      while (1) 
 		{
 		  --q;
+		  if ( q < 0 ) return fail_parse( "parentheses mismatched while expanding vector subscript" , s , p + 1 );
 		  if ( s->substr(q,1) == ")" ) ++nest;
 		  else if ( s->substr(q,1) == "(" ) --nest;
 		  if ( nest == 0 ) break; 
@@ -1620,10 +1766,10 @@ bool Eval::expand_indices( std::string * s )
       int r = p;      
       while ( ++p )
 	{  
-	  if ( p == s->size() ) return false;
+	  if ( p == s->size() ) return fail_parse( "missing closing ] for vector subscript" , s , r + 1 );
 	  char c = s->substr(p,1)[0];
 	  // do not allow nested indexing
-	  if ( c == '[' ) return false;	  
+	  if ( c == '[' ) return fail_parse( "nested vector subscripting is not supported" , s , p + 1 );	  
 	  if ( c == ']' )
 	    {
 	      arg_idx = s->substr(r+1,p-r-1);
@@ -1654,4 +1800,3 @@ void Eval::locate_symbols( std::vector<Token> & tok )
       }
   reset_symbols(); // symbol table
 }
-

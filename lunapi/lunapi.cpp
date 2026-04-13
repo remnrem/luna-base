@@ -1718,7 +1718,8 @@ lannot_t lunapi_inst_t::fetch_annots( const std::vector<std::string> & anns , co
   return r;
 }
 
-lannot_full_t lunapi_inst_t::fetch_full_annots( const std::vector<std::string> & anns ) const
+lannot_full_t lunapi_inst_t::fetch_full_annots( const std::vector<std::string> & anns ,
+                                                const bool add_keys ) const
 {
   // typedef std::vector<std::tuple<std::string,std::string,std::string,std::string,double,double> > lannot_full_t;
   lannot_full_t r;
@@ -1747,7 +1748,8 @@ lannot_full_t lunapi_inst_t::fetch_full_annots( const std::vector<std::string> &
 	      std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
 	      while ( dd != inst->data.end() )
 		{
-		  if ( dd != inst->data.begin() ) ss << "|";
+		  if ( dd != inst->data.begin() ) ss << ( add_keys ? ";" : "|" );
+                  if ( add_keys ) ss << dd->first << "=";
 		  ss << *dd->second; // meta-data value
 		  ++dd;		  
 		}

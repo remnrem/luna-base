@@ -1478,6 +1478,7 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
   // linear models / analysis
   clmap[ "--gpa-prep" ]     = PROC_GPA_PREP ;
   clmap[ "--gpa" ]          = PROC_GPA_RUN ;
+  clmap[ "--ged-group" ]    = PROC_GED_GROUP ;
   clmap[ "--cpt" ]          = PROC_CPERM_TEST ;
   clmap[ "--overlap" ]      = PROC_OVERLAP ;
   
@@ -1907,9 +1908,27 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
     }
 
   //
+  // GED group (standalone: no EDF loop needed)
+  //
+
+  if ( cmdline == PROC_GED_GROUP )
+    {
+      param_t param;
+      build_param( &param, argc, argv, param_from_command_line );
+      writer.begin();
+      writer.id( "." , "." );
+      writer.cmd( "GED" , 1 , "" );
+      writer.level( "GED" , "_GED" );
+      ged_group_t::run_group( param );
+      writer.unlevel( "_GED" );
+      writer.commit();
+      std::exit(0);
+    }
+
+  //
   // POPS
   //
-  
+
   if ( cmdline == PROC_POPS )
     {
 #ifdef HAS_LGBM
@@ -2539,11 +2558,13 @@ void proc_eval_tester( const bool verbose )
   
   bool is_valid = tok.evaluate( verbose );
   
-  bool retval;
+  bool retval = false;
   
   if ( ! tok.value( retval ) ) is_valid = false;
 
   std::cout << "parsed as a valid expression : " << ( is_valid ? "yes" : "no" ) << "\n";
+  if ( tok.errmsg() != "" )
+    std::cout << "error detail                : " << Helper::rtrim( tok.errmsg() ) << "\n";
   std::cout << "return value                 : " << tok.result() << "\n";
   std::cout << "return value (as T/F)        : " << ( retval ? "true" : "false" ) << "\n";
   std::cout << "assigned meta-data           : " << out.print() << "\n";  
