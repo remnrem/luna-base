@@ -2736,6 +2736,87 @@ void cmddefs_t::init()
   add_var( "SEGMENTS" , "GAP" , "STOP_HMS" , "Gap stop (hh:mm:ss)" );
 
   //
+  // ALIGN-SCAN
+  //
+
+  add_cmd( "output" , "ALIGN-SCAN" , "Scan for epoch/record/staging alignment edge cases" );
+  add_param( "ALIGN-SCAN" , "annots"  , "N1,N2,N3,R,W" , "Staging annotation labels to check (default: N1,N2,N3,R,W,?,L,U,M)" );
+  add_param( "ALIGN-SCAN" , "minimal" , ""              , "Use minimal label set: N1,N2,N3,R,W" );
+  add_param( "ALIGN-SCAN" , "verbose" , ""             , "Also emit per-epoch (E) and per-annotation-event (ANNOT/ANN_N) tables" );
+
+  add_table( "ALIGN-SCAN" , "" , "Alignment summary" );
+
+  add_var( "ALIGN-SCAN" , "" , "OK"               , "1 = no issues; 0 = warnings detected" );
+
+  add_var( "ALIGN-SCAN" , "" , "EDF_TYPE"         , "EDF type string (EDF, EDF+C, EDF+D)" );
+  add_var( "ALIGN-SCAN" , "" , "REC_DUR"          , "EDF record duration (seconds)" );
+  add_var( "ALIGN-SCAN" , "" , "NRECS"            , "Number of retained records" );
+  add_var( "ALIGN-SCAN" , "" , "TOT_DUR"          , "Total retained duration (seconds)" );
+  add_var( "ALIGN-SCAN" , "" , "NSEGS"            , "Number of contiguous segments" );
+  add_var( "ALIGN-SCAN" , "" , "NGAPS"            , "Number of discontinuity gaps" );
+
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_DUR"          , "Epoch duration (seconds)" );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_INC"          , "Epoch step (seconds)" );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_OFFSET"       , "Effective epoch grid offset (seconds)" );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_N"            , "Number of epochs" );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_AUTO"         , "1 = default 30s epoch was applied by this command" );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_ALIGN_ACTIVE" , "1 = EPOCH align annotation alignment is active" );
+
+  add_var( "ALIGN-SCAN" , "" , "ANN_FOUND"    , "Annotation labels present in file" );
+  add_var( "ALIGN-SCAN" , "" , "ANN_MISSING"  , "Annotation labels absent from file" );
+  add_var( "ALIGN-SCAN" , "" , "ANN_N"        , "Total staging annotation instances" );
+  add_var( "ALIGN-SCAN" , "" , "ANN_STARTS"   , "Distinct annotation start time-points" );
+
+  add_var( "ALIGN-SCAN" , "" , "REC_DIVIDES_EPOCH"   , "1 = record duration evenly divides epoch duration" );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_ON_REC"         , "Epochs whose start falls on a record boundary" );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_OFF_REC"        , "Epochs whose start falls mid-record" );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_ON_REC_PCT"     , "Percentage of epochs starting on a record boundary" );
+
+  add_var( "ALIGN-SCAN" , "" , "ANN_AT_EPOCH"          , "Annotation starts coinciding with an epoch start" );
+  add_var( "ALIGN-SCAN" , "" , "ANN_OFF_EPOCH"         , "Annotation starts falling between epoch starts" );
+  add_var( "ALIGN-SCAN" , "" , "ANN_AT_EPOCH_PCT"      , "Percentage of annotation starts on an epoch boundary" );
+  add_var( "ALIGN-SCAN" , "" , "ALIGN_OFFSET"          , "Offset EPOCH align would use (seconds from EDF start)" );
+  add_var( "ALIGN-SCAN" , "" , "ALIGN_WOULD_FIX_DRIFT" , "1 = running EPOCH align would resolve all annotation drift" );
+
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_ONE_STAGE"   , "Epochs with a single unambiguous stage label" );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_NO_STAGE"    , "Epochs with no overlapping stage annotation" );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_MULTI_STAGE" , "Epochs spanning >1 distinct stage label (annotation boundary mid-epoch)" );
+
+  add_var( "ALIGN-SCAN" , "" , "REC_AMBIG" , "Records shared between epochs with different stage labels (MASK/RE ambiguity)" );
+
+  add_var( "ALIGN-SCAN" , "" , "ANN_IN_GAP"   , "Annotations falling entirely within an EDF+D gap" );
+  add_var( "ALIGN-SCAN" , "" , "ANN_SPAN_GAP" , "Annotations spanning a segment/gap boundary" );
+
+  add_var( "ALIGN-SCAN" , "" , "WARN_REC_NOT_DIV"   , "1 = epoch size is not an exact multiple of record size" );
+  add_var( "ALIGN-SCAN" , "" , "WARN_EPOCH_OFF_REC" , "1 = some epoch starts are not on record boundaries" );
+  add_var( "ALIGN-SCAN" , "" , "WARN_STAGE_DRIFT"   , "1 = some annotation starts fall between epoch boundaries" );
+  add_var( "ALIGN-SCAN" , "" , "WARN_MULTI_STAGE"   , "1 = some epochs span >1 stage label" );
+  add_var( "ALIGN-SCAN" , "" , "WARN_GAP_ANNS"      , "1 = some annotations fall in or span EDF+D gaps" );
+
+  add_table( "ALIGN-SCAN" , "E" , "Per-epoch detail (verbose only)" );
+  add_var( "ALIGN-SCAN" , "E" , "START"     , "Epoch start (seconds from EDF start)" );
+  add_var( "ALIGN-SCAN" , "E" , "STOP"      , "Epoch stop (seconds from EDF start)" );
+  add_var( "ALIGN-SCAN" , "E" , "START_HMS" , "Epoch start (hh:mm:ss)" );
+  add_var( "ALIGN-SCAN" , "E" , "STOP_HMS"  , "Epoch stop (hh:mm:ss)" );
+  add_var( "ALIGN-SCAN" , "E" , "STAGE"     , "Stage label(s) overlapping this epoch (. if none)" );
+  add_var( "ALIGN-SCAN" , "E" , "N_STAGES"  , "Number of distinct stage labels overlapping this epoch" );
+  add_var( "ALIGN-SCAN" , "E" , "ON_REC"    , "1 = epoch start falls on a record boundary" );
+  add_var( "ALIGN-SCAN" , "E" , "REC_START" , "First EDF record overlapping this epoch" );
+  add_var( "ALIGN-SCAN" , "E" , "REC_STOP"  , "Last EDF record overlapping this epoch" );
+  add_var( "ALIGN-SCAN" , "E" , "NRECS"     , "Number of EDF records spanned by this epoch" );
+
+  add_table( "ALIGN-SCAN" , "ANNOT,ANN_N" , "Per-annotation-event detail (verbose only)" );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "START"     , "Annotation start (seconds from EDF start)" );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "STOP"      , "Annotation stop (seconds from EDF start)" );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "START_HMS" , "Annotation start (hh:mm:ss)" );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "STOP_HMS"  , "Annotation stop (hh:mm:ss)" );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "AT_EPOCH"  , "1 = annotation start coincides with an epoch start" );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "EPOCH"     , "Epoch number (1-based) if AT_EPOCH=1, else -1" );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "OFF_SEC"   , "Offset (seconds) from nearest epoch boundary" );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "REC_START" , "First EDF record overlapping this annotation" );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "REC_STOP"  , "Last EDF record overlapping this annotation" );
+
+  //
   // HEAD
   //
 
@@ -7290,6 +7371,35 @@ void cmddefs_t::init()
   add_var( "DESAT" , "DESAT" , "BASELINE" , "Local median baseline SpO2 at event onset (%)" );
   add_var( "DESAT" , "DESAT" , "DROP"     , "Magnitude of drop (baseline - nadir, SpO2 units)" );
   add_var( "DESAT" , "DESAT" , "SEG"      , "Segment index (0-based) in which event occurred" );
+
+  // --- Matlab mode (mode=matlab) ---
+  add_param( "DESAT" , "mode"      , "matlab" , "Use peak-valley algorithm (Azarbarzin/Billauer) instead of forward-scan; add mode=matlab" );
+  add_param( "DESAT" , "neighbor"  , "2"      , "[matlab mode] Expand artifact zones by ±N seconds (default 2)" );
+  add_param( "DESAT" , "lp"        , "1"      , "[matlab mode] Butterworth low-pass cutoff Hz applied before artifact detection (default 1 Hz to match Matlab; set lp=0 to disable)" );
+  add_param( "DESAT" , "lp-order"  , "2"      , "[matlab mode] LP filter order (default 2)" );
+  add_param( "DESAT" , "no-round"  , ""       , "[matlab mode] If present, skip integer rounding after LP filter (rounding is on by default to match Matlab)" );
+  add_param( "DESAT" , "mag-thres" , "1.5"    , "[matlab mode] Peak-valley pruning threshold in SpO2 units (default 1.5)" );
+
+  add_table( "DESAT" , "DESAT_M" , "[matlab mode] Per-event desaturation output" );
+  add_var( "DESAT" , "DESAT_M" , "START",    "Event start time (pre-peak, seconds from recording start)" );
+  add_var( "DESAT" , "DESAT_M" , "STOP",     "Event stop time (post-peak, seconds from recording start)" );
+  add_var( "DESAT" , "DESAT_M" , "DUR",      "Event duration (pre to post, seconds)" );
+  add_var( "DESAT" , "DESAT_M" , "NADIR_T",  "Time of nadir (seconds from recording start)" );
+  add_var( "DESAT" , "DESAT_M" , "NADIR",    "SpO2 at nadir (%)" );
+  add_var( "DESAT" , "DESAT_M" , "PRE",      "SpO2 at pre-event local peak (%)" );
+  add_var( "DESAT" , "DESAT_M" , "POST",     "SpO2 at post-event local peak (%)" );
+  add_var( "DESAT" , "DESAT_M" , "MAG_DOWN", "Drop magnitude: PRE - NADIR (SpO2 units)" );
+  add_var( "DESAT" , "DESAT_M" , "MAG_UP",   "Recovery magnitude: POST - NADIR (SpO2 units)" );
+  add_var( "DESAT" , "DESAT_M" , "SEG",      "Segment index (0-based)" );
+  add_var( "DESAT" , "DESAT_M" , "SLEEP",    "1 if nadir fell in a sleep epoch (requires staging annotations)" );
+
+  add_var( "DESAT" , "" , "N2",            "[matlab mode] Number of events with SpO2 drop >= 2%" );
+  add_var( "DESAT" , "" , "N3",            "[matlab mode] Number of events with SpO2 drop >= 3%" );
+  add_var( "DESAT" , "" , "N4",            "[matlab mode] Number of events with SpO2 drop >= 4%" );
+  add_var( "DESAT" , "" , "ODI2",          "[matlab mode] ODI2: events/hr of valid sleep (or all valid time if no staging)" );
+  add_var( "DESAT" , "" , "ODI3",          "[matlab mode] ODI3: events/hr" );
+  add_var( "DESAT" , "" , "ODI4",          "[matlab mode] ODI4: events/hr" );
+  add_var( "DESAT" , "" , "T_SLEEP_VALID", "[matlab mode] Valid signal duration within sleep epochs (seconds)" );
 
   //
   // RESPBREATH

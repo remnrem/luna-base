@@ -41,6 +41,8 @@ struct rpeaks_t
 
   double npks;
   double p_inverted;
+  double p_order_inverted;
+  double polarity_conf;
   bool inverted;
   
   double bpm( interval_t & , double lwr = 0 , double upr = 0 ) ;
@@ -63,7 +65,7 @@ struct hrv_opt_t;
 struct hrv_res_t {
 
   hrv_res_t()
-    : IMPUTED(0.0), P_INV(0.0), INV(0.0), NP(0.0), NP_TOT(0.0),
+    : IMPUTED(0.0), P_INV(0.0), ORDER_INV(0.0), POLARITY_CONF(0.0), INV(0.0), NP(0.0), NP_TOT(0.0),
       RR(0.0), HR(0.0),
       SDNN(0.0), SDNN_R(0.0), RMSSD(0.0), RMSSD_R(0.0), pNN50(0.0),
       LF(0.0), LF_N(0.0), LF_PK(0.0), HF(0.0), HF_N(0.0), HF_PK(0.0),
@@ -71,7 +73,9 @@ struct hrv_res_t {
   
   
   double IMPUTED; // proportion of intervals imputed (out-of-range)
-  double P_INV;   // proportion of intervals inverted
+  double P_INV;   // fraction of beats supporting inversion
+  double ORDER_INV; // fraction of beats where the negative deflection precedes the positive
+  double POLARITY_CONF; // confidence in inversion call
   double INV;     // is it inverted? Y/N
   double NP;      // # of RR intervals
   double NP_TOT;  // keep as total number of peaks (i.e. sum over epochs) 
@@ -122,6 +126,13 @@ struct rpeak_opt_t {
     flwr = 5;
     fupr = 20;
     median_filter_window = 9;
+    eval_window_sec = 0.15;
+    polarity_margin = 0.10;
+    rr_eval_lwr = 0.3;
+    rr_eval_upr = 2.0;
+    force_polarity = false;
+    force_inverted = false;
+    polarity_conf_threshold = 0.5;
 
     //smoothed Z
     lag_sec = 10;
@@ -140,6 +151,13 @@ struct rpeak_opt_t {
   double flwr;
   double fupr;
   int median_filter_window;
+  double eval_window_sec;
+  double polarity_margin;
+  double rr_eval_lwr;
+  double rr_eval_upr;
+  bool force_polarity;
+  bool force_inverted;
+  double polarity_conf_threshold;
 
   // smoothedZ peak finding
   double lag_sec;

@@ -427,18 +427,23 @@ bool timeline_t::align_epochs( uint64_t * tp , int * rec , const std::set<uint64
       break;
     }
 
-  // is this tp in the same record?  
+  // is this tp in the same record?
   // if not, we also need to advance rec
-  
-  while ( 1 ) 
+  //
+  // Use next_record() rather than (*rec)++ so that we walk only retained records.
+  // After RE, rec2tp contains sparse record IDs; (*rec)++ would visit non-retained
+  // records whose record2interval() returns (0,0), causing a spurious early return false.
+
+  while ( 1 )
     {
       interval_t reci = record2interval( *rec );
-      // unable to find this record
-      if ( reci.start == 0 && reci.stop == 0 )  return false; 
+      // unable to find this record (end of retained records)
+      if ( reci.start == 0 && reci.stop == 0 )  return false;
       if ( *tp >= reci.start && *tp <= reci.stop ) return true;
-      // advance to the next record and check
+      // advance to the next retained record and check
       //std::cout << " advancing rec = " << *rec << "\n";
-      (*rec)++;
+      *rec = next_record( *rec );
+      if ( *rec == -1 ) return false;
     }
 
   //  std::cout << " DONE\n";

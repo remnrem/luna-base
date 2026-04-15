@@ -26,6 +26,9 @@
 #include "luna.h"
 #include "timeline/actig.h"
 
+// defined in timeline/ralign.cpp
+void proc_review_alignment( edf_t & edf , param_t & param );
+
 extern logger_t logger;
 
 extern writer_t writer;
@@ -904,7 +907,8 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "DUMP" ) )         { fnd = true; proc_dump( edf, param(c) );  }
       if ( (!fnd) && is( c, "DUMP-RECORDS" ) ) { fnd = true; proc_record_dump( edf , param(c) ); }
       if ( (!fnd) && is( c, "RECS" ) )         { fnd = true; proc_record_table( edf , param(c) ); }
-      if ( (!fnd) && is( c, "SEGMENTS" ) )     { fnd = true; proc_dump_segs( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SEGMENTS" ) )          { fnd = true; proc_dump_segs( edf , param(c) ); }
+      if ( (!fnd) && is( c, "ALIGN-SCAN" ) ) { fnd = true; proc_review_alignment( edf , param(c) ); }
       if ( (!fnd) && is( c, "DUMP-EPOCHS" ) )  { fnd = true; proc_epoch_dump( edf, param(c) ); } // REDUNDANT -> ANNOTS epoch
       if ( (!fnd) && is( c, "ANNOTS" ) )       { fnd = true; proc_list_all_annots( edf, param(c) ); }
       if ( (!fnd) && is( c, "ESPAN" ) )        { fnd = true; proc_espan( edf , param(c) ); }
@@ -3219,9 +3223,9 @@ void proc_epoch( edf_t & edf , param_t & param )
       return;
     }
   
-  logger << "  set epochs, length " << dur 
-	 << " (step " << inc 
-	 << ", offset " << offset * globals::tp_duration  
+  logger << "  set epochs, length " << dur
+	 << " (step " << inc
+	 << ", offset " << edf.timeline.epoch_offset()
 	 <<  "), " << ne << " epochs\n";
   if ( span_gaps ) logger << "  epochs defined to splice out any gaps\n";
   

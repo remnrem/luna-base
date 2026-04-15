@@ -60,9 +60,16 @@ struct desat_seg_results_t {
 };
 
 
-// Entry point
+// Entry point (original forward-scan algorithm)
 struct desat_t {
   desat_t( edf_t & edf , param_t & param );
+};
+
+
+// Matlab-style peak-valley desaturation detector
+// Implements the CalcODI / SpO2ArtifactReject approach from Azarbarzin et al.
+struct desat_matlab_t {
+  desat_matlab_t( edf_t & edf , param_t & param );
 };
 
 #endif

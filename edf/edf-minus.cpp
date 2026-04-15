@@ -126,7 +126,7 @@ bool edf_t::edf_minus( param_t & param )
   if ( param.has( "require" ) )
     requirements = param.strset( "require" );
   else if ( param.has( "require-whole" ) )
-    requirements = param.strset( "require-whole " );
+    requirements = param.strset( "require-whole" );
   
   const bool requirement_whole = param.has( "require-whole" );
   const bool requirement_min_dur = param.has( "require-dur" );
@@ -441,6 +441,7 @@ bool edf_t::edf_minus( param_t & param )
   
   // track largest (segment_policy -1)
   interval_t largest(0LLU,0LLU);
+  interval_t largest_orig(0LLU,0LLU);
   
   std::set<interval_t>::const_iterator ii = segments.begin();
   while ( ii != segments.end() )
@@ -508,7 +509,10 @@ bool edf_t::edf_minus( param_t & param )
 
 	  // is this largest
 	  if ( seg.duration() > largest.duration() )
-	    largest = seg;
+	    {
+	      largest = seg;
+	      largest_orig = seg0;
+	    }
 	  
 	  // track anyway
 	  included[ seg0 ] = 0; // we'll update the actual largest below (-->1)
@@ -527,7 +531,7 @@ bool edf_t::edf_minus( param_t & param )
   
   if ( segment_policy == -1 && largest.duration() != 0LLU )
     {
-      included[ largest ] = 1; // redundant prob - but keep, can use for other stats (e.g. mins of annot)
+      included[ largest_orig ] = 1; // redundant prob - but keep, can use for other stats (e.g. mins of annot)
       retained.insert( largest );
     }
     
@@ -993,8 +997,8 @@ bool edf_t::edf_minus( param_t & param )
 	  // physical zero in digital space?
 	  const	int slot = header.signal( ss->first );
 	  
-	  const int pmin = header.physical_min[ slot ];
-	  const int pmax = header.physical_max[ slot ];
+	  const double pmin = header.physical_min[ slot ];
+	  const double pmax = header.physical_max[ slot ];
 	  
 	  const int dmin = header.digital_min[ slot ];
 	  const int dmax = header.digital_max[ slot ];
@@ -1119,9 +1123,6 @@ bool edf_t::edf_minus( param_t & param )
   std::map<interval_t,interval_t> gaps_edit; // gap before this segment (in final edit)
   std::map<interval_t,interval_t> spliced; // placed segment (in new EDF, if spliced)
 
-  // any initial zpad offsets?
-  int64_t offset = zpad_deltas[ ii->start ];
-    
   uint64_t last = 0LLU;
   uint64_t last_edit = 0LLU;
   uint64_t running = 0LLU;
@@ -1271,8 +1272,8 @@ bool edf_t::edf_minus( param_t & param )
       const int Fs = sr[ xx->first ];
       const int slot = header.signal( xx->first );
 	  
-      const int pmin = header.physical_min[ slot ];
-      const int pmax = header.physical_max[ slot ];
+      const double pmin = header.physical_min[ slot ];
+      const double pmax = header.physical_max[ slot ];
 	  
       const int dmin = header.digital_min[ slot ];
       const int dmax = header.digital_max[ slot ];
@@ -1384,7 +1385,7 @@ bool edf_t::edf_minus( param_t & param )
       while ( qq != rr.end() )
 	{
 	  writer.level( qq->first , globals::annot_strat );
-	  writer.value( "N_ALIGN" , qq->second );
+	  writer.value( "N_REQ" , qq->second );
 	  writer.value( "N_ALL" , rr_tot[ qq->first ] );
 	  ++qq;
 	}
@@ -1393,7 +1394,7 @@ bool edf_t::edf_minus( param_t & param )
       while ( qq != ra.end() )
 	{
 	  writer.level( qq->first , globals::annot_strat );
-          writer.value( "N_REQ" , qq->second );
+          writer.value( "N_ALIGN" , qq->second );
 	  // this may overwrite rr_tot[] if same annot given, but fine, is the same value
 	  // defined twiced as we may have annots in ra_tot not in rr_tot and vice versa
           writer.value( "N_ALL" , ra_tot[ qq->first ] ); 	  

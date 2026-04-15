@@ -45,6 +45,107 @@ extern writer_t writer;
 
 extern logger_t logger;
 
+namespace
+{
+
+struct rpeak_candidate_score_t
+{
+  int n_valid_rr;
+  double frac_valid_rr;
+  double rr_robust_var;
+  int removed_lockout;
+  double mean_anchor_abs;
+  double mean_dom;
+};
+
+rpeaks_t make_candidate_peaks( const std::vector<int> & locs ,
+			       const std::vector<uint64_t> * tp ,
+			       const std::vector<double> & bpf ,
+			       int * removed_lockout )
+{
+  rpeaks_t peaks;
+  const int n = locs.size();
+  peaks.R_t.resize( n );
+  peaks.R_i.resize( n );
+
+  for (int i=0; i<n; i++)
+    {
+      peaks.R_t[i] = (*tp)[ locs[i] ];
+      peaks.R_i[i] = locs[i];
+    }
+
+  const int removed = peaks.lockout( 0.3 , bpf );
+  peaks.npks = peaks.R_t.size();
+  if ( removed_lockout != NULL ) *removed_lockout = removed;
+  return peaks;
+}
+
+rpeak_candidate_score_t score_candidate_peaks( const rpeaks_t & peaks ,
+					       const std::vector<double> & bpf ,
+					       const std::map<int,double> & dom_by_index ,
+					       double rr_lwr ,
+					       double rr_upr ,
+					       int removed_lockout )
+{
+  rpeak_candidate_score_t score;
+  score.n_valid_rr = 0;
+  score.frac_valid_rr = 0;
+  score.rr_robust_var = 1e12;
+  score.removed_lockout = removed_lockout;
+  score.mean_anchor_abs = 0;
+  score.mean_dom = 0;
+
+  const int np = peaks.R_t.size();
+  if ( np == 0 ) return score;
+
+  for (int i=0; i<np; i++)
+    {
+      score.mean_anchor_abs += std::abs( bpf[ peaks.R_i[i] ] );
+      std::map<int,double>::const_iterator dd = dom_by_index.find( peaks.R_i[i] );
+      if ( dd != dom_by_index.end() ) score.mean_dom += dd->second;
+    }
+  score.mean_anchor_abs /= (double)np;
+  score.mean_dom /= (double)np;
+
+  std::vector<double> valid_rr;
+  for (int i=1; i<np; i++)
+    {
+      const double rr = globals::tp_duration * ( peaks.R_t[i] - peaks.R_t[i-1] );
+      if ( rr >= rr_lwr && rr <= rr_upr ) valid_rr.push_back( rr );
+    }
+
+  score.n_valid_rr = valid_rr.size();
+  if ( np > 1 ) score.frac_valid_rr = score.n_valid_rr / (double)( np - 1 );
+  if ( valid_rr.size() >= 2 ) score.rr_robust_var = MiscMath::sdev_robust( valid_rr );
+
+  return score;
+}
+
+bool better_candidate_score( const rpeak_candidate_score_t & lhs ,
+			     const rpeak_candidate_score_t & rhs )
+{
+  if ( lhs.n_valid_rr != rhs.n_valid_rr ) return lhs.n_valid_rr > rhs.n_valid_rr;
+
+  const double frac_eps = 1e-6;
+  if ( std::abs( lhs.frac_valid_rr - rhs.frac_valid_rr ) > frac_eps )
+    return lhs.frac_valid_rr > rhs.frac_valid_rr;
+
+  const double rr_eps = 1e-6;
+  if ( std::abs( lhs.rr_robust_var - rhs.rr_robust_var ) > rr_eps )
+    return lhs.rr_robust_var < rhs.rr_robust_var;
+
+  if ( lhs.removed_lockout != rhs.removed_lockout )
+    return lhs.removed_lockout < rhs.removed_lockout;
+
+  const double dom_eps = 1e-6;
+  if ( std::abs( lhs.mean_dom - rhs.mean_dom ) > dom_eps )
+    return lhs.mean_dom > rhs.mean_dom;
+
+  return lhs.mean_anchor_abs >= rhs.mean_anchor_abs;
+}
+
+}
+
 // assumes broad range of 'normal' sleeping heart beat is 40-100 
 
 std::vector<uint64_t> rpeaks_t::beats( interval_t & interval ) const
@@ -579,26 +680,42 @@ rpeaks_t dsptools::mpeakdetect2( const std::vector<double> * d ,
 					      only_positives,
 					      &regions);  
 
-  // within each region, look to bpf signal to get min/max  
+  // within each region, look to the local QRS window to get min/max
   std::vector<int> maxloc, minloc;
   std::vector<double> maxval, minval;
   
   const int npks = regions.size();
+  const int eval_half_window = opt.eval_window_sec * Fs;
   
-  // get max point within each segment
+  // get extrema within a tightened local search window to avoid T-wave contamination
   for (int i=0;i<regions.size();i++)
     {
 
       int p1 = regions[i].start;
       int p2 = regions[i].stop - 1 ; // --> to closed [p1,p2]
-      
-      double mx = bpf[p1];
-      int mxi = p1;
+      if ( p2 < p1 ) p2 = p1;
 
-      double mn = bpf[p1];
-      int mni = p1;
+      // centre on the dominant BPF amplitude peak rather than the geometric
+      // midpoint or the energy peak.  The 5-20 Hz bandpass attenuates T-waves
+      // (mostly <5 Hz) so the largest |bpf| within the region is reliably the
+      // QRS feature (R-peak or inverted trough), giving correct placement for
+      // both symmetric and asymmetric waveforms without a leftward bias.
+      int pc = p1;
+      for (int j = p1+1; j <= p2; j++)
+        if ( std::abs(bpf[j]) > std::abs(bpf[pc]) ) pc = j;
+      int q1 = pc - eval_half_window;
+      int q2 = pc + eval_half_window;
+      if ( q1 < p1 ) q1 = p1;
+      if ( q2 > p2 ) q2 = p2;
+      if ( q2 < q1 ) { q1 = p1; q2 = p2; }
       
-      for (int j=p1+1;j<=p2;j++) 
+      double mx = bpf[q1];
+      int mxi = q1;
+
+      double mn = bpf[q1];
+      int mni = q1;
+      
+      for (int j=q1+1;j<=q2;j++) 
 	{
 	  
 	  if ( bpf[j] > mx ) 
@@ -618,37 +735,81 @@ rpeaks_t dsptools::mpeakdetect2( const std::vector<double> * d ,
       maxval.push_back( mx );
       
       minloc.push_back( mni );
-      minval.push_back( mn );
-    }
+	      minval.push_back( mn );
+	    }
 
-  // check for lead inversion
-  //  --> do minima precede maxima more often than not?
-    
-  int inv1 = 0;
-  for (int i=0;i<npks;i++)
-    if ( minloc[ i ] < maxloc[ i ] ) ++inv1;
-  const double p_inverted = inv1 / (double)minloc.size();  
-  const bool inverted = p_inverted > 0.5;
+  std::vector<int> posloc = maxloc;
+  std::vector<int> negloc = minloc;
 
-  peaks.R_t.resize( npks );
-  peaks.R_i.resize( npks );
-  
-  for (int i=0;i<npks;i++)
+  std::map<int,double> pos_dom_by_index;
+  std::map<int,double> neg_dom_by_index;
+
+  int order_neg = 0;
+  int dom_neg = 0;
+  int dom_confident = 0;
+
+  for (int i=0; i<npks; i++)
     {
-      peaks.R_t[ i ] = (*tp)[ inverted ? minloc[i] : maxloc[i] ] ;
-      peaks.R_i[ i ] = inverted ? minloc[i] : maxloc[i] ;
+      if ( minloc[i] < maxloc[i] ) ++order_neg;
+
+      const double apos = std::abs( maxval[i] );
+      const double aneg = std::abs( minval[i] );
+      const double denom = apos + aneg + 1e-12;
+      const double dom = ( apos - aneg ) / denom;
+
+      pos_dom_by_index[ maxloc[i] ] = dom;
+      neg_dom_by_index[ minloc[i] ] = -dom;
+
+      if ( std::abs( dom ) >= opt.polarity_margin )
+        {
+          ++dom_confident;
+          if ( dom < 0 ) ++dom_neg;
+        }
     }
 
-  peaks.lockout( 0.3 , bpf );
-  
+  const double order_inv = npks ? order_neg / (double)npks : 0.5;
+  const double p_inverted = dom_confident ? dom_neg / (double)dom_confident : order_inv;
+  const double polarity_conf =
+    npks ? ( dom_confident / (double)npks ) * ( 2.0 * std::abs( p_inverted - 0.5 ) ) : 0.0;
 
+  int pos_removed = 0 , neg_removed = 0;
+  rpeaks_t pos_peaks = make_candidate_peaks( posloc , tp , bpf , &pos_removed );
+  rpeaks_t neg_peaks = make_candidate_peaks( negloc , tp , bpf , &neg_removed );
+
+  rpeak_candidate_score_t pos_score =
+    score_candidate_peaks( pos_peaks , bpf , pos_dom_by_index ,
+                           opt.rr_eval_lwr , opt.rr_eval_upr , pos_removed );
+  rpeak_candidate_score_t neg_score =
+    score_candidate_peaks( neg_peaks , bpf , neg_dom_by_index ,
+                           opt.rr_eval_lwr , opt.rr_eval_upr , neg_removed );
+
+  const bool neg_is_better = better_candidate_score( neg_score , pos_score );
+
+  // When amplitude evidence is confident, trust it over RR-based scoring.
+  // RR regularity can be fooled by Q-wave positions (similar inter-beat
+  // spacing to true R-peaks) and never reaches the mean_dom tiebreaker.
+  // Only fall back to RR scoring when polarity_conf is low.
+  const bool amp_inverted = p_inverted > 0.5;
+  const bool choose_inverted = opt.force_polarity ? opt.force_inverted
+                             : ( polarity_conf >= opt.polarity_conf_threshold ? amp_inverted
+                                                                              : neg_is_better );
+  peaks = choose_inverted ? neg_peaks : pos_peaks;
+
+  
   //
   // Output
   //
 
-  peaks.npks = npks;
+  peaks.npks = peaks.R_t.size();
   peaks.p_inverted = p_inverted;
-  peaks.inverted = inverted;
+  peaks.p_order_inverted = order_inv;
+  peaks.polarity_conf = polarity_conf;
+  peaks.inverted = choose_inverted;
+
+  if ( ! opt.force_polarity && npks && polarity_conf < 0.25 )
+    logger << "  warning: ECG polarity ambiguous (P_INV=" << p_inverted
+           << ", ORDER_INV=" << order_inv
+           << ", POLARITY_CONF=" << polarity_conf << ")\n";
     
   return peaks;
 
@@ -878,6 +1039,12 @@ rpeaks_t dsptools::mpeakdetect( const edf_t & edf ,
 
   // total time
   double mx = (*tp)[ tp->size() - 1 ];
+
+  peaks.npks = peaks.R_t.size();
+  peaks.p_inverted = p_inverted;
+  peaks.p_order_inverted = p_inverted;
+  peaks.polarity_conf = 2.0 * std::abs( p_inverted - 0.5 );
+  peaks.inverted = inverted;
   
   return peaks;
   
@@ -1082,6 +1249,11 @@ void dsptools::hrv( edf_t & edf , param_t & param )
   if ( param.has( "rp-flwr" ) ) ropt.flwr = param.requires_dbl( "rp-flwr" );
   if ( param.has( "rp-fupr" ) ) ropt.fupr = param.requires_dbl( "rp-fupr" );
   if ( param.has( "rp-w" ) ) ropt.median_filter_window = param.requires_dbl( "rp-w" );
+  if ( param.has( "rp-eval" ) ) ropt.eval_window_sec = param.requires_dbl( "rp-eval" );
+  if ( param.has( "rp-polarity-margin" ) ) ropt.polarity_margin = param.requires_dbl( "rp-polarity-margin" );
+  if ( param.has( "rp-rr-lwr" ) ) ropt.rr_eval_lwr = param.requires_dbl( "rp-rr-lwr" );
+  if ( param.has( "rp-rr-upr" ) ) ropt.rr_eval_upr = param.requires_dbl( "rp-rr-upr" );
+  if ( param.has( "rp-invert" ) ) { ropt.force_polarity = true; ropt.force_inverted = param.yesno( "rp-invert" ); }
         
   
   //
@@ -1273,6 +1445,8 @@ void dsptools::hrv( edf_t & edf , param_t & param )
 		}
 	      peaks.npks = peaks.R_t.size();
 	      peaks.p_inverted = whole_peaks.p_inverted;
+	      peaks.p_order_inverted = whole_peaks.p_order_inverted;
+	      peaks.polarity_conf = whole_peaks.polarity_conf;
 	      peaks.inverted = whole_peaks.inverted;
 	    }
 	  else
@@ -1436,10 +1610,10 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
       if ( rr1 >= opt.rr_lwr && rr1 <= opt.rr_upr ) rr.push_back( rr1 );
     }
   
-  const int len_imputed = rr.size();
-  const double prop_imputed = len_imputed / (double)(np-1);
+  const int len_valid = rr.size();
+  const double prop_imputed = 1.0 - ( len_valid / (double)(np-1) );
 
-  if ( len_imputed < 10 ) 
+  if ( len_valid < 10 ) 
     {
       logger << "  warning: epoch with <10 NN-intervals detected, skipping\n";
       return;
@@ -1508,6 +1682,8 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
   if ( pks.npks < 10 ) return;   
   
   res.P_INV = pks.p_inverted;
+  res.ORDER_INV = pks.p_order_inverted;
+  res.POLARITY_CONF = pks.polarity_conf;
   res.INV = pks.inverted;
   
   res.RR = 1000.0 * mean_rr;
@@ -1742,6 +1918,8 @@ hrv_res_t hrv_res_t::summarize( const std::vector<hrv_res_t> & x )
     {
       res.IMPUTED += x[i].IMPUTED;
       res.P_INV += x[i].P_INV;
+      res.ORDER_INV += x[i].ORDER_INV;
+      res.POLARITY_CONF += x[i].POLARITY_CONF;
       res.INV += x[i].INV;
       res.NP += x[i].NP;
       res.NP_TOT += x[i].NP_TOT;
@@ -1766,6 +1944,8 @@ hrv_res_t hrv_res_t::summarize( const std::vector<hrv_res_t> & x )
   
   res.IMPUTED /= (double)n;
   res.P_INV /= (double)n;
+  res.ORDER_INV /= (double)n;
+  res.POLARITY_CONF /= (double)n;
   res.INV /= (double)n;
 
   res.NP /= (double)n;
@@ -1807,6 +1987,8 @@ void hrv_res_t::write( const hrv_opt_t & opt, const bool reduced ) const
   if ( ! reduced ) {  
     writer.value( "IMPUTED" , IMPUTED);
     writer.value( "P_INV" , P_INV);
+    writer.value( "ORDER_INV" , ORDER_INV);
+    writer.value( "POLARITY_CONF" , POLARITY_CONF);
     writer.value( "INV" , INV);
   }
   
@@ -1864,6 +2046,10 @@ rpeaks_t rpeaks_t::intersect( const std::set<uint64_t> & x ,
     }
   }
   res.npks = res.R_t.size();
+  res.p_inverted = 0.5;
+  res.p_order_inverted = 0.5;
+  res.polarity_conf = 0.0;
+  res.inverted = false;
   return res;
 }
 

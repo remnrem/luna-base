@@ -585,7 +585,8 @@ struct timeline_t
 
   std::set<interval_t> gaps( const std::set<interval_t> & segs );
 
-  void set_epochs_to_span_gaps(const bool b ) { gap_spanning_epochs = b; } 
+  void set_epochs_to_span_gaps(const bool b ) { gap_spanning_epochs = b; }
+  bool epochs_span_gaps() const { return gap_spanning_epochs; } 
   
  private:
 

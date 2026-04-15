@@ -391,22 +391,24 @@ int timeline_t::calc_epochs()
       // epochs have to be continuous in clocktime
       // putative start (i.e. start of record)
       //
-      // ORIGINAL (epoch_offset_tp was silently ignored for EDF+D):
-      //   uint64_t estart = rec2tp[r];
+      // epoch_offset_tp is an *absolute* EDF time (seconds from EDF start, in tp units)
+      // derived from the first annotation start via annotations->first().
+      // rec2tp[r] is also an absolute EDF time for the first retained record.
       //
-      // CHANGED: apply epoch_offset_tp within each segment, mirroring the continuous-EDF
-      // behaviour (see 'if ( edf->header.continuous )' branch above).  This means that
-      // for a recording with segments at [T0..T1], [T2..T3], ..., epochs within each
-      // segment start at T_seg + offset, T_seg + offset + inc, ...
-      // To revert: replace the line below with the commented-out original above.
+      // When annot_alignment is true, align_epochs() is responsible for advancing
+      // estart from rec2tp[r] to the first valid annotation start within this segment.
+      // Adding epoch_offset_tp here would double-apply the offset (rec2tp[r] + offset
+      // pushes estart past all retained records after RE), so we must NOT add it.
       //
-      // CAVEAT: if epoch_offset_tp >= record_duration_tp, the first record of each segment
-      // will be spuriously included in the epoch->record mapping (the epoch actually starts
-      // in a later record within the segment).  For the primary use-case that motivated this
-      // change (POPS hypnodensity, offsets always < 15 s with 30 s records) this cannot
-      // arise.  A proper fix would advance 'r' past any records that precede 'estart' before
-      // entering the epoch loop -- left for a later revision.
-      uint64_t estart = rec2tp[r] + epoch_offset_tp;
+      // When annot_alignment is false, epoch_offset_tp is a within-segment relative
+      // offset (used for e.g. POPS hypnodensity alignment), and it is correct to add it.
+      //
+      // CAVEAT (non-alignment path only): if epoch_offset_tp >= record_duration_tp, the
+      // first record of each segment will be spuriously included in the epoch->record
+      // mapping.  For the primary use-case (POPS, offsets always < 15 s with 30 s records)
+      // this cannot arise.  A proper fix would advance 'r' past records that precede
+      // 'estart' before entering the epoch loop -- left for a later revision.
+      uint64_t estart = rec2tp[r] + ( annot_alignment ? 0LLU : epoch_offset_tp );
 
       // but, if we are allowing annot offset alignment, we may need to skip ahead a bit? (i.e. will go the 
       // the start of the next valid annot
@@ -672,13 +674,13 @@ int timeline_t::calc_epochs()
 	      
 	      if ( rec2_start - rec_end != 1 )
 		{
-		  // ORIGINAL (epoch_offset_tp ignored at each new-segment restart):
-		  //   estart = rec2_start;
-		  //
-		  // CHANGED: apply the same offset used at the initial segment start (above).
-		  // To revert: replace the line below with the commented-out original above.
-		  // See caveat above re: offset >= record_duration_tp.
-		  estart = rec2_start + epoch_offset_tp;
+		  // Mirror the initial-segment logic above: only add epoch_offset_tp when
+		  // there is no annotation alignment.  With annotation alignment, rec2_start
+		  // is already an absolute EDF time and align_epochs() will advance estart to
+		  // the first annotation within this segment; adding epoch_offset_tp again
+		  // would push estart far beyond the retained timeline.
+		  // See caveat above (non-alignment path) re: offset >= record_duration_tp.
+		  estart = rec2_start + ( annot_alignment ? 0LLU : epoch_offset_tp );
 
 		  //
 		  // Any annot-alignment?
@@ -1001,13 +1003,20 @@ double timeline_t::epoch_inc() const
   return (double)epoch_inc_tp / globals::tp_1sec;
 }
 
-double timeline_t::epoch_offset() const 
+double timeline_t::epoch_offset() const
 {
+  // In EDF+D with annotation alignment, epoch_offset_tp is not applied as a
+  // within-segment offset (align_epochs() handles positioning from rec2tp[r]).
+  // Report 0 so callers see the effective offset, not the stored absolute annotation time.
+  if ( !edf->header.continuous && epoch_align_annots.size() != 0 )
+    return 0.0;
   return (double)epoch_offset_tp / globals::tp_1sec;
 }
 
-bool timeline_t::epoch_any_offset() const 
+bool timeline_t::epoch_any_offset() const
 {
+  if ( !edf->header.continuous && epoch_align_annots.size() != 0 )
+    return false;
   return epoch_offset_tp != 0L;
 }
 
