@@ -376,8 +376,10 @@ struct annot_t
   instance_t * add( const std::string & id , const interval_t & interval , const std::string & ch );
 
   void remove( const std::string & id , const interval_t & interval , const std::string & ch );
-   
-  uint64_t minimum_tp() const;  
+
+  void rebuild_tree();
+
+  uint64_t minimum_tp() const;
   
   uint64_t maximum_tp() const;
 

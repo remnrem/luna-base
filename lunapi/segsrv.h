@@ -45,20 +45,25 @@ typedef std::shared_ptr<lunapi_inst_t> lunapi_inst_ptr;
 struct evt_t {
   evt_t( const interval_t & interval ,
 	 const std::string & name ,
-	 const std::string & meta = "" )
-    : interval(interval) , name(name) , meta(meta) { }
-  
+	 const std::string & meta = "" ,
+	 const std::string & inst_id = "" ,
+	 const std::string & ch_str = "" )
+    : interval(interval) , name(name) , meta(meta)
+    , inst_id(inst_id) , ch_str(ch_str) { }
+
   interval_t interval;
   std::string name;
-  std::string meta;
-  
+  std::string meta;    // legacy "id; ch_str" label for display
+  std::string inst_id; // raw instance id from instance_idx_t
+  std::string ch_str;  // raw channel string from instance_idx_t
+
   bool operator<( const evt_t & rhs ) const
   {
     if ( interval < rhs.interval ) return true;
     if ( interval > rhs.interval ) return false;
     if ( name < rhs.name ) return true;
-    if ( name > rhs.name ) return false;    
-    return meta < rhs.meta ; 
+    if ( name > rhs.name ) return false;
+    return meta < rhs.meta ;
   }
 };
 
@@ -335,6 +340,55 @@ private:
   
   // special case of handling min/max/SD bars? (already in (p1,p2,nan) encoding 
   
+};
+
+
+// --------------------------------------------------------------------------------
+// Pending edit for a single annotation instance, queued via segsrv_t::queue_edit().
+//
+// Identity fields (aclass, inst_id, start_tp, stop_tp, ch_str) come directly from
+// fetch_all_evts_with_inst_ids() columns 0, 6, 4, 5, 7 (!hms).
+//
+// All action fields are optional; unset fields leave the original value unchanged.
+// del takes precedence over all other fields.
+// If new_start is set but new_stop is not, the interval is shifted (duration preserved).
+// aclass is the only truly immutable field; inst_id can be changed via new_inst_id.
+
+struct annot_edit_t
+{
+  // identity
+  std::string aclass;
+  std::string inst_id;
+  uint64_t    start_tp = 0;
+  uint64_t    stop_tp  = 0;
+  std::string ch_str;
+
+  // actions
+  bool del = false;
+
+  std::optional<uint64_t>    new_start;    // new start tp
+  std::optional<uint64_t>    new_stop;     // new stop tp (shift applied first if new_start set)
+  std::optional<std::string> new_ch;       // new channel string
+  std::optional<std::string> new_inst_id;  // new instance ID (only aclass is immutable)
+
+  bool clear_meta = false;               // wipe all existing metadata before meta updates
+  std::map<std::string,std::string> meta; // metadata key -> value to set/override
+};
+
+
+// --------------------------------------------------------------------------------
+// Applies a list of annot_edit_t records to an annotation_set_t.
+// Normally called indirectly via segsrv_t::apply_annot_edits().
+
+struct annot_editor_t
+{
+  static int apply( annotation_set_t & aset ,
+		    const std::vector<annot_edit_t> & edits ,
+		    const std::vector<std::string> & classes = {} );
+
+private:
+  static int apply_class( annot_t * annot ,
+			   const std::vector<annot_edit_t> & class_edits );
 };
 
 
@@ -659,8 +713,23 @@ public:
   // for lunascope selection window
   std::vector<std::vector<std::string> > fetch_all_evts_with_inst_ids( const std::vector<std::string> & ,
 								       const bool hms = false ) const;
-  
+
+  // Queue a single edit to be applied by apply_annot_edits().
+  // Identity fields (aclass, inst_id, start_tp, stop_tp, ch_str) come from
+  // fetch_all_evts_with_inst_ids() cols 0, 6, 4, 5, 7 (!hms).
+  void queue_edit( const annot_edit_t & edit );
+
+  // Discard all queued edits without applying.
+  void clear_edits();
+
+  // Apply all queued edits for the given classes (empty = all classes).
+  // Rebuilds interval_tree for each modified class, refreshes evts.
+  // Clears the queue on completion. Returns count of instances changed/deleted.
+  int apply_annot_edits( const std::vector<std::string> & classes = {} );
+
 private:
+
+  std::vector<annot_edit_t> pending_edits_;
 
   std::set<evt_t> evts;
   

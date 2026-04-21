@@ -1,3 +1,24 @@
+//    --------------------------------------------------------------------
+//
+//    This file is part of Luna.
+//
+//    LUNA is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    Luna is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with Luna. If not, see <http://www.gnu.org/licenses/>.
+//
+//    Please see LICENSE.txt for more details.
+//
+//    --------------------------------------------------------------------
+
 
 //
 // ALIGN-SCAN: scan for epoch/record/staging alignment edge cases
@@ -16,6 +37,10 @@
 // Parameters:
 //   annots=N1,N2,...  custom annotation labels  (default: N1,N2,N3,R,W,?,L,U,M)
 //   minimal           use N1,N2,N3,R,W only
+//   annot[=T/F]       add derived issue annotations (default: on)
+//   annot-prefix=P    prefix for derived annotations (default: align_)
+//   annot-epoch[=T/F] also add epoch annotations as PEPOCHEPOCH
+//   annot-rec[=T/F]   also add retained EDF record annotations as PRECREC
 //   verbose           also emit per-epoch details (default: per-label ANNOT table only)
 //
 
@@ -76,6 +101,11 @@ void proc_review_alignment( edf_t & edf , param_t & param )
     ann_labels = { "N1" , "N2" , "N3" , "R" , "W" };
   else
     ann_labels = { "N1" , "N2" , "N3" , "R" , "W" , "?" , "L" , "U" , "M" };
+
+  const bool emit_annots = param.yesno( "annot" , true , true );
+  const bool emit_epoch_annots = param.has( "annot-epoch" ) ? param.yesno( "annot-epoch" , false , true ) : false;
+  const bool emit_rec_annots = param.has( "annot-rec" ) ? param.yesno( "annot-rec" , false , true ) : false;
+  const std::string annot_prefix = param.has( "annot-prefix" ) ? param.value( "annot-prefix" ) : "align_";
 
 
   // ------------------------------------------------------------------
@@ -253,6 +283,14 @@ void proc_review_alignment( edf_t & edf , param_t & param )
   std::map<std::string,LabelStats> lstats;
   for ( const auto & l : found_labels ) lstats[l] = LabelStats();
 
+  struct AnnIssueInfo {
+    interval_t interval;
+    std::string label;
+    bool on_epoch = false;
+    double off_sec = 0.0;
+  };
+  std::vector<AnnIssueInfo> ann_issue_info;
+
   // Build sorted vector of epoch starts for binary-search nearest-boundary
   std::vector<uint64_t> epoch_starts_vec( epoch_starts_set.begin() , epoch_starts_set.end() );
 
@@ -260,8 +298,12 @@ void proc_review_alignment( edf_t & edf , param_t & param )
     {
       const uint64_t s = ai.first.start;
       const std::string & label = ai.second;
+      AnnIssueInfo info;
+      info.interval = ai.first;
+      info.label = label;
 
       bool on_epoch = epoch_starts_set.count(s) > 0;
+      info.on_epoch = on_epoch;
       if ( on_epoch ) { ++ann_at_epoch;  ++lstats[label].n_at_epoch;  }
       else            { ++ann_off_epoch; ++lstats[label].n_off_epoch; }
 
@@ -280,11 +322,14 @@ void proc_review_alignment( edf_t & edf , param_t & param )
           if ( nearest != std::numeric_limits<uint64_t>::max() )
             {
               double off_sec = nearest / (double)globals::tp_1sec;
+              info.off_sec = off_sec;
               lstats[label].sum_off_tp += off_sec;
               if ( off_sec > lstats[label].max_off_tp )
                 lstats[label].max_off_tp = off_sec;
             }
         }
+
+      ann_issue_info.push_back( info );
     }
 
 
@@ -298,6 +343,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
   int ep_multi_stage = 0;
 
   std::map<int,std::set<std::string>> epoch_stage_labels;
+  std::map<int,std::string> epoch_stage_str;
 
   if ( ! is_generic && ! is_contig )
     {
@@ -311,6 +357,9 @@ void proc_review_alignment( edf_t & edf , param_t & param )
               labs.insert( ai.second );
 
           epoch_stage_labels[e] = labs;
+          std::string stage_str;
+          for ( const auto & l : labs ) stage_str += l + " ";
+          epoch_stage_str[e] = stage_str.empty() ? "." : stage_str;
 
           if      ( labs.empty()     ) ++ep_no_stage;
           else if ( labs.size() == 1 ) ++ep_one_stage;
@@ -339,6 +388,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
   // ------------------------------------------------------------------
 
   int records_ambig = 0;
+  std::map<int,std::string> rec_stage_str;
 
   if ( ! is_generic && ! is_contig && ! is_gap_spanning )
     {
@@ -352,7 +402,13 @@ void proc_review_alignment( edf_t & edf , param_t & param )
               if ( it != epoch_stage_labels.end() )
                 stages_for_rec.insert( it->second.begin() , it->second.end() );
             }
-          if ( stages_for_rec.size() > 1 ) ++records_ambig;
+          if ( stages_for_rec.size() > 1 )
+            {
+              ++records_ambig;
+              std::string stage_str;
+              for ( const auto & s : stages_for_rec ) stage_str += s + " ";
+              rec_stage_str[ kv.first ] = stage_str.empty() ? "." : stage_str;
+            }
         }
     }
 
@@ -686,7 +742,121 @@ void proc_review_alignment( edf_t & edf , param_t & param )
 
 
   // ------------------------------------------------------------------
-  // 15. Structured writer() output — summary level
+  // 15. Optional issue annotations for visualization
+  // ------------------------------------------------------------------
+
+  if ( emit_annots || emit_epoch_annots || emit_rec_annots )
+    {
+      if ( emit_annots )
+        {
+          annot_t * conf_annot      = edf.annotations->add( annot_prefix + "CONF" );
+          annot_t * off_epoch_annot = edf.annotations->add( annot_prefix + "OFF_EPOCH" );
+          annot_t * in_gap_annot    = edf.annotations->add( annot_prefix + "IN_GAP" );
+          annot_t * span_gap_annot  = edf.annotations->add( annot_prefix + "SPAN_GAP" );
+          annot_t * rec_ambig_annot = edf.annotations->add( annot_prefix + "REC_AMBIG" );
+
+          for ( int e = 0 ; e < nepochs ; ++e )
+            {
+              const std::set<std::string> & labs = epoch_stage_labels[e];
+              if ( labs.size() <= 1 ) continue;
+
+              const interval_t ep = edf.timeline.epoch(e);
+              instance_t * inst = conf_annot->add( "." , ep , "." );
+              inst->set( "TYPE" , "CONF" );
+              inst->set( "EPOCH" , e + 1 );
+              inst->set( "N_STAGES" , (int)labs.size() );
+              inst->set( "STAGE" , epoch_stage_str[e] );
+            }
+
+          for ( const auto & info : ann_issue_info )
+            {
+              if ( ! info.on_epoch )
+                {
+                  instance_t * inst = off_epoch_annot->add( "." , info.interval , "." );
+                  inst->set( "TYPE" , "OFF_EPOCH" );
+                  inst->set( "STAGE" , info.label );
+                  inst->set( "OFF_SEC" , info.off_sec );
+                }
+
+              if ( ! is_continuous )
+                {
+                  for ( const auto & gap : gps )
+                    {
+                      const bool a_in_gap =
+                        ( info.interval.start >= gap.start && info.interval.stop <= gap.stop );
+                      const bool a_span_left =
+                        ( info.interval.start < gap.start && info.interval.stop > gap.start && info.interval.stop <= gap.stop );
+                      const bool a_span_right =
+                        ( info.interval.start >= gap.start && info.interval.start < gap.stop && info.interval.stop > gap.stop );
+
+                      if ( a_in_gap )
+                        {
+                          instance_t * inst = in_gap_annot->add( "." , info.interval , "." );
+                          inst->set( "TYPE" , "IN_GAP" );
+                          inst->set( "STAGE" , info.label );
+                          break;
+                        }
+                      if ( a_span_left || a_span_right )
+                        {
+                          instance_t * inst = span_gap_annot->add( "." , info.interval , "." );
+                          inst->set( "TYPE" , "SPAN_GAP" );
+                          inst->set( "STAGE" , info.label );
+                          break;
+                        }
+                    }
+                }
+            }
+
+          if ( ! is_generic && ! is_contig && ! is_gap_spanning )
+            {
+              for ( const auto & kv : rec_stage_str )
+                {
+                  std::map<int,uint64_t>::const_iterator rt = edf.timeline.rec2tp.find( kv.first );
+                  if ( rt == edf.timeline.rec2tp.end() ) continue;
+                  interval_t rec_iv( rt->second , rt->second + rec_dur_tp );
+                  instance_t * inst = rec_ambig_annot->add( "." , rec_iv , "." );
+                  inst->set( "TYPE" , "REC_AMBIG" );
+                  inst->set( "REC" , kv.first );
+                  inst->set( "STAGE" , kv.second );
+                }
+            }
+        }
+
+      if ( emit_epoch_annots )
+        {
+          annot_t * epoch_annot = edf.annotations->add( annot_prefix + "EPOCH" );
+          for ( int e = 0 ; e < nepochs ; ++e )
+            {
+              const interval_t ep = edf.timeline.epoch(e);
+              instance_t * inst = epoch_annot->add( "." , ep , "." );
+              inst->set( "TYPE" , "EPOCH" );
+              inst->set( "EPOCH" , e + 1 );
+              if ( ! is_generic && ! is_contig )
+                {
+                  const std::set<std::string> & labs = epoch_stage_labels[e];
+                  inst->set( "N_STAGES" , (int)labs.size() );
+                  inst->set( "STAGE" , epoch_stage_str[e] );
+                }
+              inst->set( "ON_REC" , (int)( rec_starts_set.count( ep.start ) > 0 ) );
+            }
+        }
+
+      if ( emit_rec_annots )
+        {
+          annot_t * rec_annot = edf.annotations->add( annot_prefix + "REC" );
+          for ( const auto & kv : edf.timeline.rec2tp )
+            {
+              interval_t rec_iv( kv.second , kv.second + rec_dur_tp );
+              instance_t * inst = rec_annot->add( "." , rec_iv , "." );
+              inst->set( "TYPE" , "REC" );
+              inst->set( "REC" , kv.first );
+            }
+        }
+    }
+
+
+  // ------------------------------------------------------------------
+  // 16. Structured writer() output — summary level
   // ------------------------------------------------------------------
 
   writer.value( "OK"               , (int)( ! any_warning ) );
@@ -754,7 +924,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
 
 
   // ------------------------------------------------------------------
-  // 16. Per-label table  (strata: ANNOT)
+  // 17. Per-label table  (strata: ANNOT)
   //     Skipped for generic/contig modes where per-epoch stats N/A
   // ------------------------------------------------------------------
 
@@ -791,7 +961,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
 
 
   // ------------------------------------------------------------------
-  // 17. Verbose per-epoch table  (strata: E)
+  // 18. Verbose per-epoch table  (strata: E)
   //     Only emitted when verbose param is set.
   //     Not applicable for generic/contig modes.
   // ------------------------------------------------------------------
@@ -849,7 +1019,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
 
 
   // ------------------------------------------------------------------
-  // 18. Verbose per-annotation-event table  (strata: ANNOT x ANN_N)
+  // 19. Verbose per-annotation-event table  (strata: ANNOT x ANN_N)
   //     Only emitted when verbose param is set.
   // ------------------------------------------------------------------
 

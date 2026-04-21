@@ -884,6 +884,11 @@ std::string lunapi_inst_t::get_annot_files() const
   return Helper::stringize( annot_filenames );
 }
 
+annot_t * lunapi_inst_t::find_annot( const std::string & cls ) const
+{
+  return annotations.find( cls );
+}
+
 void lunapi_inst_t::refresh()
 {
   if ( state != 1 ) 

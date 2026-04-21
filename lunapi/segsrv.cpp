@@ -1451,7 +1451,8 @@ bool segsrv_t::add_annot( const std::string & ch )
 	    meta = ".";
 	}
       
-      evt_t evt( ii->first.interval , ii->first.parent->name , meta );
+      evt_t evt( ii->first.interval , ii->first.parent->name , meta ,
+		 ii->first.id , ii->first.ch_str );
 
       evts.insert( evt );
 
@@ -1527,71 +1528,65 @@ segsrv_t::fetch_all_evts_with_inst_ids( const std::vector<std::string> & avec ,
 					const bool hms ) const
 {
 
-  // !hms : return annot | inst | startsec | stopsec
-  //  hms : return annot | inst | hh:mm:ss | startsec | +duration
-  //               0       1      2          3          4
+  // !hms : annot | meta | startsec | stopsec | start_tp | stop_tp | inst_id | ch_str
+  //          0      1      2          3          4          5          6         7
+  //  hms : annot | meta | hh:mm:ss | startsec | +duration | start_tp | stop_tp | inst_id | ch_str
+  //          0      1      2          3           4           5          6         7         8
+  //
+  // meta (col 1) is the legacy "id; ch_str" encoded label, kept for backward compat.
+  // cols 5-8 provide exact values needed for stamp_annot_edit() round-trips.
 
-  const int cols = hms ? 5 : 4;
-    
-  // hms uses clocktime_t edf_start, if it is valid
-    
+  const int cols = hms ? 9 : 8;
+
   std::vector<std::vector<std::string> > r;
-  
+
   std::set<std::string> aset = Helper::vec2set( avec );
-  
+
   std::set<evt_t>::const_iterator ee = evts.begin();
-  
+
   while ( ee != evts.end() )
     {
       if ( aset.find( ee->name ) != aset.end() )
 	{
-	  
+
 	  std::vector<std::string> row( cols );
 
 	  row[0] = ee->name;
 	  row[1] = ee->meta;
-	  
-	  std::string str = ee->name + " | " + ee->interval.as_string(3,"-") ; // 3dp
-	  
+
 	  if ( hms )
 	    {
-
-	      // clock time (start)
-	      if  (edf_start.valid )
+	      if ( edf_start.valid )
 		{
 		  clocktime_t t = edf_start;
 		  t.advance_tp( ee->interval.start );
-		  row[2] = t.as_string( ':' , false ); // F = do not include any fractional seconds
+		  row[2] = t.as_string( ':' , false );
 		}
 	      else
 		row[2] = "?";
-
-	      // start in seconds
 	      row[3] = Helper::dbl2str( ee->interval.start_sec() , 3 );
-	      
-	      // duration in seconds	      	      
 	      row[4] = Helper::dbl2str( ee->interval.duration_sec() , 3 );
-	      
+	      row[5] = Helper::int2str( ee->interval.start );
+	      row[6] = Helper::int2str( ee->interval.stop );
+	      row[7] = ee->inst_id;
+	      row[8] = ee->ch_str;
 	    }
 	  else
 	    {
-	      // !hms : return annot | inst | startsec | stopsec
-	      //               0       1      2          3
-	      
-	      // start in seconds
 	      row[2] = Helper::dbl2str( ee->interval.start_sec() , 3 );
-	      
-	      // start in seconds
 	      row[3] = Helper::dbl2str( ee->interval.stop_sec() , 3 );
-	      
+	      row[4] = Helper::int2str( ee->interval.start );
+	      row[5] = Helper::int2str( ee->interval.stop );
+	      row[6] = ee->inst_id;
+	      row[7] = ee->ch_str;
 	    }
 
 	  r.push_back( row );
-	  
+
 	}
       ++ee;
     }
-  
+
   return r;
 
 }
@@ -2656,4 +2651,204 @@ float segsrv_t::max_skip_nan(const Eigen::VectorXf &v) {
       m = x;
   }
   return m;
+}
+
+
+// --------------------------------------------------------------------------------
+// annot_editor_t implementation
+
+int annot_editor_t::apply_class( annot_t * annot ,
+				 const std::vector<annot_edit_t> & class_edits )
+{
+  // Build lookup: instance_idx_t key -> edit
+  std::map<instance_idx_t, const annot_edit_t *> edit_map;
+  for ( const annot_edit_t & e : class_edits )
+    {
+      instance_idx_t key( annot ,
+			  interval_t( e.start_tp , e.stop_tp ) ,
+			  e.inst_id ,
+			  e.ch_str );
+      edit_map[ key ] = &e;
+    }
+
+  if ( edit_map.empty() ) return 0;
+
+  int changed = 0;
+  annot_map_t new_events;
+
+  annot_map_t::iterator ii = annot->interval_events.begin();
+  while ( ii != annot->interval_events.end() )
+    {
+      const instance_idx_t & key  = ii->first;
+      instance_t           * inst = ii->second;
+
+      std::map<instance_idx_t, const annot_edit_t *>::const_iterator ee
+	= edit_map.find( key );
+
+      if ( ee == edit_map.end() )
+	{
+	  new_events[ key ] = inst;
+	  ++ii;
+	  continue;
+	}
+
+      ++changed;
+      const annot_edit_t & edit = *( ee->second );
+
+      if ( edit.del )
+	{
+	  annot->all_instances.erase( inst );
+	  delete inst;
+	  ++ii;
+	  continue;
+	}
+
+      // resolve new interval
+      uint64_t new_start = key.interval.start;
+      uint64_t new_stop  = key.interval.stop;
+
+      if ( edit.new_start.has_value() )
+	{
+	  uint64_t dur = new_stop - new_start;
+	  new_start    = edit.new_start.value();
+	  new_stop     = new_start + dur;  // shift; overridden below if new_stop also set
+	}
+      if ( edit.new_stop.has_value() )
+	new_stop = edit.new_stop.value();
+
+      // resolve new channel
+      std::string new_ch = key.ch_str;
+      if ( edit.new_ch.has_value() )
+	new_ch = edit.new_ch.value();
+
+      // build new instance
+      instance_t * new_inst = new instance_t;
+
+      if ( ! edit.clear_meta )
+	{
+	  std::map<std::string,avar_t*>::const_iterator dd = inst->data.begin();
+	  while ( dd != inst->data.end() )
+	    {
+	      new_inst->data[ dd->first ] = dd->second->clone();
+	      new_inst->tracker.insert( new_inst->data[ dd->first ] );
+	      ++dd;
+	    }
+	}
+
+      std::map<std::string,std::string>::const_iterator mm = edit.meta.begin();
+      while ( mm != edit.meta.end() )
+	{
+	  new_inst->set( mm->first , mm->second );
+	  ++mm;
+	}
+
+      // retire old instance
+      annot->all_instances.erase( inst );
+      delete inst;
+
+      // resolve new instance id
+      std::string new_id = key.id;
+      if ( edit.new_inst_id.has_value() )
+	new_id = edit.new_inst_id.value();
+
+      // insert under new key; drop silently on collision
+      interval_t     new_interval( new_start , new_stop );
+      instance_idx_t new_key( annot , new_interval , new_id , new_ch );
+
+      if ( new_events.find( new_key ) == new_events.end() )
+	{
+	  new_events[ new_key ] = new_inst;
+	  annot->all_instances.insert( new_inst );
+	}
+      else
+	{
+	  delete new_inst;
+	}
+
+      ++ii;
+    }
+
+  if ( changed > 0 )
+    {
+      annot->interval_events = std::move( new_events );
+      annot->rebuild_tree();
+    }
+
+  return changed;
+}
+
+
+int annot_editor_t::apply( annotation_set_t & aset ,
+			   const std::vector<annot_edit_t> & edits ,
+			   const std::vector<std::string> & classes )
+{
+  if ( edits.empty() ) return 0;
+
+  // group edits by class
+  std::map<std::string, std::vector<annot_edit_t> > by_class;
+  for ( const annot_edit_t & e : edits )
+    by_class[ e.aclass ].push_back( e );
+
+  std::set<std::string> cset( classes.begin() , classes.end() );
+
+  int total = 0;
+  for ( auto & kv : by_class )
+    {
+      if ( ! classes.empty() && ! cset.count( kv.first ) ) continue;
+      annot_t * annot = aset.find( kv.first );
+      if ( annot != NULL )
+	total += apply_class( annot , kv.second );
+    }
+
+  return total;
+}
+
+
+// --------------------------------------------------------------------------------
+// segsrv_t annotation editor interface
+
+void segsrv_t::queue_edit( const annot_edit_t & edit )
+{
+  pending_edits_.push_back( edit );
+}
+
+
+void segsrv_t::clear_edits()
+{
+  pending_edits_.clear();
+}
+
+
+int segsrv_t::apply_annot_edits( const std::vector<std::string> & classes )
+{
+  int n = annot_editor_t::apply( *( p->edf.annotations ) , pending_edits_ , classes );
+
+  pending_edits_.clear();
+
+  if ( n > 0 )
+    {
+      // determine which classes need refreshing in evts
+      std::set<std::string> cset( classes.begin() , classes.end() );
+
+      std::set<std::string> loaded_classes;
+      for ( const evt_t & e : evts )
+	loaded_classes.insert( e.name );
+
+      std::set<std::string> to_refresh;
+      for ( const std::string & c : loaded_classes )
+	if ( classes.empty() || cset.count( c ) )
+	  to_refresh.insert( c );
+
+      for ( const std::string & c : to_refresh )
+	{
+	  std::set<evt_t>::iterator ee = evts.begin();
+	  while ( ee != evts.end() )
+	    ee = ( ee->name == c ) ? evts.erase( ee ) : std::next( ee );
+	  add_annot( c );
+	}
+
+      etree.build( evts.begin() , evts.end() );
+    }
+
+  return n;
 }

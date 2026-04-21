@@ -3059,7 +3059,9 @@ void edf_t::drop_signal( const int s )
   
   if ( os != -1 ) // i.e. present in original signal list
     {
-      inp_signals_n.erase( inp_signals_n.find(os) );
+      // use key-based erase (safe if already absent, e.g. channel was dropped
+      // then re-created under the same name and dropped again)
+      inp_signals_n.erase( os );
     }
   
   // need to remake label2header

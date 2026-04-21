@@ -414,6 +414,8 @@ public:
 
   std::string get_annot_files() const;
 
+  annot_t * find_annot( const std::string & cls ) const;
+
   int get_state() const;
 
   double last_sec() const;

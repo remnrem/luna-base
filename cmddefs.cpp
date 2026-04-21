@@ -2618,7 +2618,167 @@ void cmddefs_t::init()
   // INSERT
   //
 
-  // add_cmd( "align" , "INSERT" , "Insert records or gaps into an EDF timeline" );
+  add_cmd( "manip" , "INSERT" , "Align and splice signals from a secondary EDF, with clock-drift estimation" );
+  add_verb( "INSERT" ,
+            "INSERT estimates the timing correction needed to align a secondary EDF to the current EDF,\n"
+            "using one or more similar signal pairs. It reports quality metrics first, then the waveform\n"
+            "shift, header-derived offset, and final net offset correction, and can optionally splice the\n"
+            "secondary signals into the primary timeline. For a longer worked example, see the INSERT\n"
+            "vignette in artifacts/insert_vignette/insert.md." );
+  add_param( "INSERT" , "edf" , "other.edf" ,
+             "Secondary EDF to align against the current EDF" );
+  add_param( "INSERT" , "pairs" , "C3,C3" ,
+             "Signal pairs used for alignment, as sig1,sig2[,sig1,sig2,...]" );
+  add_param( "INSERT" , "start" , "900" ,
+             "Window-search start time in seconds; default is the middle 80% heuristic start" );
+  add_param( "INSERT" , "end" , "25200" ,
+             "Window-search stop time in seconds; default is the middle 80% heuristic end" );
+  add_param( "INSERT" , "len" , "300" ,
+             "Window length in seconds for local alignment estimation" );
+  add_param( "INSERT" , "inc" , "60" ,
+             "Window increment in seconds between successive alignment windows" );
+  add_param( "INSERT" , "steps" , "1000" ,
+             "Maximum number of windows to evaluate" );
+  add_param( "INSERT" , "min-peak" , "0.3" ,
+             "Minimum median per-window cross-correlation peak required for a window to be accepted" );
+  add_param( "INSERT" , "filt-low" , "0.5" ,
+             "Lower edge of the in-memory band-pass filter applied before alignment" );
+  add_param( "INSERT" , "filt-high" , "15" ,
+             "Upper edge of the in-memory band-pass filter applied before alignment" );
+  add_param( "INSERT" , "no-filter" , "" ,
+             "Disable pre-alignment band-pass filtering" );
+  add_param( "INSERT" , "euclidean" , "" ,
+             "Use Euclidean distance rather than cross-correlation for window matching" );
+  add_param( "INSERT" , "verbose" , "" ,
+             "Emit per-window and per-pair alignment diagnostics" );
+  add_param( "INSERT" , "full-search" , "" ,
+             "Mutually exclusive with offset-range/offset-margin: search the full valid per-window lag space" );
+  add_param( "INSERT" , "offset-range" , "-120,120" ,
+             "Explicit absolute search interval in seconds for the secondary-vs-primary offset" );
+  add_param( "INSERT" , "offset-margin" , "120" ,
+             "Mutually exclusive with offset-range: use EDF header start times to estimate the expected offset, then search +/- this many seconds around that value" );
+  add_param( "INSERT" , "auto-try" , "" ,
+             "Automatically try a short list of window lengths from 30 s up to the current len, keeping start fixed and using inc=len/5" );
+  add_param( "INSERT" , "try-start" , "900,1200" ,
+             "Optionally try multiple window start times in seconds and choose the best fit by a composite of R2, accepted-window fraction, and xcorr peak quality" );
+  add_param( "INSERT" , "try-len" , "60,100,180" ,
+             "Optionally try multiple window lengths in seconds and choose the best fit" );
+  add_param( "INSERT" , "try-inc" , "5,30,60" ,
+             "Optionally try multiple window increments in seconds and choose the best fit" );
+  add_param( "INSERT" , "insert" , "" ,
+             "After estimating offset and drift, splice the secondary EDF into the primary EDF in memory" );
+  add_param( "INSERT" , "sig" , "*" ,
+             "Signals to splice from the secondary EDF when using insert mode" );
+  add_param( "INSERT" , "annot" , "" ,
+             "Optional annotation label(s) to splice from the secondary EDF when using insert mode" );
+  add_param( "INSERT" , "offset" , "0" ,
+             "Manual constant shift in seconds when using direct insert mode without estimation" );
+  add_param( "INSERT" , "drift" , "0" ,
+             "Manual linear drift term when using direct insert mode" );
+  add_param( "INSERT" , "secs" , "1" ,
+             "Denominator for manual drift, so drift/seconds gives seconds of shift per second" );
+  add_param( "INSERT" , "warn-r2" , "0.5" ,
+             "Emit a warning if the fitted drift regression R2 falls below this value" );
+  add_param( "INSERT" , "warn-p-ok" , "0.5" ,
+             "Emit a warning if fewer than this fraction of windows pass the alignment-quality gate" );
+  add_param( "INSERT" , "warn-peak" , "0.35" ,
+             "Emit a warning if the median per-window matched-window correlation falls below this value" );
+  add_param( "INSERT" , "no-warn" , "" ,
+             "Suppress summary alignment-quality warnings" );
+  add_table( "INSERT" , "" ,
+             "Summary alignment fit across all accepted windows" );
+  add_var( "INSERT" , "" , "OKAY" ,
+           "1 if the summary alignment quality passed warning thresholds, else 0" );
+  add_var( "INSERT" , "" , "N_WIN_ALL" ,
+           "Total number of windows evaluated before xcorr quality gating" );
+  add_var( "INSERT" , "" , "N_WIN" ,
+           "Number of accepted windows used in the summary fit" );
+  add_var( "INSERT" , "" , "N_OUTLIER" ,
+           "Number of windows removed as regression outliers" );
+  add_var( "INSERT" , "" , "P_OK" ,
+           "Proportion of evaluated windows that passed the alignment-quality threshold" );
+  add_var( "INSERT" , "" , "MEDIAN_SEC" ,
+           "Median waveform shift in seconds across accepted windows" );
+  add_var( "INSERT" , "" , "MEAN_SEC" ,
+           "Mean waveform shift in seconds across accepted windows" );
+  add_var( "INSERT" , "" , "MIN_SEC" ,
+           "Minimum waveform shift in seconds across accepted windows" );
+  add_var( "INSERT" , "" , "MAX_SEC" ,
+           "Maximum waveform shift in seconds across accepted windows" );
+  add_var( "INSERT" , "" , "RANGE_SEC" ,
+           "Range of waveform shifts in seconds across accepted windows" );
+  add_var( "INSERT" , "" , "MEDIAN_PEAK" ,
+           "Median per-window matched-window correlation magnitude across all evaluated windows" );
+  add_var( "INSERT" , "" , "MEAN_PEAK" ,
+           "Mean per-window matched-window correlation magnitude across all evaluated windows" );
+  add_var( "INSERT" , "" , "MIN_PEAK" ,
+           "Minimum per-window matched-window correlation magnitude across all evaluated windows" );
+  add_var( "INSERT" , "" , "MAX_PEAK" ,
+           "Maximum per-window matched-window correlation magnitude across all evaluated windows" );
+  add_var( "INSERT" , "" , "INTERCEPT" ,
+           "Fitted start-of-record waveform shift in seconds" );
+  add_var( "INSERT" , "" , "SLOPE" ,
+           "Fitted drift slope in seconds per second" );
+  add_var( "INSERT" , "" , "SLOPE_HR" ,
+           "Fitted drift slope in seconds per hour" );
+  add_var( "INSERT" , "" , "R2" ,
+           "R-squared for the fitted offset-versus-time regression" );
+  add_var( "INSERT" , "" , "IMPLIED_SR" ,
+           "Implied secondary sample rate from the fitted drift" );
+  add_var( "INSERT" , "" , "HDR_OFFSET" ,
+           "Header-derived offset in seconds from the EDF start times alone" );
+  add_var( "INSERT" , "" , "HDR_OFFSET_VALID" ,
+           "1 if both EDF start times were valid and HDR_OFFSET was available, else 0" );
+  add_var( "INSERT" , "" , "TOTAL_OFFSET" ,
+           "Net offset correction in seconds after combining header_offset and fitted start_shift" );
+  add_var( "INSERT" , "" , "USED_START_SEC" ,
+           "Window start time in seconds used for the selected fit" );
+  add_var( "INSERT" , "" , "USED_LEN_SEC" ,
+           "Window length in seconds used for the selected fit" );
+  add_var( "INSERT" , "" , "USED_INC_SEC" ,
+           "Window increment in seconds used for the selected fit" );
+  add_var( "INSERT" , "" , "AUTO_TUNED" ,
+           "1 if auto-try or try-start/try-len/try-inc selected the final window settings, else 0" );
+
+  add_table( "INSERT" , "WIN" ,
+             "Per-window offset estimates and quality flags" );
+  add_var( "INSERT" , "WIN" , "OK" ,
+           "1 if the window passed the alignment-quality threshold, else 0" );
+  add_var( "INSERT" , "WIN" , "PEAK" ,
+           "Median matched-window correlation magnitude across signal pairs for this window" );
+  add_var( "INSERT" , "WIN" , "SP" ,
+           "Estimated offset in sample points for this window" );
+  add_var( "INSERT" , "WIN" , "SEC" ,
+           "Estimated waveform shift in seconds for this window" );
+  add_var( "INSERT" , "WIN" , "TOT_SEC" ,
+           "Estimated net offset correction in seconds for this window after combining waveform_shift and header_offset" );
+  add_var( "INSERT" , "WIN" , "DSEC" ,
+           "Change in waveform shift in seconds relative to the first accepted window" );
+  add_var( "INSERT" , "WIN" , "T1_SEC" ,
+           "Matched primary time in seconds for this window" );
+  add_var( "INSERT" , "WIN" , "T2_SEC" ,
+           "Secondary window start time in seconds" );
+  add_var( "INSERT" , "WIN" , "T1_HMS" ,
+           "Matched primary wall-clock time for this window, when EDF headers are valid" );
+  add_var( "INSERT" , "WIN" , "T2_HMS" ,
+           "Secondary wall-clock time for this window, when EDF headers are valid" );
+  add_var( "INSERT" , "WIN" , "FIT_USED" ,
+           "1 if the window was used in the drift fit before outlier removal, else 0" );
+  add_var( "INSERT" , "WIN" , "FIT_OUTLIER" ,
+           "1 if the window was removed as a drift-fit outlier, 0 if retained, -1 if not fit" );
+
+  add_table( "INSERT" , "CHS" ,
+             "Per-signal-pair drift fits" );
+  add_var( "INSERT" , "CHS" , "INTERCEPT" ,
+           "Per-pair fitted start-of-record waveform shift in seconds" );
+  add_var( "INSERT" , "CHS" , "SLOPE" ,
+           "Per-pair fitted drift slope in seconds per second" );
+  add_var( "INSERT" , "CHS" , "SLOPE_HR" ,
+           "Per-pair fitted drift slope in seconds per hour" );
+  add_var( "INSERT" , "CHS" , "IMPLIED_SR" ,
+           "Per-pair implied secondary sample rate from the fitted drift" );
+  add_var( "INSERT" , "CHS" , "N_OUTLIER" ,
+           "Number of outlier windows removed from the per-pair fit" );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -2742,6 +2902,10 @@ void cmddefs_t::init()
   add_cmd( "output" , "ALIGN-SCAN" , "Scan for epoch/record/staging alignment edge cases" );
   add_param( "ALIGN-SCAN" , "annots"  , "N1,N2,N3,R,W" , "Staging annotation labels to check (default: N1,N2,N3,R,W,?,L,U,M)" );
   add_param( "ALIGN-SCAN" , "minimal" , ""              , "Use minimal label set: N1,N2,N3,R,W" );
+  add_param( "ALIGN-SCAN" , "annot"        , "T"       , "Add derived issue annotations (default: on; use annot=F to disable)" );
+  add_param( "ALIGN-SCAN" , "annot-prefix" , "align_"  , "Prefix for derived issue and record annotations" );
+  add_param( "ALIGN-SCAN" , "annot-epoch"  , ""        , "Also annotate epochs with the annotation class <annot-prefix>EPOCH" );
+  add_param( "ALIGN-SCAN" , "annot-rec"    , ""        , "Also annotate retained EDF records with the annotation class <annot-prefix>REC" );
   add_param( "ALIGN-SCAN" , "verbose" , ""             , "Also emit per-epoch (E) and per-annotation-event (ANNOT/ANN_N) tables" );
 
   add_table( "ALIGN-SCAN" , "" , "Alignment summary" );
@@ -7149,7 +7313,6 @@ void cmddefs_t::init()
   add_param( "HRV" , "time-domain" , "T" , "Enable time-domain HRV metrics" );
   add_param( "HRV" , "lwr" , "0.3" , "Lower valid RR interval bound in seconds" );
   add_param( "HRV" , "upr" , "2" , "Upper valid RR interval bound in seconds" );
-  add_param( "HRV" , "w" , "5" , "Median-filter width for RR interval cleaning" );
   add_param( "HRV" , "ns" , "512" , "Welch segment length for frequency-domain HRV" );
   add_param( "HRV" , "add-annot" , "Rpk" , "Add generic R-peak annotations" );
   add_param( "HRV" , "add-annot-rr" , "RRint" , "Add generic RR-interval annotations" );
@@ -7177,9 +7340,9 @@ void cmddefs_t::init()
   add_var( "HRV" , "CH" , "RR" , "Mean RR interval" );
   add_var( "HRV" , "CH" , "HR" , "Mean heart rate" );
   add_var( "HRV" , "CH" , "SDNN" , "Standard deviation of NN intervals" );
-  add_var( "HRV" , "CH" , "SDNN_R" , "Relative SDNN" );
+  add_var( "HRV" , "CH" , "SDNN_R" , "Robust SDNN" );
   add_var( "HRV" , "CH" , "RMSSD" , "Root mean square successive RR difference" );
-  add_var( "HRV" , "CH" , "RMSSD_R" , "Relative RMSSD" );
+  add_var( "HRV" , "CH" , "RMSSD_R" , "Robust RMSSD" );
   add_var( "HRV" , "CH" , "pNN50" , "Proportion of successive RR differences exceeding 50 ms" );
   add_var( "HRV" , "CH" , "LF" , "Low-frequency HRV power" );
   add_var( "HRV" , "CH" , "HF" , "High-frequency HRV power" );
@@ -7197,9 +7360,9 @@ void cmddefs_t::init()
   add_var( "HRV" , "CH,E" , "RR" , "Mean RR interval" );
   add_var( "HRV" , "CH,E" , "HR" , "Mean heart rate" );
   add_var( "HRV" , "CH,E" , "SDNN" , "Standard deviation of NN intervals" );
-  add_var( "HRV" , "CH,E" , "SDNN_R" , "Relative SDNN" );
+  add_var( "HRV" , "CH,E" , "SDNN_R" , "Robust SDNN" );
   add_var( "HRV" , "CH,E" , "RMSSD" , "Root mean square successive RR difference" );
-  add_var( "HRV" , "CH,E" , "RMSSD_R" , "Relative RMSSD" );
+  add_var( "HRV" , "CH,E" , "RMSSD_R" , "Robust RMSSD" );
   add_var( "HRV" , "CH,E" , "pNN50" , "Proportion of successive RR differences exceeding 50 ms" );
   add_var( "HRV" , "CH,E" , "LF" , "Low-frequency HRV power" );
   add_var( "HRV" , "CH,E" , "HF" , "High-frequency HRV power" );
@@ -7214,9 +7377,9 @@ void cmddefs_t::init()
   add_var( "HRV" , "CH,ANNOT" , "RR" , "Mean RR interval" );
   add_var( "HRV" , "CH,ANNOT" , "HR" , "Mean heart rate" );
   add_var( "HRV" , "CH,ANNOT" , "SDNN" , "Standard deviation of NN intervals" );
-  add_var( "HRV" , "CH,ANNOT" , "SDNN_R" , "Relative SDNN" );
+  add_var( "HRV" , "CH,ANNOT" , "SDNN_R" , "Robust SDNN" );
   add_var( "HRV" , "CH,ANNOT" , "RMSSD" , "Root mean square successive RR difference" );
-  add_var( "HRV" , "CH,ANNOT" , "RMSSD_R" , "Relative RMSSD" );
+  add_var( "HRV" , "CH,ANNOT" , "RMSSD_R" , "Robust RMSSD" );
   add_var( "HRV" , "CH,ANNOT" , "pNN50" , "Proportion of successive RR differences exceeding 50 ms" );
 
   add_table( "HRV" , "CH,ANNOT,INST" , "Annotation-instance-stratified HRV metrics [by-instance]" );
@@ -7224,9 +7387,9 @@ void cmddefs_t::init()
   add_var( "HRV" , "CH,ANNOT,INST" , "RR" , "Mean RR interval" );
   add_var( "HRV" , "CH,ANNOT,INST" , "HR" , "Mean heart rate" );
   add_var( "HRV" , "CH,ANNOT,INST" , "SDNN" , "Standard deviation of NN intervals" );
-  add_var( "HRV" , "CH,ANNOT,INST" , "SDNN_R" , "Relative SDNN" );
+  add_var( "HRV" , "CH,ANNOT,INST" , "SDNN_R" , "Robust SDNN" );
   add_var( "HRV" , "CH,ANNOT,INST" , "RMSSD" , "Root mean square successive RR difference" );
-  add_var( "HRV" , "CH,ANNOT,INST" , "RMSSD_R" , "Relative RMSSD" );
+  add_var( "HRV" , "CH,ANNOT,INST" , "RMSSD_R" , "Robust RMSSD" );
   add_var( "HRV" , "CH,ANNOT,INST" , "pNN50" , "Proportion of successive RR differences exceeding 50 ms" );
 
   //

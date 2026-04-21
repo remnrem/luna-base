@@ -1187,7 +1187,6 @@ struct hrv_opt_t {
   bool time_domain;
   double rr_lwr;
   double rr_upr;
-  int median_filter_width;
   int welch_nsamples;
 
   // for annotations
@@ -1211,8 +1210,12 @@ void dsptools::hrv( edf_t & edf , param_t & param )
   //
 
   
-  const bool annotate_ch = param.has( "add-annot-ch" ) | param.has( "add-annot-rr-ch" ) ;
-  const bool annotate = annotate_ch || param.has( "add-annot" ) || param.has( "add-annot-ch" );
+  const bool annotate_r = param.has( "add-annot" );
+  const bool annotate_rr = param.has( "add-annot-rr" );
+  const bool annotate_r_ch = param.has( "add-annot-ch" );
+  const bool annotate_rr_ch = param.has( "add-annot-rr-ch" );
+  const bool annotate_ch = annotate_r_ch || annotate_rr_ch;
+  const bool annotate = annotate_r || annotate_rr || annotate_ch;
   
   std::string alabel = "Rpk";
   std::string alabel_rr = "RRint";
@@ -1269,8 +1272,7 @@ void dsptools::hrv( edf_t & edf , param_t & param )
   opt.time_domain = param.has( "time-domain" ) ? param.yesno( "time-domain" ) : true ; 
   opt.rr_lwr = param.has( "lwr" ) ? param.requires_dbl( "lwr" ) : 0.3;
   opt.rr_upr = param.has( "upr" ) ? param.requires_dbl( "upr" ) : 2;
-  opt.median_filter_width = param.has( "w" ) ? param.requires_int( "w" ) : 5 ;
-  opt.welch_nsamples = param.has( "ns" ) ? param.requires_int( "ns" ) : 512 ; 
+  opt.welch_nsamples = param.has( "ns" ) ? param.requires_int( "ns" ) : 512 ;
   
   //
   // Get time-domain HRV values stratified by annot
@@ -1381,13 +1383,17 @@ void dsptools::hrv( edf_t & edf , param_t & param )
       annot_t * rr_annot = NULL;
       
       if ( annotate_ch ) {
-	r_annot = edf.annotations->add( alabel + "_"  + signals.label(s) );
-	rr_annot = edf.annotations->add( alabel_rr + "_"  + signals.label(s) );
+	if ( annotate_r_ch )
+	  r_annot = edf.annotations->add( alabel + "_"  + signals.label(s) );
+	if ( annotate_rr_ch )
+	  rr_annot = edf.annotations->add( alabel_rr + "_"  + signals.label(s) );
       }
       else if ( annotate ) 
 	{
-	  r_annot = edf.annotations->add( alabel );
-	  rr_annot = edf.annotations->add( alabel_rr );
+	  if ( annotate_r )
+	    r_annot = edf.annotations->add( alabel );
+	  if ( annotate_rr )
+	    rr_annot = edf.annotations->add( alabel_rr );
 	}
       
       //
@@ -1400,17 +1406,17 @@ void dsptools::hrv( edf_t & edf , param_t & param )
         for (int i=0; i<whole_peaks.R_t.size(); i++)
           tps.insert( whole_peaks.R_t[i] );
 
-      if ( annotate )
+      if ( r_annot != NULL )
         {
           const int npeaks = whole_peaks.R_t.size();
           for (int i=0; i<npeaks; i++)
             r_annot->add( "." , interval_t( whole_peaks.R_t[i] , whole_peaks.R_t[i] ) ,
                           signals.label(s) );
-
-          // For RR annotations
-          opt.annot = rr_annot;
-          opt.chlabel = signals.label(s);
         }
+
+      // For RR annotations
+      opt.annot = rr_annot;
+      opt.chlabel = signals.label(s);
       
       //
       // Iterate over epochs
@@ -1465,15 +1471,17 @@ void dsptools::hrv( edf_t & edf , param_t & param )
 	  
 	  if ( by_epoch )
 	    {
-	      results.push_back( rr.res );
-	      
-	      if ( epoch_output ) 
-		rr.res.write( opt );
+	      if ( rr.res.NP > 0 )
+		{
+		  results.push_back( rr.res );
+		  if ( epoch_output )
+		    rr.res.write( opt );
+		}
 	    }
 	  else
 	    {
 	      // write whole-trace results
-	      rr.res.write( opt );		
+	      rr.res.write( opt );
 	    }
 	  
 	  
@@ -1494,12 +1502,15 @@ void dsptools::hrv( edf_t & edf , param_t & param )
 	{
 	  writer.unepoch();
 
-	  // get means over epochs
-	  hrv_res_t means = hrv_res_t::summarize( results );
-
-	  // output
-	  means.write( opt );
-	  
+	  if ( results.empty() )
+	    {
+	      logger << "  warning: no valid epochs for HRV summary\n";
+	    }
+	  else
+	    {
+	      hrv_res_t means = hrv_res_t::summarize( results );
+	      means.write( opt );
+	    }
 	}
 
 
@@ -1525,6 +1536,7 @@ void dsptools::hrv( edf_t & edf , param_t & param )
 	  
 	  hrv_opt_t opt2 = opt;
 	  opt2.freq_domain = false;
+	  opt2.annot = NULL;
 	  
 	  std::map<std::pair<std::string,std::string> , std::set<interval_t> >::const_iterator aa = atypes.begin();
 	  while ( aa != atypes.end() )
@@ -1534,7 +1546,11 @@ void dsptools::hrv( edf_t & edf , param_t & param )
 	      //   aa->second = std::set<interval_t>
 
 	      rpeaks_t peaks2 = rpeaks_t::intersect( tps , aa->second );
-	      
+	      peaks2.p_inverted = whole_peaks.p_inverted;
+	      peaks2.p_order_inverted = whole_peaks.p_order_inverted;
+	      peaks2.polarity_conf = whole_peaks.polarity_conf;
+	      peaks2.inverted = whole_peaks.inverted;
+
 	      //
 	      // ~not enough data?
 	      //
@@ -1629,7 +1645,8 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
   t.clear();
   rr.clear();
   tp.clear();
-  
+  imputed.clear();
+
   for (int i=1; i<np; i++)
     {
       const double rr1 = globals::tp_duration * ( pks.R_t[i] - pks.R_t[i-1] );
@@ -1639,23 +1656,17 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
 	{
 	  rr.push_back( 1000.0 * rr1 );
 	  t.push_back( i == 1 ? 0 : t[i-2] + rr1 );
+	  imputed.push_back( false );
 	}
       else
 	{
 	  rr.push_back( 1000.0 * mean_rr );
-	  t.push_back( i == 1 ? 0 : t[i-2] + mean_rr );	  
-	}      
+	  t.push_back( i == 1 ? 0 : t[i-2] + mean_rr );
+	  imputed.push_back( true );
+	}
     }
 
   
-
-  //
-  // Median filter 
-  //
-  
-  if ( opt.median_filter_width != 0 ) 
-    rr = MiscMath::median_filter( rr , opt.median_filter_width );
-
 
   //
   // Add R-R intervals as annotation?  
@@ -1664,12 +1675,7 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
   if ( opt.annot != NULL )
     {
       for (int i=0; i<np-1; i++)
-	{
-	  uint64_t rr1 = ( rr[i] / 1000.0 ) * globals::tp_1sec;
-	  uint64_t tp2 = tp[i];
-	  uint64_t tp1 = tp2 > rr1 ? tp2 - rr1 : 0LLU;	  
-	  opt.annot->add( "." , interval_t( tp1, tp2 ) , opt.chlabel );
-	}	  
+	opt.annot->add( "." , interval_t( pks.R_t[i], pks.R_t[i+1] ) , opt.chlabel );
     }
   
   //
@@ -1885,25 +1891,35 @@ rr_intervals_t::rr_intervals_t( const rpeaks_t & pks ,
 
 
   const int npks = rr.size();
-  
-  res.SDNN = MiscMath::sdev( rr );
-  res.SDNN_R = MiscMath::sdev_robust( rr );  
+
+  // SDNN: SD over non-imputed intervals only
+  std::vector<double> nn;
+  for (int i=0; i<npks; i++)
+    if ( ! imputed[i] ) nn.push_back( rr[i] );
+
+  res.SDNN   = nn.size() > 1 ? MiscMath::sdev( nn ) : 0;
+  res.SDNN_R = nn.size() > 1 ? MiscMath::sdev_robust( nn ) : 0;
+
+  // RMSSD / pNN50: successive differences only where both intervals are non-imputed
   res.pNN50 = 0;
   res.RMSSD = 0;
-
   std::vector<double> diffs;
-  for (int i=1;i<npks;i++)
+  for (int i=1; i<npks; i++)
     {
+      if ( imputed[i] || imputed[i-1] ) continue;
       const double df = fabs( rr[i] - rr[i-1] );
       if ( df > 50 ) ++res.pNN50;
       res.RMSSD += df*df;
       diffs.push_back( df );
     }
-  
-  res.RMSSD /= (double)(npks-1.0);
-  res.RMSSD = sqrt( res.RMSSD );  
-  res.RMSSD_R = MiscMath::sdev_robust( diffs );  
-  res.pNN50 /= (double)npks;
+
+  const int ndiffs = diffs.size();
+  if ( ndiffs > 0 )
+    {
+      res.RMSSD   = sqrt( res.RMSSD / (double)ndiffs );
+      res.RMSSD_R = MiscMath::sdev_robust( diffs );
+      res.pNN50  /= (double)ndiffs;
+    }
 
     
 }
@@ -1913,60 +1929,45 @@ hrv_res_t hrv_res_t::summarize( const std::vector<hrv_res_t> & x )
 {
   const int n = x.size();
   hrv_res_t res;
-  
+
+  // total NP across epochs (used as weight denominator)
+  double total_np = 0;
+  for (int i=0; i<n; i++) total_np += x[i].NP;
+
   for (int i=0; i<n; i++)
     {
-      res.IMPUTED += x[i].IMPUTED;
-      res.P_INV += x[i].P_INV;
-      res.ORDER_INV += x[i].ORDER_INV;
-      res.POLARITY_CONF += x[i].POLARITY_CONF;
-      res.INV += x[i].INV;
-      res.NP += x[i].NP;
+      // NP and NP_TOT: simple sum (reported separately)
+      res.NP     += x[i].NP;
       res.NP_TOT += x[i].NP_TOT;
-      
-      res.RR += x[i].RR;
-      res.HR += x[i].HR;
-      
-      res.SDNN += x[i].SDNN;
-      res.SDNN_R += x[i].SDNN_R;
-      res.RMSSD += x[i].RMSSD;
-      res.RMSSD_R += x[i].RMSSD_R;
-      res.pNN50 += x[i].pNN50;
-      
-      res.LF += x[i].LF;
-      res.HF += x[i].HF;
-      res.LF_N += x[i].LF_N;
-      res.HF_N += x[i].HF_N;
-      res.LF_PK += x[i].LF_PK;
-      res.HF_PK += x[i].HF_PK;
-      res.LF2HF += x[i].LF2HF;	
-    }
-  
-  res.IMPUTED /= (double)n;
-  res.P_INV /= (double)n;
-  res.ORDER_INV /= (double)n;
-  res.POLARITY_CONF /= (double)n;
-  res.INV /= (double)n;
 
+      // all other metrics: weighted by each epoch's NP
+      const double w = total_np > 0 ? x[i].NP / total_np : 1.0 / (double)n;
+      res.IMPUTED      += w * x[i].IMPUTED;
+      res.P_INV        += w * x[i].P_INV;
+      res.ORDER_INV    += w * x[i].ORDER_INV;
+      res.POLARITY_CONF += w * x[i].POLARITY_CONF;
+      res.INV          += w * x[i].INV;
+      res.RR           += w * x[i].RR;
+      res.HR           += w * x[i].HR;
+      res.SDNN         += w * x[i].SDNN;
+      res.SDNN_R       += w * x[i].SDNN_R;
+      res.RMSSD        += w * x[i].RMSSD;
+      res.RMSSD_R      += w * x[i].RMSSD_R;
+      res.pNN50        += w * x[i].pNN50;
+      res.LF           += w * x[i].LF;
+      res.HF           += w * x[i].HF;
+      res.LF_PK        += w * x[i].LF_PK;
+      res.HF_PK        += w * x[i].HF_PK;
+    }
+
+  // NP: report mean peaks per epoch
   res.NP /= (double)n;
-  // i.e. do not divide NP_TOT by n
-  
-  res.RR  /= (double)n;
-  res.HR  /= (double)n;
-  
-  res.SDNN  /= (double)n;
-  res.SDNN_R  /= (double)n;
-  res.RMSSD  /= (double)n;
-  res.RMSSD_R  /= (double)n;
-  res.pNN50  /= (double)n;
-  
-  res.LF  /= (double)n;
-  res.LF_N  /= (double)n;
-  res.LF_PK  /= (double)n;
-  res.HF  /= (double)n;
-  res.HF_N  /= (double)n;
-  res.HF_PK  /= (double)n;
-  res.LF2HF  /= (double)n;
+  // NP_TOT: keep as total (not divided)
+
+  // derive ratios from averaged components, not by averaging per-epoch ratios
+  res.LF_N  = ( res.LF + res.HF ) > 0 ? res.LF / ( res.LF + res.HF ) : 0;
+  res.HF_N  = ( res.LF + res.HF ) > 0 ? res.HF / ( res.LF + res.HF ) : 0;
+  res.LF2HF = res.HF > 0 ? res.LF / res.HF : 0;
 
 
   // **assumes** that all strata have the same # 

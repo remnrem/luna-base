@@ -144,6 +144,12 @@ void annot_t::remove( const std::string & id , const interval_t & interval , con
 }
 
 
+void annot_t::rebuild_tree()
+{
+  interval_tree.build_from_keys( interval_events.begin() , interval_events.end() );
+}
+
+
 std::string instance_t::print( const std::string & delim , const std::string & prelim ) const
 {
   std::stringstream ss;

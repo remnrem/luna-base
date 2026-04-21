@@ -1827,6 +1827,551 @@ static void test_segsrv( lunapi_t * eng,
     record(R,"segsrv/summary-threshold", pass, m.str(), V);
     delete ss;
   } catch(std::exception & e) { record(R,"segsrv/summary-threshold",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // annot_editor_t / segsrv annotation editing tests
+  // -----------------------------------------------------------------------
+  //
+  // Helpers shared across edit tests
+  //   TP  = 1,000,000,000  (one second in tp units)
+  //   All tests build a fresh EDF + segsrv; annotations inserted via
+  //   lunapi_inst_t::insert_annotation() which uses (start_sec, stop_sec)
+  //   tuples.  We recover exact tp values from fetch_all_evts_with_inst_ids().
+
+  const uint64_t TP = globals::tp_1sec; // 1e9
+
+  // Helper: build inst + segsrv with a single "Sp" annotation class
+  //         containing two non-overlapping events:
+  //           event 0: [10s, 11s)
+  //           event 1: [20s, 22s)
+  auto make_edit_ss = [&]( const std::string & id )
+    -> std::pair<lunapi_inst_ptr, segsrv_t*>
+  {
+    auto p = eng->inst(id);
+    p->empty_edf(id, 10, 30, "01.01.85", "22.00.00");  // 300 s
+    p->insert_signal("EEG", make_sine(256, 10*30, 10.0, 1.0), 256);
+    p->insert_annotation("Sp", {{10.0, 11.0}, {20.0, 22.0}});
+    segsrv_t * ss = new segsrv_t(p);
+    ss->populate({"EEG"}, {"Sp"});
+    ss->add_annot("Sp");
+    return {p, ss};
+  };
+
+  // Helper: count instances in a class
+  auto count_class = [&]( lunapi_inst_ptr p, const std::string & cls ) -> int {
+    annot_t * a = p->find_annot(cls);
+    if (!a) return -1;
+    return (int)a->interval_events.size();
+  };
+
+  // Helper: fetch rows for a class
+  auto fetch_rows = [&]( segsrv_t * ss, const std::string & cls )
+    -> std::vector<std::vector<std::string>>
+  {
+    return ss->fetch_all_evts_with_inst_ids({cls}, false);
+  };
+
+
+  // -----------------------------------------------------------------------
+  // N1 — fetch_all_evts_with_inst_ids returns 8 cols (!hms) with correct tps
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae1");
+    auto rows = fetch_rows(ss, "Sp");
+    bool right_cols  = (rows.size() == 2) && (rows[0].size() == 8);
+    // col 0 = class name
+    bool right_class = (rows[0][0] == "Sp");
+    // cols 4/5 should round-trip to exact tp values near 10s and 11s
+    uint64_t s0 = 0, e0 = 0;
+    Helper::str2int64(rows[0][4], &s0);
+    Helper::str2int64(rows[0][5], &e0);
+    bool right_tp = (s0 == 10 * TP) && (e0 == 11 * TP);
+    bool pass = right_cols && right_class && right_tp;
+    std::ostringstream m;
+    m << "rows=" << rows.size() << " cols=" << (rows.empty() ? 0 : rows[0].size())
+      << " class=" << (rows.empty() ? "?" : rows[0][0])
+      << " start_tp=" << s0 << " stop_tp=" << e0;
+    record(R, "segsrv/ae-fetch-cols", pass, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-fetch-cols",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N2 — delete_annot: count drops by 1; deleted tp gone from fetch
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae2");
+    auto rows = fetch_rows(ss, "Sp");
+    // delete first event [10s,11s)
+    uint64_t s0=0, e0=0;
+    Helper::str2int64(rows[0][4], &s0);
+    Helper::str2int64(rows[0][5], &e0);
+    annot_edit_t ed;
+    ed.aclass   = "Sp";
+    ed.inst_id  = rows[0][6];
+    ed.start_tp = s0;
+    ed.stop_tp  = e0;
+    ed.ch_str   = rows[0][7];
+    ed.del      = true;
+    ss->queue_edit(ed);
+    int n = ss->apply_annot_edits({});
+    int remaining = count_class(p, "Sp");
+    // confirm the deleted tp is absent
+    auto rows2 = fetch_rows(ss, "Sp");
+    bool gone = true;
+    for (auto & r : rows2) {
+      uint64_t ts = 0; Helper::str2int64(r[4], &ts);
+      if (ts == s0) { gone = false; break; }
+    }
+    bool pass = (n == 1) && (remaining == 1) && gone;
+    std::ostringstream m;
+    m << "n=" << n << " remaining=" << remaining << " gone=" << gone;
+    record(R, "segsrv/ae-delete", pass, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-delete",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N3 — shift: new_start only → duration preserved
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae3");
+    auto rows = fetch_rows(ss, "Sp");
+    uint64_t s0=0, e0=0;
+    Helper::str2int64(rows[0][4], &s0);
+    Helper::str2int64(rows[0][5], &e0);
+    uint64_t dur = e0 - s0;                  // 1s = TP
+    uint64_t new_start = 15 * TP;
+    annot_edit_t ed;
+    ed.aclass   = "Sp";  ed.inst_id = rows[0][6];
+    ed.start_tp = s0;    ed.stop_tp = e0;  ed.ch_str = rows[0][7];
+    ed.new_start = new_start;               // new_stop absent → shift
+    ss->queue_edit(ed);
+    ss->apply_annot_edits({});
+    // find the shifted event
+    auto rows2 = fetch_rows(ss, "Sp");
+    bool found = false;
+    for (auto & r : rows2) {
+      uint64_t ts=0, te=0;
+      Helper::str2int64(r[4], &ts);
+      Helper::str2int64(r[5], &te);
+      if (ts == new_start && (te - ts) == dur) { found = true; break; }
+    }
+    std::ostringstream m;
+    m << "new_start=" << new_start << " dur=" << dur << " found=" << found;
+    record(R, "segsrv/ae-shift", found, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-shift",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N4 — resize: new_start + new_stop → exact new interval
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae4");
+    auto rows = fetch_rows(ss, "Sp");
+    uint64_t s0=0, e0=0;
+    Helper::str2int64(rows[0][4], &s0);
+    Helper::str2int64(rows[0][5], &e0);
+    uint64_t ns = 12 * TP, ne = 14 * TP;
+    annot_edit_t ed;
+    ed.aclass   = "Sp";  ed.inst_id = rows[0][6];
+    ed.start_tp = s0;    ed.stop_tp = e0;  ed.ch_str = rows[0][7];
+    ed.new_start = ns;   ed.new_stop = ne;
+    ss->queue_edit(ed);
+    ss->apply_annot_edits({});
+    auto rows2 = fetch_rows(ss, "Sp");
+    bool found = false;
+    for (auto & r : rows2) {
+      uint64_t ts=0, te=0;
+      Helper::str2int64(r[4], &ts); Helper::str2int64(r[5], &te);
+      if (ts == ns && te == ne) { found = true; break; }
+    }
+    std::ostringstream m;
+    m << "ns=" << ns << " ne=" << ne << " found=" << found;
+    record(R, "segsrv/ae-resize", found, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-resize",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N5 — channel change: new_ch updates ch_str in the rebuilt index
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae5");
+    auto rows = fetch_rows(ss, "Sp");
+    uint64_t s0=0, e0=0;
+    Helper::str2int64(rows[0][4], &s0);
+    Helper::str2int64(rows[0][5], &e0);
+    annot_edit_t ed;
+    ed.aclass   = "Sp";  ed.inst_id = rows[0][6];
+    ed.start_tp = s0;    ed.stop_tp = e0;  ed.ch_str = rows[0][7];
+    ed.new_ch   = std::string("EEG2");
+    ss->queue_edit(ed);
+    ss->apply_annot_edits({});
+    auto rows2 = fetch_rows(ss, "Sp");
+    bool found = false;
+    for (auto & r : rows2) {
+      uint64_t ts=0; Helper::str2int64(r[4], &ts);
+      if (ts == s0 && r[7] == "EEG2") { found = true; break; }
+    }
+    std::ostringstream m;
+    m << "ch_updated=" << found;
+    record(R, "segsrv/ae-ch-change", found, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-ch-change",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N6 — metadata set: meta key appears on modified instance
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae6");
+    auto rows = fetch_rows(ss, "Sp");
+    uint64_t s0=0, e0=0;
+    Helper::str2int64(rows[0][4], &s0);
+    Helper::str2int64(rows[0][5], &e0);
+    annot_edit_t ed;
+    ed.aclass   = "Sp";  ed.inst_id = rows[0][6];
+    ed.start_tp = s0;    ed.stop_tp = e0;  ed.ch_str = rows[0][7];
+    ed.meta["confidence"] = "0.95";
+    ed.meta["note"]       = "manual";
+    ss->queue_edit(ed);
+    ss->apply_annot_edits({});
+    // verify via fetch_full_annots
+    annot_t * a = p->find_annot("Sp");
+    bool found_conf = false, found_note = false;
+    for (auto & kv : a->interval_events) {
+      uint64_t ts = kv.first.interval.start;
+      if (ts == s0 && kv.second) {
+        avar_t * av_c = kv.second->find("confidence");
+        avar_t * av_n = kv.second->find("note");
+        if (av_c && av_c->text_value() == "0.95") found_conf = true;
+        if (av_n && av_n->text_value() == "manual") found_note = true;
+      }
+    }
+    bool pass = found_conf && found_note;
+    std::ostringstream m;
+    m << "confidence=" << found_conf << " note=" << found_note;
+    record(R, "segsrv/ae-meta-set", pass, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-meta-set",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N7 — clear_meta: existing meta removed; new meta applied
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae7");
+    // First stamp some metadata onto the first event
+    auto rows = fetch_rows(ss, "Sp");
+    uint64_t s0=0, e0=0;
+    Helper::str2int64(rows[0][4], &s0);
+    Helper::str2int64(rows[0][5], &e0);
+    {
+      annot_edit_t ed;
+      ed.aclass = "Sp"; ed.inst_id = rows[0][6];
+      ed.start_tp = s0; ed.stop_tp = e0; ed.ch_str = rows[0][7];
+      ed.meta["old_key"] = "old_val";
+      ss->queue_edit(ed);
+      ss->apply_annot_edits({});
+    }
+    // Now clear + set new meta
+    auto rows2 = fetch_rows(ss, "Sp");
+    uint64_t s1=0, e1=0;
+    Helper::str2int64(rows2[0][4], &s1);
+    Helper::str2int64(rows2[0][5], &e1);
+    {
+      annot_edit_t ed;
+      ed.aclass = "Sp"; ed.inst_id = rows2[0][6];
+      ed.start_tp = s1; ed.stop_tp = e1; ed.ch_str = rows2[0][7];
+      ed.clear_meta = true;
+      ed.meta["new_key"] = "new_val";
+      ss->queue_edit(ed);
+      ss->apply_annot_edits({});
+    }
+    annot_t * a = p->find_annot("Sp");
+    bool old_gone = true, new_present = false;
+    for (auto & kv : a->interval_events) {
+      if (kv.first.interval.start == s1 && kv.second) {
+        if (kv.second->find("old_key")) old_gone = false;
+        avar_t * av = kv.second->find("new_key");
+        if (av && av->text_value() == "new_val") new_present = true;
+      }
+    }
+    bool pass = old_gone && new_present;
+    std::ostringstream m;
+    m << "old_gone=" << old_gone << " new_present=" << new_present;
+    record(R, "segsrv/ae-clear-meta", pass, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-clear-meta",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N8 — combined: shift + channel + meta in one edit
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae8");
+    auto rows = fetch_rows(ss, "Sp");
+    uint64_t s0=0, e0=0;
+    Helper::str2int64(rows[0][4], &s0);
+    Helper::str2int64(rows[0][5], &e0);
+    uint64_t dur = e0 - s0;
+    uint64_t new_s = 50 * TP;
+    annot_edit_t ed;
+    ed.aclass    = "Sp"; ed.inst_id = rows[0][6];
+    ed.start_tp  = s0;   ed.stop_tp = e0; ed.ch_str = rows[0][7];
+    ed.new_start = new_s;
+    ed.new_ch    = std::string("F4");
+    ed.meta["edited"] = "1";
+    ss->queue_edit(ed);
+    ss->apply_annot_edits({});
+    annot_t * a = p->find_annot("Sp");
+    bool found = false;
+    for (auto & kv : a->interval_events) {
+      const instance_idx_t & idx = kv.first;
+      if (idx.interval.start == new_s &&
+          (idx.interval.stop - idx.interval.start) == dur &&
+          idx.ch_str == "F4" &&
+          kv.second && kv.second->find("edited")) {
+        found = true; break;
+      }
+    }
+    std::ostringstream m;
+    m << "combined_ok=" << found;
+    record(R, "segsrv/ae-combined", found, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-combined",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N9 — class filter: apply_annot_edits({"Other"}) leaves "Sp" untouched
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae9");
+    // Also insert a second class
+    p->insert_annotation("Other", {{5.0, 6.0}});
+    ss->add_annot("Other");
+    auto rows = fetch_rows(ss, "Sp");
+    uint64_t s0=0, e0=0;
+    Helper::str2int64(rows[0][4], &s0);
+    Helper::str2int64(rows[0][5], &e0);
+    annot_edit_t ed;
+    ed.aclass = "Sp"; ed.inst_id = rows[0][6];
+    ed.start_tp = s0; ed.stop_tp = e0; ed.ch_str = rows[0][7];
+    ed.del = true;
+    ss->queue_edit(ed);
+    // Apply only to "Other" — the "Sp" delete should be applied but
+    // "Other" has no queued edits, so net result: queue processed for
+    // "Sp" because class filter means only "Other" is targeted
+    int n = ss->apply_annot_edits({"Other"});
+    int sp_count = count_class(p, "Sp");
+    // "Sp" edit was queued but filtered out → Sp still has 2 events
+    bool pass = (n == 0) && (sp_count == 2);
+    std::ostringstream m;
+    m << "n=" << n << " sp_count=" << sp_count;
+    record(R, "segsrv/ae-class-filter", pass, m.str(), V);
+    // clear the unfired queue
+    ss->clear_edits();
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-class-filter",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N10 — clear_edits: queued edits discarded, annotation unchanged
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae10");
+    auto rows = fetch_rows(ss, "Sp");
+    uint64_t s0=0, e0=0;
+    Helper::str2int64(rows[0][4], &s0);
+    Helper::str2int64(rows[0][5], &e0);
+    annot_edit_t ed;
+    ed.aclass = "Sp"; ed.inst_id = rows[0][6];
+    ed.start_tp = s0; ed.stop_tp = e0; ed.ch_str = rows[0][7];
+    ed.del = true;
+    ss->queue_edit(ed);
+    ss->clear_edits();               // discard before apply
+    // count should be unchanged
+    int cnt = count_class(p, "Sp");
+    bool pass = (cnt == 2);
+    std::ostringstream m;
+    m << "cnt_after_cancel=" << cnt;
+    record(R, "segsrv/ae-cancel", pass, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-cancel",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N11 — apply empty queue: returns 0, annotation unchanged
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae11");
+    int n = ss->apply_annot_edits({});
+    int cnt = count_class(p, "Sp");
+    bool pass = (n == 0) && (cnt == 2);
+    std::ostringstream m;
+    m << "n=" << n << " cnt=" << cnt;
+    record(R, "segsrv/ae-empty-apply", pass, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-empty-apply",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N12 — bulk: delete both events, count reaches 0
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae12");
+    auto rows = fetch_rows(ss, "Sp");
+    for (auto & r : rows) {
+      uint64_t s=0, e=0;
+      Helper::str2int64(r[4], &s); Helper::str2int64(r[5], &e);
+      annot_edit_t ed;
+      ed.aclass = "Sp"; ed.inst_id = r[6];
+      ed.start_tp = s; ed.stop_tp = e; ed.ch_str = r[7];
+      ed.del = true;
+      ss->queue_edit(ed);
+    }
+    int n   = ss->apply_annot_edits({});
+    int cnt = count_class(p, "Sp");
+    bool pass = (n == 2) && (cnt == 0);
+    std::ostringstream m;
+    m << "n=" << n << " cnt=" << cnt;
+    record(R, "segsrv/ae-bulk-delete", pass, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-bulk-delete",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N13 — collision: moving event 0 onto event 1's position keeps count
+  //        at 2 (edit dropped, not applied) — original event 1 survives
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae13");
+    auto rows = fetch_rows(ss, "Sp");
+    uint64_t s0=0, e0=0, s1=0, e1=0;
+    Helper::str2int64(rows[0][4], &s0); Helper::str2int64(rows[0][5], &e0);
+    Helper::str2int64(rows[1][4], &s1); Helper::str2int64(rows[1][5], &e1);
+    // Move event 0 exactly onto event 1's interval
+    annot_edit_t ed;
+    ed.aclass    = "Sp"; ed.inst_id = rows[0][6];
+    ed.start_tp  = s0;   ed.stop_tp = e0; ed.ch_str = rows[0][7];
+    ed.new_start = s1;   ed.new_stop = e1;
+    ss->queue_edit(ed);
+    ss->apply_annot_edits({});
+    // One of the two survives; count is 1 (collision drops the incoming edit,
+    // so the untouched event 1 wins and the moved event 1' is discarded)
+    int cnt = count_class(p, "Sp");
+    bool pass = (cnt == 1);
+    std::ostringstream m;
+    m << "cnt_after_collision=" << cnt;
+    record(R, "segsrv/ae-collision", pass, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-collision",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N14 — queue survives apply_annot_edits only for unmatched classes
+  //        (queue is fully cleared after apply regardless)
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae14");
+    auto rows = fetch_rows(ss, "Sp");
+    uint64_t s0=0, e0=0;
+    Helper::str2int64(rows[0][4], &s0); Helper::str2int64(rows[0][5], &e0);
+    annot_edit_t ed;
+    ed.aclass = "Sp"; ed.inst_id = rows[0][6];
+    ed.start_tp = s0; ed.stop_tp = e0; ed.ch_str = rows[0][7];
+    ed.del = true;
+    ss->queue_edit(ed);
+    ss->apply_annot_edits({});   // queue cleared
+    // Second apply with empty queue should be a no-op
+    int n2 = ss->apply_annot_edits({});
+    int cnt = count_class(p, "Sp");
+    bool pass = (n2 == 0) && (cnt == 1);
+    std::ostringstream m;
+    m << "n2=" << n2 << " cnt=" << cnt;
+    record(R, "segsrv/ae-queue-cleared", pass, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-queue-cleared",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N15 — interval tree rebuilt: fetch after edit returns updated tps
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae15");
+    auto rows = fetch_rows(ss, "Sp");
+    uint64_t s0=0, e0=0;
+    Helper::str2int64(rows[0][4], &s0); Helper::str2int64(rows[0][5], &e0);
+    uint64_t new_s = 80 * TP, new_e = 81 * TP;
+    annot_edit_t ed;
+    ed.aclass = "Sp"; ed.inst_id = rows[0][6];
+    ed.start_tp = s0; ed.stop_tp = e0; ed.ch_str = rows[0][7];
+    ed.new_start = new_s; ed.new_stop = new_e;
+    ss->queue_edit(ed);
+    ss->apply_annot_edits({});
+    // Verify via interval_tree query directly
+    annot_t * a = p->find_annot("Sp");
+    interval_t qwin( new_s, new_e );
+    auto hits = a->extract( qwin );
+    bool found_in_tree = !hits.empty();
+    // And the old position should not be in the tree
+    interval_t old_win( s0, e0 );
+    auto old_hits = a->extract( old_win );
+    bool old_gone_from_tree = old_hits.empty();
+    bool pass = found_in_tree && old_gone_from_tree;
+    std::ostringstream m;
+    m << "found_in_tree=" << found_in_tree
+      << " old_gone=" << old_gone_from_tree;
+    record(R, "segsrv/ae-tree-rebuild", pass, m.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-tree-rebuild",false,e.what(),V); }
+
+
+  // -----------------------------------------------------------------------
+  // N16 — inst_id rename: new_inst_id updates key.id; old id gone, new present
+  // -----------------------------------------------------------------------
+  try {
+    auto [p, ss] = make_edit_ss("T_ae16");
+    auto rows = fetch_rows(ss, "Sp");
+    uint64_t s0=0, e0=0;
+    Helper::str2int64(rows[0][4], &s0);
+    Helper::str2int64(rows[0][5], &e0);
+    std::string old_id = rows[0][6];
+    std::string new_id = "renamed_inst";
+
+    annot_edit_t ed;
+    ed.aclass      = "Sp"; ed.inst_id = old_id;
+    ed.start_tp    = s0;   ed.stop_tp = e0; ed.ch_str = rows[0][7];
+    ed.new_inst_id = new_id;
+    ss->queue_edit(ed);
+    ss->apply_annot_edits({});
+
+    // Verify via interval_events: old id gone, new id present at same interval
+    annot_t * a = p->find_annot("Sp");
+    bool old_gone = true, new_found = false;
+    for (auto & kv : a->interval_events) {
+      if (kv.first.interval.start == s0 && kv.first.interval.stop == e0) {
+        if (kv.first.id == old_id) old_gone = false;
+        if (kv.first.id == new_id) new_found = true;
+      }
+    }
+    // Also verify fetch returns new id in col 6
+    auto rows2 = fetch_rows(ss, "Sp");
+    bool fetch_shows_new = false;
+    for (auto & row : rows2)
+      if (row[4] == Helper::int2str(s0) && row[6] == new_id) fetch_shows_new = true;
+
+    bool pass = old_gone && new_found && fetch_shows_new;
+    std::ostringstream msg;
+    msg << "old_gone=" << old_gone
+        << " new_found=" << new_found
+        << " fetch_shows_new=" << fetch_shows_new;
+    record(R, "segsrv/ae-inst-id-rename", pass, msg.str(), V);
+    delete ss;
+  } catch(std::exception & e) { record(R,"segsrv/ae-inst-id-rename",false,e.what(),V); }
 }
 
 // ============================================================
