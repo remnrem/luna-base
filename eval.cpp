@@ -950,8 +950,6 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "EPOCH" ) )        { fnd = true; proc_epoch( edf, param(c) ); }
       if ( (!fnd) && is( c, "ALIGN" ) )        { fnd = true; proc_align( edf , param(c) ); }
       if ( (!fnd) && is( c, "SLICE" ) )        { fnd = true; proc_slice( edf , param(c) , 1 ); }
-      if ( (!fnd) && is( c, "ALIGN-EPOCHS" ) ) { fnd = true; proc_align_epochs( edf , param(c) ); }
-      if ( (!fnd) && is( c, "ALIGN-ANNOTS" ) ) { fnd = true; proc_align_annots( edf , param(c) ); }
       if ( (!fnd) && is( c, "INSERT" ) )       { fnd = true; proc_insert( edf , param(c) ); }
       if ( (!fnd) && is( c, "CTYPES" ) )       { fnd = true; proc_ctypes( edf, param(c) ); } 
       if ( (!fnd) && is( c, "SUDS" ) )         { fnd = true; proc_suds( edf , param(c) ); }
@@ -2500,18 +2498,6 @@ void proc_dump( edf_t & edf , param_t & param )
 void proc_insert( edf_t & edf , param_t & param )
 {
   edf_inserter_t inserter( edf , param );
-}
-
-// ALIGN-EPOCHS
-void proc_align_epochs( edf_t & edf , param_t & param )
-{
-  align_epochs_t align( edf , param );  
-}
-
-// ALIGN-ANNOTS: given an ALIGN-EPOCHS solution, change annotation timings
-void proc_align_annots( edf_t & edf , param_t & param )
-{
-  align_annots_t align( edf , param );  
 }
 
 // ALIGN

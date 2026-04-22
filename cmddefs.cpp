@@ -2647,8 +2647,6 @@ void cmddefs_t::init()
              "Upper edge of the in-memory band-pass filter applied before alignment" );
   add_param( "INSERT" , "no-filter" , "" ,
              "Disable pre-alignment band-pass filtering" );
-  add_param( "INSERT" , "euclidean" , "" ,
-             "Use Euclidean distance rather than cross-correlation for window matching" );
   add_param( "INSERT" , "verbose" , "" ,
              "Emit per-window and per-pair alignment diagnostics" );
   add_param( "INSERT" , "full-search" , "" ,

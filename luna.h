@@ -66,7 +66,6 @@
 
 #include "annot/annot.h"
 #include "annot/annotate.h"
-#include "annot/align-annots.h"
 
 #include "edf/edf.h"
 #include "edfz/edfz2.h"
@@ -74,7 +73,6 @@
 #include "edf/slice.h"
 #include "edf/sedf.h"
 #include "edf/freezer.h"
-#include "edf/align-epochs.h"
 #include "edf/insert.h"
 
 #include "timeline/timeline.h"
