@@ -192,7 +192,7 @@ struct hd_derived_t
 {
   // 5-state signals
   std::vector<double> H, C, Mg;          // entropy, confidence, margin
-  std::vector<double> TV, L2, TV_lag;    // motion metrics
+  std::vector<double> TV, TV_lag;         // motion metrics
   std::vector<double> mix_wn1;           // min(W, N1)
   std::vector<double> mix_n2n3;          // min(N2, N3)
   std::vector<double> mix_rn1;           // min(R, N1)
@@ -214,7 +214,6 @@ struct hd_derived_t
     C.assign( N, 0.0 );
     Mg.assign( N, 0.0 );
     TV.assign( N, 0.0 );
-    L2.assign( N, 0.0 );
     TV_lag.assign( N, 0.0 );
     mix_wn1.assign( N, 0.0 );
     mix_n2n3.assign( N, 0.0 );
@@ -252,15 +251,10 @@ struct hd_derived_t
 	// Motion metrics (step from previous sample)
 	if ( i > 0 )
 	  {
-	    double tv = 0.0, l2sq = 0.0;
+	    double tv = 0.0;
 	    for ( int k = 0; k < 5; k++ )
-	      {
-		double d = dat.p[k][i] - dat.p[k][i-1];
-		tv   += std::fabs( d );
-		l2sq += d * d;
-	      }
+	      tv += std::fabs( dat.p[k][i] - dat.p[k][i-1] );
 	    TV[i] = 0.5 * tv;
-	    L2[i] = std::sqrt( l2sq );
 	  }
 
 	// Longer-lag motion
@@ -496,21 +490,15 @@ struct hd_trans_t
 		   [](const hd_event_t & a, const hd_event_t & b){ return a.idx < b.idx; } );
 	// Deduplicate / merge nearby
 	std::vector<hd_event_t> merged;
-	int prev_idx = -999999;
-	double prev_tv = 0.0;
 	for ( int ei = 0; ei < (int)events5.size(); ei++ )
 	  {
-	    if ( events5[ei].idx - prev_idx < min_gap )
+	    if ( !merged.empty() && events5[ei].idx - merged.back().idx < min_gap )
 	      {
 		if ( events5[ei].peak_tv > merged.back().peak_tv )
 		  merged.back() = events5[ei];
 	      }
 	    else
-	      {
-		merged.push_back( events5[ei] );
-		prev_idx = events5[ei].idx;
-		prev_tv  = events5[ei].peak_tv;
-	      }
+	      merged.push_back( events5[ei] );
 	  }
 	events5 = merged;
       }
@@ -722,6 +710,7 @@ static void compute_trans_shape(
     const hd_derived_t & der,
     const std::vector<hd_event_t> & all_events,
     const std::vector<bool> & region_mask,
+    const std::vector<bool> & is_stable,
     const hd_data_t & dat,
     const hd_params_t & par,
     double Fs,
@@ -774,18 +763,17 @@ static void compute_trans_shape(
   std::vector<std::vector<double>> sum_P( K , std::vector<double>( profile_len , 0.0 ) );
   std::vector<int>    cnt( profile_len, 0 );
 
-  // Baseline H for width estimation: mean H in stable-core of this region
-  // (We use a simple approximation: mean H in region samples that are not transition-zone)
-  // This is just the p50 of H across the region for convenience
-  std::vector<double> all_H_region;
+  // Baseline H: stable-core samples only; fall back to full region if none available
+  std::vector<double> all_H_region, stable_H_region;
   for ( int i = 0; i < N; i++ )
-    if ( region_mask[i] ) all_H_region.push_back( H_ref[i] );
-  double baseline_H = percentile( all_H_region, 0.5 );
-
-  // Entropy threshold for width measurement: halfway between baseline and max
-  // We'll also compute width based on TV threshold
+    if ( region_mask[i] )
+      {
+        all_H_region.push_back( H_ref[i] );
+        if ( is_stable[i] ) stable_H_region.push_back( H_ref[i] );
+      }
+  const std::vector<double> & baseline_src = stable_H_region.empty() ? all_H_region : stable_H_region;
+  double baseline_H = percentile( baseline_src, 0.5 );
   double H_width_th = baseline_H + 0.5 * ( percentile( all_H_region, 0.9 ) - baseline_H );
-  double TV_width_th = par.motion_th * 0.5;
 
   int n_events_profile = 0;
 
@@ -1047,7 +1035,7 @@ static void write_hdstats(
 	  const std::vector<hd_event_t> & evts = threestate ? tr.events3 : tr.events5;
 	  hd_trans_stats_t tshape;
 	  hd_profile_t     profile;
-	  compute_trans_shape( der, evts, context_mask, dat, par, dat.Fs, threestate, tshape, profile );
+	  compute_trans_shape( der, evts, context_mask, is_stable, dat, par, dat.Fs, threestate, tshape, profile );
 	  if ( emit_top_level_transition_stats )
 	    write_trans_stats( tshape );
 
@@ -1063,6 +1051,20 @@ static void write_hdstats(
 		  writer.value( "C",  profile.C[j] );
 		  writer.value( "MG", profile.Mg[j] );
 		  writer.value( "TV", profile.TV[j] );
+		  if ( threestate )
+		    {
+		      writer.value( "P_W",  profile.P[0][j] );
+		      writer.value( "P_NR", profile.P[1][j] );
+		      writer.value( "P_R",  profile.P[2][j] );
+		    }
+		  else
+		    {
+		      writer.value( "P_W",  profile.P[0][j] );
+		      writer.value( "P_N1", profile.P[1][j] );
+		      writer.value( "P_N2", profile.P[2][j] );
+		      writer.value( "P_N3", profile.P[3][j] );
+		      writer.value( "P_R",  profile.P[4][j] );
+		    }
 		  writer.unlevel( "OFFSET" );
 		}
 	    }
@@ -1084,7 +1086,7 @@ static void write_hdstats(
 
 	      hd_trans_stats_t tshape_pair;
 	      hd_profile_t     profile_pair;
-	      compute_trans_shape( der, evts_pair, context_mask, dat, par, dat.Fs, threestate, tshape_pair, profile_pair );
+	      compute_trans_shape( der, evts_pair, context_mask, is_stable, dat, par, dat.Fs, threestate, tshape_pair, profile_pair );
 
 	      const std::string trans_label = hd_state_label( threestate , tp.first ) + "->"
 		+ hd_state_label( threestate , tp.second );
@@ -1247,11 +1249,14 @@ void proc_hdstats( edf_t & edf, param_t & param )
 	  writer.value( "IS_STABLE",(int)tr.is_stable5[i] );
 	  if ( par.do_3state )
 	    {
-	      writer.value( "H3",        der.H3[i] );
-	      writer.value( "C3",        der.C3[i] );
-	      writer.value( "TV3",       der.TV3[i] );
-	      writer.value( "ARGMAX3",   der.argmax3[i] );
-	      writer.value( "IS_TRANS3", (int)tr.is_trans3[i] );
+	      writer.value( "H3",         der.H3[i] );
+	      writer.value( "C3",         der.C3[i] );
+	      writer.value( "TV3",        der.TV3[i] );
+	      writer.value( "ARGMAX3",    der.argmax3[i] );
+	      writer.value( "IS_TRANS3",  (int)tr.is_trans3[i] );
+	      writer.value( "IS_STABLE3", (int)tr.is_stable3[i] );
+	      writer.value( "MIX_A3",     der.mix3_wnrem[i] );
+	      writer.value( "MIX_C3",     der.mix3_nremr[i] );
 	    }
 	  writer.unlevel( "TIME" );
 	}
