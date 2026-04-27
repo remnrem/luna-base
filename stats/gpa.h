@@ -248,9 +248,14 @@ struct gpa_t {
     
   // run
   void run();   // correct for all X considered
-  void run1X(); // correction w/in X 
+  void run1X(); // correction w/in X
 
-    
+  // read-only access to the analysis matrix (used by lunapi_t to cache after run)
+  const std::vector<std::string>& get_ids()  const { return ids; }
+  const std::vector<std::string>& get_vars() const { return vars; }
+  const Eigen::MatrixXd&          get_X()    const { return X; }
+
+
 private:
 
   // ids

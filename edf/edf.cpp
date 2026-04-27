@@ -2265,8 +2265,36 @@ std::vector<double> edf_t::fixedrate_signal( uint64_t start ,
   // Ensure we are within bounds
   //
   
-  if ( stop > timeline.last_time_point_tp + 1 )
-    stop = timeline.last_time_point_tp + 1 ;      
+  const uint64_t tail_tp1 = timeline.last_time_point_tp + 1LLU;
+
+  if ( start >= tail_tp1 )
+    {
+      if ( luna_re_debug_enabled() )
+        std::cerr << "[LUNA_RE_DEBUG] fixedrate_signal(): start beyond tail"
+                  << " sig=" << header.label[ signal ]
+                  << " start=" << start
+                  << " stop=" << stop
+                  << " tail_tp1=" << tail_tp1
+                  << " continuous=" << header.continuous
+                  << "\n";
+      return ret;
+    }
+  
+  if ( stop > tail_tp1 )
+    stop = tail_tp1;
+
+  if ( start >= stop )
+    {
+      if ( luna_re_debug_enabled() )
+        std::cerr << "[LUNA_RE_DEBUG] fixedrate_signal(): empty after tail clamp"
+                  << " sig=" << header.label[ signal ]
+                  << " start=" << start
+                  << " stop=" << stop
+                  << " tail_tp1=" << tail_tp1
+                  << " continuous=" << header.continuous
+                  << "\n";
+      return ret;
+    }
   
   //
   // First, determine which records are being requested

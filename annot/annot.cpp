@@ -4411,20 +4411,12 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
 
   if ( mk_folder )
     {
-
       std::string outdir = Helper::expand( param.value( "annot-dir" ) );
       
       if ( outdir[ outdir.size() - 1 ] != globals::folder_delimiter ) 
 	outdir += globals::folder_delimiter;
-      
-      int p=filename.size()-1;
-      int v = 0;
-      for (int j=p;j>=0;j--)
-	{
-	  if ( filename[j] == globals::folder_delimiter ) { v=j+1; break; }
-	}
 
-      // new filename to write
+      // Write one file per EDF, mirroring WRITE edf-dir behavior.
       filename = outdir + edf.id + ( xml_format ? ".xml" : ".annot" ); 
       
       // create folder if it does not exist 

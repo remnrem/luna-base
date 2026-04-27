@@ -113,6 +113,8 @@
 #include "assoc/assoc.h"
 #include "assoc/massoc.h"
 
+#include "dumper/waveform.h"
+
 #include "clocs/topo.h"
 
 #include "clocs/clocs.h"

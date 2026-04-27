@@ -74,6 +74,7 @@ struct hd_params_t
   std::string annot_name;           // annotation class for stratification (empty = none)
   bool verbose;                     // emit per-sample HDSIG table
   int min_events_profile;           // minimum events needed to emit aligned profile
+  int min_samples_region;           // minimum samples needed to emit REGION summaries
 };
 
 
@@ -602,9 +603,12 @@ struct hd_region_stats_t
   double corr_H_TV = 0;
   // Domain C: pairwise mixing (a=WN1/WNREM, b=N2N3, c=RN1/NREMR)
   double mean_mix_a = 0, mean_mix_b = 0, mean_mix_c = 0;
+  // Mean posterior probability for each state across included samples.
+  std::vector<double> mean_p;
 };
 
 static hd_region_stats_t compute_region(
+    const hd_data_t & dat,
     const hd_derived_t & der,
     const std::vector<bool> & mask,   // which samples to include
     const hd_params_t & par,
@@ -613,6 +617,8 @@ static hd_region_stats_t compute_region(
   hd_region_stats_t rs;
 
   std::vector<double> vH, vC, vMg, vTV, vTV_lag, vMix_a, vMix_b, vMix_c;
+  std::vector<double> sum_p( threestate ? 3 : 5 , 0.0 );
+  int n_p = 0;
 
   const std::vector<double> & H_ref       = threestate ? der.H3      : der.H;
   const std::vector<double> & C_ref       = threestate ? der.C3      : der.C;
@@ -621,6 +627,8 @@ static hd_region_stats_t compute_region(
   const std::vector<double> & TVlag_ref   = threestate ? der.TV3_lag : der.TV_lag;
   const std::vector<double> & mix_a_ref   = threestate ? der.mix3_wnrem : der.mix_wn1;
   const std::vector<double> & mix_c_ref   = threestate ? der.mix3_nremr : der.mix_rn1;
+  const std::vector<std::vector<double>> & P_ref = threestate ? dat.p3 : dat.p;
+  const int K = threestate ? 3 : 5;
   // mix_b is N2/N3 mixing — only meaningful in 5-state
   const std::vector<double> & mix_b_ref   = der.mix_n2n3;
 
@@ -636,6 +644,8 @@ static hd_region_stats_t compute_region(
       vMix_a.push_back( mix_a_ref[i] );
       if ( !threestate ) vMix_b.push_back( mix_b_ref[i] );
       vMix_c.push_back( mix_c_ref[i] );
+      for ( int k = 0; k < K; k++ ) sum_p[k] += P_ref[k][i];
+      ++n_p;
     }
 
   rs.n = (int)vH.size();
@@ -667,6 +677,10 @@ static hd_region_stats_t compute_region(
   rs.mean_mix_a  = vmean( vMix_a );
   rs.mean_mix_b  = threestate ? std::numeric_limits<double>::quiet_NaN() : vmean( vMix_b );
   rs.mean_mix_c  = vmean( vMix_c );
+  rs.mean_p.assign( K, std::numeric_limits<double>::quiet_NaN() );
+  if ( n_p > 0 )
+    for ( int k = 0; k < K; k++ )
+      rs.mean_p[k] = sum_p[k] / n_p;
 
   // Fraction with confidence below threshold
   int n_below = 0;
@@ -879,6 +893,26 @@ static void write_region( const hd_region_stats_t & rs, bool threestate )
   if ( !threestate )
     writer.value( "MEAN_MIX_B", rs.mean_mix_b );
   writer.value( "MEAN_MIX_C", rs.mean_mix_c );
+  if ( threestate )
+    {
+      if ( rs.mean_p.size() >= 3 )
+	{
+	  writer.value( "MEAN_P_W",  rs.mean_p[0] );
+	  writer.value( "MEAN_P_NR", rs.mean_p[1] );
+	  writer.value( "MEAN_P_R",  rs.mean_p[2] );
+	}
+    }
+  else
+    {
+      if ( rs.mean_p.size() >= 5 )
+	{
+	  writer.value( "MEAN_P_W",  rs.mean_p[0] );
+	  writer.value( "MEAN_P_N1", rs.mean_p[1] );
+	  writer.value( "MEAN_P_N2", rs.mean_p[2] );
+	  writer.value( "MEAN_P_N3", rs.mean_p[3] );
+	  writer.value( "MEAN_P_R",  rs.mean_p[4] );
+	}
+    }
 }
 
 static void write_trans_stats( const hd_trans_stats_t & ts )
@@ -913,9 +947,21 @@ static std::string hd_state_label( const bool threestate , const int st )
   return "?";
 }
 
+static std::vector<bool> make_stage_mask(
+    const std::vector<bool> & region_mask,
+    const std::vector<int> & argmax,
+    const int stage )
+{
+  std::vector<bool> mask( region_mask.size(), false );
+  for ( int i = 0; i < (int)region_mask.size(); i++ )
+    mask[i] = region_mask[i] && argmax[i] == stage;
+  return mask;
+}
+
 // Write HDSTATS rows for one context (global or per-stratum).
 // Emits REGION strata: ALL, STABLE, TRANS.
 // Emits STATE stratum only when do_3state is true.
+// Emits STAGE stratum for primary summary metrics only, based on argmax stage.
 static void write_hdstats(
     const hd_derived_t & der,
     const hd_trans_t & tr,
@@ -944,117 +990,157 @@ static void write_hdstats(
     const std::vector<bool> & rmask     = threestate ? region_mask3 : region_mask5;
     const std::vector<bool> & is_trans  = threestate ? tr.is_trans3  : tr.is_trans5;
     const std::vector<bool> & is_stable = threestate ? tr.is_stable3 : tr.is_stable5;
+    const std::vector<int>  & argmax    = threestate ? der.argmax3    : der.argmax5;
+    const int K = threestate ? 3 : 5;
 
-    // HDSTATS table (REGION strata)
-    {
-      hd_region_stats_t rs_all    = compute_region( der, make_all(rmask),                par, threestate );
-      hd_region_stats_t rs_stable = compute_region( der, make_stable(rmask, is_stable),  par, threestate );
-      hd_region_stats_t rs_trans  = compute_region( der, make_trans(rmask,  is_trans),   par, threestate );
-
-      writer.level( "ALL",   "REGION" );
-      write_region( rs_all, threestate );
-      writer.unlevel( "REGION" );
-
-      writer.level( "STABLE", "REGION" );
-      write_region( rs_stable, threestate );
-      writer.unlevel( "REGION" );
-
-      writer.level( "TRANS", "REGION" );
-      write_region( rs_trans, threestate );
-      writer.unlevel( "REGION" );
-
-      // Stable-vs-transition ratios (no REGION stratum)
-      if ( rs_all.valid )
+    auto emit_context = [&]( const std::vector<bool> & context_mask,
+			     const bool emit_top_level_transition_stats,
+			     const bool emit_profiles_and_pairs )
+      {
+	// HDSTATS table (REGION strata)
 	{
-	  if ( rs_stable.valid && rs_trans.valid )
+	  hd_region_stats_t rs_all    = compute_region( dat, der, make_all(context_mask),               par, threestate );
+	  hd_region_stats_t rs_stable = compute_region( dat, der, make_stable(context_mask, is_stable), par, threestate );
+	  hd_region_stats_t rs_trans  = compute_region( dat, der, make_trans(context_mask,  is_trans),  par, threestate );
+
+	  const bool ok_all    = rs_all.valid    && rs_all.n    >= par.min_samples_region;
+	  const bool ok_stable = rs_stable.valid && rs_stable.n >= par.min_samples_region;
+	  const bool ok_trans  = rs_trans.valid  && rs_trans.n  >= par.min_samples_region;
+
+	  if ( ok_all )
 	    {
-	      writer.value( "H_RATIO_TR_ST",  rs_stable.mean_H > 0
-			    ? rs_trans.mean_H / rs_stable.mean_H : std::numeric_limits<double>::quiet_NaN() );
-	      writer.value( "CONF_DIFF_TR_ST", rs_trans.mean_C - rs_stable.mean_C );
-	      writer.value( "TV_RATIO_TR_ST",  rs_stable.mean_TV > 0
-			    ? rs_trans.mean_TV / rs_stable.mean_TV : std::numeric_limits<double>::quiet_NaN() );
+	      writer.level( "ALL",   "REGION" );
+	      write_region( rs_all, threestate );
+	      writer.unlevel( "REGION" );
 	    }
-	}
-    }
 
-    // HDTRANS table (transition shape)
-    {
-      const std::vector<hd_event_t> & evts = threestate ? tr.events3 : tr.events5;
-      hd_trans_stats_t tshape;
-      hd_profile_t     profile;
-      compute_trans_shape( der, evts, rmask, dat, par, dat.Fs, threestate, tshape, profile );
-      write_trans_stats( tshape );
-
-      // HDTRANS_PROFILE table
-      if ( profile.valid )
-	{
-	  for ( int j = 0; j < (int)profile.offsets.size(); j++ )
+	  if ( ok_stable )
 	    {
-	      writer.level( profile.offsets[j], "OFFSET" );
-	      writer.value( "H",  profile.H[j] );
-	      writer.value( "C",  profile.C[j] );
-	      writer.value( "MG", profile.Mg[j] );
-	      writer.value( "TV", profile.TV[j] );
-	      writer.unlevel( "OFFSET" );
+	      writer.level( "STABLE", "REGION" );
+	      write_region( rs_stable, threestate );
+	      writer.unlevel( "REGION" );
 	    }
-	}
 
-      // Transition-pair specific outputs for definite argmax changes only.
-      std::set<std::pair<int,int>> trans_pairs;
-      for ( const auto & e : evts )
-	if ( e.from_st >= 0 && e.to_st >= 0 && e.from_st != e.to_st )
-	  trans_pairs.insert( std::make_pair( e.from_st , e.to_st ) );
-
-      for ( const auto & tp : trans_pairs )
-	{
-	  std::vector<hd_event_t> evts_pair;
-	  for ( const auto & e : evts )
-	    if ( e.from_st == tp.first && e.to_st == tp.second )
-	      evts_pair.push_back( e );
-
-	  if ( evts_pair.empty() ) continue;
-
-	  hd_trans_stats_t tshape_pair;
-	  hd_profile_t     profile_pair;
-	  compute_trans_shape( der, evts_pair, rmask, dat, par, dat.Fs, threestate, tshape_pair, profile_pair );
-
-	  const std::string trans_label = hd_state_label( threestate , tp.first ) + "->"
-	    + hd_state_label( threestate , tp.second );
-
-	  writer.level( trans_label , "TRANS" );
-	  write_trans_stats( tshape_pair );
-
-	  if ( profile_pair.valid )
+	  if ( ok_trans )
 	    {
-	      for ( int j = 0; j < (int)profile_pair.offsets.size(); j++ )
+	      writer.level( "TRANS", "REGION" );
+	      write_region( rs_trans, threestate );
+	      writer.unlevel( "REGION" );
+	    }
+
+	  // Stable-vs-transition ratios (no REGION stratum)
+	  if ( emit_top_level_transition_stats && ok_all )
+	    {
+	      if ( ok_stable && ok_trans )
 		{
-		  writer.level( profile_pair.offsets[j], "OFFSET" );
-		  writer.value( "H",  profile_pair.H[j] );
-		  writer.value( "C",  profile_pair.C[j] );
-		  writer.value( "MG", profile_pair.Mg[j] );
-		  writer.value( "TV", profile_pair.TV[j] );
+		  writer.value( "H_RATIO_TR_ST",  rs_stable.mean_H > 0
+				? rs_trans.mean_H / rs_stable.mean_H : std::numeric_limits<double>::quiet_NaN() );
+		  writer.value( "CONF_DIFF_TR_ST", rs_trans.mean_C - rs_stable.mean_C );
+		  writer.value( "TV_RATIO_TR_ST",  rs_stable.mean_TV > 0
+				? rs_trans.mean_TV / rs_stable.mean_TV : std::numeric_limits<double>::quiet_NaN() );
+		}
+	    }
+	}
 
-		  if ( threestate )
-		    {
-		      writer.value( "P_W",  profile_pair.P[0][j] );
-		      writer.value( "P_NR", profile_pair.P[1][j] );
-		      writer.value( "P_R",  profile_pair.P[2][j] );
-		    }
-		  else
-		    {
-		      writer.value( "P_W",  profile_pair.P[0][j] );
-		      writer.value( "P_N1", profile_pair.P[1][j] );
-		      writer.value( "P_N2", profile_pair.P[2][j] );
-		      writer.value( "P_N3", profile_pair.P[3][j] );
-		      writer.value( "P_R",  profile_pair.P[4][j] );
-		    }
+	// HDTRANS table (transition shape)
+	{
+	  const std::vector<hd_event_t> & evts = threestate ? tr.events3 : tr.events5;
+	  hd_trans_stats_t tshape;
+	  hd_profile_t     profile;
+	  compute_trans_shape( der, evts, context_mask, dat, par, dat.Fs, threestate, tshape, profile );
+	  if ( emit_top_level_transition_stats )
+	    write_trans_stats( tshape );
+
+	  if ( ! emit_profiles_and_pairs ) return;
+
+	  // HDTRANS_PROFILE table
+	  if ( profile.valid )
+	    {
+	      for ( int j = 0; j < (int)profile.offsets.size(); j++ )
+		{
+		  writer.level( profile.offsets[j], "OFFSET" );
+		  writer.value( "H",  profile.H[j] );
+		  writer.value( "C",  profile.C[j] );
+		  writer.value( "MG", profile.Mg[j] );
+		  writer.value( "TV", profile.TV[j] );
 		  writer.unlevel( "OFFSET" );
 		}
 	    }
 
-	  writer.unlevel( "TRANS" );
+	  // Transition-pair specific outputs for definite argmax changes only.
+	  std::set<std::pair<int,int>> trans_pairs;
+	  for ( const auto & e : evts )
+	    if ( e.from_st >= 0 && e.to_st >= 0 && e.from_st != e.to_st )
+	      trans_pairs.insert( std::make_pair( e.from_st , e.to_st ) );
+
+	  for ( const auto & tp : trans_pairs )
+	    {
+	      std::vector<hd_event_t> evts_pair;
+	      for ( const auto & e : evts )
+		if ( e.from_st == tp.first && e.to_st == tp.second )
+		  evts_pair.push_back( e );
+
+	      if ( evts_pair.empty() ) continue;
+
+	      hd_trans_stats_t tshape_pair;
+	      hd_profile_t     profile_pair;
+	      compute_trans_shape( der, evts_pair, context_mask, dat, par, dat.Fs, threestate, tshape_pair, profile_pair );
+
+	      const std::string trans_label = hd_state_label( threestate , tp.first ) + "->"
+		+ hd_state_label( threestate , tp.second );
+
+	      writer.level( trans_label , "TRANS" );
+	      write_trans_stats( tshape_pair );
+
+	      if ( profile_pair.valid )
+		{
+		  for ( int j = 0; j < (int)profile_pair.offsets.size(); j++ )
+		    {
+		      writer.level( profile_pair.offsets[j], "OFFSET" );
+		      writer.value( "H",  profile_pair.H[j] );
+		      writer.value( "C",  profile_pair.C[j] );
+		      writer.value( "MG", profile_pair.Mg[j] );
+		      writer.value( "TV", profile_pair.TV[j] );
+
+		      if ( threestate )
+			{
+			  writer.value( "P_W",  profile_pair.P[0][j] );
+			  writer.value( "P_NR", profile_pair.P[1][j] );
+			  writer.value( "P_R",  profile_pair.P[2][j] );
+			}
+		      else
+			{
+			  writer.value( "P_W",  profile_pair.P[0][j] );
+			  writer.value( "P_N1", profile_pair.P[1][j] );
+			  writer.value( "P_N2", profile_pair.P[2][j] );
+			  writer.value( "P_N3", profile_pair.P[3][j] );
+			  writer.value( "P_R",  profile_pair.P[4][j] );
+			}
+		      writer.unlevel( "OFFSET" );
+		    }
+		}
+
+	      writer.unlevel( "TRANS" );
+	    }
 	}
-    }
+      };
+
+    // Overall context output remains unchanged and includes detailed transition profiles.
+    emit_context( rmask, true, true );
+
+    // Stage-conditioned output is REGION-only; do not emit separate top-level
+    // transition or ratio summaries under STAGE.
+    for ( int st = 0; st < K; st++ )
+      {
+	const std::vector<bool> stage_mask = make_stage_mask( rmask, argmax, st );
+	bool any = false;
+	for ( int i = 0; i < (int)stage_mask.size(); i++ )
+	  if ( stage_mask[i] ) { any = true; break; }
+	if ( ! any ) continue;
+	writer.level( hd_state_label( threestate, st ), "STAGE" );
+	emit_context( stage_mask, false, false );
+	writer.unlevel( "STAGE" );
+      }
   };
 
   if ( par.do_3state )
@@ -1100,6 +1186,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
   par.annot_name      = param.has( "annot"     ) ? param.value( "annot" )              : "";
   par.verbose         = param.yesno( "verbose" );
   par.min_events_profile = param.has( "min-events" ) ? param.requires_int( "min-events" ) : 3;
+  par.min_samples_region = param.has( "min-samples" ) ? param.requires_int( "min-samples" ) : 20;
 
   std::string method_str = param.has( "transition" ) ? param.value( "transition" ) : "motion";
   if      ( method_str == "hard"   ) par.method = HD_HARD;

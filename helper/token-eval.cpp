@@ -1431,6 +1431,36 @@ void Eval::bind( const std::map<std::string,std::vector<double> > & inputs ,
 
 
 
+void Eval::bind( const instance_t & m , instance_t * outputs )
+{
+  // bind each field in a single instance directly as a bare scalar variable (no class-name prefix).
+  // used by META expr= to evaluate per-instance expressions.
+
+  reset_symbols();
+
+  std::map<std::string,std::set<Token*> >::iterator i = vartb.begin();
+  while ( i != vartb.end() )
+    {
+      const std::string & var_name = i->first;
+      std::set<Token*>::iterator tok = i->second.begin();
+      while ( tok != i->second.end() )
+	{
+	  avar_t * a = m.find( var_name );
+	  if      ( a == NULL )                           (*tok)->set();
+	  else if ( a->atype() == globals::A_INT_T  )     (*tok)->set( a->int_value()    );
+	  else if ( a->atype() == globals::A_DBL_T  )     (*tok)->set( a->double_value() );
+	  else if ( a->atype() == globals::A_TXT_T  )     (*tok)->set( a->text_value()   );
+	  else if ( a->atype() == globals::A_BOOL_T )     (*tok)->set( a->bool_value()   );
+	  else                                            (*tok)->set();
+	  ++tok;
+	}
+      ++i;
+    }
+
+  func.attach( outputs );
+}
+
+
 void Eval::bind( const Token * ntok )
 {
 

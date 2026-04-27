@@ -1003,6 +1003,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "MS" ) )           { fnd = true; proc_microstates( edf , param(c) ); }
       if ( (!fnd) && is( c, "ASYMM" ) )        { fnd = true; proc_asymm( edf , param(c) ); }
       if ( (!fnd) && is( c, "TLOCK" ) )        { fnd = true; proc_tlock( edf , param(c) ); }
+      if ( (!fnd) && is( c, "WAVEFORMS" ) )    { fnd = true; proc_waveform( edf , param(c) ); }
       if ( (!fnd) && is( c, "TCLST" ) )        { fnd = true; proc_tclst( edf , param(c) ); }
       if ( (!fnd) && is( c, "PERI" ) )         { fnd = true; proc_peri( edf , param(c) ); }
       if ( (!fnd) && is( c, "PEAKS" ) )        { fnd = true; proc_peaks( edf , param(c) ); } 
@@ -2260,6 +2261,12 @@ void proc_tlock( edf_t & edf  , param_t & param )
 {
   // get mean time-locked value of one signal against a set of annotations (time-points)
   dsptools::tlock( edf , param );
+}
+
+// WAVEFORMS
+void proc_waveform( edf_t & edf  , param_t & param )
+{
+  dsptools::waveform( edf , param );
 }
 
 // TCLST

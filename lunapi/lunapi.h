@@ -215,6 +215,33 @@ public:
 
   rtables_return_t eval( const std::string & );
 
+  // Run --gpa-prep (prep_mode=true) or --gpa (prep_mode=false) without an EDF.
+  // opts maps Luna parameter names to values; use "" as value for flag-only params.
+  // Returns { rtables_return_t, stdout_capture } where stdout_capture holds any
+  // tab-delimited manifest / dump output written to std::cout by the GPA code.
+  std::pair<rtables_return_t, std::string>
+    run_gpa( const std::map<std::string,std::string> & opts, bool prep_mode );
+
+  // GPA matrix cache — populated after each non-prep run_gpa(); released on clear.
+  // Returns (ids, x_vals, y_vals) for rows where both variables are non-NaN.
+  bool gpa_has_cache() const { return _gpa_cache_valid; }
+  void gpa_clear_cache();
+
+  // Raw values for a pair of variables (rows where both are non-NaN).
+  std::tuple<std::vector<std::string>,
+             std::vector<double>,
+             std::vector<double>>
+    gpa_get_xy( const std::string & xvar, const std::string & yvar ) const;
+
+  // Partial residuals: regress Z out of X and Y, return residuals.
+  // Mirrors the Freedman-Lane Rz projection in linmod_t::run().
+  std::tuple<std::vector<std::string>,
+             std::vector<double>,
+             std::vector<double>>
+    gpa_get_xy_partial( const std::string & xvar,
+                        const std::string & yvar,
+                        const std::vector<std::string> & zvars ) const;
+
   //
   // Command descriptions/helpers
   //
@@ -233,11 +260,17 @@ public:
 
   
 private:
-  
+
   std::map<std::string,std::string> edfs;
   std::map<std::string,std::set<std::string> > annots;
   std::map<int,std::string> n2id;
   std::map<std::string,int> id2n;
+
+  // GPA matrix cache (populated after each non-prep run_gpa)
+  bool                     _gpa_cache_valid = false;
+  std::vector<std::string> _gpa_ids;
+  std::vector<std::string> _gpa_vars;
+  Eigen::MatrixXd          _gpa_X;
 
 };
 

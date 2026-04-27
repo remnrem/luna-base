@@ -79,8 +79,11 @@ struct Eval {
 	     bool reset = true );
 
   // if passing signal data
-  void bind( const std::map<std::string,std::vector<double> > & inputs , 
-	     instance_t * outputs ); 
+  void bind( const std::map<std::string,std::vector<double> > & inputs ,
+	     instance_t * outputs );
+
+  // if passing a single instance's metadata as plain scalar variables (no class-name prefix)
+  void bind( const instance_t & m , instance_t * outputs );
 
   void bind( const Token * );
 

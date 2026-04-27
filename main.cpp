@@ -1461,6 +1461,7 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
   // primary
   clmap[ "--validate" ]     = PROC_VALIDATE ;
   clmap[ "--build" ]        = PROC_BUILD;
+  clmap[ "--waveforms" ]    = PROC_WAVEFORM_SUMMARY;
   clmap[ "--repath" ]       = PROC_REPATH;
   clmap[ "--merge" ]        = PROC_MERGE;
   clmap[ "--bind" ]         = PROC_BIND;
@@ -2114,6 +2115,27 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       Helper::validate_slist( param );
 
       writer.unlevel( "_VALIDATE" );
+      writer.commit();
+      std::exit(0);
+    }
+
+
+  //
+  // --waveforms
+  //
+
+  if ( cmdline == PROC_WAVEFORM_SUMMARY )
+    {
+      param_t param;
+      build_param( &param, argc, argv, param_from_command_line );
+      writer.begin();
+      writer.id( "." , "." );
+      writer.cmd( "WAVEFORMS" , 1 , "" );
+      writer.level( "WAVEFORMS", "_WAVEFORMS" );
+
+      dsptools::waveform_summary( param );
+
+      writer.unlevel( "_WAVEFORMS" );
       writer.commit();
       std::exit(0);
     }

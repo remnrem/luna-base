@@ -1033,6 +1033,13 @@ void cmddefs_t::init()
   add_verb( "META" ,
 	    "META adds or updates per-instance meta-data fields on existing annotations.\n"
 	    "\n"
+	    "Modes:\n"
+	    "  dur               : store annotation duration in seconds\n"
+	    "  sig (with mean/min/max/range) : store a signal statistic over the annotation interval\n"
+	    "  other (with overlap/count/nearest/...) : relate to other annotation classes\n"
+	    "  expr=#...#        : evaluate an expression using existing metadata fields as variables\n"
+	    "  other+look+src-md : copy a metadata field from a nearby annotation (next/prev/overlap/nearest)\n"
+	    "\n"
 	    "Use it when annotations need extra attached values for later tabulation, filtering or export." );
   add_param( "META" , "annot" , "spindle" , "Annotations to update" );
   add_param( "META" , "md" , "DUR" , "Metadata field name to set" );
@@ -1055,6 +1062,10 @@ void cmddefs_t::init()
   add_param( "META" , "w" , "0.5" , "Expand the interval symmetrically by this many seconds before evaluating" );
   add_param( "META" , "w-left" , "0.5" , "Expand the interval left by this many seconds" );
   add_param( "META" , "w-right" , "0.5" , "Expand the interval right by this many seconds" );
+  add_param( "META" , "expr" , "#conf*dur#" , "Expression evaluated per instance using existing metadata fields as variables (also: dur)" );
+  add_param( "META" , "src-md" , "spo2_nadir" , "Copy this metadata field from a nearby annotation (requires other= and look=)" );
+  add_param( "META" , "look" , "next" , "How to find the nearby annotation: next, prev, overlap, or nearest" );
+  add_param( "META" , "prefer" , "longest" , "Tie-break when multiple candidates match: first, last, or longest (default: longest for overlap, first otherwise)" );
 
   //
   // ESPAN
@@ -4331,6 +4342,7 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "lag"        , "30"     , "Lag for longer-lag TV metric (seconds)" );
   add_param( "HDSTATS" , "stable-min" , "60"     , "Min seconds from any transition to qualify as stable-core" );
   add_param( "HDSTATS" , "conf-th"    , "0.8"    , "Confidence threshold for FRAC_C_LT metric" );
+  add_param( "HDSTATS" , "min-samples" , "20"    , "Minimum samples required to emit REGION-based summaries for any context/stratum" );
   add_param( "HDSTATS" , "annot"      , ""       , "Annotation class to stratify output by" );
   add_param( "HDSTATS" , "min-events" , "3"      , "Minimum events required to emit aligned transition profile" );
   add_param( "HDSTATS" , "verbose"    , ""       , "Emit per-sample HDSIG time-series table" );
@@ -4338,6 +4350,10 @@ void cmddefs_t::init()
   add_table( "HDSTATS" , "REGION"           , "Mixedness and instability by region (ALL/STABLE/TRANS)" );
   add_table( "HDSTATS" , "REGION,ANNOT"     , "Same, stratified by annotation level" );
   add_table( "HDSTATS" , "REGION,STATE"     , "Same, by state representation (5/3); only with 3state option" );
+  add_table( "HDSTATS" , "REGION,STAGE"     , "Same, stratified by most-likely stage" );
+  add_table( "HDSTATS" , "REGION,ANNOT,STAGE" , "Same, stratified by annotation level and most-likely stage" );
+  add_table( "HDSTATS" , "REGION,STATE,STAGE" , "Same, stratified by state representation and most-likely stage" );
+  add_table( "HDSTATS" , "REGION,ANNOT,STATE,STAGE" , "Same, stratified by annotation level, state representation, and most-likely stage" );
   add_var(   "HDSTATS" , "REGION"           , "N"           , "Number of samples in region" );
   add_var(   "HDSTATS" , "REGION"           , "MEAN_H"      , "Mean entropy" );
   add_var(   "HDSTATS" , "REGION"           , "SD_H"        , "SD entropy" );
@@ -6055,6 +6071,52 @@ void cmddefs_t::init()
   add_var( "TLOCK" , "CH,SEC" , "MD" , "Median aligned signal value" );
 
   //
+  // WAVEFORMS
+  //
+
+  add_cmd( "interval" , "WAVEFORMS" , "Dump annotation-defined waveforms" );
+  add_url( "WAVEFORMS" , "intervals/#waveforms" );
+  add_verb( "WAVEFORMS" ,
+            "WAVEFORMS writes raw annotation-defined waveforms to a binary .lwf shard.\n"
+            "Each selected annotation instance becomes one waveform event. The dumped\n"
+            "interval is the original annotation span, optionally expanded left and/or\n"
+            "right by a fixed number of seconds. Time alignment is stored as metadata\n"
+            "using the annotation start, midpoint or stop; the raw samples remain in\n"
+            "their original time units.\n"
+            "\n"
+            "This command is intended to sit naturally in the normal Luna pipeline,\n"
+            "for example after MASK/RE, filtering or annotation remapping. One call\n"
+            "writes one .lwf file for the current individual; repeated calls can emit\n"
+            "multiple files for the same EDF into a shared folder." );
+  add_param( "WAVEFORMS" , "sig" , "C3,C4" , "One or more signals to dump" );
+  add_param( "WAVEFORMS" , "annot" , "SPINDLE,SO" , "One or more annotation classes defining the waveform events" );
+  add_param( "WAVEFORMS" , "dir" , "waves/" , "Output folder for .lwf files" );
+  add_param( "WAVEFORMS" , "tag" , "spindle-v1" , "User-defined tag stored in the file and used in auto-generated filenames" );
+  add_param( "WAVEFORMS" , "align" , "mid" , "Anchor to store for each waveform: start, mid or stop" );
+  add_param( "WAVEFORMS" , "require" , "full" , "Retention rule after MASK/RE: full requires the entire waveform interval be retained; any allows partial overlap" );
+  add_param( "WAVEFORMS" , "w" , "0.5" , "Symmetric flank in seconds to add on both sides of each annotation" );
+  add_param( "WAVEFORMS" , "w-left" , "0.25" , "Additional seconds to extend left of the annotation" );
+  add_param( "WAVEFORMS" , "w-right" , "0.25" , "Additional seconds to extend right of the annotation" );
+
+  add_table( "WAVEFORMS" , "FILE" , "Per-file waveform dump summary" );
+  add_var( "WAVEFORMS" , "FILE" , "ID" , "EDF/individual ID" );
+  add_var( "WAVEFORMS" , "FILE" , "EDF" , "Source EDF filename" );
+  add_var( "WAVEFORMS" , "FILE" , "TAG" , "User-defined tag stored in the .lwf file" );
+  add_var( "WAVEFORMS" , "FILE" , "ALIGN" , "Stored anchor mode" );
+  add_var( "WAVEFORMS" , "FILE" , "START_DATE" , "EDF start date" );
+  add_var( "WAVEFORMS" , "FILE" , "START_TIME" , "EDF start time" );
+  add_var( "WAVEFORMS" , "FILE" , "N_ANNOTS" , "Number of defining annotation classes stored in the file header" );
+  add_var( "WAVEFORMS" , "FILE" , "ANNOTS" , "Comma-delimited defining annotation classes" );
+  add_var( "WAVEFORMS" , "FILE" , "N_WAVES" , "Number of waveform events dumped" );
+  add_var( "WAVEFORMS" , "FILE" , "N_CH" , "Number of dumped channels" );
+
+  add_table( "WAVEFORMS" , "FILE,CH" , "Per-file channel summary for dumped waveforms" );
+  add_var( "WAVEFORMS" , "FILE,CH" , "SR" , "Channel sample rate" );
+  add_var( "WAVEFORMS" , "FILE,CH" , "UNIT" , "Physical units from the EDF header" );
+  add_var( "WAVEFORMS" , "FILE,CH" , "MIN_SAMPLES" , "Minimum samples per waveform for this channel" );
+  add_var( "WAVEFORMS" , "FILE,CH" , "MAX_SAMPLES" , "Maximum samples per waveform for this channel" );
+
+  //
   // PEAKS
   //
 
@@ -7215,6 +7277,43 @@ void cmddefs_t::init()
   add_table( "--validate" , "" , "Primary VALIDATE output" );
   add_var( "--validate" , "" , "EDF" , "Valid/invalid EDF (1=valid)" );
   add_var( "--validate" , "" , "ANNOTS" , "Valid/invalid annotations (1=valid)" );
+
+  //
+  // --waveforms
+  //
+
+  add_cmd( "helpers" , "--waveforms" , "Summarize a folder of dumped waveform shards" );
+  add_verb( "--waveforms" ,
+            "--waveforms scans one or more folders of .lwf files and reports file-level "
+            "and channel-level metadata without requiring a sample list or EDF input. "
+            "It is intended as the standalone inspection utility for waveform datasets, "
+            "similar in spirit to project-level helper modes such as --build.\n\n"
+            "Use dir= to point at one folder, or a comma-delimited list of folders, "
+            "containing waveform shards previously written by WAVEFORMS. Add recur "
+            "to scan those folder(s) recursively." );
+  add_param( "--waveforms" , "dir" , "dir=waves/,waves2/" , "Folder or comma-delimited list of folders containing .lwf files" );
+  add_param( "--waveforms" , "recur" , "" , "Recursively scan the specified folder(s) for .lwf files" );
+
+  add_table( "--waveforms" , "FILE" , "Per-file waveform shard summary" );
+  add_var( "--waveforms" , "FILE" , "ID" , "EDF/individual ID" );
+  add_var( "--waveforms" , "FILE" , "EDF" , "Source EDF filename stored in the shard" );
+  add_var( "--waveforms" , "FILE" , "TAG" , "User-defined tag stored in the shard" );
+  add_var( "--waveforms" , "FILE" , "ALIGN" , "Stored anchor mode" );
+  add_var( "--waveforms" , "FILE" , "START_DATE" , "EDF start date" );
+  add_var( "--waveforms" , "FILE" , "START_TIME" , "EDF start time" );
+  add_var( "--waveforms" , "FILE" , "N_ANNOTS" , "Number of defining annotation classes stored in the file header" );
+  add_var( "--waveforms" , "FILE" , "ANNOTS" , "Comma-delimited defining annotation classes" );
+  add_var( "--waveforms" , "FILE" , "N_WAVES" , "Number of waveform events in the shard" );
+  add_var( "--waveforms" , "FILE" , "N_CH" , "Number of stored channels" );
+
+  add_table( "--waveforms" , "FILE,CH" , "Per-file channel summary for waveform shards" );
+  add_var( "--waveforms" , "FILE,CH" , "SR" , "Channel sample rate" );
+  add_var( "--waveforms" , "FILE,CH" , "UNIT" , "Physical units from the EDF header" );
+  add_var( "--waveforms" , "FILE,CH" , "MIN_SAMPLES" , "Minimum samples per waveform for this channel" );
+  add_var( "--waveforms" , "FILE,CH" , "MAX_SAMPLES" , "Maximum samples per waveform for this channel" );
+
+  add_table( "--waveforms" , "ANNOT,CH,LWF_ID,TAG" , "Aggregated waveform event counts across scanned shards" );
+  add_var( "--waveforms" , "ANNOT,CH,LWF_ID,TAG" , "N" , "Number of waveform events for this annotation/channel/ID/tag combination" );
 
   //
   // --repath

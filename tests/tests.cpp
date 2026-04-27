@@ -1281,6 +1281,29 @@ static void test_write( lunapi_t * eng,
     std::remove( (tmp + ".annot").c_str() );
   } catch(std::exception & e) { record(R,"write/annot-round-trip",false,e.what(),V); }
 
+  // J2b — write-annots annot-dir: create nested folder and write <ID>.annot
+  try {
+    const std::string tmp = temp_base_path("test_annot_dir");
+    const std::string outdir = tmp + "/nested/annots";
+    const std::string outfile = outdir + "/T1.annot";
+    auto p = make_sine_inst(eng);
+    std::vector<std::tuple<double,double>> ivs;
+    for (int i=0; i<4; i++) ivs.push_back({i*30.0, (i+1)*30.0});
+    p->insert_annotation("DirRoundTrip", ivs);
+    p->eval( std::string("WRITE-ANNOTS annot-dir=") + outdir );
+
+    auto p2 = eng->inst("T_ra_dir");
+    p2->empty_edf("T_ra_dir", 720, 30, "01.01.85","22.00.00");
+    p2->attach_annot( outfile );
+    auto fa = p2->fetch_annots({"DirRoundTrip"});
+    const bool exists = Helper::fileExists( outfile );
+    bool pass = exists && (int)fa.size() == 4;
+    std::ostringstream m;
+    m << "exists=" << exists << " re-fetched " << fa.size() << " intervals (exp=4)";
+    record(R,"write/annot-dir-round-trip", pass, m.str(), V);
+    std::remove( outfile.c_str() );
+  } catch(std::exception & e) { record(R,"write/annot-dir-round-trip",false,e.what(),V); }
+
   // J3 — STATS mean/SD preserved through EDF write/read
   try {
     const std::string tmp = temp_base_path("test_stats");

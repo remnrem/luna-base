@@ -30,6 +30,7 @@
 #include "param.h"
 #include <stdexcept>
 #include <memory>
+#include <sstream>
 
 extern logger_t logger;
 
@@ -841,6 +842,197 @@ rtables_return_t lunapi_t::results() const
   return rtables.data() ;
 }
 
+
+std::pair<rtables_return_t, std::string>
+lunapi_t::run_gpa( const std::map<std::string,std::string> & opts, bool prep_mode )
+{
+  // Build param_t from the Python-supplied options dict.
+  // An empty value string means a flag-only parameter (e.g. "manifest", "stats").
+  param_t param;
+  for (const auto & kv : opts)
+    param.add( kv.first , kv.second );
+
+  // Redirect std::cout so that GPA's manifest/dump/make-specs text output
+  // (which goes to std::cout, not the writer) is captured and returned to Python.
+  std::ostringstream stdout_buf;
+  std::streambuf * old_cout = std::cout.rdbuf( stdout_buf.rdbuf() );
+
+  // Wire the writer to an in-memory retval accumulator so that association
+  // results are captured without touching any on-disk database.
+  retval_t accumulator;
+  writer.clear();
+  writer.set_types();
+  writer.use_retval( &accumulator );
+  writer.begin();
+  writer.id( "." , "." );
+  writer.cmd( "GPA" , 1 , "" );
+  writer.level( "GPA" , "_GPA" );
+
+  try {
+    gpa_t gpa( param , prep_mode );
+    // Capture the QC'd analysis matrix before gpa is destroyed.
+    // Only for non-prep, non-dump runs that actually built a matrix.
+    if ( !prep_mode && !gpa.get_ids().empty() )
+      {
+	_gpa_ids          = gpa.get_ids();
+	_gpa_vars         = gpa.get_vars();
+	_gpa_X            = gpa.get_X();
+	_gpa_cache_valid  = true;
+      }
+  }
+  catch (...) {
+    // Restore state before propagating; the bail_function already converted
+    // Helper::halt() to a std::runtime_error so this is a clean C++ exception.
+    std::cout.rdbuf( old_cout );
+    try { writer.unlevel( "_GPA" ); } catch (...) {}
+    writer.use_retval( NULL );
+    writer.clear();
+    writer.set_types();
+    throw;
+  }
+
+  writer.unlevel( "_GPA" );
+  writer.commit();
+
+  std::cout.rdbuf( old_cout );
+  std::string captured = stdout_buf.str();
+
+  rtables = rtables_t( accumulator );
+  writer.use_retval( NULL );
+  writer.clear();
+  writer.set_types();
+
+  return { rtables.data() , captured };
+}
+
+
+void lunapi_t::gpa_clear_cache()
+{
+  _gpa_cache_valid = false;
+  _gpa_ids.clear();
+  _gpa_vars.clear();
+  _gpa_X.resize(0, 0);
+}
+
+
+std::tuple<std::vector<std::string>,
+           std::vector<double>,
+           std::vector<double>>
+lunapi_t::gpa_get_xy( const std::string & xvar, const std::string & yvar ) const
+{
+  std::vector<std::string> ids_out;
+  std::vector<double>      x_out, y_out;
+
+  if ( !_gpa_cache_valid )
+    Helper::halt( "gpa_get_xy: no cached GPA matrix (run gpa_run first)" );
+
+  // locate column indices
+  int xi = -1, yi = -1;
+  for (int j = 0; j < (int)_gpa_vars.size(); j++)
+    {
+      if ( _gpa_vars[j] == xvar ) xi = j;
+      if ( _gpa_vars[j] == yvar ) yi = j;
+    }
+  if ( xi < 0 ) Helper::halt( "gpa_get_xy: variable not found in cache: " + xvar );
+  if ( yi < 0 ) Helper::halt( "gpa_get_xy: variable not found in cache: " + yvar );
+
+  const int ni = _gpa_X.rows();
+  for (int i = 0; i < ni; i++)
+    {
+      const double xv = _gpa_X(i, xi);
+      const double yv = _gpa_X(i, yi);
+      if ( std::isnan(xv) || std::isnan(yv) ) continue;
+      ids_out.push_back( _gpa_ids[i] );
+      x_out.push_back( xv );
+      y_out.push_back( yv );
+    }
+
+  return { ids_out, x_out, y_out };
+}
+
+
+std::tuple<std::vector<std::string>,
+           std::vector<double>,
+           std::vector<double>>
+lunapi_t::gpa_get_xy_partial( const std::string & xvar,
+                               const std::string & yvar,
+                               const std::vector<std::string> & zvars ) const
+{
+  std::vector<std::string> ids_out;
+  std::vector<double>      x_out, y_out;
+
+  if ( !_gpa_cache_valid )
+    Helper::halt( "gpa_get_xy_partial: no cached GPA matrix (run gpa_run first)" );
+
+  if ( zvars.empty() )
+    return gpa_get_xy( xvar, yvar );
+
+  // locate column indices
+  int xi = -1, yi = -1;
+  std::vector<int> zis( zvars.size(), -1 );
+
+  for (int j = 0; j < (int)_gpa_vars.size(); j++)
+    {
+      if ( _gpa_vars[j] == xvar ) xi = j;
+      if ( _gpa_vars[j] == yvar ) yi = j;
+      for (int k = 0; k < (int)zvars.size(); k++)
+        if ( _gpa_vars[j] == zvars[k] ) zis[k] = j;
+    }
+  if ( xi < 0 ) Helper::halt( "gpa_get_xy_partial: variable not found: " + xvar );
+  if ( yi < 0 ) Helper::halt( "gpa_get_xy_partial: variable not found: " + yvar );
+  for (int k = 0; k < (int)zvars.size(); k++)
+    if ( zis[k] < 0 ) Helper::halt( "gpa_get_xy_partial: covariate not found: " + zvars[k] );
+
+  // pass 1: find complete-case rows (non-NaN in x, y, and all z)
+  const int ni = _gpa_X.rows();
+  const int nz = (int)zvars.size();
+  std::vector<int> rows;
+  rows.reserve( ni );
+  for (int i = 0; i < ni; i++)
+    {
+      if ( std::isnan( _gpa_X(i, xi) ) || std::isnan( _gpa_X(i, yi) ) ) continue;
+      bool ok = true;
+      for (int k = 0; k < nz && ok; k++)
+        if ( std::isnan( _gpa_X(i, zis[k]) ) ) ok = false;
+      if ( ok ) rows.push_back( i );
+    }
+
+  const int n = (int)rows.size();
+  if ( n == 0 ) return { ids_out, x_out, y_out };
+
+  // pass 2: build sub-vectors and Z matrix [1 | z1 | z2 | ...]
+  Eigen::VectorXd xv(n), yv(n);
+  Eigen::MatrixXd ZZ( n, 1 + nz );
+  ZZ.col(0) = Eigen::VectorXd::Ones(n);
+
+  for (int r = 0; r < n; r++)
+    {
+      const int i = rows[r];
+      xv[r] = _gpa_X(i, xi);
+      yv[r] = _gpa_X(i, yi);
+      for (int k = 0; k < nz; k++)
+        ZZ(r, k+1) = _gpa_X(i, zis[k]);
+    }
+
+  // Rz = I - ZZ (ZZ'ZZ)^{-1} ZZ'  (same projection as linmod_t::run)
+  Eigen::CompleteOrthogonalDecomposition<Eigen::MatrixXd> cqr( ZZ );
+  Eigen::MatrixXd Rz = Eigen::MatrixXd::Identity(n, n) - ZZ * cqr.pseudoInverse();
+
+  Eigen::VectorXd xr = Rz * xv;
+  Eigen::VectorXd yr = Rz * yv;
+
+  ids_out.reserve(n);
+  x_out.reserve(n);
+  y_out.reserve(n);
+  for (int r = 0; r < n; r++)
+    {
+      ids_out.push_back( _gpa_ids[ rows[r] ] );
+      x_out.push_back( xr[r] );
+      y_out.push_back( yr[r] );
+    }
+
+  return { ids_out, x_out, y_out };
+}
 
 
 //

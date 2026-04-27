@@ -72,6 +72,7 @@ SRCS = globals.cpp eval.cpp param.cpp cmddefs.cpp optdefs.cpp dummy.cpp \
        $(wildcard dsp/libsamplerate/*.cpp) \
        $(wildcard pops/*.cpp) \
        $(wildcard assoc/*.cpp) \
+       $(wildcard dumper/*.cpp) \
        $(wildcard lgbm/*.cpp) \
        $(wildcard web/*.cpp) \
        $(wildcard models/*.cpp) \

@@ -9,4 +9,4 @@ efficient handling, filtering and manipulation of data, a range of
 spectral analysis routines and spindle detection methods, and
 visualization of raw data.
 
-See the [documentation site](http://zzz.bwh.harvard.edu/luna/) for more details.
+See the [documentation site](http://zzz.nyspi.org/luna/) for more details.
