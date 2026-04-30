@@ -634,7 +634,8 @@ void edf_t::terse_summary( param_t & param )
 
 
 std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , edfz2_t * edfz2,
-				  const std::set<std::string> * inp_signals )
+				  const std::set<std::string> * inp_signals ,
+				  const std::set<std::string> * inp_signals_drop )
 {
 
   // file  --> implies uncompressed EDF
@@ -806,8 +807,8 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , edfz2_t * edfz2,
 
 
   // current limitation
-  if ( edfplus && inp_signals != NULL )
-    Helper::halt( "currently, cannot specify a subset of channels ('sig') with EDF+ (or using force-edf=T)" );
+  if ( edfplus && ( inp_signals != NULL || inp_signals_drop != NULL ) )
+    Helper::halt( "currently, cannot specify attach-time channel filters ('sig'/'drop') with EDF+ (or using force-edf=T)" );
   
   // Number and direction of records/signals  
 
@@ -948,6 +949,13 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , edfz2_t * edfz2,
       // if inp_signals is defined, it will always include the annotation channel label
 
       bool include = inp_signals == NULL || signal_list_t::match( inp_signals , &l , slabels );
+
+      if ( include && inp_signals_drop != NULL )
+	{
+	  std::string drop_label = tlabels[s];
+	  if ( signal_list_t::match( inp_signals_drop , &drop_label , slabels ) )
+	    include = false;
+	}
 	    
       // imatch allows for case-insensitive match of 'edf annotation*'  (i.e. 14 chars)
       bool annotation = Helper::imatch( l , "EDF Annotation" , 14 ) ;
@@ -1891,6 +1899,15 @@ bool edf_t::attach( const std::string & f ,
 		    const std::set<std::string> * inp_signals ,
 		    const bool silent )
 {
+  return attach( f , i , inp_signals , NULL , silent );
+}
+
+bool edf_t::attach( const std::string & f ,
+		    const std::string & i ,
+		    const std::set<std::string> * inp_signals ,
+		    const std::set<std::string> * inp_signals_drop ,
+		    const bool silent )
+{
 
   //
   // Store filename and ID
@@ -1988,7 +2005,7 @@ bool edf_t::attach( const std::string & f ,
   // signal codes store so we know how to read records
   //
 
-  inp_signals_n = header.read( file , edfz , edfz2, inp_signals );
+  inp_signals_n = header.read( file , edfz , edfz2, inp_signals , inp_signals_drop );
 
 
   //

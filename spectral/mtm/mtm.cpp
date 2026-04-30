@@ -73,13 +73,13 @@ void mtm_t::store_tapers( const int seg_size )
 }
 
 
-void mtm_t::apply( const std::vector<double> * d , const int fs , 
+void mtm_t::apply( const std::vector<double> * d , const double fs , 
 		   const int seg_size , const int seg_step , bool verbose , mtm_t * precomputed )
 {
 
   const bool allsegs = restrict.size() == 0 ;
   
-  const double dt = 1.0/(double)fs;
+  const double dt = 1.0 / fs;
 
   const int total_npoints = d->size();
   
@@ -280,6 +280,7 @@ void mtm_t::apply( const std::vector<double> * d , const int fs ,
 	    espec[sn][i] = 10 * log10( raw_espec[sn][i] );
 	  else
 	    espec[sn][i] = raw_espec[sn][i] ;	  
+
 	}  
 
       //
@@ -683,7 +684,13 @@ void  mtm_t::do_mtap_spec( real_FFT * fftseg ,
        std::vector<double> dcf( num_freq_tap , 0 );
        std::vector<double> degf( num_freqs , 0 );
        
-       adwait( &(sqr_spec)[0], &(dcf)[0], lam.data(), nwin, num_freqs, &(amu)[0], &(degf)[0], avar );
+       if ( avar <= 0 || ! std::isfinite( avar ) )
+	 {
+	   std::fill( amu.begin() , amu.end() , 0.0 );
+	   std::fill( degf.begin() , degf.end() , 0.0 );
+	 }
+       else
+	 adwait( &(sqr_spec)[0], &(dcf)[0], lam.data(), nwin, num_freqs, &(amu)[0], &(degf)[0], avar );
        
         // if ( Fvalues != NULL ) 
   	//  get_F_values(ReSpec, ImSpec, num_freqs, nwin, fv, tapsum);
@@ -702,5 +709,3 @@ void  mtm_t::do_mtap_spec( real_FFT * fftseg ,
      }
   
 }
-
-

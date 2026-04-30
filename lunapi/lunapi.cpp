@@ -87,13 +87,14 @@ bool lunapi_t::is_silenced() const
 void lunapi_t::var( const std::string & key , const std::string & value )
 {
   
-  // special treatment for `sig`.   This will just append
-  // to an existing signallist;  as we don't always want to have
-  // to lreset(), make this one case so that sig clears signlist prior 
-  // to setting if the signal list is "." 
+  // special treatment for `sig` / `drop`. These append to existing
+  // attach-time include/exclude lists; allow "." to clear either list
+  // without requiring a full reset.
   
   if ( key == "sig" && value == "." )
     cmd_t::signallist.clear();
+  else if ( key == "drop" && value == "." )
+    cmd_t::droplist.clear();
   else
     {
       //std::cout << " parsing [" << key << "] -> [" << value << "]\n";
@@ -1250,9 +1251,10 @@ bool lunapi_inst_t::attach_edf( const std::string & _filename ,
   
   // restrict to limited set of input signals?
   const std::set<std::string> * inp_signals = cmd.signals().size() > 0 ? &cmd.signals() : NULL;
+  const std::set<std::string> * inp_signals_drop = cmd.drops().size() > 0 ? &cmd.drops() : NULL;
    
   // load EDF
-  bool okay = edf.attach( filename , id , inp_signals );
+  bool okay = edf.attach( filename , id , inp_signals , inp_signals_drop );
 
   if ( ! okay )
     {

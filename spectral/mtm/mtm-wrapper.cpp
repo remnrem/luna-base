@@ -273,7 +273,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
   // Channel checks
   //
   
-  std::set<int> srs;
+  std::set<int> segment_sizes;
 
   int ns_used = 0;
   
@@ -288,27 +288,30 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 
       ++ns_used;
       
-      srs.insert( Fs[s] );
+      const int segment_size = (int)std::llround( Fs[s] * segment_size_sec );
+      if ( segment_size < 2 )
+	Helper::halt( "MTM requires segment-sec to span at least 2 samples for all selected signals" );
+
+      segment_sizes.insert( segment_size );
     }
 
   if ( ns_used == 0 ) return;
   
-  if ( spec_kurt && srs.size() != 1 )
+  if ( spec_kurt && segment_sizes.size() != 1 )
     Helper::halt( "all SRs must be similar if using speckurt option" );
   
   //
   // Precompute tapers (for each Fs) 
   //
 
-  logger << "  precomputing " << nwin << " tapers for " << srs.size() << " distinct sample rates\n";
-  std::map<int,mtm_t> sr2tapers;
-  std::set<int>::const_iterator ss = srs.begin();
-  while ( ss != srs.end() )
+  logger << "  precomputing " << nwin << " tapers for " << segment_sizes.size() << " distinct segment sizes\n";
+  std::map<int,mtm_t> segsize2tapers;
+  std::set<int>::const_iterator ss = segment_sizes.begin();
+  while ( ss != segment_sizes.end() )
     {      
       mtm_t mtm( npi , nwin );
-      const int segment_size = *ss * segment_size_sec;
-      mtm.store_tapers( segment_size );      
-      sr2tapers[ *ss ] = mtm;
+      mtm.store_tapers( *ss );      
+      segsize2tapers[ *ss ] = mtm;
       ++ss;
     }
 
@@ -495,10 +498,13 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	  // Step size in sample-points
 	  //
 	  
-	  const int segment_size = Fs[s] * segment_size_sec;
-	  const int segment_step = Fs[s] * segment_step_sec;
-	  const uint64_t delta_tp = globals::tp_1sec / Fs[s] ;
-	  
+	  const int segment_size = (int)std::llround( Fs[s] * segment_size_sec );
+	  const int segment_step = (int)std::llround( Fs[s] * segment_step_sec );
+	  if ( segment_size < 2 )
+	    Helper::halt( "MTM requires segment-sec to span at least 2 samples for all selected signals" );
+	  if ( segment_step < 1 )
+	    Helper::halt( "MTM requires segment-inc to advance by at least 1 sample for all selected signals" );
+	  const uint64_t delta_tp = (uint64_t)std::llround( globals::tp_1sec / Fs[s] );
 	  //
 	  // Get time points (and flags for segments that span discontinuities)
 	  //  - also, indicate whether all should be computed (at segment/epoch level)
@@ -594,7 +600,7 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 	    mtm.restrict = restrict;
 	  
 	  // actual MTM 
-	  mtm_t * precomputed = &(sr2tapers[ Fs[s] ]);
+	  mtm_t * precomputed = &(segsize2tapers[ segment_size ]);
 	  mtm.apply( d , Fs[s] , segment_size , segment_step , show_initial_log_output , precomputed );
 	  
 	  // cannot show channel progress in epoch mode (epoch then channel processed)
@@ -1658,6 +1664,3 @@ void mtm::wrapper( edf_t & edf , param_t & param )
 
   // all done
 }
-
-
-

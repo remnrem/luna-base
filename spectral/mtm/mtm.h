@@ -50,7 +50,7 @@ struct mtm_t
   void store_tapers( const int seg_size );
   
   // do actual MT (optionally. passing pre-computed tapers in mt_tapers)
-  void apply( const std::vector<double> * , const int fs ,
+  void apply( const std::vector<double> * , const double fs ,
 	      const int seg_size , const int seg_step ,
 	      bool verbose = false , mtm_t * mt_tapers = NULL );
   

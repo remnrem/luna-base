@@ -866,8 +866,10 @@ void process_edfs( cmd_t & cmd )
       //
       
       const std::set<std::string> * inp_signals = NULL;
+      const std::set<std::string> * inp_signals_drop = NULL;
       
       if ( cmd.signals().size() > 0 ) inp_signals = &cmd.signals();
+      if ( cmd.drops().size() > 0 ) inp_signals_drop = &cmd.drops();
 
       
       //
@@ -950,7 +952,7 @@ void process_edfs( cmd_t & cmd )
 	  okay = edf.init_empty( id , nr , rs , startdate , starttime );
 	}
       else // attach an EDF from disk
-	okay = edf.attach( edffile , rootname , inp_signals ); 
+	okay = edf.attach( edffile , rootname , inp_signals , inp_signals_drop ); 
 
 
 

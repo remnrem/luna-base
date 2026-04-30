@@ -75,8 +75,6 @@ int mtm_t::adwait( double *sqr_spec,  double *dcf,
 	  const int kpoint=jloop+i*num_freq;
 	  spw[i]=(sqr_spec[kpoint])/scale ;
 	}
-      
-      
       // first guess is the average of the two 
       // lowest-order eigenspectral estimates
       

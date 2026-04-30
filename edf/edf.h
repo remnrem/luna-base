@@ -186,7 +186,9 @@ struct edf_header_t
 
   std::string summary() const;
 
-  std::set<int> read( FILE * file, edfz_t * edfz , edfz2_t * edfz2 , const std::set<std::string> * inp_signals );
+  std::set<int> read( FILE * file, edfz_t * edfz , edfz2_t * edfz2 ,
+		      const std::set<std::string> * inp_signals ,
+		      const std::set<std::string> * inp_signals_drop = NULL );
   
   bool write( FILE * file , const std::vector<int> & ch2slot );
   
@@ -642,6 +644,10 @@ public:
   //
 
   bool attach( const std::string & f , const std::string & id , const std::set<std::string> * inp_signals = NULL , const bool silent = false );
+  bool attach( const std::string & f , const std::string & id ,
+	       const std::set<std::string> * inp_signals ,
+	       const std::set<std::string> * inp_signals_drop ,
+	       const bool silent = false );
   
   bool read_records( int r , int r2 );
 

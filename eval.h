@@ -214,6 +214,7 @@ class cmd_t
   
   // command-specific parameters (i.e. from command-file)
   static std::set<std::string>    signallist;
+  static std::set<std::string>    droplist;
   
   static std::map<std::string,std::string> label_aliases;
   static std::map<std::string,std::vector<std::string> > primary_alias;
@@ -222,10 +223,13 @@ class cmd_t
   static void signal_alias( const std::string & s );
 
   static const std::set<std::string> & signals() ;
+  static const std::set<std::string> & drops() ;
 
   static void clear_signals() ;
+  static void clear_drops() ;
 
   static std::string signal_string() ;
+  static std::string drop_string() ;
 
   static void clear_static_members() ;
 

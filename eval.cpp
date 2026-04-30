@@ -78,6 +78,7 @@ void cmd_t::clear_static_members()
   ivars.clear();
   idmapper.clear();
   signallist.clear();
+  droplist.clear();
   label_aliases.clear();
   primary_alias.clear();
   primary_upper2orig.clear();
@@ -233,10 +234,20 @@ const std::set<std::string> & cmd_t::signals()
 { 
   return signallist; 
 }
+
+const std::set<std::string> & cmd_t::drops()
+{
+  return droplist;
+}
   
 void cmd_t::clear_signals() 
 { 
   signallist.clear(); 
+}
+
+void cmd_t::clear_drops()
+{
+  droplist.clear();
 }
 
 std::string cmd_t::signal_string() 
@@ -250,6 +261,22 @@ std::string cmd_t::signal_string()
     {
       if ( ii != signallist.begin() ) ss << ",";
       ss << *ii;	  
+      ++ii;
+    }
+  return ss.str();
+}
+
+std::string cmd_t::drop_string()
+{
+
+  if ( droplist.size() == 0 ) return "";
+
+  std::stringstream ss;
+  std::set<std::string>::iterator ii = droplist.begin();
+  while ( ii != droplist.end() )
+    {
+      if ( ii != droplist.begin() ) ss << ",";
+      ss << *ii;
       ++ii;
     }
   return ss.str();
@@ -717,6 +744,15 @@ bool cmd_t::read( const std::string * str , bool silent )
 	  logger << "signals :";
 	  for (std::set<std::string>::iterator s=signallist.begin();
 	       s!=signallist.end();s++) 
+	    logger << " " << *s ;
+	  logger << "\n";
+	}
+
+      if ( droplist.size() > 0 )
+	{
+	  logger << "drop    :";
+	  for (std::set<std::string>::iterator s=droplist.begin();
+	       s!=droplist.end();s++)
 	    logger << " " << *s ;
 	  logger << "\n";
 	}
@@ -4820,7 +4856,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // lunapi, etc) n.b. previously, we'd skip this and only add
   // non-special vars
 
-  // ... except handle the special case of 'sig' which _appends_ to an
+  // ... except handle the special case of 'sig'/'drop' which _appends_ to an
   // existing list unless '.'
 
   
@@ -4832,12 +4868,12 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // ------------------------------------------------------------
   //
 
-  if ( tok0 == "sig" )
+  if ( tok0 == "sig" || tok0 == "drop" )
     {
       std::string curr = cmd_t::vars[ tok0 ];
       // wipe?
       if ( tok1 == "." || tok1 == "" )
-	cmd_t::vars.erase( cmd_t::vars.find( "sig" ) );
+	cmd_t::vars.erase( cmd_t::vars.find( tok0 ) );
       else // add to list
 	{
 	  if ( curr == "." || curr == "" )
@@ -4851,21 +4887,22 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
 
   //
-  // now process sig opt via cmd_t::signallist
+  // now process sig/drop opts via cmd_t::signallist/cmd_t::droplist
   //
   
-  if ( Helper::iequals( tok0 , "sig" ) )
+  if ( Helper::iequals( tok0 , "sig" ) || Helper::iequals( tok0 , "drop" ) )
     {
+      std::set<std::string> * target = Helper::iequals( tok0 , "sig" ) ? &cmd_t::signallist : &cmd_t::droplist;
       // wipe?
       if ( tok1 == "." || tok1 == "" )
-	cmd_t::signallist.clear();
+	target->clear();
       else // or append to list?
 	{
 	  std::vector<std::string> tok2 = Helper::quoted_parse( tok1 , "," );		        
 	  for (int s=0;s<tok2.size();s++) 
-	    cmd_t::signallist.insert( globals::sanitize_everything ?
-				      Helper::sanitize( Helper::unquote(tok2[s] ) ) :				  
-				      Helper::unquote(tok2[s]) );
+	    target->insert( globals::sanitize_everything ?
+			    Helper::sanitize( Helper::unquote(tok2[s] ) ) :
+			    Helper::unquote(tok2[s]) );
 	}
       return;
     }
@@ -6174,6 +6211,7 @@ void cmd_t::register_specials()
   specials.insert( "devel" );
   specials.insert( "sec-dp" );
   specials.insert( "sig" ) ;
+  specials.insert( "drop" ) ;
   specials.insert( "vars" );
   specials.insert( "ids" );    
   specials.insert( "add" ) ;

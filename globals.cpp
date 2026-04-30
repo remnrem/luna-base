@@ -51,6 +51,7 @@ std::map<std::string,std::string>  cmd_t::idmapper;
 std::set<std::string>              cmd_t::specials;
 
 std::set<std::string>              cmd_t::signallist;
+std::set<std::string>              cmd_t::droplist;
 std::map<std::string,std::string>  cmd_t::label_aliases;
 std::map<std::string,std::vector<std::string> >  cmd_t::primary_alias;
 std::map<std::string,std::string>  cmd_t::primary_upper2orig;
@@ -71,4 +72,3 @@ bool nsrr_t::unmapped = false;
 
 std::set<std::string> nsrr_t::edf_class;
 bool nsrr_t::all_edf_class = false;
-
