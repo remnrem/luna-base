@@ -258,6 +258,7 @@ class Token {
   // fetch meta-data
   std::string name() const { return tname; }
   tok_type type() const { return ttype; }
+  static std::string type_name( tok_type t );
   
   
   // name maps
@@ -320,7 +321,7 @@ struct  TokenFunctions{
 
   // vector functions
   Token fn_vec_length( const Token & tok) const;
-  Token fn_vec_extract( const Token & tok , const Token & idx ) const;
+  Token fn_vec_extract( const Token & tok , const Token & idx , const std::string & expr = "" ) const;
   Token fn_vec_min( const Token & tok ) const;
   Token fn_vec_maj( const Token & tok ) const;
   Token fn_vec_sum( const Token & tok ) const;

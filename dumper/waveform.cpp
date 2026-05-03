@@ -22,6 +22,7 @@
 #include "dumper/waveform.h"
 
 #include "luna.h"
+#include "lunapi/waveforms.h"
 
 #include <algorithm>
 #include <cerrno>
@@ -46,7 +47,7 @@ namespace {
 std::vector<std::string> * g_recursive_lwf_files = NULL;
 
 const char * const LWF_MAGIC = "LWF1";
-const int LWF_VERSION = 1;
+const int LWF_VERSION = 2;
 
 struct channel_info_t {
   int slot;
@@ -57,20 +58,12 @@ struct channel_info_t {
   int max_samples;
 };
 
-struct event_def_t {
-  std::string annot;
-  std::string instance;
-  std::string annot_ch;
-  std::string meta;
-  interval_t annot_interval;
-  interval_t wave_interval;
-  double anchor_sec;
-};
-
 struct sample_block_info_t {
   int n;
   double data_start_sec;
   double data_stop_sec;
+  int feature_qc;
+  std::vector<double> feature_values;
 };
 
 struct wave_index_t {
@@ -86,11 +79,6 @@ struct wave_index_t {
   std::vector<sample_block_info_t> blocks;
 };
 
-struct wave_payload_t {
-  std::vector<sample_block_info_t> blocks;
-  std::vector< std::vector<float> > samples;
-};
-
 struct file_summary_t {
   std::string file;
   std::string id;
@@ -100,6 +88,7 @@ struct file_summary_t {
   std::string tag;
   std::string align;
   std::vector<std::string> def_annots;
+  std::vector<std::string> feature_names;
   std::vector<channel_info_t> channels;
   int n_waves;
   std::map<std::string,int> annot_counts;
@@ -425,119 +414,111 @@ std::vector<channel_info_t> get_channels( edf_t & edf , param_t & param )
 }
 
 
-std::vector<event_def_t> collect_events( edf_t & edf , param_t & param , const std::string & align , std::vector<std::string> * annots_out )
+std::vector<std::string> get_annots( edf_t & edf , param_t & param )
 {
   const std::vector<std::string> requested = param.strvector( "annot" );
   if ( requested.size() == 0 ) Helper::halt( "annot= is required for WAVEFORM" );
 
+  std::vector<std::string> annots;
+  std::set<std::string> seen;
+  for (int a=0; a<requested.size(); a++)
+    {
+      const std::string annot = requested[a];
+      if ( seen.find( annot ) != seen.end() ) continue;
+      if ( edf.annotations->find( annot ) == NULL )
+        {
+          logger << "  could not find annotation " << annot << " - skipping\n";
+          continue;
+        }
+      seen.insert( annot );
+      annots.push_back( annot );
+    }
+
+  if ( annots.size() == 0 )
+    Helper::halt( "could not find any requested annotations for WAVEFORM" );
+
+  return annots;
+}
+
+
+double get_wave_left( param_t & param )
+{
   double w_left = 0;
-  double w_right = 0;
   if ( param.has( "w" ) )
     {
       const double w = param.requires_dbl( "w" );
       if ( w < 0 ) Helper::halt( "w cannot be negative for WAVEFORM" );
-      w_left = w_right = w;
+      w_left = w;
     }
   if ( param.has( "w-left" ) )
     {
       w_left = param.requires_dbl( "w-left" );
       if ( w_left < 0 ) Helper::halt( "w-left cannot be negative for WAVEFORM" );
     }
+  return w_left;
+}
+
+
+double get_wave_right( param_t & param )
+{
+  double w_right = 0;
+  if ( param.has( "w" ) )
+    {
+      const double w = param.requires_dbl( "w" );
+      if ( w < 0 ) Helper::halt( "w cannot be negative for WAVEFORM" );
+      w_right = w;
+    }
   if ( param.has( "w-right" ) )
     {
       w_right = param.requires_dbl( "w-right" );
       if ( w_right < 0 ) Helper::halt( "w-right cannot be negative for WAVEFORM" );
     }
-
-  const uint64_t w_left_tp = (uint64_t)( w_left * globals::tp_1sec );
-  const uint64_t w_right_tp = (uint64_t)( w_right * globals::tp_1sec );
-
-  std::vector<event_def_t> events;
-  std::set<std::string> seen_annots;
-
-  for (int a=0; a<requested.size(); a++)
-    {
-      annot_t * annot = edf.annotations->find( requested[a] );
-      if ( annot == NULL )
-        {
-          logger << "  could not find annotation " << requested[a] << " - skipping\n";
-          continue;
-        }
-
-      seen_annots.insert( requested[a] );
-
-      const annot_map_t & amap = annot->interval_events;
-      annot_map_t::const_iterator ii = amap.begin();
-      while ( ii != amap.end() )
-        {
-          const instance_idx_t & idx = ii->first;
-          const instance_t * inst = ii->second;
-
-          event_def_t ev;
-          ev.annot = requested[a];
-          ev.instance = idx.id;
-          ev.annot_ch = idx.ch_str;
-          ev.meta = inst != NULL ? inst->print() : "";
-          ev.annot_interval = idx.interval;
-          ev.wave_interval = idx.interval;
-          if ( w_left_tp ) ev.wave_interval.expand_left( w_left_tp );
-          if ( w_right_tp ) ev.wave_interval.expand_right( w_right_tp );
-          ev.anchor_sec = get_anchor_sec( idx.interval , align );
-          events.push_back( ev );
-          ++ii;
-        }
-    }
-
-  if ( seen_annots.size() == 0 )
-    Helper::halt( "could not find any requested annotations for WAVEFORM" );
-
-  annots_out->assign( seen_annots.begin() , seen_annots.end() );
-  return events;
+  return w_right;
 }
 
 
-bool extract_wave( edf_t & edf , const std::vector<channel_info_t> & channels , const event_def_t & event , wave_payload_t * payload )
+std::vector<std::string> get_channel_labels( const std::vector<channel_info_t> & channels )
 {
-  payload->blocks.clear();
-  payload->samples.clear();
-
+  std::vector<std::string> labels;
+  labels.reserve( channels.size() );
   for (int c=0; c<channels.size(); c++)
-    {
-      slice_t slice( edf , channels[c].slot , event.wave_interval );
-      const std::vector<double> * d = slice.pdata();
-      const std::vector<uint64_t> * tp = slice.ptimepoints();
-
-      if ( d == NULL || tp == NULL || d->size() == 0 || tp->size() != d->size() )
-        return false;
-
-      sample_block_info_t block;
-      block.n = d->size();
-      block.data_start_sec = (*tp)[0] / (double)globals::tp_1sec;
-      block.data_stop_sec = (*tp)[ block.n - 1 ] / (double)globals::tp_1sec + 1.0 / channels[c].sr;
-      payload->blocks.push_back( block );
-
-      std::vector<float> vals( block.n );
-      for (int i=0; i<block.n; i++) vals[i] = (float)( (*d)[i] );
-      payload->samples.push_back( vals );
-    }
-
-  return true;
+    labels.push_back( channels[c].label );
+  return labels;
 }
 
 
-wave_index_t make_wave_index( const event_def_t & event , const wave_payload_t & payload )
+waveform_feature_options_t get_feature_options( param_t & param , bool * enabled )
+{
+  waveform_feature_options_t options;
+  options.catch_enabled = param.has( "catch22" ) || param.has( "catch24" );
+  options.catch24 = param.has( "catch24" );
+  options.basic_stats = param.has( "basic-stats" ) || options.catch_enabled;
+  *enabled = options.basic_stats || options.catch_enabled;
+  return options;
+}
+
+
+wave_index_t make_wave_index( const waveform_event_t & event )
 {
   wave_index_t idx;
   idx.annot = event.annot;
   idx.instance = event.instance;
   idx.annot_ch = event.annot_ch;
-  idx.annot_start_sec = event.annot_interval.start_sec();
-  idx.annot_stop_sec = event.annot_interval.stop_sec();
+  idx.annot_start_sec = event.annot_start_sec;
+  idx.annot_stop_sec = event.annot_stop_sec;
   idx.anchor_sec = event.anchor_sec;
-  idx.wave_start_sec = event.wave_interval.start_sec();
-  idx.wave_stop_sec = event.wave_interval.stop_sec();
+  idx.wave_start_sec = event.wave_start_sec;
+  idx.wave_stop_sec = event.wave_stop_sec;
   idx.payload_offset = 0LLU;
-  idx.blocks = payload.blocks;
+  for (int c=0; c<event.blocks.size(); c++)
+    {
+      sample_block_info_t block;
+      block.n = event.blocks[c].values.size();
+      block.data_start_sec = event.blocks[c].data_start_sec;
+      block.data_stop_sec = event.blocks[c].data_stop_sec;
+      block.feature_qc = event.blocks[c].feature_qc;
+      idx.blocks.push_back( block );
+    }
   return idx;
 }
 
@@ -548,7 +529,7 @@ uint64_t string_storage_bytes( const std::string & s )
 }
 
 
-uint64_t wave_payload_storage_bytes( const event_def_t & event , const wave_index_t & idx )
+uint64_t wave_payload_storage_bytes( const waveform_event_t & event , const std::vector<std::string> & feature_names )
 {
   uint64_t n = 0LLU;
   n += string_storage_bytes( event.annot );
@@ -557,11 +538,16 @@ uint64_t wave_payload_storage_bytes( const event_def_t & event , const wave_inde
   n += string_storage_bytes( event.meta );
   n += 5LLU * (uint64_t)sizeof(double);
   n += (uint64_t)sizeof(int);
-  for (int c=0; c<idx.blocks.size(); c++)
+  for (int c=0; c<event.blocks.size(); c++)
     {
       n += (uint64_t)sizeof(int);
       n += 2LLU * (uint64_t)sizeof(double);
-      n += (uint64_t)idx.blocks[c].n * (uint64_t)sizeof(float);
+      if ( feature_names.size() )
+        {
+          n += (uint64_t)sizeof(int);
+          n += (uint64_t)feature_names.size() * (uint64_t)sizeof(double);
+        }
+      n += (uint64_t)event.blocks[c].values.size() * (uint64_t)sizeof(float);
     }
   return n;
 }
@@ -582,7 +568,8 @@ uint64_t wave_index_storage_bytes( const wave_index_t & idx )
 
 
 uint64_t header_storage_bytes( edf_t & edf , const std::string & outfile , const std::string & tag , const std::string & align ,
-                               const std::vector<std::string> & annots , const std::vector<channel_info_t> & channels )
+                               const std::vector<std::string> & annots , const std::vector<channel_info_t> & channels ,
+                               const std::vector<std::string> & feature_names )
 {
   uint64_t n = 0LLU;
   n += 4LLU;
@@ -604,23 +591,15 @@ uint64_t header_storage_bytes( edf_t & edf , const std::string & outfile , const
       n += (uint64_t)sizeof(int);
     }
   n += (uint64_t)sizeof(int);
+  for (int i=0; i<feature_names.size(); i++) n += string_storage_bytes( feature_names[i] );
+  n += (uint64_t)sizeof(int);
   return n;
 }
 
 
-bool event_meets_retention_rule( edf_t & edf , const event_def_t & event , const std::string & require )
-{
-  const uint64_t requested_tp = event.wave_interval.duration();
-  if ( requested_tp == 0 ) return false;
-
-  const uint64_t retained_tp = edf.timeline.valid_tps( event.wave_interval );
-  if ( require == "full" ) return retained_tp == requested_tp;
-  return retained_tp > 0LLU;
-}
-
-
 void write_header( std::ofstream & O , edf_t & edf , const std::string & outfile , const std::string & tag , const std::string & align ,
-                   const std::vector<std::string> & annots , const std::vector<channel_info_t> & channels , const int n_waves )
+                   const std::vector<std::string> & annots , const std::vector<channel_info_t> & channels ,
+                   const std::vector<std::string> & feature_names , const int n_waves )
 {
   O.write( LWF_MAGIC , 4 );
   write_i32( O , LWF_VERSION );
@@ -642,6 +621,9 @@ void write_header( std::ofstream & O , edf_t & edf , const std::string & outfile
       write_string( O , channels[i].unit );
       write_i32( O , channels[i].sr );
     }
+
+  write_i32( O , feature_names.size() );
+  for (int i=0; i<feature_names.size(); i++) write_string( O , feature_names[i] );
 
   write_i32( O , n_waves );
 }
@@ -668,26 +650,36 @@ void write_index_entry( std::ofstream & O , const wave_index_t & idx )
 }
 
 
-void write_wave( std::ofstream & O , const event_def_t & event , const wave_payload_t & payload )
+void write_wave( std::ofstream & O , const waveform_event_t & event , const std::vector<std::string> & feature_names )
 {
   write_string( O , event.annot );
   write_string( O , event.instance );
   write_string( O , event.annot_ch );
   write_string( O , event.meta );
-  write_f64( O , event.annot_interval.start_sec() );
-  write_f64( O , event.annot_interval.stop_sec() );
+  write_f64( O , event.annot_start_sec );
+  write_f64( O , event.annot_stop_sec );
   write_f64( O , event.anchor_sec );
-  write_f64( O , event.wave_interval.start_sec() );
-  write_f64( O , event.wave_interval.stop_sec() );
+  write_f64( O , event.wave_start_sec );
+  write_f64( O , event.wave_stop_sec );
 
-  write_i32( O , payload.blocks.size() );
-  for (int c=0; c<payload.blocks.size(); c++)
+  write_i32( O , event.blocks.size() );
+  for (int c=0; c<event.blocks.size(); c++)
     {
-      write_i32( O , payload.blocks[c].n );
-      write_f64( O , payload.blocks[c].data_start_sec );
-      write_f64( O , payload.blocks[c].data_stop_sec );
-      for (int i=0; i<payload.samples[c].size(); i++)
-        write_f32( O , payload.samples[c][i] );
+      write_i32( O , event.blocks[c].values.size() );
+      write_f64( O , event.blocks[c].data_start_sec );
+      write_f64( O , event.blocks[c].data_stop_sec );
+      if ( feature_names.size() )
+        {
+          write_i32( O , event.blocks[c].feature_qc );
+          for (int i=0; i<feature_names.size(); i++)
+            {
+              std::map<std::string,double>::const_iterator ff = event.blocks[c].features.find( feature_names[i] );
+              const double value = ff == event.blocks[c].features.end() ? std::numeric_limits<double>::quiet_NaN() : ff->second;
+              write_f64( O , value );
+            }
+        }
+      for (int i=0; i<event.blocks[c].values.size(); i++)
+        write_f32( O , (float)event.blocks[c].values[i] );
     }
 }
 
@@ -707,7 +699,7 @@ file_summary_t read_summary( const std::string & file )
     Helper::halt( "invalid .lwf file: " + file );
 
   const int version = read_i32( I );
-  if ( version != LWF_VERSION )
+  if ( version != 1 && version != LWF_VERSION )
     Helper::halt( "unsupported .lwf version in " + file );
 
   s.id = read_string( I );
@@ -731,6 +723,12 @@ file_summary_t read_summary( const std::string & file )
       s.channels[c].sr = read_i32( I );
       s.channels[c].min_samples = std::numeric_limits<int>::max();
       s.channels[c].max_samples = 0;
+    }
+
+  if ( version >= 2 )
+    {
+      const int n_features = read_i32( I );
+      for (int i=0; i<n_features; i++) s.feature_names.push_back( read_string( I ) );
     }
 
   s.n_waves = read_i32( I );
@@ -783,6 +781,8 @@ void writer_output_for_file( const std::string & cmd , const file_summary_t & s 
   writer.value( "ANNOTS" , join_strings( s.def_annots , "," ) );
   writer.value( "N_WAVES" , s.n_waves );
   writer.value( "N_CH" , (int)s.channels.size() );
+  writer.value( "N_FEATURES" , (int)s.feature_names.size() );
+  writer.value( "FEATURES" , s.feature_names.size() ? join_strings( s.feature_names , "," ) : "." );
 
   for (int c=0; c<s.channels.size(); c++)
     {
@@ -806,79 +806,73 @@ void dsptools::waveform( edf_t & edf , param_t & param )
   const std::string tag = param.has( "tag" ) ? param.value( "tag" ) : "";
   const std::string align = get_align( param );
   const std::string require = get_require_mode( param );
+  const double w_left = get_wave_left( param );
+  const double w_right = get_wave_right( param );
 
   ensure_dir( dir );
 
   std::vector<channel_info_t> channels = get_channels( edf , param );
-  std::vector<std::string> annots;
-  std::vector<event_def_t> events = collect_events( edf , param , align , &annots );
+  const std::vector<std::string> annots = get_annots( edf , param );
+  const std::vector<std::string> channel_labels = get_channel_labels( channels );
+  bool features_enabled = false;
+  const waveform_feature_options_t feature_options = get_feature_options( param , &features_enabled );
 
-  if ( events.size() == 0 )
+  waveform_extract_result_t extracted =
+    waveform_core::extract_annotation_window_waveforms( edf , annots , channel_labels , w_left , w_right , align , require );
+
+  if ( extracted.total_events == 0 )
     Helper::halt( "no annotation events available for WAVEFORM" );
 
-  logger << "  considering " << events.size() << " annotation-defined waveform interval(s)\n";
+  logger << "  considering " << extracted.total_events << " annotation-defined waveform interval(s)\n";
 
-  std::vector<event_def_t> valid_events;
-  std::vector<wave_index_t> valid_index;
-  valid_events.reserve( events.size() );
-  valid_index.reserve( events.size() );
-  int dropped_empty = 0;
-  int dropped_prescreen = 0;
-  for (int i=0; i<events.size(); i++)
+  if ( features_enabled )
+    waveform_core::compute_features( &extracted , feature_options );
+
+  for (int e=0; e<extracted.events.size(); e++)
     {
-      if ( ! event_meets_retention_rule( edf , events[i] , require ) )
+      const waveform_event_t & wave = extracted.events[e];
+      for (int c=0; c<wave.blocks.size() && c<channels.size(); c++)
         {
-          ++dropped_prescreen;
-          continue;
+          const int n = wave.blocks[c].values.size();
+          if ( n < channels[c].min_samples ) channels[c].min_samples = n;
+          if ( n > channels[c].max_samples ) channels[c].max_samples = n;
         }
-
-      wave_payload_t payload;
-      if ( ! extract_wave( edf , channels , events[i] , &payload ) )
-        {
-          ++dropped_empty;
-          continue;
-        }
-
-      for (int c=0; c<channels.size(); c++)
-        {
-          if ( payload.blocks[c].n < channels[c].min_samples ) channels[c].min_samples = payload.blocks[c].n;
-          if ( payload.blocks[c].n > channels[c].max_samples ) channels[c].max_samples = payload.blocks[c].n;
-        }
-
-      valid_events.push_back( events[i] );
-      valid_index.push_back( make_wave_index( events[i] , payload ) );
     }
 
-  if ( valid_events.size() == 0 )
+  if ( extracted.events.size() == 0 )
     Helper::halt( "no valid waveforms could be extracted for WAVEFORM" );
+
+  std::vector<wave_index_t> valid_index;
+  valid_index.reserve( extracted.events.size() );
+  for (int i=0; i<extracted.events.size(); i++)
+    valid_index.push_back( make_wave_index( extracted.events[i] ) );
 
   const std::string outfile = next_output_file( dir , edf.id , tag );
 
-  logger << "  writing " << valid_events.size() << " waveform(s) to " << outfile << "\n";
-  if ( dropped_prescreen ) logger << "  dropped " << dropped_prescreen << " event(s) failing require=" << require << "\n";
-  if ( dropped_empty ) logger << "  dropped " << dropped_empty << " event(s) with empty/invalid slices\n";
+  logger << "  writing " << extracted.events.size() << " waveform(s) to " << outfile << "\n";
+  std::map<std::string,int>::const_iterator dd = extracted.dropped.begin();
+  while ( dd != extracted.dropped.end() )
+    {
+      if ( dd->second > 0 )
+        logger << "  dropped " << dd->second << " event(s) due to " << dd->first << "\n";
+      ++dd;
+    }
 
   std::ofstream O( outfile.c_str() , std::ios::binary | std::ios::out );
   if ( ! O ) Helper::halt( "could not open output file " + outfile );
 
-  uint64_t payload_offset = header_storage_bytes( edf , outfile , tag , align , annots , channels );
+  uint64_t payload_offset = header_storage_bytes( edf , outfile , tag , align , annots , channels , extracted.feature_names );
   for (int i=0; i<valid_index.size(); i++) payload_offset += wave_index_storage_bytes( valid_index[i] );
   for (int i=0; i<valid_index.size(); i++)
     {
       valid_index[i].payload_offset = payload_offset;
-      payload_offset += wave_payload_storage_bytes( valid_events[i] , valid_index[i] );
+      payload_offset += wave_payload_storage_bytes( extracted.events[i] , extracted.feature_names );
     }
 
-  write_header( O , edf , outfile , tag , align , annots , channels , valid_events.size() );
+  write_header( O , edf , outfile , tag , align , annots , channels , extracted.feature_names , extracted.events.size() );
   for (int i=0; i<valid_index.size(); i++) write_index_entry( O , valid_index[i] );
 
-  for (int i=0; i<valid_events.size(); i++)
-    {
-      wave_payload_t payload;
-      if ( ! extract_wave( edf , channels , valid_events[i] , &payload ) )
-        Helper::halt( "internal error re-extracting waveforms for WAVEFORM" );
-      write_wave( O , valid_events[i] , payload );
-    }
+  for (int i=0; i<extracted.events.size(); i++) write_wave( O , extracted.events[i] , extracted.feature_names );
 
   O.close();
 
@@ -891,8 +885,9 @@ void dsptools::waveform( edf_t & edf , param_t & param )
   s.tag = tag;
   s.align = align;
   s.def_annots = annots;
+  s.feature_names = extracted.feature_names;
   s.channels = channels;
-  s.n_waves = valid_events.size();
+  s.n_waves = extracted.events.size();
   writer_output_for_file( "WAVEFORMS" , s );
 }
 

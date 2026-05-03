@@ -168,6 +168,8 @@ struct pops_t {
   //
 
   static std::string update_filepath( const std::string & s );
+  static std::string resolve_coda_model_file( const param_t & param ,
+                                              const bool allow_legacy_train_key = false );
   
   static Eigen::MatrixXd add_time_track( const int , const int );
 

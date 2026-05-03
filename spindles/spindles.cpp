@@ -516,6 +516,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       if ( param.value( "annot" ) != "" )
 	sp_label = param.value( "annot" );       
     }
+  const bool annot_ch = save_annots && param.has( "annot-ch" );
 
 
   
@@ -2923,7 +2924,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      // annot label
 	      const std::string analysis_label = Helper::dbl2str(frq[fi]) ;
 	      
-	      const std::string aname = sp_label;// + "-" + analysis_label;
+	      const std::string aname = annot_ch ? sp_label + "_" + signals.label(s) : sp_label;
 	      
 	      annot_t * a = edf.annotations->add( aname );
 	      a->description = "Spindle intervals";
@@ -2949,6 +2950,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  // any meta-data?
 		  
 		  instance->set( "amp" , spindle.amp );
+		  instance->set( "act_mx" , spindle.norm_amp_max );
 		  instance->set( "isa" , spindle.isa );
 		  instance->set( "frq" , spindle.frq );
 		  instance->set( "dur" , spindle.dur );

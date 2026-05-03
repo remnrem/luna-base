@@ -39,6 +39,45 @@
 // TODO
 // for now, vector x scalar comparisons do not allow for type conversion
 
+std::string Token::type_name( tok_type t )
+{
+  switch ( t )
+    {
+    case UNDEF: return "undefined";
+    case INT: return "integer scalar";
+    case FLOAT: return "floating-point scalar";
+    case STRING: return "string scalar";
+    case BOOL: return "boolean scalar";
+    case INT_VECTOR: return "integer vector";
+    case FLOAT_VECTOR: return "floating-point vector";
+    case STRING_VECTOR: return "string vector";
+    case BOOL_VECTOR: return "boolean vector";
+    case ARG_SEPARATOR: return "argument separator";
+    case FUNCTION: return "function";
+    case VARIABLE: return "variable";
+    case MULTIPLY_OPERATOR: return "operator";
+    case POWER_OPERATOR: return "operator";
+    case DIVIDE_OPERATOR: return "operator";
+    case MOD_OPERATOR: return "operator";
+    case ADD_OPERATOR: return "operator";
+    case SUBTRACT_OPERATOR: return "operator";
+    case AND_OPERATOR: return "operator";
+    case OR_OPERATOR: return "operator";
+    case NOT_OPERATOR: return "operator";
+    case EQUAL_OPERATOR: return "operator";
+    case HAS_OPERATOR: return "operator";
+    case UNEQUAL_OPERATOR: return "operator";
+    case GREATER_THAN_OPERATOR: return "operator";
+    case LESS_THAN_OPERATOR: return "operator";
+    case GREATER_THAN_OR_EQUAL_OPERATOR: return "operator";
+    case LESS_THAN_OR_EQUAL_OPERATOR: return "operator";
+    case ASSIGNMENT_OPERATOR: return "operator";
+    case LEFT_PARENTHESIS: return "left parenthesis";
+    case RIGHT_PARENTHESIS: return "right parenthesis";
+    }
+  return "unknown";
+}
+
 
 void TokenFunctions::attach( instance_t * m )
 { 
@@ -327,6 +366,7 @@ void Token::init()
   // vector functions
   
   fn_map[ "element" ] = 2;  // element(Y,i)      extract element 'i' from vector 'Y'
+  fn_map[ "elementx" ] = 4; // internal: elementx(Y,i,lhs,rhs)
   fn_map[ "length" ]  = 1;  // length(Y)   length of Y
   fn_map[ "size" ]    = 1;  // size(Y)   length of Y
   fn_map[ "min" ]     = 1;  // min(Y)      minimum element in Y
@@ -3030,18 +3070,47 @@ Token TokenFunctions::fn_vec_sort( const Token & tok ) const
 }
 
 
-Token TokenFunctions::fn_vec_extract( const Token & tok , const Token & idx ) const
+Token TokenFunctions::fn_vec_extract( const Token & tok , const Token & idx , const std::string & expr ) const
 {
-  
-  if ( ! ( idx.is_int() || idx.is_int_vector() || idx.is_bool_vector() ) ) 
-    Helper::halt( "index for vector subscripting is not an integer value, integer vector or boolean vector" );
+  if ( idx.is_bool() )
+    {
+      if ( tok.is_vector() && tok.size() != 1 )
+        {
+          std::stringstream ss;
+          if ( expr != "" ) ss << "bad index type in vector subscript '" << expr << "': ";
+          else ss << "index for vector subscripting has bad type: ";
+          ss << "got boolean scalar; expected integer scalar, integer vector or boolean vector";
+          Helper::halt( ss.str() );
+        }
+    }
+  else if ( ! ( idx.is_int() || idx.is_int_vector() || idx.is_bool_vector() ) ) 
+    {
+      std::stringstream ss;
+      if ( expr != "" ) ss << "bad index type in vector subscript '" << expr << "': ";
+      else ss << "index for vector subscripting has bad type: ";
+      ss << "got " << Token::type_name( idx.type() )
+         << "; expected integer scalar, integer vector or boolean vector";
+      Helper::halt( ss.str() );
+    }
   
   //
   // NEW, for subsetting, only change the ve[] mask
   //
 
-  // if scalar, return whole thing (i.e. could only have been x[0] so pointless)                                           
-  if ( ! tok.is_vector() ) return tok;
+  // if scalar, retain existing integer-index behavior; for boolean scalar
+  // support length-1 semantics: X[true] -> X, X[false] -> empty
+  if ( ! tok.is_vector() )
+    {
+      if ( idx.is_bool() )
+        {
+          if ( idx.as_bool() ) return tok;
+          if ( tok.is_int() ) return Token( std::vector<int>() );
+          if ( tok.is_float() ) return Token( std::vector<double>() );
+          if ( tok.is_string() ) return Token( std::vector<std::string>() );
+          if ( tok.is_bool() ) return Token( std::vector<bool>() );
+        }
+      return tok;
+    }
   
   // nb, the vector may already be subsetted; size() will return current ve[] if so
   //  i.e. X = int(10,11,12) ;   X[ c(2,3) ][ 1 ] = 11 
@@ -3090,6 +3159,10 @@ Token TokenFunctions::fn_vec_extract( const Token & tok , const Token & idx ) co
       for (int i=0; i<s; i++)
 	if ( bi[i] ) ve.push_back( tokve[i] );
       
+    }
+  else if ( idx.is_bool() )
+    {
+      if ( idx.as_bool() ) ve.push_back( tokve[0] );
     }
 
 

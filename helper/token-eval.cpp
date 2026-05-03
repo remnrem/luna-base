@@ -887,7 +887,20 @@ bool Eval::execute( const std::vector<Token> & input )
 	      
 	      // vector functions
 	
-	      else if ( c.name() == "element" )  res = func.fn_vec_extract( args[1] , args[0] );
+	      else if ( c.name() == "element" )
+		{
+		  res = func.fn_vec_extract( args[1] , args[0] );
+		}
+	      else if ( c.name() == "elementx" )
+		{
+		  std::string lhs, rhs;
+		  if ( ! args[1].is_string( &lhs ) || ! args[0].is_string( &rhs ) )
+		    {
+		      errmsg( "third and fourth arguments to elementx() must be strings" );
+		      return false;
+		    }
+		  res = func.fn_vec_extract( args[3] , args[2] , lhs + "[" + rhs + "]" );
+		}
 	      
 	      else if ( c.name() == "length" )   res = func.fn_vec_length( args[0] );	      
 	      else if ( c.name() == "size" )     res = func.fn_vec_length( args[0] );	      
@@ -1807,7 +1820,7 @@ bool Eval::expand_indices( std::string * s )
 	    }  
 	}
       
-      std::string label = "element(" + vec_idx + "," + arg_idx + ")";
+      std::string label = "elementx(" + vec_idx + "," + arg_idx + ",{" + vec_idx + "},{" + arg_idx + "})";
       s->replace( q , (p-q+1) , label );      
 
     } // search for next []  

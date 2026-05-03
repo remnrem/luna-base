@@ -25,6 +25,7 @@
 #include "param.h"
 #include "luna.h"
 #include "timeline/actig.h"
+#include <memory>
 
 // defined in timeline/ralign.cpp
 void proc_review_alignment( edf_t & edf , param_t & param );
@@ -1899,6 +1900,28 @@ void proc_runpops( edf_t & edf , param_t & param )
 	pops_param.parse( tok[i] );
     }
 
+  // Forward CODA params to proc_pops
+  if ( param.has( "coda" ) )
+    pops_param.add( "coda" , param.value( "coda" ) );
+  if ( param.has( "SHAP" ) )
+    pops_param.add( "SHAP" );
+  if ( param.has( "shap" ) )
+    pops_param.add( "shap" );
+  if ( param.has( "pops-SHAP" ) )
+    pops_param.add( "pops-SHAP" );
+  if ( param.has( "coda-SHAP" ) )
+    pops_param.add( "coda-SHAP" );
+  if ( param.has( "epoch-SHAP" ) )
+    pops_param.add( "epoch-SHAP" );
+  if ( param.has( "SHAP-epoch" ) )
+    pops_param.add( "SHAP-epoch" );
+  if ( param.has( "coda-context" ) )
+    pops_param.add( "coda-context" , param.value( "coda-context" ) );
+  if ( param.has( "coda-lambda" ) )
+    pops_param.add( "coda-lambda" , param.value( "coda-lambda" ) );
+  if ( param.has( "coda-no-future" ) )
+    pops_param.add( "coda-no-future" );
+
   proc_pops( edf , pops_param );
 
   
@@ -1927,10 +1950,58 @@ void proc_pops( edf_t & edf , param_t & param )
 #ifdef HAS_LGBM
 
   //
+  // Standalone CODA training: posteriors=<file> coda[=<model>]  or legacy train-coda=<model>
+  // If lib=ROOT is set and no explicit model path is given, default to ROOT.coda.mod
+  // under path=, matching the stage-1 file resolution convention.
+  // Reads a destrat POPS -r E output, trains a new CODA model, saves it, and
+  // returns without touching the EDF.  A static guard means the training run
+  // happens only once even when luna iterates over many EDFs in the sample list.
+  //
+
+  if ( ( param.has( "train-coda" ) || param.has( "coda" ) ) && param.has( "posteriors" ) )
+    {
+      pops_opt_t::set_options( param );
+
+      static std::set<std::string> _coda_trained;
+      const std::string coda_model  = pops_t::resolve_coda_model_file( param , true );
+      const std::string post_file   = param.value( "posteriors" );
+      const std::string guard_key   = coda_model + "|" + post_file;
+
+      if ( _coda_trained.find( guard_key ) == _coda_trained.end() )
+        {
+          _coda_trained.insert( guard_key );
+
+          pops_coda_t coda;
+          coda.opt.three_state      = param.has( "3-class" ) || ( pops_opt_t::n_stages == 3 );
+          if ( param.has( "coda-context" ) )
+            coda.opt.context_epochs = param.requires_int( "coda-context" );
+          if ( param.has( "coda-lambda" ) )
+            coda.opt.lambda         = param.requires_dbl( "coda-lambda" );
+          if ( param.has( "coda-min-contiguous" ) )
+            coda.opt.min_subject_contiguous_epochs = param.requires_int( "coda-min-contiguous" );
+          if ( param.has( "coda-weights" ) )
+            coda.opt.class_weights  = param.dblvector( "coda-weights" );
+          if ( param.has( "coda-no-future" ) )
+            coda.opt.include_future = false;
+
+          const std::string coda_conf =
+            param.has( "coda-config" ) ? param.value( "coda-config" ) : ".";
+          const int coda_iter =
+            param.has( "coda-iter" ) ? param.requires_int( "coda-iter" ) : 200;
+
+          coda.train_from_posteriors_file( post_file , coda_conf , coda_iter );
+          coda.save( coda_model );
+
+          logger << "  POPS-CODA: model saved to " << coda_model << "\n";
+        }
+      return;
+    }
+
+  //
   // set up parameters
   //
 
-  pops_t pops( param );   
+  pops_t pops( param );
 
   //
   // force new specs? (for use w/ R/moonlight)
@@ -1978,10 +2049,84 @@ void proc_pops( edf_t & edf , param_t & param )
 
   pops_indiv_t indiv( edf , param );
 
+  //
+  // Optionally apply POPS-CODA second-stage rescoring (prediction mode only).
+  // CODA model is specified via coda=<model-file>.
+  // The POPS stage-1 outputs are written above by summarize() inside the
+  // pops_indiv_t constructor.  CODA outputs are written here under MDL=CODA.
+  //
+
+  const bool training_mode = param.has( "train" );
+
+  if ( !training_mode && param.has( "coda" ) )
+    {
+      const std::string coda_file = pops_t::resolve_coda_model_file( param );
+
+      if ( !Helper::fileExists( coda_file ) )
+        {
+          logger << "  ** POPS-CODA: model file not found: " << coda_file << " -- skipping\n";
+        }
+      else if ( indiv.ne == 0 )
+        {
+          logger << "  ** POPS-CODA: no valid epochs -- skipping\n";
+        }
+      else
+        {
+          pops_coda_t::options_t coda_opt;
+          coda_opt.three_state = ( pops_opt_t::n_stages == 3 );
+
+          if ( param.has( "coda-context" ) )
+            coda_opt.context_epochs = param.requires_int( "coda-context" );
+          if ( param.has( "coda-lambda" ) )
+            coda_opt.lambda = param.requires_dbl( "coda-lambda" );
+          if ( param.has( "coda-no-future" ) )
+            coda_opt.include_future = false;
+          coda_opt.do_SHAP = param.has( "SHAP" ) || param.has( "shap" ) ||
+                             param.has( "coda-SHAP" );
+
+          const std::string coda_key =
+            coda_file + "|" +
+            Helper::int2str( coda_opt.three_state ? 1 : 0 ) + "|" +
+            Helper::int2str( coda_opt.context_epochs ) + "|" +
+            Helper::dbl2str( coda_opt.lambda ) + "|" +
+            Helper::int2str( coda_opt.include_future ? 1 : 0 ) + "|" +
+            Helper::int2str( coda_opt.do_SHAP ? 1 : 0 );
+
+          static std::unique_ptr<pops_coda_t> coda;
+          static std::string coda_loaded_key = "";
+
+          if ( !coda || coda_loaded_key != coda_key )
+            {
+              coda.reset( new pops_coda_t() );
+              coda->opt = coda_opt;
+              coda->load( coda_file );
+              coda_loaded_key = coda_key;
+            }
+
+          // Build flagged[] for valid epochs: POPS_UNKNOWN or NaN in P
+          std::vector<bool> flagged( indiv.ne , false );
+          for (int e = 0; e < indiv.ne; e++)
+            {
+              if ( indiv.PS[e] == POPS_UNKNOWN )
+                { flagged[e] = true; continue; }
+              for (int j = 0; j < indiv.P.cols(); j++)
+                if ( std::isnan( indiv.P(e,j) ) ) { flagged[e] = true; break; }
+            }
+
+          coda->predict( indiv.P ,
+                         indiv.E ,
+                         flagged ,
+                         indiv.ne_total ,
+                         indiv.has_staging ,
+                         indiv.S ,
+                         indiv.pedf );
+        }
+    }
+
 #else
   Helper::halt( "no LGBM support compiled in" );
 #endif
-    
+
 }
 
 

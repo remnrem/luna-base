@@ -720,6 +720,13 @@ void dsptools::polarity_check( const std::vector<double> & x0 , const std::vecto
       writer.value( "T_H2" , t_mobility );
       writer.value( "T_H3" , t_complexity );
 
+      int pol_flag = 0;
+      if ( t_sigdiff > 0 && t_activity > 0 )
+        pol_flag = 1;
+      else if ( t_sigdiff < 0 && t_activity < 0 )
+        pol_flag = -1;
+      writer.value( "FLIP" , pol_flag );
+
       if ( d_mode ) 
 	{
 

@@ -25,6 +25,7 @@
 
 #include "luna.h"
 #include "lunapi/rtables.h"
+#include "lunapi/waveforms.h"
 #include "stats/Eigen/Dense"
 #include <variant>
 #include <optional>
@@ -401,6 +402,29 @@ public:
 
   lannot_full_t fetch_full_annots( const std::vector<std::string> & anns ,
                                    const bool add_keys = false ) const;
+
+  waveform_extract_result_t extract_event_waveforms(
+    const std::vector<std::string> & annots ,
+    const std::vector<std::string> & chs ,
+    const double pre_secs ,
+    const double post_secs ,
+    const std::string & align = "mid" ,
+    const std::string & require = "full" ) const;
+
+  waveform_extract_result_t compute_waveform_features(
+    const waveform_extract_result_t & input ,
+    const bool catch24 = false ,
+    const bool basic_stats = true ) const;
+
+  waveform_extract_result_t extract_event_waveforms_with_features(
+    const std::vector<std::string> & annots ,
+    const std::vector<std::string> & chs ,
+    const double pre_secs ,
+    const double post_secs ,
+    const std::string & align = "mid" ,
+    const std::string & require = "full" ,
+    const bool catch24 = false ,
+    const bool basic_stats = true ) const;
 
   
   //

@@ -25,6 +25,7 @@
 #include "pops/hypnodensity.h"
 #include "pops/pops.h"
 #include "pops/indiv.h"
+#include "pops/coda.h"
 #include "pops/options.h"
 #include "pops/spec.h"
 
@@ -38,6 +39,7 @@
 #include <map>
 #include <numeric>
 #include <cmath>
+#include <memory>
 
 extern logger_t logger;
 
@@ -149,6 +151,62 @@ void pops_hypnodensity( edf_t & edf , param_t & param )
     {
       pops_t::lgbm.load_model( model_file );
       pops_t::lgbm_model_loaded = model_file;
+    }
+
+
+  //
+  // Optionally load CODA model once; if present, each stride's combined 30 s
+  // posterior matrix will be rescored before contributing to hypnodensity PP.
+  //
+
+  pops_coda_t * coda = NULL;
+
+  if ( param.has( "coda" ) )
+    {
+      const std::string coda_file = pops_t::resolve_coda_model_file( param );
+
+      if ( !Helper::fileExists( coda_file ) )
+        {
+          logger << "  ** POPS-CODA: model file not found: " << coda_file
+                 << " -- using stage-1 posteriors for hypnodensity\n";
+        }
+      else
+        {
+          pops_coda_t::options_t coda_opt;
+          coda_opt.three_state = false;
+
+          if ( param.has( "coda-context" ) )
+            coda_opt.context_epochs = param.requires_int( "coda-context" );
+          if ( param.has( "coda-lambda" ) )
+            coda_opt.lambda = param.requires_dbl( "coda-lambda" );
+          if ( param.has( "coda-no-future" ) )
+            coda_opt.include_future = false;
+          coda_opt.do_SHAP = false;
+
+          const std::string coda_key =
+            coda_file + "|" +
+            Helper::int2str( coda_opt.three_state ? 1 : 0 ) + "|" +
+            Helper::int2str( coda_opt.context_epochs ) + "|" +
+            Helper::dbl2str( coda_opt.lambda ) + "|" +
+            Helper::int2str( coda_opt.include_future ? 1 : 0 ) + "|" +
+            Helper::int2str( coda_opt.do_SHAP ? 1 : 0 );
+
+          static std::unique_ptr<pops_coda_t> coda_cache;
+          static std::string coda_loaded_key = "";
+
+          if ( !coda_cache || coda_loaded_key != coda_key )
+            {
+              coda_cache.reset( new pops_coda_t() );
+              coda_cache->opt = coda_opt;
+              coda_cache->load( coda_file );
+              coda_loaded_key = coda_key;
+            }
+
+          coda = coda_cache.get();
+
+          logger << "  hypnodensity mode: using CODA rescoring model "
+                 << coda_file << " for each stride\n";
+        }
     }
 
 
@@ -347,6 +405,27 @@ void pops_hypnodensity( edf_t & edf , param_t & param )
 
       if ( equivn )
 	logger << "\n";
+
+
+      //
+      // Optionally rescore the stride's final 30 s posteriors with CODA before
+      // mapping them into the overlapping hypnodensity PP traces.
+      //
+
+      if ( coda && indiv.ne > 0 )
+        {
+          std::vector<bool> flagged( indiv.ne , false );
+          for (int e = 0; e < indiv.ne; e++)
+            {
+              if ( indiv.PS[e] == POPS_UNKNOWN )
+                { flagged[e] = true; continue; }
+              for (int j = 0; j < indiv.P.cols(); j++)
+                if ( std::isnan( indiv.P(e,j) ) ) { flagged[e] = true; break; }
+            }
+
+          logger << "    rescoring stride posteriors with CODA\n";
+          indiv.P = coda->rescore( indiv.P , indiv.E , flagged );
+        }
 
 
       //

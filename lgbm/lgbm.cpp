@@ -1017,23 +1017,22 @@ void lgbm_t::load_pops_default_config()
 {
 
   params = 
-    " boosting_type = gbdt"
-    " objective = multiclass"
-    " metric = multi_logloss"
-    " num_class = 5"
-    " metric_freq = 1"
-    " is_training_metric = true"
-    " max_bin = 255"
-    " early_stopping = 10"
-    " num_trees = 100"
-    " learning_rate = 0.05"
-    " num_leaves = 31";  
+    "boosting_type=gbdt "
+    "objective=multiclass "
+    "metric=multi_logloss "
+    "num_class=5 "
+    "metric_freq=1 "
+    "is_training_metric=true "
+    "max_bin=255 "
+    "early_stopping=10 "
+    "num_trees=100 "
+    "learning_rate=0.05 "
+    "num_leaves=31";
   
 }
 
    
 #endif
-
 
 
 

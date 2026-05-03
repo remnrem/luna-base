@@ -424,7 +424,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  // Optionally, SHAP values too 
 	  //
 	  
-	  if ( param.has( "SHAP" ) )
+	  if ( param.has( "SHAP" ) || param.has( "shap" ) || param.has( "pops-SHAP" ) )
 	    SHAP();
 
 
@@ -1766,6 +1766,7 @@ void pops_indiv_t::predict( const int iter )
 
 void pops_indiv_t::SHAP()
 {
+  logger << "  calculating SHAP values...\n";
   
   Eigen::MatrixXd SHAP = pops_t::lgbm.SHAP_values( X1 );
 
@@ -2140,6 +2141,26 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   writer.value( "PREC3" , stats3.macro_precision );
   writer.value( "RECALL3" , stats3.macro_recall );
 
+  // Mirror core stage-1 summary metrics under MDL=E for easy model comparisons.
+  writer.level( "E" , "MDL" );
+  writer.value( "K" , stats.kappa );
+  writer.value( "K3" , stats3.kappa );
+  writer.value( "ACC" , stats.acc );
+  writer.value( "ACC3" , stats3.acc );
+  writer.value( "CONF" , avg_pmax / (double)ne );
+  writer.value( "MCC" , stats.mcc );
+  writer.value( "MCC3" , stats3.mcc );
+  writer.value( "F1" , stats.macro_f1 );
+  writer.value( "PREC" , stats.macro_precision );
+  writer.value( "RECALL" , stats.macro_recall );
+  writer.value( "F1_WGT" , stats.avg_weighted_f1 );
+  writer.value( "PREC_WGT" , stats.avg_weighted_precision );
+  writer.value( "RECALL_WGT" , stats.avg_weighted_recall );
+  writer.value( "F13" , stats3.macro_f1 );
+  writer.value( "PREC3" , stats3.macro_precision );
+  writer.value( "RECALL3" , stats3.macro_recall );
+  writer.unlevel( "MDL" );
+
   //
   // sleep and REM latencies
   //
@@ -2324,6 +2345,28 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   writer.value( "PR1" ,  fac * masked );
 
   writer.unlevel(  globals::stage_strat  );
+
+  writer.level( "E" , "MDL" );
+  for (int ss=0; ss < pops_opt_t::n_stages ; ss++ )
+    {
+      writer.level( pops_t::label( (pops_stage_t)ss ) , globals::stage_strat );
+      writer.value( "F1" , stats.f1[ss] );
+      writer.value( "PREC" , stats.precision[ss] );
+      writer.value( "RECALL" , stats.recall[ss] );
+      writer.value( "OBS" ,  fac * dur_obs[ss] );
+      writer.value( "ORIG" , fac * dur_obs_orig[ss] );
+      if ( ! pops_opt_t::eval_mode )
+        writer.value( "PRF" ,  fac * dur_predf[ss] );
+      writer.value( "PR1" ,  fac * dur_pred1[ss] );
+    }
+  writer.level( pops_t::label( POPS_UNKNOWN ) , globals::stage_strat );
+  writer.value( "OBS" ,  fac * masked );
+  writer.value( "ORIG" , fac * dur_obs_orig[ POPS_UNKNOWN ] );
+  if ( ! pops_opt_t::eval_mode )
+    writer.value( "PRF" ,  fac * masked );
+  writer.value( "PR1" ,  fac * masked );
+  writer.unlevel( globals::stage_strat );
+  writer.unlevel( "MDL" );
 
 
   //

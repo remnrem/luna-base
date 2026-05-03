@@ -55,6 +55,7 @@
 #include "pops/spec.h"
 
 #include "lgbm/lgbm.h"
+#include "pops/coda.h"
 #include "miscmath/miscmath.h"
 #include "miscmath/crandom.h"
 #include "helper/helper.h"
@@ -366,18 +367,22 @@ void pops_t::make_level2_library( param_t & param )
   //
   // Train model
   //
- 
+
   fit_model( model_file , weights );
-  
+
+  if ( param.has( "coda" ) )
+    logger << "  POPS-CODA: note -- CODA training is only supported from an explicit "
+           << "posteriors= file; stage-1 training does not train CODA inline\n";
+
 
   //
   // Write elapsed-sleep priors?
   //
-  
-  if ( espriors_file != "." )
-    write_elapsed_sleep_priors( espriors_file );      
 
-  
+  if ( espriors_file != "." )
+    write_elapsed_sleep_priors( espriors_file );
+
+
 }
 
 
@@ -1206,6 +1211,21 @@ std::string pops_t::update_filepath( const std::string & f )
   return f2;
 }
 
+std::string pops_t::resolve_coda_model_file( const param_t & param ,
+                                             const bool allow_legacy_train_key )
+{
+  if ( allow_legacy_train_key && param.has( "train-coda" ) && !param.empty( "train-coda" ) )
+    return update_filepath( param.value( "train-coda" ) );
+
+  if ( param.has( "coda" ) && !param.empty( "coda" ) )
+    return update_filepath( param.value( "coda" ) );
+
+  if ( pops_opt_t::pops_root != "" )
+    return update_filepath( pops_opt_t::pops_root + ".coda.mod" );
+
+  return update_filepath( "coda.mod" );
+}
+
 
 void pops_t::dump_matrix( const std::string & f )
 {
@@ -1845,11 +1865,6 @@ void pops_t::stage_association()
 
 
 #endif
-
-
-
-
-
 
 
 

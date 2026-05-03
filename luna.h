@@ -107,6 +107,7 @@
 #include "lgbm/lgbm.h"
 
 #include "pops/pops.h"
+#include "pops/coda.h"
 #include "pops/hypnodensity.h"
 #include "pops/hdstats.h"
 

@@ -1036,9 +1036,12 @@ void cmddefs_t::init()
 	    "Modes:\n"
 	    "  dur               : store annotation duration in seconds\n"
 	    "  sig (with mean/min/max/range) : store a signal statistic over the annotation interval\n"
-	    "  other (with overlap/count/nearest/...) : relate to other annotation classes\n"
+	    "  other (with flag/count/gap/copy-md/...) : relate to other annotation classes\n"
 	    "  expr=#...#        : evaluate an expression using existing metadata fields as variables\n"
-	    "  other+look+src-md : copy a metadata field from a nearby annotation (next/prev/overlap/nearest)\n"
+	    "\n"
+	    "In other= mode, look= selects candidate annotations (any/overlap/next/prev/nearest\n"
+	    "and start/stop/midpoint anchored variants), and one output function writes a flag,\n"
+	    "count, signed gap, or copied metadata value.\n"
 	    "\n"
 	    "Use it when annotations need extra attached values for later tabulation, filtering or export." );
   add_param( "META" , "annot" , "spindle" , "Annotations to update" );
@@ -1051,21 +1054,22 @@ void cmddefs_t::init()
   add_param( "META" , "range" , "" , "Store the signal range over the interval/window" );
   add_param( "META" , "other" , "arousal" , "Use other annotations to derive metadata" );
   add_param( "META" , "flatten" , "" , "Flatten other annotations before overlap-based calculations" );
-  add_param( "META" , "overlap" , "" , "Store whether any other annotation overlaps the interval" );
+  add_param( "META" , "flag" , "" , "Store whether any matching other annotation exists after applying look= and windowing" );
+  add_param( "META" , "overlap" , "" , "Alias for flag with look=overlap" );
   add_param( "META" , "complete-overlap" , "" , "Store whether the interval is completely spanned by another annotation" );
   add_param( "META" , "whole-other" , "" , "Store whether the interval completely spans another annotation" );
-  add_param( "META" , "count" , "" , "Store the number of overlapping other annotations" );
-  add_param( "META" , "nearest" , "60" , "Store signed time to the nearest other annotation" );
-  add_param( "META" , "nearest-start" , "60" , "Store signed time to the nearest annotation start" );
-  add_param( "META" , "nearest-stop" , "60" , "Store signed time to the nearest annotation stop" );
-  add_param( "META" , "nearest-midpoint" , "60" , "Store signed time to the nearest annotation midpoint" );
+  add_param( "META" , "count" , "" , "Store the number of matching other annotations after applying look= and windowing" );
+  add_param( "META" , "gap" , "" , "Store signed interval-gap in seconds to the selected other annotation" );
+  add_param( "META" , "gap-start" , "" , "Store signed start-to-start gap in seconds to the selected other annotation" );
+  add_param( "META" , "gap-stop" , "" , "Store signed stop-to-stop gap in seconds to the selected other annotation" );
+  add_param( "META" , "gap-midpoint" , "" , "Store signed midpoint-to-midpoint gap in seconds to the selected other annotation" );
   add_param( "META" , "w" , "0.5" , "Expand the interval symmetrically by this many seconds before evaluating" );
   add_param( "META" , "w-left" , "0.5" , "Expand the interval left by this many seconds" );
   add_param( "META" , "w-right" , "0.5" , "Expand the interval right by this many seconds" );
   add_param( "META" , "expr" , "#conf*dur#" , "Expression evaluated per instance using existing metadata fields as variables (also: dur)" );
-  add_param( "META" , "src-md" , "spo2_nadir" , "Copy this metadata field from a nearby annotation (requires other= and look=)" );
-  add_param( "META" , "look" , "next" , "How to find the nearby annotation: next, prev, overlap, or nearest" );
-  add_param( "META" , "prefer" , "longest" , "Tie-break when multiple candidates match: first, last, or longest (default: longest for overlap, first otherwise)" );
+  add_param( "META" , "copy-md" , "spo2_nadir" , "Copy this metadata field from the selected other annotation (requires other= and look=)" );
+  add_param( "META" , "look" , "next" , "How to find related annotations: any, overlap, next, prev, nearest, next-start, next-stop, next-midpoint, prev-start, prev-stop, or prev-midpoint" );
+  add_param( "META" , "prefer" , "longest" , "Tie-break when multiple candidates match: first, last, or longest (default: longest for any/overlap, first otherwise)" );
 
   //
   // ESPAN
@@ -4042,6 +4046,8 @@ void cmddefs_t::init()
   add_param( "POPS" , "soap-grid" , "0.8" , "Run a SOAP confidence grid search" );
   add_param( "POPS" , "verbose" , "" , "Verbose model and feature diagnostics" );
   add_param( "POPS" , "stage-assoc" , "F" , "Run stage-association summaries" );
+  add_param( "POPS" , "pops-SHAP" , "" , "Emit SHAP values for the stage-1 POPS model only" );
+  add_param( "POPS" , "coda-SHAP" , "" , "Emit SHAP values for the CODA model only" );
   add_param( "POPS" , "epoch-SHAP" , "" , "Emit epoch-level SHAP values" );
   add_param( "POPS" , "SHAP-epoch" , "" , "Alias for epoch-SHAP" );
   add_param( "POPS" , "3-class" , "" , "Pool N1/N2/N3 into a single NREM class" );
@@ -4056,6 +4062,16 @@ void cmddefs_t::init()
   add_param( "POPS" , "fix" , "W,R,N1,N2,N3" , "Sample a fixed number of epochs per class" );
   add_param( "POPS" , "alias" , "CEN|C3" , "Specify channel aliases" );
   add_param( "POPS" , "equiv" , "CEN|C3,C3_N" , "Specify channel-equivalent mappings" );
+  add_param( "POPS" , "posteriors" , "pops-out.txt" , "POPS-CODA: file of stage-1 posteriors for standalone CODA training (destrat POPS -r E format)" );
+  add_param( "POPS" , "train-coda" , "coda.mod" , "POPS-CODA: explicit output model file for standalone CODA training (legacy override; otherwise coda[=<file>] with lib=ROOT defaults to ROOT.coda.mod)" );
+  add_param( "POPS" , "coda" , "coda.mod" , "POPS-CODA: standalone second-stage CODA training from posteriors=, or explicit model path override; if no file is given and lib=ROOT then uses ROOT.coda.mod under path=" );
+  add_param( "POPS" , "coda-config" , "coda.conf" , "POPS-CODA: LightGBM config file for CODA training (default: built-in)" );
+  add_param( "POPS" , "coda-iter" , "200" , "POPS-CODA: number of LightGBM iterations for CODA training (default 200)" );
+  add_param( "POPS" , "coda-context" , "20" , "POPS-CODA: context window in epochs (default 20)" );
+  add_param( "POPS" , "coda-min-contiguous" , "0" , "POPS-CODA: require at least this many contiguous valid epochs to include a subject in CODA training (default 0 = no filter)" );
+  add_param( "POPS" , "coda-weights" , "1,1.5,1.5,1,1" , "POPS-CODA: class weights for training in W,R,N1,N2,N3 order (or W,R,NR for 3-class); defaults upweight R and N1/NR" );
+  add_param( "POPS" , "coda-lambda" , "5" , "POPS-CODA: denominator smoothing for rel-elapsed features (default 5)" );
+  add_param( "POPS" , "coda-no-future" , "" , "POPS-CODA: disable future-context features" );
 
   add_table( "POPS" , "" , "POPS metrics" );
   add_var( "POPS", "" , "ACC" , "Accuracy" );
@@ -4122,10 +4138,17 @@ void cmddefs_t::init()
 
   add_table( "POPS" , "SS,FTR" , "SHAP values" );
   add_var( "POPS" , "SS,FTR" , "SHAP" , "SHAP values" );
+
+  add_table( "POPS" , "MDL,SS,FTR" , "Model-specific SHAP values" );
+  add_var( "POPS" , "MDL,SS,FTR" , "SHAP" , "SHAP values" );
  
   add_table( "POPS" , "E,SS,FTR" , "Epoch-level SHAP values" );
   add_var( "POPS" , "E,SS,FTR" , "SHAP" , "SHAP values" );
   set_compressed( "POPS" , tfac_t( "E,SS,FTR" ) );
+
+  add_table( "POPS" , "MDL,E,SS,FTR" , "Model-specific epoch-level SHAP values" );
+  add_var( "POPS" , "MDL,E,SS,FTR" , "SHAP" , "SHAP values" );
+  set_compressed( "POPS" , tfac_t( "MDL,E,SS,FTR" ) );
   
   add_table( "POPS" , "PRED,OBS" , "Confusion matrix" );
   add_var( "POPS" , "PRED,OBS" , "N" , "Count" );
@@ -4304,6 +4327,16 @@ void cmddefs_t::init()
   add_param( "RUN-POPS" , "prefix" , "PP" , "Channel prefix for hypnodensity output signals" );
   add_param( "RUN-POPS" , "add-nrem123" , "T" , "Add individual N1/N2/N3 posterior channels (hypnodensity)" );
   add_param( "RUN-POPS" , "add-nrem" , "F" , "Add summed NR=N1+N2+N3 posterior channel (hypnodensity)" );
+  add_param( "RUN-POPS" , "coda" , "coda.mod" , "Apply POPS-CODA second-stage rescoring model; if no file is given and lib=ROOT then uses ROOT.coda.mod under path=" );
+  add_param( "RUN-POPS" , "pops-SHAP" , "" , "Emit SHAP values for the stage-1 POPS model only" );
+  add_param( "RUN-POPS" , "coda-SHAP" , "" , "Emit SHAP values for the CODA model only" );
+  add_param( "RUN-POPS" , "epoch-SHAP" , "" , "Emit epoch-level SHAP values" );
+  add_param( "RUN-POPS" , "SHAP-epoch" , "" , "Alias for epoch-SHAP" );
+  add_param( "RUN-POPS" , "coda-context" , "20" , "CODA context window in epochs (default 20)" );
+  add_param( "RUN-POPS" , "coda-min-contiguous" , "0" , "CODA training: require at least this many contiguous valid epochs to include a subject (default 0 = no filter)" );
+  add_param( "RUN-POPS" , "coda-weights" , "1,1.5,1.5,1,1" , "CODA training class weights in W,R,N1,N2,N3 order (or W,R,NR for 3-class); defaults upweight R and N1/NR" );
+  add_param( "RUN-POPS" , "coda-lambda" , "5" , "CODA denominator smoothing for rel-elapsed features (default 5)" );
+  add_param( "RUN-POPS" , "coda-no-future" , "" , "Disable future-context features in CODA" );
 
   //
   // EVAL-STAGES
@@ -5255,6 +5288,7 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "ftr" , "tag" , "Produce FTR files for all spindles, with the tag in the filename" );
   add_param( "SPINDLES" , "ftr-dir" , "/path/to/folder" , "Folder for FTR files" );
   add_param( "SPINDLES" , "annot" , "SP" , "Write detected spindles as annotations, optionally with this label" );
+  add_param( "SPINDLES" , "annot-ch" , "" , "Append the channel label to the spindle annotation class name" );
   add_param( "SPINDLES" , "out" , "spindles.annot" , "Write spindle annotations to an output file" );
   add_param( "SPINDLES" , "cache" , "spindles" , "Cache spindle-level summaries" );
   add_param( "SPINDLES" , "cache-peaks" , "spindles-peaks" , "Cache spindle peak sample-points" );
@@ -6097,6 +6131,9 @@ void cmddefs_t::init()
   add_param( "WAVEFORMS" , "w" , "0.5" , "Symmetric flank in seconds to add on both sides of each annotation" );
   add_param( "WAVEFORMS" , "w-left" , "0.25" , "Additional seconds to extend left of the annotation" );
   add_param( "WAVEFORMS" , "w-right" , "0.25" , "Additional seconds to extend right of the annotation" );
+  add_param( "WAVEFORMS" , "catch22" , "" , "Precompute catch22 waveform metrics for each stored channel waveform" );
+  add_param( "WAVEFORMS" , "catch24" , "" , "Precompute catch24 waveform metrics (catch22 plus mean and SD) for each stored channel waveform" );
+  add_param( "WAVEFORMS" , "basic-stats" , "" , "Also store basic waveform metrics (duration, range, mean, SD) for each stored channel waveform" );
 
   add_table( "WAVEFORMS" , "FILE" , "Per-file waveform dump summary" );
   add_var( "WAVEFORMS" , "FILE" , "ID" , "EDF/individual ID" );
@@ -6109,6 +6146,8 @@ void cmddefs_t::init()
   add_var( "WAVEFORMS" , "FILE" , "ANNOTS" , "Comma-delimited defining annotation classes" );
   add_var( "WAVEFORMS" , "FILE" , "N_WAVES" , "Number of waveform events dumped" );
   add_var( "WAVEFORMS" , "FILE" , "N_CH" , "Number of dumped channels" );
+  add_var( "WAVEFORMS" , "FILE" , "N_FEATURES" , "Number of precomputed waveform features stored per channel block" );
+  add_var( "WAVEFORMS" , "FILE" , "FEATURES" , "Comma-delimited waveform feature names stored in the .lwf file" );
 
   add_table( "WAVEFORMS" , "FILE,CH" , "Per-file channel summary for dumped waveforms" );
   add_var( "WAVEFORMS" , "FILE,CH" , "SR" , "Channel sample rate" );
@@ -7867,6 +7906,7 @@ void cmddefs_t::init()
   add_var( "POL" , "CH" , "MD" , "Median signal level summary" );
   add_var( "POL" , "CH" , "T_DIFF" , "t-statistic comparing upward versus downward signal level" );
   add_var( "POL" , "CH" , "T_H1" , "t-statistic comparing Hjorth activity" );
+  add_var( "POL" , "CH" , "FLIP" , "Simple polarity call: 1=likely flipped, 0=unsure, -1=likely not flipped, based on agreement between T_DIFF and T_H1" );
   add_var( "POL" , "CH" , "T_H2" , "t-statistic comparing Hjorth mobility" );
   add_var( "POL" , "CH" , "T_H3" , "t-statistic comparing Hjorth complexity" );
   add_var( "POL" , "CH" , "UP_H1" , "Mean upward Hjorth activity [d-mode]" );

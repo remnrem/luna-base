@@ -2905,54 +2905,31 @@ void timeline_t::set_annot_metadata( const param_t & param )
   const bool expr_mode = param.has( "expr" );
 
   //
-  // copy mode: copy a metadata field from a nearby annotation of another class
-  //   requires other= (source class) and look= (next/prev/overlap/nearest)
-  //   copy_mode takes precedence over other_mode for the mode guard
+  // other annots (flag/count/gap/copy-md/... functions)
   //
 
-  const bool copy_mode = param.has( "src-md" );
-
-  //
-  // other annots (overlap/count/nearest functions); excludes copy_mode
-  //
-
-  const bool other_mode = param.has( "other" ) && !copy_mode;
+  const bool other_mode = param.has( "other" );
 
   std::vector<std::string> oanames;
-  if ( other_mode || copy_mode )
+  if ( other_mode )
     oanames = param.strvector_xsigs( "other" );
 
   //
   // can only be in a single mode
   //
 
-  if ( dur_mode + other_mode + signal_mode + expr_mode + copy_mode != 1 )
+  if ( dur_mode + other_mode + signal_mode + expr_mode != 1 )
     Helper::halt( "specify exactly one mode: dur, sig (with mean/min/max/range), "
-		  "other (with overlap/count/nearest function), expr, "
-		  "or other+look+src-md" );
-
-  if ( copy_mode )
-    {
-      if ( !param.has( "other" ) )
-	Helper::halt( "src-md= requires other=" );
-      if ( !param.has( "look" ) )
-	Helper::halt( "src-md= requires look= (next, prev, overlap, or nearest)" );
-      const std::string lv = param.value( "look" );
-      if ( lv != "next" && lv != "prev" && lv != "overlap" && lv != "nearest" )
-	Helper::halt( "look= must be one of: next, prev, overlap, nearest" );
-      if ( param.has( "prefer" ) )
-	{
-	  const std::string pv = param.value( "prefer" );
-	  if ( pv != "first" && pv != "last" && pv != "longest" )
-	    Helper::halt( "prefer= must be one of: first, last, longest" );
-	}
-    }
+		  "other (with flag/count/gap/copy-md function), or expr" );
 
   //
   // functions
   //
 
   std::string fn = "";
+  std::string look_mode = "";
+  std::string copy_md = "";
+  std::string prefer_mode = "first";
   
   if ( signal_mode )
     {
@@ -2965,46 +2942,100 @@ void timeline_t::set_annot_metadata( const param_t & param )
     }
   else if ( other_mode )
     {
-      int fc = 0; 
-      if ( param.has( "overlap" ) ) {fn = "overlap"; ++fc; }
-      if ( param.has( "complete-overlap" ) ) {fn = "complete-overlap"; ++fc; } // A is completely spanned by O
-      if ( param.has( "whole-other" ) ) {fn = "whole-other" ; ++fc; } // O is completely spanned by A 
-      if ( param.has( "count" ) ) {fn = "count"; ++fc; }
-      if ( param.has( "nearest" )) {fn = "nearest"; ++fc; }
-      if ( param.has( "nearest-start" )) {fn = "nearest-start"; ++fc; }
-      if ( param.has( "nearest-stop" )) {fn = "nearest-stop"; ++fc; }
-      if ( param.has( "nearest-midpoint" )) {fn = "nearest-midpoint"; ++fc; }
+      const bool copy_mode = param.has( "copy-md" );
+      const bool flag_mode = param.has( "flag" );
+      const bool overlap_alias_mode = param.has( "overlap" );
+      const bool complete_overlap_mode = param.has( "complete-overlap" );
+      const bool whole_other_mode = param.has( "whole-other" );
+      const bool count_mode = param.has( "count" );
+      const bool gap_mode = param.has( "gap" );
+      const bool gap_start_mode = param.has( "gap-start" );
+      const bool gap_stop_mode = param.has( "gap-stop" );
+      const bool gap_midpoint_mode = param.has( "gap-midpoint" );
+      const bool nearest_alias_mode = param.has( "nearest" );
+      const bool nearest_start_alias_mode = param.has( "nearest-start" );
+      const bool nearest_stop_alias_mode = param.has( "nearest-stop" );
+      const bool nearest_midpoint_alias_mode = param.has( "nearest-midpoint" );
 
-      if ( fc != 1 ) Helper::halt( "must specify exactly one of: count, overlap, complete-overlap, whole-other, nearest, nearest-midpoint, nearest-start, nearest-stop" ); 
+      int fc = 0; 
+      if ( flag_mode ) { fn = "flag"; ++fc; }
+      if ( overlap_alias_mode ) { fn = "flag"; ++fc; }
+      if ( complete_overlap_mode ) { fn = "complete-overlap"; ++fc; }
+      if ( whole_other_mode ) { fn = "whole-other"; ++fc; }
+      if ( count_mode ) { fn = "count"; ++fc; }
+      if ( gap_mode ) { fn = "gap"; ++fc; }
+      if ( gap_start_mode ) { fn = "gap-start"; ++fc; }
+      if ( gap_stop_mode ) { fn = "gap-stop"; ++fc; }
+      if ( gap_midpoint_mode ) { fn = "gap-midpoint"; ++fc; }
+      if ( copy_mode ) { fn = "copy-md"; ++fc; }
+      if ( nearest_alias_mode ) { fn = "gap"; ++fc; }
+      if ( nearest_start_alias_mode ) { fn = "gap-start"; ++fc; }
+      if ( nearest_stop_alias_mode ) { fn = "gap-stop"; ++fc; }
+      if ( nearest_midpoint_alias_mode ) { fn = "gap-midpoint"; ++fc; }
+
+      if ( fc != 1 )
+	Helper::halt( "must specify exactly one of: flag, count, complete-overlap, whole-other, gap, gap-start, gap-stop, gap-midpoint, copy-md" );
+
+      const bool explicit_look = param.has( "look" );
+      if ( explicit_look )
+	look_mode = param.value( "look" );
+      else if ( overlap_alias_mode )
+	look_mode = "overlap";
+      else if ( nearest_alias_mode || nearest_start_alias_mode || nearest_stop_alias_mode || nearest_midpoint_alias_mode )
+	look_mode = "nearest";
+      else
+	look_mode = "any";
+
+      if ( look_mode != "any"
+	   && look_mode != "overlap"
+	   && look_mode != "next"
+	   && look_mode != "prev"
+	   && look_mode != "nearest"
+	   && look_mode != "next-start"
+	   && look_mode != "next-stop"
+	   && look_mode != "next-midpoint"
+	   && look_mode != "prev-start"
+	   && look_mode != "prev-stop"
+	   && look_mode != "prev-midpoint" )
+	Helper::halt( "look= must be one of: any, overlap, next, prev, nearest, next-start, next-stop, next-midpoint, prev-start, prev-stop, prev-midpoint" );
+
+      if ( overlap_alias_mode && explicit_look && look_mode != "overlap" && look_mode != "any" )
+	Helper::halt( "overlap is only compatible with look=overlap (or omitted look=)" );
+
+      if ( ( nearest_alias_mode || nearest_start_alias_mode || nearest_stop_alias_mode || nearest_midpoint_alias_mode )
+	   && explicit_look && look_mode != "nearest" )
+	Helper::halt( "nearest aliases are only compatible with look=nearest (or omitted look=)" );
+
+      if ( fn == "copy-md" )
+	{
+	  copy_md = param.requires( "copy-md" );
+	  if ( look_mode == "any" )
+	    Helper::halt( "copy-md= requires look= to select a specific other annotation" );
+	}
+
+      if ( ( fn == "gap" || fn == "gap-start" || fn == "gap-stop" || fn == "gap-midpoint" )
+	   && look_mode == "any" )
+	Helper::halt( "gap outputs require look= to select a specific other annotation" );
+
+      if ( ( fn == "complete-overlap" || fn == "whole-other" )
+	   && look_mode != "any" && look_mode != "overlap" )
+	Helper::halt( "complete-overlap and whole-other are only defined for look=any or look=overlap" );
+
+      if ( param.has( "prefer" ) )
+	{
+	  prefer_mode = param.value( "prefer" );
+	  if ( prefer_mode != "first" && prefer_mode != "last" && prefer_mode != "longest" )
+	    Helper::halt( "prefer= must be one of: first, last, longest" );
+	}
+      else
+	prefer_mode = ( look_mode == "any" || look_mode == "overlap" ) ? "longest" : "first";
+
+      if ( flatten
+	   && ( fn == "copy-md" || fn == "gap" || fn == "gap-start" || fn == "gap-stop" || fn == "gap-midpoint" )
+	   && ( look_mode == "any" || look_mode == "overlap" ) )
+	Helper::halt( "flatten is only supported for flag, count, complete-overlap, and whole-other" );
     }
 
-
-  //
-  // search window for nearest comparisons (1 minute by default) 
-  //
-
-  double nearest_search_sec = 60;
-
-  if ( fn == "nearest" && ! param.empty( "nearest" ) )
-    nearest_search_sec = param.requires_dbl( "nearest" );
-
-  if ( fn == "nearest-start" && ! param.empty( "nearest-start" ) )
-    nearest_search_sec = param.requires_dbl( "nearest-start" );
-  
-  if ( fn == "nearest-stop" && ! param.empty( "nearest-stop" ) )
-    nearest_search_sec = param.requires_dbl( "nearest-stop" );
-
-  if ( fn == "nearest-midpoint" && ! param.empty( "nearest-midpoint" ) )
-    nearest_search_sec = param.requires_dbl( "nearest-midpoint" );
-  
-  if ( nearest_search_sec < 0 ) nearest_search_sec = fabs( nearest_search_sec );
-  
-  uint64_t nearest_search_tp = nearest_search_sec * globals::tp_1sec;
-
-  const bool nearest_mode = fn.substr(0,7) == "nearest";
-
-  if ( nearest_mode )
-    logger << "  using " << fn << " search window of " << nearest_search_sec << " seconds\n";
 
   //
   // MD tag 
@@ -3025,86 +3056,48 @@ void timeline_t::set_annot_metadata( const param_t & param )
     }
 
   //
-  // parse copy_mode parameters
+  // other-mode parameters and lookups
   //
 
-  std::string look_mode = "";
-  std::string src_md    = "";
-  std::string prefer_mode = "first";
+  struct meta_other_t {
+    interval_t interval;
+    instance_t * instance;
+    std::string label;
+  };
 
-  if ( copy_mode )
-    {
-      look_mode = param.value( "look" );
-      src_md    = param.requires( "src-md" );
-      // default prefer: longest for overlap (most intuitive for medical events), first otherwise
-      prefer_mode = param.has( "prefer" ) ? param.value( "prefer" )
-	  : ( look_mode == "overlap" ? "longest" : "first" );
-      logger << "  META copy: look=" << look_mode
-	     << " src-md=" << src_md
-	     << " prefer=" << prefer_mode << "\n";
-    }
+  std::multimap< interval_t , meta_other_t > b_events;
+  std::multimap< uint64_t , meta_other_t > b_starts;
+  std::multimap< uint64_t , meta_other_t > b_stops;
+  std::multimap< uint64_t , meta_other_t > b_midpoints;
+  std::vector<annot_t*> b_annot_ptrs;
+  std::vector<std::string> b_annot_names;
 
-  //
-  // general other table (for nearest functions)
-  //
-
-  std::map<interval_t,std::string> allevs;
-
-  if ( nearest_mode )
-    {
-      for (int a=0; a<oanames.size(); a++)
-	{      
-	  annot_t * a1 = annotations->find( oanames[a] );
-	  if ( a1 == NULL ) continue;
-	  
-	  // get /all/ annotations
-	  const annot_map_t & events = a1->interval_events;
-	  
-	  // list events in this epoch (any span)
-	  annot_map_t::const_iterator ii = events.begin();
-	  while ( ii != events.end() )
-	    {	  	      
-	      const instance_idx_t & instance_idx = ii->first;	      
-	      const interval_t & an_interval = instance_idx.interval;	  
-	      if ( fn == "nearest-midpoint" ) 
-		allevs[ interval_t( an_interval.mid() , an_interval.mid() ) ] = oanames[a];
-	      else if ( fn == "nearest-start" )
-		allevs[ interval_t( an_interval.start , an_interval.start ) ] = oanames[a];
-	      else if ( fn == "nearest-stop" )
-		allevs[ interval_t( an_interval.stop , an_interval.stop ) ] = oanames[a];
-	      else if ( fn == "nearest" )
-		allevs[ an_interval ] = oanames[a];
-	      ++ii;
-	    }
-	}
-      
-      logger << "  built a table of " << allevs.size() << " other events for nearest lookups\n";
-
-    }
-
-  //
-  // copy_mode pre-processing: build a sorted map of all B events and keep annot_t* for extract()
-  //
-
-  std::map<interval_t, instance_t*> b_events;   // sorted by interval for next/prev/nearest walks
-  std::vector<annot_t*> b_annot_ptrs;            // for interval-tree extract() in overlap/nearest-overlap
-
-  if ( copy_mode )
+  if ( other_mode )
     {
       for (int oa=0; oa<(int)oanames.size(); oa++)
 	{
 	  annot_t * ba = annotations->find( oanames[oa] );
 	  if ( ba == NULL ) continue;
 	  b_annot_ptrs.push_back( ba );
+	  b_annot_names.push_back( oanames[oa] );
+
 	  const annot_map_t & bevs = ba->interval_events;
 	  annot_map_t::const_iterator ii = bevs.begin();
 	  while ( ii != bevs.end() )
 	    {
-	      b_events[ ii->first.interval ] = ii->second;
+	      meta_other_t evt;
+	      evt.interval = ii->first.interval;
+	      evt.instance = ii->second;
+	      evt.label = oanames[oa];
+	      b_events.insert( std::make_pair( evt.interval , evt ) );
+	      b_starts.insert( std::make_pair( evt.interval.start , evt ) );
+	      b_stops.insert( std::make_pair( evt.interval.stop , evt ) );
+	      b_midpoints.insert( std::make_pair( evt.interval.mid() , evt ) );
 	      ++ii;
 	    }
 	}
-      logger << "  built a table of " << b_events.size() << " other events for copy lookup\n";
+
+      logger << "  built tables of " << b_events.size() << " other events for META lookups\n";
     }
 
   //
@@ -3205,223 +3198,431 @@ void timeline_t::set_annot_metadata( const param_t & param )
 
 
 	  //
-	  // copy_mode: copy a metadata field from a nearby annotation of another class
+	  // annot-mode
 	  //
 
-	  if ( copy_mode )
+	  if ( other_mode )
 	    {
-	      // window limits (raw tp values used directly as gap bounds for next/prev/nearest)
 	      uint64_t right_win_tp = right_flanking ? (uint64_t)right_flanking_tp
 		                    : ( flanking      ? (uint64_t)flanking_tp : 0 );
 	      uint64_t left_win_tp  = left_flanking  ? (uint64_t)left_flanking_tp
 		                    : ( flanking      ? (uint64_t)flanking_tp : 0 );
 	      const bool has_right_win = right_flanking || flanking;
 	      const bool has_left_win  = left_flanking  || flanking;
-
-	      // for overlap mode: expand A's interval before the extract() query
 	      interval_t look_int = idx.interval;
 	      if      ( flanking      ) look_int.expand( flanking_tp );
 	      else if ( left_flanking ) look_int.expand_left( left_flanking_tp );
 	      else if ( right_flanking) look_int.expand_right( right_flanking_tp );
 
-	      instance_t * matched_b = NULL;
+	      typedef std::vector<meta_other_t> meta_other_list_t;
 
-	      // --- look=next: first B whose start >= A's stop, within w-right window ---
-	      if ( look_mode == "next" )
+	      auto append_key_matches = [&]( const std::multimap< uint64_t , meta_other_t > & table ,
+					     const uint64_t key ,
+					     meta_other_list_t * out )
 		{
-		  std::map<interval_t,instance_t*>::const_iterator bb =
-		    b_events.lower_bound( interval_t( idx.interval.stop , idx.interval.stop ) );
-		  if ( bb != b_events.end() )
+		  std::pair< std::multimap< uint64_t , meta_other_t >::const_iterator ,
+			     std::multimap< uint64_t , meta_other_t >::const_iterator > rr = table.equal_range( key );
+		  std::multimap< uint64_t , meta_other_t >::const_iterator ii = rr.first;
+		  while ( ii != rr.second )
 		    {
-		      uint64_t gap = bb->first.start - idx.interval.stop;
-		      if ( !has_right_win || gap <= right_win_tp )
-			matched_b = bb->second;
+		      out->push_back( ii->second );
+		      ++ii;
 		    }
-		}
+		};
 
-	      // --- look=prev: most recent B whose stop <= A's start, within w-left window ---
-	      else if ( look_mode == "prev" )
+	      auto gather_overlap_candidates = [&]( const interval_t & query ) -> meta_other_list_t
 		{
-		  std::map<interval_t,instance_t*>::const_iterator bb =
-		    b_events.lower_bound( interval_t( idx.interval.start , idx.interval.start ) );
-		  while ( bb != b_events.begin() )
-		    {
-		      --bb;
-		      if ( bb->first.stop <= idx.interval.start )
-			{
-			  uint64_t gap = idx.interval.start - bb->first.stop;
-			  if ( !has_left_win || gap <= left_win_tp )
-			    matched_b = bb->second;
-			  break;  // most recent qualifying B (walking backward)
-			}
-		      // B overlaps A's start — keep walking backward
-		    }
-		}
-
-	      // --- look=overlap: any B overlapping A's (optionally expanded) interval ---
-	      else if ( look_mode == "overlap" )
-		{
-		  std::vector<std::pair<interval_t,instance_t*> > candidates;
+		  meta_other_list_t candidates;
 		  for (int bi=0; bi<(int)b_annot_ptrs.size(); bi++)
 		    {
-		      annot_map_t ovlp = b_annot_ptrs[bi]->extract( look_int );
+		      annot_map_t ovlp = b_annot_ptrs[bi]->extract( query );
 		      annot_map_t::const_iterator oi = ovlp.begin();
 		      while ( oi != ovlp.end() )
 			{
-			  candidates.push_back( std::make_pair( oi->first.interval , oi->second ) );
+			  meta_other_t evt;
+			  evt.interval = oi->first.interval;
+			  evt.instance = oi->second;
+			  evt.label = b_annot_names[bi];
+			  candidates.push_back( evt );
 			  ++oi;
 			}
 		    }
+		  return candidates;
+		};
 
-		  if ( !candidates.empty() )
+	      auto pick_preferred = [&]( const meta_other_list_t & candidates , meta_other_t * matched ) -> bool
+		{
+		  if ( candidates.empty() ) return false;
+		  *matched = candidates[0];
+
+		  if ( prefer_mode == "last" )
 		    {
-		      if ( prefer_mode == "last" )
+		      for (int ci=1; ci<(int)candidates.size(); ci++)
+			if ( candidates[ci].interval.start > matched->interval.start ) *matched = candidates[ci];
+		    }
+		  else if ( prefer_mode == "longest" )
+		    {
+		      uint64_t best_isect = 0;
+		      for (int ci=0; ci<(int)candidates.size(); ci++)
 			{
-			  std::pair<interval_t,instance_t*> best = candidates[0];
-			  for (int ci=1; ci<(int)candidates.size(); ci++)
-			    if ( candidates[ci].first.start > best.first.start ) best = candidates[ci];
-			  matched_b = best.second;
-			}
-		      else if ( prefer_mode == "longest" )
-			{
-			  uint64_t best_isect = 0;
-			  matched_b = candidates[0].second;
-			  for (int ci=0; ci<(int)candidates.size(); ci++)
+			  const interval_t & bi = candidates[ci].interval;
+			  uint64_t is = bi.start > idx.interval.start ? bi.start : idx.interval.start;
+			  uint64_t ie = bi.stop  < idx.interval.stop  ? bi.stop  : idx.interval.stop;
+			  uint64_t isect = ie > is ? ie - is : 0;
+			  if ( ci == 0 || isect > best_isect )
 			    {
-			      const interval_t & bi = candidates[ci].first;
-			      uint64_t is = bi.start > idx.interval.start ? bi.start : idx.interval.start;
-			      uint64_t ie = bi.stop  < idx.interval.stop  ? bi.stop  : idx.interval.stop;
-			      uint64_t isect = ie > is ? ie - is : 0;
-			      if ( isect > best_isect ) { best_isect = isect; matched_b = candidates[ci].second; }
+			      best_isect = isect;
+			      *matched = candidates[ci];
 			    }
 			}
-		      else // prefer_mode == "first"
+		    }
+		  else
+		    {
+		      for (int ci=1; ci<(int)candidates.size(); ci++)
+			if ( candidates[ci].interval.start < matched->interval.start ) *matched = candidates[ci];
+		    }
+
+		  return true;
+		};
+
+	      auto point_distance_tp = [&]( const uint64_t a , const uint64_t b ) -> uint64_t
+		{
+		  return a > b ? a - b : b - a;
+		};
+
+	      auto pick_nearest_point_candidates = [&]( const std::multimap< uint64_t , meta_other_t > & table ,
+						       const uint64_t anchor ,
+						       const uint64_t max_dist_tp ,
+						       const bool has_max_dist ) -> meta_other_list_t
+		{
+		  meta_other_list_t candidates;
+		  if ( table.empty() ) return candidates;
+
+		  std::multimap< uint64_t , meta_other_t >::const_iterator hi = table.lower_bound( anchor );
+		  bool have_best = false;
+		  uint64_t best_dist = 0;
+
+		  if ( hi != table.end() )
+		    {
+		      best_dist = point_distance_tp( hi->first , anchor );
+		      if ( !has_max_dist || best_dist <= max_dist_tp )
 			{
-			  std::pair<interval_t,instance_t*> best = candidates[0];
-			  for (int ci=1; ci<(int)candidates.size(); ci++)
-			    if ( candidates[ci].first.start < best.first.start ) best = candidates[ci];
-			  matched_b = best.second;
+			  have_best = true;
+			  append_key_matches( table , hi->first , &candidates );
 			}
 		    }
-		}
 
-	      // --- look=nearest: closest B by gap to A (unlimited unless w= specified) ---
+		  if ( hi != table.begin() )
+		    {
+		      std::multimap< uint64_t , meta_other_t >::const_iterator lo = hi;
+		      --lo;
+		      uint64_t d = point_distance_tp( lo->first , anchor );
+		      if ( !has_max_dist || d <= max_dist_tp )
+			{
+			  if ( !have_best || d < best_dist )
+			    {
+			      candidates.clear();
+			      best_dist = d;
+			      have_best = true;
+			      append_key_matches( table , lo->first , &candidates );
+			    }
+			  else if ( d == best_dist && ( hi == table.end() || lo->first != hi->first ) )
+			    append_key_matches( table , lo->first , &candidates );
+			}
+		    }
+
+		  return candidates;
+		};
+
+	      auto gap_point_sec = [&]( const uint64_t seed_tp , const uint64_t other_tp ) -> double
+		{
+		  if ( other_tp == seed_tp ) return 0;
+		  const double sec = point_distance_tp( seed_tp , other_tp ) / (double)globals::tp_1sec;
+		  return other_tp > seed_tp ? sec : -sec;
+		};
+
+	      meta_other_list_t candidates;
+	      meta_other_t matched_evt;
+	      bool have_matched_evt = false;
+
+	      if ( look_mode == "any" || look_mode == "overlap" )
+		candidates = gather_overlap_candidates( look_int );
+	      else if ( look_mode == "next" )
+		{
+		  std::multimap< uint64_t , meta_other_t >::const_iterator ii = b_starts.lower_bound( idx.interval.stop );
+		  if ( ii != b_starts.end() )
+		    {
+		      uint64_t gap = ii->first - idx.interval.stop;
+		      if ( !has_right_win || gap <= right_win_tp )
+			append_key_matches( b_starts , ii->first , &candidates );
+		    }
+		}
+	      else if ( look_mode == "prev" )
+		{
+		  std::multimap< uint64_t , meta_other_t >::const_iterator ii = b_stops.upper_bound( idx.interval.start );
+		  if ( ii != b_stops.begin() )
+		    {
+		      --ii;
+		      uint64_t gap = idx.interval.start - ii->first;
+		      if ( !has_left_win || gap <= left_win_tp )
+			append_key_matches( b_stops , ii->first , &candidates );
+		    }
+		}
+	      else if ( look_mode == "next-start" )
+		{
+		  std::multimap< uint64_t , meta_other_t >::const_iterator ii = b_starts.lower_bound( idx.interval.start );
+		  if ( ii != b_starts.end() )
+		    {
+		      uint64_t gap = ii->first - idx.interval.start;
+		      if ( !has_right_win || gap <= right_win_tp )
+			append_key_matches( b_starts , ii->first , &candidates );
+		    }
+		}
+	      else if ( look_mode == "next-stop" )
+		{
+		  std::multimap< uint64_t , meta_other_t >::const_iterator ii = b_stops.lower_bound( idx.interval.stop );
+		  if ( ii != b_stops.end() )
+		    {
+		      uint64_t gap = ii->first - idx.interval.stop;
+		      if ( !has_right_win || gap <= right_win_tp )
+			append_key_matches( b_stops , ii->first , &candidates );
+		    }
+		}
+	      else if ( look_mode == "next-midpoint" )
+		{
+		  const uint64_t mid = idx.interval.mid();
+		  std::multimap< uint64_t , meta_other_t >::const_iterator ii = b_midpoints.lower_bound( mid );
+		  if ( ii != b_midpoints.end() )
+		    {
+		      uint64_t gap = ii->first - mid;
+		      if ( !has_right_win || gap <= right_win_tp )
+			append_key_matches( b_midpoints , ii->first , &candidates );
+		    }
+		}
+	      else if ( look_mode == "prev-start" )
+		{
+		  std::multimap< uint64_t , meta_other_t >::const_iterator ii = b_starts.upper_bound( idx.interval.start );
+		  if ( ii != b_starts.begin() )
+		    {
+		      --ii;
+		      uint64_t gap = idx.interval.start - ii->first;
+		      if ( !has_left_win || gap <= left_win_tp )
+			append_key_matches( b_starts , ii->first , &candidates );
+		    }
+		}
+	      else if ( look_mode == "prev-stop" )
+		{
+		  std::multimap< uint64_t , meta_other_t >::const_iterator ii = b_stops.upper_bound( idx.interval.stop );
+		  if ( ii != b_stops.begin() )
+		    {
+		      --ii;
+		      uint64_t gap = idx.interval.stop - ii->first;
+		      if ( !has_left_win || gap <= left_win_tp )
+			append_key_matches( b_stops , ii->first , &candidates );
+		    }
+		}
+	      else if ( look_mode == "prev-midpoint" )
+		{
+		  const uint64_t mid = idx.interval.mid();
+		  std::multimap< uint64_t , meta_other_t >::const_iterator ii = b_midpoints.upper_bound( mid );
+		  if ( ii != b_midpoints.begin() )
+		    {
+		      --ii;
+		      uint64_t gap = mid - ii->first;
+		      if ( !has_left_win || gap <= left_win_tp )
+			append_key_matches( b_midpoints , ii->first , &candidates );
+		    }
+		}
 	      else if ( look_mode == "nearest" )
 		{
-		  uint64_t search_tp = has_right_win ? right_win_tp : ( has_left_win ? left_win_tp : 0 );
+		  const bool point_nearest = fn == "gap-start" || fn == "gap-stop" || fn == "gap-midpoint";
 		  const bool has_search_win = has_right_win || has_left_win;
+		  const uint64_t search_tp = has_right_win ? right_win_tp : ( has_left_win ? left_win_tp : 0 );
 
-		  std::map<interval_t,instance_t*>::const_iterator bb =
-		    b_events.upper_bound( idx.interval );
-
-		  bool any = false;
-		  bool first_comp = true;
-		  uint64_t dist = 0;
-		  instance_t * near_inst = NULL;
-
-		  if ( !b_events.empty() )
+		  if ( point_nearest )
 		    {
-		      while (1)
+		      if ( fn == "gap-start" )
+			candidates = pick_nearest_point_candidates( b_starts , idx.interval.start , search_tp , has_search_win );
+		      else if ( fn == "gap-stop" )
+			candidates = pick_nearest_point_candidates( b_stops , idx.interval.stop , search_tp , has_search_win );
+		      else if ( fn == "gap-midpoint" )
+			candidates = pick_nearest_point_candidates( b_midpoints , idx.interval.mid() , search_tp , has_search_win );
+		    }
+		  else if ( !b_events.empty() )
+		    {
+		      std::multimap< interval_t , meta_other_t >::const_iterator ii = b_events.upper_bound( idx.interval );
+		      bool any = false;
+		      bool first_comp = true;
+		      uint64_t dist = 0;
+		      meta_other_t near_evt;
+
+		      while ( 1 )
 			{
-			  if ( bb == b_events.end() ) { --bb; continue; }
+			  if ( ii == b_events.end() )
+			    {
+			      --ii;
+			    }
 
 			  any = true;
-			  const bool before = bb->first.stop  <= idx.interval.start;
-			  const bool after  = bb->first.start >= idx.interval.stop;
-			  uint64_t d1 = before ? idx.interval.start - bb->first.stop
-			                       : ( after ? bb->first.start - idx.interval.stop : 0 );
+			  const interval_t & other_interval = ii->second.interval;
+			  const bool before = other_interval.stop  <= idx.interval.start;
+			  const bool after  = other_interval.start >= idx.interval.stop;
+			  uint64_t d1 = before ? idx.interval.start - other_interval.stop
+					       : ( after ? other_interval.start - idx.interval.stop : 0 );
 
 			  if ( d1 < dist || first_comp )
 			    {
 			      dist = d1;
-			      near_inst = bb->second;
+			      near_evt = ii->second;
 			      first_comp = false;
 			    }
 
-			  if ( dist == 0 ) break;  // overlapping — handle with prefer= below
+			  if ( dist == 0 ) break;
 
 			  if ( has_search_win )
 			    {
-			      if ( idx.interval.start > bb->first.start
-				   && idx.interval.start - bb->first.start > search_tp ) break;
-			      if ( idx.interval.start < bb->first.start
-				   && bb->first.start - idx.interval.start > search_tp ) break;
+			      if ( idx.interval.start > other_interval.start
+				   && idx.interval.start - other_interval.start > search_tp ) break;
+			      if ( idx.interval.start < other_interval.start
+				   && other_interval.start - idx.interval.start > search_tp ) break;
 			    }
-			  if ( bb == b_events.begin() ) break;
-			  --bb;
+			  if ( ii == b_events.begin() ) break;
+			  --ii;
 			}
 
-		      if ( has_search_win && dist > search_tp ) any = false;
-		    }
-
-		  if ( any )
-		    {
-		      if ( dist == 0 )
+		      if ( any && ( !has_search_win || dist <= search_tp ) )
 			{
-			  // overlapping: apply prefer= among all Bs that overlap A
-			  std::vector<std::pair<interval_t,instance_t*> > candidates;
-			  for (int bi=0; bi<(int)b_annot_ptrs.size(); bi++)
-			    {
-			      annot_map_t ovlp = b_annot_ptrs[bi]->extract( idx.interval );
-			      annot_map_t::const_iterator oi = ovlp.begin();
-			      while ( oi != ovlp.end() )
-				{
-				  candidates.push_back( std::make_pair( oi->first.interval , oi->second ) );
-				  ++oi;
-				}
-			    }
-			  if ( !candidates.empty() )
-			    {
-			      if ( prefer_mode == "last" )
-				{
-				  std::pair<interval_t,instance_t*> best = candidates[0];
-				  for (int ci=1; ci<(int)candidates.size(); ci++)
-				    if ( candidates[ci].first.start > best.first.start ) best = candidates[ci];
-				  matched_b = best.second;
-				}
-			      else if ( prefer_mode == "longest" )
-				{
-				  uint64_t best_isect = 0;
-				  matched_b = candidates[0].second;
-				  for (int ci=0; ci<(int)candidates.size(); ci++)
-				    {
-				      const interval_t & bi = candidates[ci].first;
-				      uint64_t is = bi.start > idx.interval.start ? bi.start : idx.interval.start;
-				      uint64_t ie = bi.stop  < idx.interval.stop  ? bi.stop  : idx.interval.stop;
-				      uint64_t isect = ie > is ? ie - is : 0;
-				      if ( isect > best_isect ) { best_isect = isect; matched_b = candidates[ci].second; }
-				    }
-				}
-			      else // "first"
-				{
-				  std::pair<interval_t,instance_t*> best = candidates[0];
-				  for (int ci=1; ci<(int)candidates.size(); ci++)
-				    if ( candidates[ci].first.start < best.first.start ) best = candidates[ci];
-				  matched_b = best.second;
-				}
-			    }
-			  else matched_b = near_inst;  // fallback if extract() returns nothing
+			  if ( dist == 0 )
+			    candidates = gather_overlap_candidates( idx.interval );
+			  else
+			    candidates.push_back( near_evt );
 			}
-		      else
-			matched_b = near_inst;  // unique nearest (non-overlapping)
 		    }
 		}
 
-	      // copy src-md field from matched B to this A instance; skip if no match or field absent
-	      if ( matched_b != NULL )
+	      std::set<interval_t> flattened_candidates;
+	      bool use_flattened_candidates = flatten
+		&& ( look_mode == "any" || look_mode == "overlap" )
+		&& ( fn == "flag" || fn == "count" || fn == "complete-overlap" || fn == "whole-other" );
+	      if ( use_flattened_candidates )
 		{
-		  avar_t * v = matched_b->find( src_md );
-		  if ( v != NULL )
+		  for (int ci=0; ci<(int)candidates.size(); ci++)
+		    flattened_candidates.insert( candidates[ci].interval );
+		  flattened_candidates = annotate_t::flatten( flattened_candidates );
+		}
+
+	      if ( fn == "copy-md"
+		   || fn == "gap"
+		   || fn == "gap-start"
+		   || fn == "gap-stop"
+		   || fn == "gap-midpoint" )
+		have_matched_evt = pick_preferred( candidates , &matched_evt );
+
+	      if ( fn == "flag" )
+		{
+		  const int value = use_flattened_candidates ? (int)( flattened_candidates.size() != 0 )
+							     : (int)( candidates.size() != 0 );
+		  instance->set( mdtag , value );
+		  annot->types[ mdtag ] = globals::A_INT_T;
+		}
+	      else if ( fn == "count" )
+		{
+		  const int value = use_flattened_candidates ? (int)flattened_candidates.size()
+							     : (int)candidates.size();
+		  instance->set( mdtag , value );
+		  annot->types[ mdtag ] = globals::A_INT_T;
+		}
+	      else if ( fn == "complete-overlap" )
+		{
+		  int x = 0;
+		  if ( use_flattened_candidates )
 		    {
-		      globals::atype_t t = v->atype();
-		      if      ( t == globals::A_DBL_T  ) { instance->set( mdtag , v->double_value() ); annot->types[mdtag] = t; }
-		      else if ( t == globals::A_INT_T  ) { instance->set( mdtag , v->int_value()    ); annot->types[mdtag] = t; }
-		      else if ( t == globals::A_TXT_T  ) { instance->set( mdtag , v->text_value()   ); annot->types[mdtag] = t; }
-		      else if ( t == globals::A_BOOL_T ) { instance->set( mdtag , v->bool_value()   ); annot->types[mdtag] = t; }
+		      std::set<interval_t>::const_iterator ii = flattened_candidates.begin();
+		      while ( ii != flattened_candidates.end() )
+			{
+			  if ( look_int.is_completely_spanned_by( *ii ) ) { x = 1; break; }
+			  ++ii;
+			}
+		    }
+		  else
+		    {
+		      for (int ci=0; ci<(int)candidates.size(); ci++)
+			if ( look_int.is_completely_spanned_by( candidates[ci].interval ) ) { x = 1; break; }
+		    }
+		  instance->set( mdtag , x );
+		  annot->types[ mdtag ] = globals::A_INT_T;
+		}
+	      else if ( fn == "whole-other" )
+		{
+		  int x = 0;
+		  if ( use_flattened_candidates )
+		    {
+		      std::set<interval_t>::const_iterator ii = flattened_candidates.begin();
+		      while ( ii != flattened_candidates.end() )
+			{
+			  if ( ii->is_completely_spanned_by( look_int ) ) { x = 1; break; }
+			  ++ii;
+			}
+		    }
+		  else
+		    {
+		      for (int ci=0; ci<(int)candidates.size(); ci++)
+			if ( candidates[ci].interval.is_completely_spanned_by( look_int ) ) { x = 1; break; }
+		    }
+		  instance->set( mdtag , x );
+		  annot->types[ mdtag ] = globals::A_INT_T;
+		}
+	      else if ( fn == "copy-md" )
+		{
+		  if ( have_matched_evt )
+		    {
+		      avar_t * v = matched_evt.instance->find( copy_md );
+		      if ( v != NULL )
+			{
+			  globals::atype_t t = v->atype();
+			  if      ( t == globals::A_DBL_T  ) { instance->set( mdtag , v->double_value() ); annot->types[mdtag] = t; }
+			  else if ( t == globals::A_INT_T  ) { instance->set( mdtag , v->int_value()    ); annot->types[mdtag] = t; }
+			  else if ( t == globals::A_TXT_T  ) { instance->set( mdtag , v->text_value()   ); annot->types[mdtag] = t; }
+			  else if ( t == globals::A_BOOL_T ) { instance->set( mdtag , v->bool_value()   ); annot->types[mdtag] = t; }
+			}
+		    }
+		}
+	      else if ( fn == "gap" || fn == "gap-start" || fn == "gap-stop" || fn == "gap-midpoint" )
+		{
+		  if ( have_matched_evt )
+		    {
+		      double sec = 0;
+		      if ( fn == "gap" )
+			{
+			  const bool before = matched_evt.interval.stop  <= idx.interval.start;
+			  const bool after  = matched_evt.interval.start >= idx.interval.stop;
+			  if ( before )
+			    sec = - ( idx.interval.start - matched_evt.interval.stop ) / (double)globals::tp_1sec;
+			  else if ( after )
+			    sec =   ( matched_evt.interval.start - idx.interval.stop ) / (double)globals::tp_1sec;
+			}
+		      else if ( fn == "gap-start" )
+			sec = gap_point_sec( idx.interval.start , matched_evt.interval.start );
+		      else if ( fn == "gap-stop" )
+			sec = gap_point_sec( idx.interval.stop , matched_evt.interval.stop );
+		      else if ( fn == "gap-midpoint" )
+			sec = gap_point_sec( idx.interval.mid() , matched_evt.interval.mid() );
+
+		      instance->set( mdtag , sec );
+		      instance->set( mdtag + "_id" , matched_evt.label );
+		      annot->types[ mdtag ] = globals::A_DBL_T;
+		      annot->types[ mdtag + "_id" ] = globals::A_TXT_T;
+		    }
+		  else
+		    {
+		      std::string lab1 = ".";
+		      instance->set( mdtag + "_id" , lab1 );
+		      annot->types[ mdtag + "_id" ] = globals::A_TXT_T;
 		    }
 		}
 
-	      ++aa; continue;
+	      ++aa;
+	      continue;
 	    }
 
 
@@ -3454,236 +3655,6 @@ void timeline_t::set_annot_metadata( const param_t & param )
 	      if ( ns == 1 ) instance->set( mdtag , stat[0] );
 	      else for (int s=0; s<ns; s++) instance->set( mdtag + "_" + signals.label(s) , stat[s] );
 	    }
-
-	  
-	  //
-	  // annot-mode
-	  //
-
-	  if ( other_mode )
-	    {
-	      	      
-	      
-	      //
-	      // count/overlap/etc
-	      //
-	      
-	      if ( ! nearest_mode )
-		{
-	      
-		  // build up new, epoch-based annotation map
-		  std::set<interval_t> nevs;
-		  
-		  for (int a=0; a<oanames.size(); a++)
-		    {
-		      annot_t * a1 = annotations->find( oanames[a] );
-		      
-		      if ( a1 == NULL ) continue;
-	      
-		      // get overlapping annotations (spanning this this window) 
-		      annot_map_t events = a1->extract( interval );
-		      
-		      // list events in this epoch (any span)
-		      annot_map_t::const_iterator ii = events.begin();
-		      while ( ii != events.end() )
-			{	  	      
-			  const instance_idx_t & instance_idx = ii->first;	      
-			  const instance_t * instance = ii->second;
-			  const interval_t & an_interval = instance_idx.interval;
-			  
-			  //std::cout << " an_interval = " << instance_idx.id << "\t" << an_interval.as_string() << "\n";
-			  
-			  // keep intersection w/ this spanning epoch	      
-			  nevs.insert( an_interval );
-			  ++ii;
-			}
-		      
-		    }
-
-		  //
-		  // flatten other events? (i.e. for better def. of complete-overlap and whole-other ) 
-		  //
-				
-		  if ( flatten )
-		    nevs = annotate_t::flatten( nevs );
-		  
-		  
-		  //
-		  // we now have a list of all potential events in nevs;  do processing
-		  //
-		  
-		  if ( fn == "count" )
-		    {
-		      // number of other annots overlapping this 
-		      instance->set( mdtag , (int)nevs.size() );
-		    }
-		  else if ( fn == "overlap" )
-		    {
-		      // similar to count, but reduced to 0/1
-		      instance->set( mdtag , (int)( nevs.size() != 0 ) );
-		    }
-		  else if ( fn == "complete-overlap" )
-		    {
-		      // 0 vs 1 : is A completely spanned by at least one O?
-		      int x = 0;
-		      std::set<interval_t>::const_iterator ii = nevs.begin();
-		      while ( ii != nevs.end() )
-			{
-			  if ( interval.is_completely_spanned_by( *ii ) )
-			    {
-			      x = 1; 
-			      break;
-			    }
-			  ++ii;
-			}
-		      instance->set( mdtag ,x );
-		    }
-		  else if ( fn == "whole-other" )
-		    {
-		      // 0 vs 1 : is at least one O completely spanned by
-		      int x = 0;
-		      std::set<interval_t>::const_iterator ii = nevs.begin();
-		      while ( ii != nevs.end() )
-			{
-			  if ( ii->is_completely_spanned_by( interval ) )
-			    {
-			      x = 1; 
-			      break;
-			    }
-			  ++ii;
-			}
-		      instance->set( mdtag ,x );
-		    }
-		}
-
-	      
-	      //
-	      // nearest search (uses allevs, not nevs)
-	      //
-	      
-	      if ( nearest_mode )
-		{
-
-		  // default nearest:  0 if overlaps, else  STOP --> START (-ve)   or STOP-->START (+ve)
-		  //   others: point-based , as is
-		  
-		  // do search: set target 
-		  interval_t nidx = interval;
-		  if ( fn == "nearest-midpoint" )
-		    nidx.start = nidx.stop = interval.mid();
-		  else if ( fn == "nearest-start" )
-		    nidx.start = nidx.stop = interval.start;
-		  else if ( fn == "nearest-stop" )
-		    nidx.start = nidx.stop = interval.stop;
-
-		  //		  std::cout << " nidx = " << nidx.as_string() << "\n";
-		  // do general lookup:: first event /after/ the query (upper-bound)
-		  //  (and above, the allevs set will have been constructed w/ the a
-		  //   appropriate type (whole, midpoint, start or stop)
-		  std::map<interval_t,std::string>::const_iterator bb = allevs.upper_bound( nidx );
-		  
-		  // we might not find /any/ other events
-		  bool any = false;
-		  bool first_comp = true;
-		  uint64_t dist = 0;
-		  int dsign = 0;
-		  std::string matched = ".";
-		  const bool full_mode = fn == "nearest" ;
-		
-		  //		  std::cout << " going into loop " << allevs.size() << "\n";
-		  
-		  if ( allevs.size() )
-		    {
-		      
-		      while ( 1 )
-			{
-			  
-			  // past end?
-			  if ( bb == allevs.end() )
-			    {
-			      //std::cout << " hit the end...\n";
-			      --bb;
-			      continue;
-			    }
-			  
-			  // std::cout << " considering " << bb->first.as_string() << " " << bb->second << "\n";
-			  
-			  // found at least one contender?
-			  any = true ;
-			  
-			  if ( full_mode )
-			    {
-			      
-			      // don't think we'll have any actual overlap here (would have been
-			      // caught above... but doen't hurt to add here in any case)
-			      
-			      const bool before = bb->first.stop  <= nidx.start ;
-			      const bool after  = bb->first.start >= nidx.stop ;
-			      
-			      uint64_t d1 = before ? nidx.start - bb->first.stop :
-				( after ? bb->first.start - nidx.stop : 0 ) ;
-			      
-			      if ( d1 < dist || first_comp )
-				{
-				  dist = d1;
-				  dsign = before ? -1 : ( after ? 1 : 0 ) ;
-				  matched = bb->second;
-				  first_comp = false;
-				}
-			      
-			    }
-			  else
-			    {
-			      // can use start in all cases, all 0-tp points
-			      const bool after = bb->first.start > nidx.start ;
-			      uint64_t d1 = after ? bb->first.start - nidx.start : nidx.start - bb->first.start ;
-			      if ( d1 < dist || first_comp )
-				{				  
-				  dist = d1;
-				  dsign = d1 == 0 ? 0 : ( after ? 1 : -1 ) ;
-				  matched = bb->second;
-				  first_comp = false;
-				}
-			    }
-
-			  // best possible match?
-			  if ( dist == 0 ) break;
-			      
-			  // all done? (nb. the window means the /whole/ event must be in the window
-			  //  i.e. as we may have the case of something starting a long, long time before
-			  //       but persisting right up to the actual event...
-
-			  if ( nidx.start > bb->first.start && nidx.start - bb->first.start > nearest_search_tp ) break;
-			  if ( nidx.start < bb->first.start &&  bb->first.start - nidx.start > nearest_search_tp ) break;
-			  
-			  // all done?
-			  if ( bb == allevs.begin() ) break;
-			  
-			  // step back in time
-			  --bb;
-			}
-		      
-		      // check that the nearest event matches criteria (i.e. if was upper bound
-		      // but that came a long time after , and we had no other matches)
-		      
-		      if ( dist > nearest_search_tp ) any = false;
-			  
-		      // report
-		      if ( any )
-			{
-			  double sec = dist / (double)globals::tp_1sec;
-			  instance->set( mdtag , dsign * sec );
-			  instance->set( mdtag + "_id"  , matched );
-			}
-		      else 
-			{
-			  //instance->set( mdtag , "NA" ); // missing
-			  std::string lab1 = "."; // use so correct type w/ set()
-			  instance->set( mdtag + "_id"  , lab1 );
-			}
-		    }
-		} // end of nearest mode
-	    }  // end of other mode
 	  
 	  // next event
 	  ++aa;
@@ -4224,4 +4195,3 @@ uint64_t s2a_interp(const std::vector<double>* d,
 
   return (uint64_t) llround(out);
 }
-

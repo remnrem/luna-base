@@ -1231,6 +1231,73 @@ static void test_annot( lunapi_t * eng,
     m << "no-interp=" << fa.size() << " interp30=" << fai.size() << " (exp 1 and >=4)";
     record(R,"annot/fetch-interp", pass, m.str(), V);
   } catch(std::exception & e) { record(R,"annot/fetch-interp",false,e.what(),V); }
+
+  // I7 — META look=next skips overlaps, whereas look=next-start can select them
+  try {
+    auto p = eng->inst("T_meta7");
+    p->empty_edf("T_meta7", 60, 30, "01.01.85", "22.00.00");
+    p->insert_annotation("Seed", {{10.0, 20.0}});
+    p->insert_annotation("Other", {{15.0, 16.0}, {25.0, 26.0}});
+
+    annot_t * other = p->find_annot("Other");
+    bool overlap_tagged = false;
+    bool after_tagged = false;
+    if ( other != NULL )
+      {
+        for (auto & kv : other->interval_events)
+          {
+            if ( kv.second == NULL ) continue;
+            const double s = kv.first.interval.start_sec();
+            if ( approx_equal(s, 15.0, 0.001) )
+              {
+                kv.second->set("tag", std::string("overlap"));
+                overlap_tagged = true;
+              }
+            else if ( approx_equal(s, 25.0, 0.001) )
+              {
+                kv.second->set("tag", std::string("after"));
+                after_tagged = true;
+              }
+          }
+      }
+
+    p->eval("META annot=Seed other=Other look=next w-right=10 md=NEXT_FLAG flag & "
+            "META annot=Seed other=Other look=next-start w-right=10 md=NEXT_START_FLAG flag & "
+            "META annot=Seed other=Other look=next w-right=10 md=NEXT_TAG copy-md=tag & "
+            "META annot=Seed other=Other look=next-start w-right=10 md=NEXT_START_TAG copy-md=tag");
+
+    annot_t * seed = p->find_annot("Seed");
+    bool next_flag_ok = false;
+    bool next_start_flag_ok = false;
+    bool next_tag_ok = false;
+    bool next_start_tag_ok = false;
+
+    if ( seed != NULL )
+      {
+        for (auto & kv : seed->interval_events)
+          {
+            if ( kv.second == NULL ) continue;
+            avar_t * v1 = kv.second->find("NEXT_FLAG");
+            avar_t * v2 = kv.second->find("NEXT_START_FLAG");
+            avar_t * v3 = kv.second->find("NEXT_TAG");
+            avar_t * v4 = kv.second->find("NEXT_START_TAG");
+            next_flag_ok = v1 && v1->int_value() == 1;
+            next_start_flag_ok = v2 && v2->int_value() == 1;
+            next_tag_ok = v3 && v3->text_value() == "after";
+            next_start_tag_ok = v4 && v4->text_value() == "overlap";
+          }
+      }
+
+    bool pass = overlap_tagged && after_tagged && next_flag_ok && next_start_flag_ok
+      && next_tag_ok && next_start_tag_ok;
+    std::ostringstream m;
+    m << "tagged=" << overlap_tagged << "/" << after_tagged
+      << " next_flag=" << next_flag_ok
+      << " next_start_flag=" << next_start_flag_ok
+      << " next_tag=" << next_tag_ok
+      << " next_start_tag=" << next_start_tag_ok;
+    record(R,"annot/meta-next-vs-next-start", pass, m.str(), V);
+  } catch(std::exception & e) { record(R,"annot/meta-next-vs-next-start",false,e.what(),V); }
 }
 
 // ============================================================
