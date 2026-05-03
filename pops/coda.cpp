@@ -227,7 +227,7 @@ Eigen::MatrixXd pops_coda_t::validate_and_normalise( const Eigen::MatrixXd & P )
   const int expected_cols = n_classes();
   if ( P.cols() != expected_cols && !( opt.three_state && P.cols() == 5 ) )
     Helper::halt( "POPS-CODA: expected " + Helper::int2str(expected_cols) +
-                  " posterior columns, got " + Helper::int2str(P.cols()) );
+                  " posterior columns, got " + Helper::int2str(static_cast<long>(P.cols())) );
 
   Eigen::MatrixXd Pn = adapt_posteriors( P );
 
@@ -819,8 +819,8 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
     SHAP( X , fn , E , flagged );
 
   if ( (int)P_coda.rows() != ne || (int)P_coda.cols() != nc )
-    Helper::halt( "POPS-CODA: predict returned " + Helper::int2str(P_coda.rows()) +
-                  " x " + Helper::int2str(P_coda.cols()) +
+    Helper::halt( "POPS-CODA: predict returned " + Helper::int2str(static_cast<long>(P_coda.rows())) +
+                  " x " + Helper::int2str(static_cast<long>(P_coda.cols())) +
                   " but expected " + Helper::int2str(ne) + " x " + Helper::int2str(nc) );
 
   // Build epoch-to-index map (same as summarize())
@@ -1082,8 +1082,8 @@ Eigen::MatrixXd pops_coda_t::rescore( const Eigen::MatrixXd & P_in ,
     SHAP( X , fn , E , flagged );
 
   if ( (int)P_coda.rows() != ne || (int)P_coda.cols() != nc )
-    Helper::halt( "POPS-CODA: predict returned " + Helper::int2str(P_coda.rows()) +
-                  " x " + Helper::int2str(P_coda.cols()) +
+    Helper::halt( "POPS-CODA: predict returned " + Helper::int2str(static_cast<long>(P_coda.rows())) +
+                  " x " + Helper::int2str(static_cast<long>(P_coda.cols())) +
                   " but expected " + Helper::int2str(ne) + " x " + Helper::int2str(nc) );
 
   return P_coda;
