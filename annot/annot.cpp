@@ -1072,11 +1072,34 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  if ( globals::combine_annot_class_inst && iname != "." && iname != aname )
 	    aname += globals::annot_class_inst_combiner + iname ;
 	  
+	  
 	  //
-	  // Is this an aggregate class/inst form?
+	  // Also combine a non-missing channel label?
 	  //
 
-	  const bool split_annot = aname.find( globals::class_inst_delimiter ) != std::string::npos;
+	  if ( globals::combine_annot_class_ch )
+	    {
+	      // we've already expanded to six-col format
+	      std::string cname = tok[2];
+
+	      // sanitize channel ID?
+	      if ( globals::sanitize_everything )
+		cname = Helper::sanitize( cname );
+	      
+	      if ( cname != "." )
+		aname += globals::annot_class_inst_combiner + cname ;
+	    }
+	  
+	  
+	  //
+	  // Is this an aggregate class/inst form? 
+	  //   (but disable if already merging IDs... e.g. if want to use
+	  //    that delimeter char) 
+
+	  const bool split_annot =
+	       (!globals::combine_annot_class_inst)
+	    && (!globals::combine_annot_class_ch)
+	    && aname.find( globals::class_inst_delimiter ) != std::string::npos;
 	  
 	  std::string new_inst_id = ".";
 	  

@@ -247,8 +247,9 @@ struct gpa_t {
   linmod_comps_t comps;
     
   // run
-  void run();   // correct for all X considered
-  void run1X(); // correction w/in X
+  void run();        // correct for all X considered
+  void run1X();      // correction w/in X
+  void run_each_Y(); // per-pair independent regressions (nreps=0 default)
 
   // read-only access to the analysis matrix (used by lunapi_t to cache after run)
   const std::vector<std::string>& get_ids()  const { return ids; }

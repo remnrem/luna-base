@@ -26,6 +26,8 @@
 #include "pops/pops.h"
 #include "pops/options.h"
 #include "lgbm/lgbm.h"
+#include "miscmath/crandom.h"
+#include "miscmath/miscmath.h"
 
 #include "helper/helper.h"
 #include "helper/logger.h"
@@ -51,6 +53,19 @@ std::string coda_feature_name_file( const std::string & model_file )
   return model_file + ".fnames";
 }
 
+bool coda_subject_in_holdouts( const std::set<std::string> & holdouts ,
+                               const std::string & subject_id )
+{
+  return subject_id != "" && holdouts.find( subject_id ) != holdouts.end();
+}
+
+int coda_effective_label( int label , const bool three_state )
+{
+  if ( three_state && ( label == POPS_N2 || label == POPS_N3 ) )
+    return POPS_N1;
+  return label;
+}
+
 }
 
 
@@ -73,7 +88,6 @@ std::string pops_coda_t::coda_default_params( int num_class , int n_iterations )
   p += "metric_freq=1 ";
   p += "is_training_metric=true ";
   p += "max_bin=255 ";
-  p += "early_stopping=10 ";
   p += "num_trees="           + Helper::int2str( n_iterations ) + " ";
   p += "learning_rate=0.05 ";
   p += "num_leaves=16 ";
@@ -187,10 +201,19 @@ std::vector<std::string> pops_coda_t::feature_names() const
   // L. long decayed history (past-only state pressure)
   for (int s = 0; s < ns; s++) fn.push_back( "hist_long_p_" + slabs[s] );
 
-  // M. long-history contrasts across the ambiguous classes
+  // M. long-history contrasts: adjacent-stage pairs in sleep architecture
   fn.push_back( "hist_long_R_minus_W" );
-  fn.push_back( "hist_long_R_minus_"  + slabs[2] );
-  fn.push_back( "hist_long_W_minus_"  + slabs[2] );
+  fn.push_back( "hist_long_R_minus_"  + slabs[2] );   // R vs N1/NR
+  fn.push_back( "hist_long_W_minus_"  + slabs[2] );   // W vs N1/NR
+  if ( ns == 5 )
+    {
+      fn.push_back( "hist_long_N1_minus_N2" );
+      fn.push_back( "hist_long_N2_minus_N3" );
+      fn.push_back( "hist_long_R_minus_N2"  );
+      // short/medium run-length contrasts for the N2/N3 boundary specifically
+      fn.push_back( "run_short_N2_minus_N3" );
+      fn.push_back( "run_med_N2_minus_N3"   );
+    }
 
   return fn;
 }
@@ -517,10 +540,18 @@ void pops_coda_t::make_features( const Eigen::MatrixXd & P ,
       // L. Long decayed history
       for (int s = 0; s < ns; s++) X(e, col++) = hist_long[e][s];
 
-      // M. Long-history contrasts for the classes that most often compete
+      // M. Long-history contrasts: adjacent-stage pairs in sleep architecture
       X(e, col++) = hist_long[e][POPS_REM]  - hist_long[e][POPS_WAKE];
       X(e, col++) = hist_long[e][POPS_REM]  - hist_long[e][POPS_N1];
       X(e, col++) = hist_long[e][POPS_WAKE] - hist_long[e][POPS_N1];
+      if ( ns == 5 )
+        {
+          X(e, col++) = hist_long[e][POPS_N1] - hist_long[e][POPS_N2];
+          X(e, col++) = hist_long[e][POPS_N2] - hist_long[e][POPS_N3];
+          X(e, col++) = hist_long[e][POPS_REM] - hist_long[e][POPS_N2];
+          X(e, col++) = run_short[e][POPS_N2]  - run_short[e][POPS_N3];
+          X(e, col++) = run_med[e][POPS_N2]    - run_med[e][POPS_N3];
+        }
 
       // Sanity: should have filled exactly nf columns
       if ( col != nf )
@@ -601,26 +632,52 @@ int pops_coda_t::accumulate( const Eigen::MatrixXd & P_in ,
   std::vector<std::string> fn;
   make_features( P , E , flagged , X , fn );
 
-  // Collect training rows: non-flagged only
+  std::vector<Eigen::VectorXd> * X_rows = &X_train_rows;
+  std::vector<int> * S_rows = &S_train;
+  if ( coda_subject_in_holdouts( holdouts , subject_id ) )
+    {
+      X_rows = &X_valid_rows;
+      S_rows = &S_valid;
+    }
+
+  // Collect rows: non-flagged only
   int n_added = 0;
   for (int e = 0; e < ne; e++)
     {
       if ( flagged[e] ) continue;
 
       // Convert label to CODA class index
-      int label = S[e];
-      if ( opt.three_state )
-        {
-          // Collapse N1/N2/N3 → POPS_N1 (index 2 = NR)
-          if ( label == POPS_N2 || label == POPS_N3 ) label = POPS_N1;
-        }
+      const int label = coda_effective_label( S[e] , opt.three_state );
 
-      X_train_rows.push_back( X.row(e) );
-      S_train.push_back( label );
+      X_rows->push_back( X.row(e) );
+      S_rows->push_back( label );
       ++n_added;
     }
 
   return n_added;
+}
+
+void pops_coda_t::load_validation_ids( const std::string & filename )
+{
+  holdouts.clear();
+
+  const std::string expanded = Helper::expand( filename );
+  if ( ! Helper::fileExists( expanded ) )
+    Helper::halt( "POPS-CODA: could not open " + filename );
+
+  std::ifstream in( expanded.c_str() , std::ios::in );
+  while ( ! in.eof() )
+    {
+      std::string id;
+      in >> id;
+      if ( id == "" || in.eof() ) break;
+      holdouts.insert( id );
+    }
+  in.close();
+
+  logger << "  POPS-CODA: read " << holdouts.size()
+         << " validation dataset individuals from "
+         << filename << "\n";
 }
 
 
@@ -638,23 +695,41 @@ void pops_coda_t::train_model( const std::string & config_file ,
   for (int r = 0; r < nrows; r++)
     X_train.row(r) = X_train_rows[r];
 
+  const int nrows_valid = (int)X_valid_rows.size();
+  Eigen::MatrixXd X_valid;
+  if ( nrows_valid )
+    {
+      X_valid.resize( nrows_valid , nf );
+      for (int r = 0; r < nrows_valid; r++)
+        X_valid.row(r) = X_valid_rows[r];
+    }
+
   const int nc = n_classes();
 
   logger << "  POPS-CODA: training on " << nrows << " epochs, "
          << nf << " features, " << nc << " classes, "
-         << n_iterations << " iterations\n";
+         << n_iterations << " iterations";
+  if ( nrows_valid )
+    logger << " with " << nrows_valid << " validation epochs";
+  logger << "\n";
 
   // Set up LightGBM config
   if ( config_file == "." || config_file == "" )
     lgbm.params = coda_default_params( nc , n_iterations );
   else
-    lgbm.load_config( config_file );
+    lgbm.load_config( Helper::expand( config_file ) );
 
   lgbm.n_iterations = n_iterations;
+  lgbm.early_stopping_rounds = 10;
 
   // Attach training data
   lgbm.attach_training_matrix( X_train );
   lgbm.attach_training_labels( S_train );
+  if ( nrows_valid )
+    {
+      lgbm.attach_validation_matrix( X_valid );
+      lgbm.attach_validation_labels( S_valid );
+    }
 
   // Apply uniform per-class weights (can be extended later)
   std::vector<std::string> clabs = stage_labels();
@@ -685,6 +760,11 @@ void pops_coda_t::train_model( const std::string & config_file ,
   lgbm_label_t lw( clabs , cwgts );
   lgbm.add_label_weights( lgbm.training , &lgbm.training_weights , lw );
   lgbm.apply_weights( lgbm.training , &lgbm.training_weights );
+  if ( nrows_valid )
+    {
+      lgbm.add_label_weights( lgbm.validation , &lgbm.validation_weights , lw );
+      lgbm.apply_weights( lgbm.validation , &lgbm.validation_weights );
+    }
 
   lgbm.create_booster();
 
@@ -706,10 +786,11 @@ void pops_coda_t::save( const std::string & f )
   if ( !lgbm.has_booster )
     Helper::halt( "POPS-CODA: no trained model to save" );
 
-  lgbm.save_model( f );
+  const std::string model_file = Helper::expand( f );
+  lgbm.save_model( model_file );
 
   // Write feature names alongside model
-  std::string fn_file = coda_feature_name_file( f );
+  std::string fn_file = coda_feature_name_file( model_file );
   std::ofstream FN( Helper::expand( fn_file ).c_str() , std::ios::out );
   if ( !FN.good() )
     Helper::halt( "POPS-CODA: could not write feature names to " + fn_file );
@@ -724,14 +805,15 @@ void pops_coda_t::save( const std::string & f )
 
 void pops_coda_t::load( const std::string & f )
 {
-  lgbm.load_model( f );
+  const std::string model_file = Helper::expand( f );
+  lgbm.load_model( model_file );
 
   // Load feature names
-  std::string fn_file = coda_feature_name_file( f );
-  const std::string legacy_fn_file = f + ".fnames";
-  if ( !Helper::fileExists( fn_file ) )
+  std::string fn_file = coda_feature_name_file( model_file );
+  const std::string legacy_fn_file = model_file + ".fnames";
+  if ( !Helper::fileExists( Helper::expand( fn_file ) ) )
     {
-      if ( Helper::fileExists( legacy_fn_file ) )
+      if ( Helper::fileExists( Helper::expand( legacy_fn_file ) ) )
         {
           fn_file = legacy_fn_file;
         }
@@ -807,11 +889,6 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
   std::vector<std::string> fn;
   make_features( P , E , flagged , X , fn );
 
-  // -------------------------------------------------------
-  // Write CODA outputs under MODEL=CODA stratum
-  // -------------------------------------------------------
-  writer.level( "CODA" , "MDL" );
-
   // Apply CODA model: get posteriors
   Eigen::MatrixXd P_coda = lgbm.predict( X );   // ne × nc
 
@@ -823,11 +900,50 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
                   " x " + Helper::int2str(static_cast<long>(P_coda.cols())) +
                   " but expected " + Helper::int2str(ne) + " x " + Helper::int2str(nc) );
 
-  // Build epoch-to-index map (same as summarize())
+  // Build epoch-to-index map (shared by both output blocks)
   std::map<int,int> e2e;
   for (int e = 0; e < ne; e++) e2e[ E[e] ] = e;
 
   const std::vector<std::string> & slabs = stage_labels();
+
+  // -------------------------------------------------------
+  // Write stage-1 (E) posteriors under MDL=E
+  // -------------------------------------------------------
+  writer.level( "E" , "MDL" );
+  for (int epoch = 0; epoch < ne_total; epoch++)
+    {
+      writer.epoch( epoch + 1 );
+      if ( e2e.find( epoch ) == e2e.end() ) { writer.value( "FLAG" , -1 ); continue; }
+      const int e = e2e[ epoch ];
+      if ( flagged[e] )                     { writer.value( "FLAG" , -1 ); continue; }
+      if ( nc == 3 )
+        {
+          writer.value( "PP_W"  , P(e,0) );
+          writer.value( "PP_R"  , P(e,1) );
+          writer.value( "PP_NR" , P(e,2) );
+        }
+      else
+        {
+          writer.value( "PP_W"  , P(e,0) );
+          writer.value( "PP_R"  , P(e,1) );
+          writer.value( "PP_N1" , P(e,2) );
+          writer.value( "PP_N2" , P(e,3) );
+          writer.value( "PP_N3" , P(e,4) );
+        }
+      int predx = 0;
+      double pmax = P.row(e).maxCoeff( &predx );
+      writer.value( "CONF" , pmax );
+      writer.value( "PRED" , slabs[ predx ] );
+      if ( has_staging )
+        writer.value( "PRIOR" , pops_t::label( (pops_stage_t)S[e] ) );
+      writer.value( "FLAG" , 0 );
+    }
+  writer.unepoch();
+
+  // -------------------------------------------------------
+  // Write CODA outputs under MDL=CODA
+  // -------------------------------------------------------
+  writer.level( "CODA" , "MDL" );
 
   for (int epoch = 0; epoch < ne_total; epoch++)
     {
@@ -1159,10 +1275,16 @@ void pops_coda_t::train_from_posteriors_file( const std::string & filename ,
                                                const std::string & config_file ,
                                                int n_iterations )
 {
-  if ( !Helper::fileExists( filename ) )
+  X_train_rows.clear();
+  S_train.clear();
+  X_valid_rows.clear();
+  S_valid.clear();
+
+  const std::string expanded_filename = Helper::expand( filename );
+  if ( !Helper::fileExists( expanded_filename ) )
     Helper::halt( "POPS-CODA: posteriors file not found: " + filename );
 
-  std::ifstream IN( Helper::expand( filename ).c_str() );
+  std::ifstream IN( expanded_filename.c_str() );
   if ( !IN.good() )
     Helper::halt( "POPS-CODA: could not open: " + filename );
 
@@ -1209,8 +1331,19 @@ void pops_coda_t::train_from_posteriors_file( const std::string & filename ,
   if ( file_3state ) opt.three_state = true;
 
   const int ns_file = file_5state ? 5 : 3;
+  // Build per-stage epoch thresholds (W=0,R=1,N1=2,N2=3,N3=4); size-1 applies to all
+  auto mins_to_epochs = []( int m ) -> int {
+    return m <= 0 ? 0 : ( m * 60 + 29 ) / 30;
+  };
+  std::array<int,5> min_stage_epochs;
+  if ( opt.min_stage_minutes.size() == 5 )
+    for (int s = 0; s < 5; s++) min_stage_epochs[s] = mins_to_epochs( opt.min_stage_minutes[s] );
+  else
+    min_stage_epochs.fill( mins_to_epochs( opt.min_stage_minutes[0] ) );
+  const bool any_min_stage = std::any_of( min_stage_epochs.begin(), min_stage_epochs.end(),
+                                          []( int v ){ return v > 0; } );
 
-  // Accumulate rows per subject
+  // Parse rows per subject
   struct Row { int e; std::array<double,5> pp; int prior; };
   std::map< std::string , std::vector<Row> > subjects;
 
@@ -1263,9 +1396,24 @@ void pops_coda_t::train_from_posteriors_file( const std::string & filename ,
   logger << "  POPS-CODA: read posteriors for " << subjects.size()
          << " subjects from " << filename << "\n";
 
-  // Accumulate per subject
-  int n_subj = 0;
-  int n_skipped = 0;
+  struct SubjectData {
+    std::string id;
+    Eigen::MatrixXd P;
+    std::vector<int> S;
+    std::vector<int> E;
+  };
+
+  struct ScreenCounts {
+    int insufficient_contiguous = 0;
+    int missing_stages = 0;
+    int insufficient_stage_minutes = 0;
+    int low_kappa = 0;
+    int dropped_any = 0;
+  } screen_counts;
+
+  std::vector<SubjectData> good_subjects;
+  good_subjects.reserve( subjects.size() );
+
   for ( auto & kv : subjects )
     {
       std::vector<Row> & rows = kv.second;
@@ -1275,29 +1423,200 @@ void pops_coda_t::train_from_posteriors_file( const std::string & filename ,
                  []( const Row & a , const Row & b ){ return a.e < b.e; } );
 
       const int ne = (int)rows.size();
-      Eigen::MatrixXd P( ne , ns_file );
-      std::vector<int> S( ne ) , E( ne );
+      SubjectData subj;
+      subj.id = kv.first;
+      subj.P.resize( ne , ns_file );
+      subj.S.resize( ne );
+      subj.E.resize( ne );
 
       for (int i = 0; i < ne; i++)
         {
-          E[i] = rows[i].e;
-          S[i] = rows[i].prior;
+          subj.E[i] = rows[i].e;
+          subj.S[i] = rows[i].prior;
           for (int s = 0; s < ns_file; s++)
-            P(i,s) = rows[i].pp[s];
+            subj.P(i,s) = rows[i].pp[s];
         }
 
-      if ( accumulate( P , S , E , kv.first ) > 0 )
-        ++n_subj;
-      else
-        ++n_skipped;
+      Eigen::MatrixXd P = validate_and_normalise( subj.P );
+      const int ns = P.cols();
+
+      std::vector<bool> flagged( ne , false );
+      for (int e = 0; e < ne; e++)
+        {
+          if ( subj.S[e] == POPS_UNKNOWN )
+            { flagged[e] = true; continue; }
+          for (int s = 0; s < ns; s++)
+            if ( std::isnan( P(e,s) ) ) { flagged[e] = true; break; }
+        }
+
+      int longest_run = 0;
+      int current_run = 0;
+      int prev_valid_epoch = -1;
+      std::vector<int> stage_counts( ns , 0 );
+      std::vector<int> prior;
+      std::vector<int> pred;
+
+      for (int e = 0; e < ne; e++)
+        {
+          if ( flagged[e] )
+            {
+              current_run = 0;
+              prev_valid_epoch = -1;
+              continue;
+            }
+
+          if ( prev_valid_epoch >= 0 && subj.E[e] == prev_valid_epoch + 1 )
+            ++current_run;
+          else
+            current_run = 1;
+
+          if ( current_run > longest_run )
+            longest_run = current_run;
+
+          prev_valid_epoch = subj.E[e];
+
+          const int label = coda_effective_label( subj.S[e] , opt.three_state );
+          if ( label >= 0 && label < ns )
+            stage_counts[ label ]++;
+
+          prior.push_back( label );
+          Eigen::Index predx = 0;
+          P.row(e).maxCoeff( &predx );
+          pred.push_back( (int)predx );
+        }
+
+      bool fail_contiguous = false;
+      if ( opt.min_subject_contiguous_epochs > 0 &&
+           longest_run < opt.min_subject_contiguous_epochs )
+        {
+          fail_contiguous = true;
+          ++screen_counts.insufficient_contiguous;
+        }
+
+      // In broad_stage_qc mode (5-state only): collapse N1+N2+N3 → NREM for QC checks.
+      // Per-stage min_stage_minutes (size==5) always overrides broad mode for duration checks.
+      const bool do_broad = opt.broad_stage_qc && !opt.three_state && ns == 5;
+      const bool do_broad_minutes = do_broad && ( opt.min_stage_minutes.size() != 5 );
+      const int broad_nrem = do_broad
+        ? stage_counts[POPS_N1] + stage_counts[POPS_N2] + stage_counts[POPS_N3]
+        : 0;
+
+      // Presence check: broad collapses N1+N2+N3 → requires any NREM > 0
+      bool fail_missing_stages = false;
+      if ( opt.require_all_stages )
+        {
+          if ( do_broad )
+            {
+              if ( stage_counts[POPS_WAKE] == 0 || stage_counts[POPS_REM] == 0 || broad_nrem == 0 )
+                { fail_missing_stages = true; ++screen_counts.missing_stages; }
+            }
+          else
+            {
+              for (int s = 0; s < ns; s++)
+                if ( stage_counts[s] == 0 )
+                  { fail_missing_stages = true; ++screen_counts.missing_stages; break; }
+            }
+        }
+
+      // Duration check: broad collapses NREM only when no per-stage thresholds given
+      bool fail_stage_minutes = false;
+      if ( any_min_stage )
+        {
+          if ( do_broad_minutes )
+            {
+              const int nrem_thresh = std::max( { min_stage_epochs[2], min_stage_epochs[3], min_stage_epochs[4] } );
+              if ( stage_counts[POPS_WAKE] < min_stage_epochs[POPS_WAKE] ||
+                   stage_counts[POPS_REM]  < min_stage_epochs[POPS_REM]  ||
+                   broad_nrem               < nrem_thresh )
+                { fail_stage_minutes = true; ++screen_counts.insufficient_stage_minutes; }
+            }
+          else
+            {
+              for (int s = 0; s < ns; s++)
+                if ( min_stage_epochs[s] > 0 && stage_counts[s] < min_stage_epochs[s] )
+                  { fail_stage_minutes = true; ++screen_counts.insufficient_stage_minutes; break; }
+            }
+        }
+
+      const double kappa = prior.empty() ? -1.0 : MiscMath::kappa( prior , pred , POPS_UNKNOWN );
+      bool fail_kappa = false;
+      if ( kappa < opt.min_stage1_kappa )
+        {
+          fail_kappa = true;
+          ++screen_counts.low_kappa;
+        }
+
+      if ( fail_contiguous || fail_missing_stages || fail_stage_minutes || fail_kappa )
+        {
+          ++screen_counts.dropped_any;
+          continue;
+        }
+
+      good_subjects.push_back( subj );
     }
 
-  logger << "  POPS-CODA: accumulated training data from " << n_subj << " subjects ("
+  logger << "  POPS-CODA: screening summary: "
+         << screen_counts.dropped_any << " dropped, "
+         << good_subjects.size() << " retained\n";
+  logger << "    low stage-1 kappa: " << screen_counts.low_kappa << "\n";
+  logger << "    missing required stages: " << screen_counts.missing_stages << "\n";
+  logger << "    below min-stage-minutes threshold: "
+         << screen_counts.insufficient_stage_minutes << "\n";
+  logger << "    short contiguous run: " << screen_counts.insufficient_contiguous << "\n";
+
+  if ( good_subjects.empty() )
+    Helper::halt( "POPS-CODA: no subjects remain after screening" );
+
+  if ( opt.random_validation_subjects > 0 )
+    {
+      std::vector<std::string> candidates;
+      for (const auto & subj : good_subjects)
+        if ( ! coda_subject_in_holdouts( holdouts , subj.id ) )
+          candidates.push_back( subj.id );
+
+      const int n_available = (int)candidates.size();
+      const int n_select = opt.random_validation_subjects < n_available
+        ? opt.random_validation_subjects
+        : n_available;
+
+      std::vector<int> order( n_available );
+      CRandom::random_draw( order );
+      for (int i = 0; i < n_select; i++)
+        holdouts.insert( candidates[ order[i] ] );
+
+      logger << "  POPS-CODA: randomly selected " << n_select
+             << " additional validation subject"
+             << ( n_select == 1 ? "" : "s" );
+      if ( n_select < opt.random_validation_subjects )
+        logger << " (requested " << opt.random_validation_subjects
+               << ", available " << n_available << ")";
+      logger << "\n";
+    }
+
+  // Accumulate screened-good subjects into training / validation sets
+  int n_subj_training = 0;
+  int n_subj_validation = 0;
+  for (const auto & subj : good_subjects)
+    {
+      const bool is_validation = coda_subject_in_holdouts( holdouts , subj.id );
+      if ( accumulate( subj.P , subj.S , subj.E , subj.id ) > 0 )
+        {
+          if ( is_validation )
+            ++n_subj_validation;
+          else
+            ++n_subj_training;
+        }
+    }
+
+  logger << "  POPS-CODA: accumulated training data from " << n_subj_training << " subjects ("
          << (int)X_train_rows.size() << " valid epochs)";
-  if ( n_skipped > 0 )
-    logger << "; skipped " << n_skipped << " subject"
-           << ( n_skipped == 1 ? "" : "s" );
+  if ( ! holdouts.empty() )
+    logger << "; validation data from " << n_subj_validation << " subjects ("
+           << (int)X_valid_rows.size() << " valid epochs)";
   logger << "\n";
+
+  if ( n_subj_training == 0 )
+    Helper::halt( "POPS-CODA: no training subjects remain after screening and validation selection" );
 
   train_model( config_file , n_iterations );
 }

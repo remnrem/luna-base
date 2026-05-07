@@ -215,7 +215,9 @@ struct lgbm_t {
   // then needs LGBM_FastConfigFree
   
   int n_iterations;
-  
+  int early_stopping_rounds = 0; // 0 = disabled; set before create_booster()
+  int best_iteration = 0;        // set by create_booster(); used by save_model()
+
 };
 
 

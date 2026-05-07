@@ -844,6 +844,11 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	    }
 	}
       
+      // in no-permutation mode, retain rows with missing Y values so that
+      // per-pair complete-case regression can handle them individually
+      if ( ! param.has( "nreps" ) || param.requires_int( "nreps" ) == 0 )
+	retain_rows = true;
+
       // can skip QC with qc=F option
       if ( ( ! param.has( "qc" ) ) || param.yesno( "qc" ) )
 	qc( winsor_th , param.has( "stats" ) );
@@ -936,6 +941,9 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  // options: permutations?
 	  nreps = param.has( "nreps" ) ? param.requires_int( "nreps" ) : 0 ;
 	  if ( nreps < 0 ) Helper::halt( "nreps must be positive" );
+	  // without permutations, keep all rows so cache holds the full NaN matrix
+	  // and each regression uses its own per-pair complete cases
+	  if ( nreps == 0 ) retain_rows = true;
 
 	  show_progress = param.has( "progress" ) ? param.yesno( "progress" ) : true ; 
 	  
@@ -1004,22 +1012,23 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  // do the actual work 	  
 	  //
 	  
-	  if ( correct_all_X ) 
+	  if ( nreps == 0 )
+	    {
+	      logger << "  per-pair independent regressions, asymptotic p-values (add 'nreps=N' for permutation tests)\n";
+	      run_each_Y();
+	    }
+	  else if ( correct_all_X )
 	    {
 	      logger << "  adjusting for multiple tests across all X variables\n";
-	      if ( nreps ) 
-		logger << "  performing association tests w/ "
-		       << nreps << " permutations... (may take a while)\n"; 
+	      logger << "  performing association tests w/ "
+		     << nreps << " permutations... (may take a while)\n";
 	      run();
 	    }
 	  else
 	    {
-
 	      logger << "  adjusting for multiple tests only within each X variable ('adj-all-X' to adjust across all X)\n";
-
-	      if ( nreps ) 
-		logger << "  performing association tests w/ "
-		       << nreps << " permutations... (may take a while)\n";	  
+	      logger << "  performing association tests w/ "
+		     << nreps << " permutations... (may take a while)\n";
 	      run1X();
 	    }
 	  
@@ -1910,6 +1919,191 @@ void gpa_t::run1X() // correction within X
   
 }
 
+
+
+void gpa_t::run_each_Y()
+{
+  if ( ivs.size() == 0 || dvs.size() == 0 ) return;
+
+  std::vector<std::string> yvars, xvars;
+  for (int j=0; j<(int)dvs.size(); j++) yvars.push_back( vars[ dvs[j] ] );
+  for (int j=0; j<(int)ivs.size(); j++) xvars.push_back( vars[ ivs[j] ] );
+
+  const int ni = X.rows();
+
+  // manifest strata (same as run1X)
+  std::set<std::string> allfacs;
+  std::map<std::string,std::map<std::string,std::string> >::const_iterator ii = faclvl.begin();
+  while ( ii != faclvl.end() )
+    {
+      const std::map<std::string,std::string> & xx = ii->second;
+      std::map<std::string,std::string>::const_iterator ff = xx.begin();
+      while ( ff != xx.end() ) { allfacs.insert( ff->first ); ++ff; }
+      ++ii;
+    }
+
+  int count_p05 = 0, count_fdr05 = 0, count_all = 0;
+
+  for (int j=0; j<(int)ivs.size(); j++)
+    {
+      const std::string & xvar = vars[ ivs[j] ];
+      writer.level( xvar , "X" );
+
+      // collect per-Y results for this X, then apply correction across Y
+      linmod_results_t agg;
+      std::map<std::string,int> n_obs_map;
+
+      for (int y=0; y<(int)dvs.size(); y++)
+	{
+	  const std::string & yvar = vars[ dvs[y] ];
+
+	  if ( xvar == yvar )
+	    {
+	      agg.p[ xvar ][ yvar ] = -1;
+	      continue;
+	    }
+
+	  // complete-case mask for this (x, y, Z) triple
+	  std::vector<int> mask;
+	  mask.reserve( ni );
+	  for (int i=0; i<ni; i++)
+	    {
+	      if ( std::isnan( X(i, ivs[j]) ) || std::isnan( X(i, dvs[y]) ) ) continue;
+	      bool ok = true;
+	      for (int k=0; k<(int)cvs.size() && ok; k++)
+		if ( std::isnan( X(i, cvs[k]) ) ) ok = false;
+	      if ( ok ) mask.push_back(i);
+	    }
+
+	  const int n_obs = (int)mask.size();
+	  if ( n_obs < n_req )
+	    {
+	      agg.p[ xvar ][ yvar ] = -1;
+	      continue;
+	    }
+
+	  n_obs_map[ yvar ] = n_obs;
+
+	  // extract sub-vectors and Z sub-matrix
+	  Eigen::VectorXd xv(n_obs), yv(n_obs);
+	  Eigen::MatrixXd Zsub( n_obs , (int)cvs.size() );
+	  for (int r=0; r<n_obs; r++)
+	    {
+	      xv[r] = X( mask[r], ivs[j] );
+	      yv[r] = X( mask[r], dvs[y] );
+	      for (int k=0; k<(int)cvs.size(); k++)
+		Zsub(r,k) = X( mask[r], cvs[k] );
+	    }
+
+	  Eigen::MatrixXd Ymat(n_obs, 1);  Ymat.col(0) = yv;
+	  Eigen::MatrixXd Xmat(n_obs, 1);  Xmat.col(0) = xv;
+
+	  linmod_t lm( Ymat, {yvar}, Xmat, {xvar}, Zsub );
+	  linmod_results_t res = lm.run( 0 , false );
+
+	  if ( res.p.count(xvar) && res.p[xvar].count(yvar) && res.p[xvar][yvar] > -1 )
+	    {
+	      agg.beta[ xvar ][ yvar ] = res.beta[xvar][yvar];
+	      agg.t[ xvar ][ yvar ]    = res.t[xvar][yvar];
+	      agg.p[ xvar ][ yvar ]    = res.p[xvar][yvar];
+	    }
+	  else
+	    agg.p[ xvar ][ yvar ] = -1;
+	}
+
+      // correction across all Y for this X
+      agg.make_corrected( {xvar}, yvars );
+
+      // output
+      bool shown_y = false;
+      for (int y=0; y<(int)dvs.size(); y++)
+	{
+	  const std::string & var = vars[ dvs[y] ];
+	  const bool self = xvar == var;
+	  shown_y = true;
+	  writer.level( var , "Y" );
+
+	  if ( !self )
+	    {
+	      const bool valid_test = agg.p.count(xvar) && agg.p[xvar].count(var) && agg.p[xvar][var] > -1;
+
+	      if ( valid_test )
+		{
+		  writer.value( "B"  , agg.beta[xvar][var] );
+		  writer.value( "T"  , agg.t[xvar][var] );
+		  writer.value( "N"  , n_obs_map[var] );
+		  writer.value( "P"  , agg.p[xvar][var] );
+		  writer.value( "P_FDR" , agg.fdr_bh( xvar, var ) );
+
+		  if ( adj_fdr_by ) writer.value( "P_FDR_BY" , agg.fdr_by( xvar, var ) );
+		  if ( adj_bonf )   writer.value( "P_BONF"   , agg.bonf( xvar, var ) );
+		  if ( adj_holm )   writer.value( "P_HOLM"   , agg.holm( xvar, var ) );
+
+		  if ( agg.p[xvar][var] < 0.05 ) count_p05++;
+		  if ( agg.fdr_bh( xvar, var ) < 0.05 ) count_fdr05++;
+		  count_all++;
+		}
+	    }
+
+	  // manifest details
+	  writer.value( "GROUP" , var2group[ var ] );
+	  writer.value( "BASE"  , basevar[ var ] );
+
+	  std::string sx;
+	  std::set<std::string>::const_iterator gg = allfacs.begin();
+	  while ( gg != allfacs.end() )
+	    {
+	      std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( var );
+	      if ( kk != faclvl.end() )
+		{
+		  if ( kk->second.find( *gg ) != kk->second.end() )
+		    {
+		      if ( sx != "" ) sx += ";";
+		      sx += *gg + "=" + kk->second.find( *gg )->second;
+		    }
+		}
+	      ++gg;
+	    }
+	  writer.value( "STRAT" , sx );
+
+	  if ( show_xfacs )
+	    {
+	      writer.value( "XGROUP" , var2group[ xvar ] );
+	      writer.value( "XBASE"  , basevar[ xvar ] );
+
+	      std::string sx2;
+	      std::set<std::string>::const_iterator gg2 = allfacs.begin();
+	      while ( gg2 != allfacs.end() )
+		{
+		  std::map<std::string,std::map<std::string,std::string> >::const_iterator kk = faclvl.find( xvar );
+		  if ( kk != faclvl.end() )
+		    {
+		      if ( kk->second.find( *gg2 ) != kk->second.end() )
+			{
+			  if ( sx2 != "" ) sx2 += ";";
+			  sx2 += *gg2 + "=" + kk->second.find( *gg2 )->second;
+			}
+		    }
+		  ++gg2;
+		}
+	      writer.value( "XSTRAT" , sx2 );
+	    }
+	}
+
+      if ( shown_y )
+	writer.unlevel( "Y" );
+    }
+
+  writer.unlevel( "X" );
+
+  if ( count_all > 0 )
+    {
+      logger << "  " << count_p05  << " (prop = " << count_p05  / (double)count_all
+	     << ") significant at nominal p < 0.05\n";
+      logger << "  " << count_fdr05 << " (prop = " << count_fdr05 / (double)count_all
+	     << ") significant at FDR p < 0.05\n";
+    }
+}
 
 
 // ------------------------------------------------------------
@@ -3540,13 +3734,21 @@ void gpa_t::qc( const double winsor , const bool stats_mode )
   
   std::vector<int> zeros;
 
-  eigen_ops::robust_scale( X ,
-			   true , // mean center
-			   true , // normalize
-			   winsor ,
-			   true , // second-round norm (post winsorizing)
-			   true , // ignore invariants
-			   & zeros ); // but track them here
+  if ( retain_rows )
+    eigen_ops::robust_scale_nan( X ,
+				 true , // mean center
+				 true , // normalize
+				 winsor ,
+				 true , // ignore invariants
+				 & zeros );
+  else
+    eigen_ops::robust_scale( X ,
+			     true , // mean center
+			     true , // normalize
+			     winsor ,
+			     true , // second-round norm (post winsorizing)
+			     true , // ignore invariants
+			     & zeros ); // but track them here
 
   // swap X and Z values back
   for (int j=0; j<v1.size(); j++)

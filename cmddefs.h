@@ -358,8 +358,8 @@ class cmddefs_t
   // cmd->table->var->desc
   std::map<std::string,std::map<tfac_t,std::map<std::string,std::string> > > ovars;
 
-  // cmd->table->var->tout
-  std::map<std::string,std::map<tfac_t,std::map<std::string,std::string> > > otout;
+  // cmd->table->var->output-enabled
+  std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > > otout;
 
   //
   // hidden status (i.e. not reported in output)

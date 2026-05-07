@@ -271,40 +271,46 @@ bool lgbm_t::create_booster( const bool verbose )
   int num_validation_eval_metrics = 0;
 
   LGBM_BoosterGetEvalCounts( booster , &num_validation_eval_metrics );
-  
+
+  // early stopping state
+  double es_best_val  = std::numeric_limits<double>::max();
+  int    es_best_iter = 0;
+  int    es_no_improve = 0;
+  best_iteration = 0;
+
   for (int i = 0; i < n_iterations ; i++)
     {
       int is_finished;
-      
+
       int flag = LGBM_BoosterUpdateOneIter( booster , &is_finished );
-      
+
       if ( flag )
 	Helper::halt( "problem iterating training model" );
-      
+
       if ( is_finished == 1 )
 	{
 	  logger << "  finished in " << i+1 << " iterations\n";
 	  break;
 	}
-      
+
       //
       // Evaluation
       //
-      
+
       int out_len;
       std::vector<double> eval( num_validation_eval_metrics , 0 );
-      
+
       flag = LGBM_BoosterGetEval( booster ,
 				  0 ,  //  dataset index == 0 training, 1 = 1st validation dataset, etc
 				  &out_len ,
 				  eval.data() );
 
-      if ( flag ) 
+      if ( flag )
 	Helper::halt( "problem evaluating training data" );
 
-      int out_len_valid;
+      int out_len_valid = 0;
       std::vector<double> eval_valid( num_validation_eval_metrics , 0 );
-      
+
       if ( has_validation )
 	{
 	  flag = LGBM_BoosterGetEval( booster ,
@@ -312,23 +318,23 @@ bool lgbm_t::create_booster( const bool verbose )
 				      &out_len_valid ,
 				      eval_valid.data() );
 
-	  if ( flag ) 
+	  if ( flag )
 	    Helper::halt( "problem evaluating validation data" );
 	}
-    
+
       logger << " iteration " << i+1 << ": training =";
-      
-      for (int j=0; j<out_len; j++) 
+
+      for (int j=0; j<out_len; j++)
 	logger << " " << eval[j];
-      if ( has_validation ) 
+      if ( has_validation )
 	{
 	  logger << " validation =";
 	  for (int j=0; j<out_len_valid; j++)
 	    logger << " " << eval_valid[j];
 	}
       logger << "\n";
-      
-      
+
+
       // track in DB?
       if ( verbose )
 	{
@@ -342,7 +348,31 @@ bool lgbm_t::create_booster( const bool verbose )
 	    }
 	  writer.unlevel( "METRIC" );
 	}
-      
+
+      // early stopping: track best validation loss (first metric, lower = better)
+      if ( has_validation && early_stopping_rounds > 0 && out_len_valid > 0 )
+	{
+	  const double val = eval_valid[0];
+	  if ( val < es_best_val )
+	    {
+	      es_best_val  = val;
+	      es_best_iter = i + 1;
+	      es_no_improve = 0;
+	    }
+	  else
+	    {
+	      ++es_no_improve;
+	      if ( es_no_improve >= early_stopping_rounds )
+		{
+		  logger << "  early stopping at iteration " << i+1
+			 << "; best iteration = " << es_best_iter
+			 << " (val = " << es_best_val << ")\n";
+		  best_iteration = es_best_iter;
+		  break;
+		}
+	    }
+	}
+
     }
 
   if ( verbose )
@@ -583,10 +613,11 @@ bool lgbm_t::load_model_string( const std::string & str )
 
 bool lgbm_t::save_model( const std::string & filename )
 {
-  int res = LGBM_BoosterSaveModel( booster , 
- 				   0 , // start_iteration – Start index of the iteration that should be saved 
- 				   0 , // num_iteration – Index of the iteration that should be saved, <= 0 means save all
- 				   C_API_FEATURE_IMPORTANCE_SPLIT , // or C_API_FEATURE_IMPORTANCE_GAIN ??
+  // best_iteration > 0 when early stopping fired: save only up to that iteration
+  int res = LGBM_BoosterSaveModel( booster ,
+ 				   0 ,              // start_iteration
+ 				   best_iteration , // <= 0 means save all
+ 				   C_API_FEATURE_IMPORTANCE_SPLIT ,
  				   Helper::expand( filename ).c_str() );
   
   if ( res ) Helper::halt( "problem in lgmb_t::save_model()" );  
@@ -1024,7 +1055,6 @@ void lgbm_t::load_pops_default_config()
     "metric_freq=1 "
     "is_training_metric=true "
     "max_bin=255 "
-    "early_stopping=10 "
     "num_trees=100 "
     "learning_rate=0.05 "
     "num_leaves=31";

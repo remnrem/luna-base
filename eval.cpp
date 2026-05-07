@@ -1979,10 +1979,24 @@ void proc_pops( edf_t & edf , param_t & param )
             coda.opt.lambda         = param.requires_dbl( "coda-lambda" );
           if ( param.has( "coda-min-contiguous" ) )
             coda.opt.min_subject_contiguous_epochs = param.requires_int( "coda-min-contiguous" );
+          if ( param.has( "coda-min-stage-minutes" ) )
+            coda.opt.min_stage_minutes = param.intvector( "coda-min-stage-minutes" );
+          if ( param.has( "coda-min-kappa" ) )
+            coda.opt.min_stage1_kappa = param.requires_dbl( "coda-min-kappa" );
+          if ( param.has( "coda-valid-n" ) )
+            coda.opt.random_validation_subjects = param.requires_int( "coda-valid-n" );
           if ( param.has( "coda-weights" ) )
             coda.opt.class_weights  = param.dblvector( "coda-weights" );
           if ( param.has( "coda-no-future" ) )
             coda.opt.include_future = false;
+          if ( param.has( "coda-no-require-all-stages" ) )
+            coda.opt.require_all_stages = false;
+          if ( param.has( "coda-broad-stage-qc" ) )
+            coda.opt.broad_stage_qc = true;
+          if ( param.has( "hold-outs" ) )
+            coda.load_validation_ids( param.value( "hold-outs" ) );
+          else if ( param.has( "validation" ) )
+            coda.load_validation_ids( param.value( "validation" ) );
 
           const std::string coda_conf =
             param.has( "coda-config" ) ? param.value( "coda-config" ) : ".";
@@ -5396,14 +5410,33 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   
     
   // combine annot class and instance IDs
-  if ( Helper::iequals( tok0 , "combine-annots" ) )
+  if ( Helper::iequals( tok0 , "combine-annots-delimiter" ) )
     {
-      globals::combine_annot_class_inst = true;
-      if ( tok1 != "" ) globals::annot_class_inst_combiner = tok1[0];
+      globals::annot_class_inst_combiner = tok1[0];
       return;
     }
 
+  // combine annot class and instance IDs
+  if ( Helper::iequals( tok0 , "combine-annots" ) )
+    {
+      globals::combine_annot_class_inst = true;
+      globals::combine_annot_class_ch = true;      
+      return;
+    }
 
+  // combine annot class and instance IDs
+  if ( Helper::iequals( tok0 , "combine-annots-inst" ) )
+    {
+      globals::combine_annot_class_inst = true;      
+      return;
+    }
+
+  // combine annot class and instance IDs
+  if ( Helper::iequals( tok0 , "combine-annots-channel" ) )
+    {
+      globals::combine_annot_class_ch = true;      
+      return;
+    }
 
   // skip annots not on the whitelist (remap list)
   // also applies to EDF Annots 

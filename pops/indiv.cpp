@@ -2747,6 +2747,15 @@ int pops_indiv_t::update_predicted( std::vector<int> * cnts )
 
 void pops_indiv_t::add_annots( edf_t & edf , const std::string & prefix )
 {
+  if ( E.empty() || PS.empty() )
+    {
+      logger << "  skipping POPS annotations: no predicted epochs available\n";
+      return;
+    }
+
+  if ( E.size() != PS.size() )
+    logger << "  warning: POPS annotation inputs are misaligned (E=" << E.size()
+           << ", PS=" << PS.size() << "); truncating to the common length\n";
   
   // ensure cleared if already present
 
@@ -2783,11 +2792,20 @@ void pops_indiv_t::add_annots( edf_t & edf , const std::string & prefix )
   aW->description = "W, POPS prediction";
   aU->description = "?, POPS prediction";
     
-  int ne = E.size();
+  const int ne = std::min( E.size() , PS.size() );
 
   for (int e=0; e<ne; e++)
-    {      
-      interval_t interval = edf.timeline.epoch( E[e] );                  
+    {
+      interval_t interval = edf.timeline.epoch( E[e] );
+
+      // Invalid or missing epoch mappings can happen after aggressive pruning.
+      // Skip those epochs rather than crashing while building annotations.
+      if ( interval.stop <= interval.start )
+	{
+	  logger << "  warning: skipping POPS annotation for invalid epoch index "
+		 << E[e] << "\n";
+	  continue;
+	}
       
       if ( pops_opt_t::n_stages == 3  )
 	{

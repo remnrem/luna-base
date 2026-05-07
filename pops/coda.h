@@ -55,7 +55,10 @@ class pops_coda_t {
   struct options_t {
     int    context_epochs       = 20;   // half-window in epochs (10 min at 30 s)
     int    min_subject_contiguous_epochs = 0; // require at least this many contiguous valid epochs to include a subject
-    double lambda               = 5.0;  // denominator smoothing for rel_elapsed features
+    std::vector<int> min_stage_minutes = {5};  // per-stage minimums in W,R,N1,N2,N3 order; size-1 applies to all
+    double min_stage1_kappa     = 0.5;  // require stage-1 hard calls vs PRIOR to reach at least this kappa
+    int    random_validation_subjects = 0; // additionally sample this many good subjects into validation
+    double lambda               = 2.0;  // denominator smoothing for rel_elapsed features
     std::vector<double> class_weights;  // per-class training weights in W,R,N1,N2,N3 / W,R,NR order
     bool   include_future       = true; // future-context features (offline mode)
     bool   include_global       = true; // recording-level posterior totals / fractions
@@ -63,6 +66,8 @@ class pops_coda_t {
     bool   include_quantiles    = true; // past/future posterior quantiles
     bool   include_hard_props   = true; // past/future hard-call stage proportions
     bool   include_entropy_margin = true; // top_prob, second_prob, margin, entropy
+    bool   require_all_stages   = true; // require every effective stage to be observed at least once
+    bool   broad_stage_qc      = false; // group N1+N2+N3 as NREM for require_all_stages / min_stage_minutes checks
     bool   three_state          = false; // 3-state (W R NR) vs 5-state (W R N1 N2 N3)
     bool   do_SHAP             = false; // emit CODA SHAP values during prediction
   } opt;
@@ -93,6 +98,10 @@ class pops_coda_t {
   void train_from_posteriors_file( const std::string & filename ,
                                    const std::string & config_file = "." ,
                                    int n_iterations = 200 );
+
+  // Load a file of subject IDs to hold out for LightGBM validation.
+  // Uses the same plain-text one-ID-per-token format as POPS validation= / hold-outs=.
+  void load_validation_ids( const std::string & filename );
 
   // Fit the CODA LightGBM model on accumulated data.
   // config_file: path to an LightGBM config file, or "." for CODA defaults
@@ -143,9 +152,12 @@ class pops_coda_t {
 
   lgbm_t lgbm;
 
-  // Accumulated training rows / labels (buffered as row vectors for efficiency)
+  // Accumulated training / validation rows and labels (buffered as row vectors for efficiency)
   std::vector<Eigen::VectorXd> X_train_rows;
   std::vector<int>             S_train;
+  std::vector<Eigen::VectorXd> X_valid_rows;
+  std::vector<int>             S_valid;
+  std::set<std::string>        holdouts;
 
   // Feature names as loaded from the .fnames file (used to validate at predict time)
   std::vector<std::string> loaded_fnames;

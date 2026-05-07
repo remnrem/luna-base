@@ -280,6 +280,96 @@ bool eigen_ops::robust_scale( Eigen::Ref<Eigen::MatrixXd> m , const bool center 
 
 
 
+// NaN-safe version: strips NaNs before computing per-column statistics,
+// then applies centering/scaling to all rows (NaN cells remain NaN).
+// Skips the second_rescale step because scale() uses colwise().mean()
+// which propagates NaN.
+bool eigen_ops::robust_scale_nan( Eigen::Ref<Eigen::MatrixXd> m , const bool center , bool normalize , double w ,
+				  const bool ignore_invariants , std::vector<int> * zeros )
+{
+  if ( m.rows() == 0 ) return true;
+
+  const int rows = m.rows();
+  const int cols = m.cols();
+  for (int c=0;c<cols;c++)
+    {
+      // strip NaNs for stat computation only
+      std::vector<double> v = copy_vector( eigen_ops::removeNaNs( m.col(c) ) );
+
+      if ( v.empty() )
+	{
+	  if ( zeros != NULL ) zeros->push_back( c );
+	  continue;
+	}
+
+      double median = center    ? MiscMath::median( v ) : 0 ;
+      double iqr    = normalize ? MiscMath::iqr( v )    : 0 ;
+
+      bool is_variable   = true;
+      bool invariant     = iqr <= 1e-8;
+      bool lowvar_binary = invariant;
+
+      if ( invariant )
+	{
+	  if ( MiscMath::invariant( v ) )
+	    {
+	      iqr = 1.0;
+	      is_variable = false;
+	    }
+	  else
+	    {
+	      iqr = 1;
+	      invariant = false;
+	    }
+	}
+
+      if ( normalize && invariant )
+	{
+	  is_variable = false;
+	  if ( ! ignore_invariants )
+	    return false;
+	  if ( zeros != NULL )
+	    zeros->push_back( c );
+	}
+
+      double robust_sd = ( normalize && is_variable ) ? 0.7413 * iqr : 1 ;
+
+      if ( w > 0 && is_variable && ! lowvar_binary )
+	{
+	  double lwr = MiscMath::percentile( v , w );
+	  double upr = MiscMath::percentile( v , 1-w );
+	  if ( lwr < upr )
+	    {
+	      for (int i=0; i<rows; i++)
+		{
+		  if ( std::isnan( m(i,c) ) ) continue;
+		  if      ( m(i,c) < lwr ) m(i,c) = lwr;
+		  else if ( m(i,c) > upr ) m(i,c) = upr;
+		}
+	    }
+	}
+
+      if ( center && normalize && is_variable )
+	{
+	  for (int i=0; i<rows; i++)
+	    m(i,c) = ( m(i,c) - median ) / robust_sd;   // NaN - median = NaN: fine
+	}
+      else if ( normalize && is_variable )
+	{
+	  for (int i=0; i<rows; i++)
+	    m(i,c) = m(i,c) / robust_sd;
+	}
+      else if ( center && is_variable )
+	{
+	  for (int i=0; i<rows; i++)
+	    m(i,c) = m(i,c) - median;
+	}
+    }
+
+  return true;
+}
+
+
 double eigen_ops::sdev( const Eigen::VectorXd & x )
 {
   const int N = x.size();

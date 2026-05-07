@@ -65,6 +65,7 @@ bool globals::allow_space_param = true;
 bool globals::allow_equals_param = true;
 char globals::annot_class_inst_combiner = '_';
 bool globals::combine_annot_class_inst = false;
+bool globals::combine_annot_class_ch = false;
 char globals::class_inst_delimiter = ':';
 char globals::annot_keyval_delim = '=' ; 
 char globals::annot_meta_delim  = ';';

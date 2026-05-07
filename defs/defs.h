@@ -464,9 +464,11 @@ struct globals
   // always sanitize labels (e.g. for eval expressions)
   static bool sanitize_everything;
   
-  // combine class and instance annotations (to a single class?)
+  // combine class and instance annotations (to a single class)
+  //  w/ or w/out channel also
   static char annot_class_inst_combiner;
-  static bool combine_annot_class_inst;
+  static bool combine_annot_class_inst; // class <- class + inst
+  static bool combine_annot_class_ch;   // class <- class + ch
 
   // split annot/inst
   static char class_inst_delimiter;
