@@ -1949,6 +1949,66 @@ void proc_pops( edf_t & edf , param_t & param )
 
 #ifdef HAS_LGBM
 
+  auto apply_coda_options = [&]( pops_coda_t & coda , bool for_prediction )
+    {
+      coda.opt.three_state = param.has( "3-class" ) || ( pops_opt_t::n_stages == 3 );
+      if ( param.has( "coda-context" ) )
+        coda.opt.context_epochs = param.requires_int( "coda-context" );
+      if ( param.has( "coda-lambda" ) )
+        coda.opt.lambda = param.requires_dbl( "coda-lambda" );
+      if ( param.has( "coda-min-contiguous" ) )
+        coda.opt.min_subject_contiguous_epochs = param.requires_int( "coda-min-contiguous" );
+      if ( param.has( "coda-min-stage-minutes" ) )
+        coda.opt.min_stage_minutes = param.intvector( "coda-min-stage-minutes" );
+      if ( param.has( "coda-min-kappa" ) )
+        coda.opt.min_stage1_kappa = param.requires_dbl( "coda-min-kappa" );
+      if ( param.has( "coda-valid-n" ) )
+        coda.opt.random_validation_subjects = param.requires_int( "coda-valid-n" );
+      if ( param.has( "coda-weights" ) )
+        coda.opt.class_weights = param.dblvector( "coda-weights" );
+      if ( param.has( "coda-no-future" ) )
+        coda.opt.include_future = false;
+      if ( param.has( "coda-no-require-all-stages" ) )
+        coda.opt.require_all_stages = false;
+      if ( param.has( "coda-broad-stage-qc" ) )
+        coda.opt.broad_stage_qc = true;
+      if ( for_prediction )
+        coda.opt.do_SHAP = param.has( "SHAP" ) || param.has( "shap" ) ||
+                           param.has( "coda-SHAP" );
+      else if ( param.has( "hold-outs" ) )
+        coda.load_validation_ids( param.value( "hold-outs" ) );
+      else if ( param.has( "validation" ) )
+        coda.load_validation_ids( param.value( "validation" ) );
+    };
+
+  //
+  // Standalone CODA prediction from a posteriors file.
+  //
+
+  if ( param.has( "predict-coda" ) && param.has( "posteriors" ) )
+    {
+      pops_opt_t::set_options( param );
+
+      static std::set<std::string> _coda_predicted;
+      const std::string pops_lib = param.has( "lib" ) ? Helper::expand( param.value( "lib" ) ) : "s2";
+      const std::string coda_model  =
+        pops_lib != "" ? pops_t::update_filepath( pops_lib + ".coda.mod" )
+                                    : pops_t::update_filepath( "coda.mod" );
+      const std::string post_file   = param.value( "posteriors" );
+      const std::string guard_key   = coda_model + "|" + post_file + "|predict";
+
+      if ( _coda_predicted.find( guard_key ) == _coda_predicted.end() )
+        {
+          _coda_predicted.insert( guard_key );
+
+          pops_coda_t coda;
+          apply_coda_options( coda , true );
+          coda.load( coda_model );
+          coda.predict_from_posteriors_file( post_file );
+        }
+      return;
+    }
+
   //
   // Standalone CODA training: posteriors=<file> coda[=<model>]  or legacy train-coda=<model>
   // If lib=ROOT is set and no explicit model path is given, default to ROOT.coda.mod
@@ -1972,31 +2032,7 @@ void proc_pops( edf_t & edf , param_t & param )
           _coda_trained.insert( guard_key );
 
           pops_coda_t coda;
-          coda.opt.three_state      = param.has( "3-class" ) || ( pops_opt_t::n_stages == 3 );
-          if ( param.has( "coda-context" ) )
-            coda.opt.context_epochs = param.requires_int( "coda-context" );
-          if ( param.has( "coda-lambda" ) )
-            coda.opt.lambda         = param.requires_dbl( "coda-lambda" );
-          if ( param.has( "coda-min-contiguous" ) )
-            coda.opt.min_subject_contiguous_epochs = param.requires_int( "coda-min-contiguous" );
-          if ( param.has( "coda-min-stage-minutes" ) )
-            coda.opt.min_stage_minutes = param.intvector( "coda-min-stage-minutes" );
-          if ( param.has( "coda-min-kappa" ) )
-            coda.opt.min_stage1_kappa = param.requires_dbl( "coda-min-kappa" );
-          if ( param.has( "coda-valid-n" ) )
-            coda.opt.random_validation_subjects = param.requires_int( "coda-valid-n" );
-          if ( param.has( "coda-weights" ) )
-            coda.opt.class_weights  = param.dblvector( "coda-weights" );
-          if ( param.has( "coda-no-future" ) )
-            coda.opt.include_future = false;
-          if ( param.has( "coda-no-require-all-stages" ) )
-            coda.opt.require_all_stages = false;
-          if ( param.has( "coda-broad-stage-qc" ) )
-            coda.opt.broad_stage_qc = true;
-          if ( param.has( "hold-outs" ) )
-            coda.load_validation_ids( param.value( "hold-outs" ) );
-          else if ( param.has( "validation" ) )
-            coda.load_validation_ids( param.value( "validation" ) );
+          apply_coda_options( coda , false );
 
           const std::string coda_conf =
             param.has( "coda-config" ) ? param.value( "coda-config" ) : ".";

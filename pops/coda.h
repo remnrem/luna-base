@@ -99,6 +99,11 @@ class pops_coda_t {
                                    const std::string & config_file = "." ,
                                    int n_iterations = 200 );
 
+  // Predict CODA outputs from a plain-text posteriors file.
+  // Uses the same format as train_from_posteriors_file(), except PRIOR is optional.
+  // Optional START/STOP columns, if present, are copied through to epoch-level output.
+  void predict_from_posteriors_file( const std::string & filename );
+
   // Load a file of subject IDs to hold out for LightGBM validation.
   // Uses the same plain-text one-ID-per-token format as POPS validation= / hold-outs=.
   void load_validation_ids( const std::string & filename );
@@ -136,7 +141,10 @@ class pops_coda_t {
                 int ne_total ,
                 bool has_staging ,
                 const std::vector<int> & S ,
-                edf_t * pedf );
+                edf_t * pedf ,
+                const std::vector<std::string> * start = NULL ,
+                const std::vector<std::string> * stop = NULL ,
+                bool emit_stage1 = true );
 
   // Matrix-only rescoring path for callers that want CODA posteriors without
   // writing the standard epoch-level MDL=CODA outputs.

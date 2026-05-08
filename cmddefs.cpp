@@ -4062,9 +4062,10 @@ void cmddefs_t::init()
   add_param( "POPS" , "fix" , "W,R,N1,N2,N3" , "Sample a fixed number of epochs per class" );
   add_param( "POPS" , "alias" , "CEN|C3" , "Specify channel aliases" );
   add_param( "POPS" , "equiv" , "CEN|C3,C3_N" , "Specify channel-equivalent mappings" );
-  add_param( "POPS" , "posteriors" , "pops-out.txt" , "POPS-CODA: file of stage-1 posteriors for standalone CODA training (destrat POPS -r E format)" );
+  add_param( "POPS" , "posteriors" , "pops-out.txt" , "POPS-CODA: file of stage-1 posteriors for standalone CODA training or posterior-file CODA prediction (destrat POPS -r E format; PRIOR required for training, optional for prediction; START/STOP copied through if present)" );
   add_param( "POPS" , "train-coda" , "coda.mod" , "POPS-CODA: explicit output model file for standalone CODA training (legacy override; otherwise coda[=<file>] with lib=ROOT defaults to ROOT.coda.mod)" );
-  add_param( "POPS" , "coda" , "coda.mod" , "POPS-CODA: standalone second-stage CODA training from posteriors=, or explicit model path override; if no file is given and lib=ROOT then uses ROOT.coda.mod under path=" );
+  add_param( "POPS" , "coda" , "coda.mod" , "POPS-CODA: apply the second-stage CODA model in the original POPS/RUN-POPS scoring path, or name the output model for standalone CODA training from posteriors=" );
+  add_param( "POPS" , "predict-coda" , "" , "POPS-CODA: rescore a posteriors= file with the model resolved as <lib>.coda.mod (default lib=s2), without reading EDF/signals" );
   add_param( "POPS" , "coda-config" , "coda.conf" , "POPS-CODA: LightGBM config file for CODA training (default: built-in)" );
   add_param( "POPS" , "coda-iter" , "200" , "POPS-CODA: number of LightGBM iterations for CODA training (default 200)" );
   add_param( "POPS" , "coda-context" , "20" , "POPS-CODA: context window in epochs (default 20)" );
@@ -4380,8 +4381,12 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "motion-th"  , "0.1"    , "TV threshold for motion-based transition detection" );
   add_param( "HDSTATS" , "window"     , "60"     , "Transition window half-width (seconds)" );
   add_param( "HDSTATS" , "lag"        , "30"     , "Lag for longer-lag TV metric (seconds)" );
-  add_param( "HDSTATS" , "stable-min" , "60"     , "Min seconds from any transition to qualify as stable-core" );
+  add_param( "HDSTATS" , "stable-min" , "60"     , "Minimum duration (seconds) for a TV-low, confidence-high run to qualify as stable-core" );
+  add_param( "HDSTATS" , "stable-tv"  , "0.05"   , "Per-sample TV must be below this threshold to qualify as stable-core" );
+  add_param( "HDSTATS" , "stable-conf", "0.70"   , "Per-sample confidence must exceed this threshold to qualify as stable-core" );
   add_param( "HDSTATS" , "conf-th"    , "0.8"    , "Confidence threshold for FRAC_C_LT metric" );
+  add_param( "HDSTATS" , "min-shift"  , "0.10"   , "Minimum pre/post posterior L1 shift required to retain a detected transition event" );
+  add_param( "HDSTATS" , "shift-win"  , "30"     , "Pre/post window (seconds) used to compute min-shift filtering" );
   add_param( "HDSTATS" , "hd-metrics" , "T"      , "Emit HD_ hypnodensity analogs of selected HYPNO metrics" );
   add_param( "HDSTATS" , "hd-smooth"  , "30"     , "Smoothing window (seconds) for soft sleep/REM trajectories" );
   add_param( "HDSTATS" , "hd-onset-win" , "10"   , "Forward integrated-area window (minutes) for sustained sleep/REM entry detection" );
@@ -4415,15 +4420,23 @@ void cmddefs_t::init()
   };
   const std::vector<std::string> hdstats_offset_tables = {
     "OFFSET",
+    "QUAL,OFFSET",
     "STATE,OFFSET",
+    "STATE,QUAL,OFFSET",
     "ANNOT,OFFSET",
-    "ANNOT,STATE,OFFSET"
+    "ANNOT,QUAL,OFFSET",
+    "ANNOT,STATE,OFFSET",
+    "ANNOT,STATE,QUAL,OFFSET"
   };
   const std::vector<std::string> hdstats_trans_offset_tables = {
     "TRANS,OFFSET",
+    "QUAL,TRANS,OFFSET",
     "STATE,TRANS,OFFSET",
+    "STATE,QUAL,TRANS,OFFSET",
     "ANNOT,TRANS,OFFSET",
-    "ANNOT,STATE,TRANS,OFFSET"
+    "ANNOT,QUAL,TRANS,OFFSET",
+    "ANNOT,STATE,TRANS,OFFSET",
+    "ANNOT,STATE,QUAL,TRANS,OFFSET"
   };
   auto add_hdstats_var = [&]( const std::vector<std::string> & tables ,
 			      const std::string & var ,
@@ -4450,7 +4463,7 @@ void cmddefs_t::init()
   add_hdstats_var( hdstats_ss_tables, "HD_PCT",  "Expected stage duration as % of hypnodensity total sleep time" );
   add_hdstats_var( hdstats_ss_tables, "HD_DENS", "Expected stage duration as a proportion of HD_SPT" );
 
-  add_table( "HDSTATS" , "REGION"                  , "Mixedness and instability by region (ALL/STABLE/TRANS)" );
+  add_table( "HDSTATS" , "REGION"                  , "Mixedness and instability by region (ALL/STABLE/TRANS/NEITHER)" );
   add_table( "HDSTATS" , "REGION,ANNOT"            , "Same, stratified by annotation level" );
   add_table( "HDSTATS" , "REGION,STATE"            , "Same, by state representation (5/3); only with 3state option" );
   add_table( "HDSTATS" , "REGION,ANNOT,STATE"      , "Same, stratified by annotation level and state representation" );
@@ -4479,13 +4492,21 @@ void cmddefs_t::init()
   add_hdstats_var( hdstats_region_tables, "P_N2",      "Mean N2 posterior probability (5-state only)" );
   add_hdstats_var( hdstats_region_tables, "P_N3",      "Mean N3 posterior probability (5-state only)" );
   add_hdstats_var( hdstats_region_tables, "P_R",       "Mean REM posterior probability" );
+  add_hdstats_var( std::vector<std::string>{ "REGION", "REGION,ANNOT", "REGION,STATE", "REGION,ANNOT,STATE" },
+                    "PCT_STABLE", "Percentage of context samples classified as stable-core (REGION=ALL rows only)" );
+  add_hdstats_var( std::vector<std::string>{ "REGION", "REGION,ANNOT", "REGION,STATE", "REGION,ANNOT,STATE" },
+                    "PCT_TRANS", "Percentage of context samples classified as transition-zone (REGION=ALL rows only)" );
+  add_hdstats_var( std::vector<std::string>{ "REGION", "REGION,ANNOT", "REGION,STATE", "REGION,ANNOT,STATE" },
+                    "PCT_NEITHER", "Percentage of context samples classified as neither stable-core nor transition-zone (REGION=ALL rows only)" );
 
   add_hdstats_var( hdstats_top_tables,   "H_RATIO_TR_ST",  "Entropy ratio: transition / stable" );
   add_hdstats_var( hdstats_top_tables,   "CONF_DIFF_TR_ST","Confidence difference: transition - stable" );
   add_hdstats_var( hdstats_top_tables,   "TV_RATIO_TR_ST", "TV ratio: transition / stable" );
   add_hdstats_var( hdstats_top_tables,   "N_TRANS",        "Number of transition events detected" );
+  add_hdstats_var( hdstats_top_tables,   "N_CLEAN",        "Number of clean transition events with stable-core on both sides of the transition window" );
   add_hdstats_var( hdstats_top_tables,   "TRANS_DENS",     "Transition density (events per hour)" );
-  add_hdstats_var( hdstats_top_tables,   "TRANS_W",        "Mean transition width in seconds, estimated from the detected transition window" );
+  add_hdstats_var( hdstats_top_tables,   "DENS_CLEAN",     "Density of clean transition events (events per hour)" );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_WIDTH",    "Mean transition width in seconds, estimated from the detected transition window" );
   add_hdstats_var( hdstats_top_tables,   "PEAK_H",         "Mean peak entropy attained within the transition window" );
   add_hdstats_var( hdstats_top_tables,   "MIN_C",          "Mean minimum confidence attained within the transition window" );
   add_hdstats_var( hdstats_top_tables,   "TV_AREA",        "Mean TV area under the transition window curve, reported in seconds" );
@@ -4496,15 +4517,19 @@ void cmddefs_t::init()
   add_table( "HDSTATS" , "ANNOT,STATE,TRANS"      , "Same, stratified by annotation level and state representation" );
   add_hdstats_var( hdstats_trans_tables, "N_TRANS",    "Number of transition events detected" );
   add_hdstats_var( hdstats_trans_tables, "TRANS_DENS", "Transition density (events per hour)" );
-  add_hdstats_var( hdstats_trans_tables, "TRANS_W",    "Mean transition width in seconds, estimated from the detected transition window" );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_WIDTH","Mean transition width in seconds, estimated from the detected transition window" );
   add_hdstats_var( hdstats_trans_tables, "PEAK_H",     "Mean peak entropy attained within the transition window" );
   add_hdstats_var( hdstats_trans_tables, "MIN_C",      "Mean minimum confidence attained within the transition window" );
   add_hdstats_var( hdstats_trans_tables, "TV_AREA",    "Mean TV area under the transition window curve, reported in seconds" );
 
   add_table( "HDSTATS" , "OFFSET"                  , "Transition-aligned mean profiles (HDTRANS_PROFILE)" );
+  add_table( "HDSTATS" , "QUAL,OFFSET"             , "Transition-aligned mean profiles restricted to clean transitions" );
   add_table( "HDSTATS" , "STATE,OFFSET"            , "Same aligned profiles by state representation" );
+  add_table( "HDSTATS" , "STATE,QUAL,OFFSET"       , "Same clean aligned profiles by state representation" );
   add_table( "HDSTATS" , "ANNOT,OFFSET"            , "Same aligned profiles, stratified by annotation level" );
+  add_table( "HDSTATS" , "ANNOT,QUAL,OFFSET"       , "Same clean aligned profiles, stratified by annotation level" );
   add_table( "HDSTATS" , "ANNOT,STATE,OFFSET"      , "Same aligned profiles, stratified by annotation level and state representation" );
+  add_table( "HDSTATS" , "ANNOT,STATE,QUAL,OFFSET" , "Same clean aligned profiles, stratified by annotation level and state representation" );
   add_hdstats_var( hdstats_offset_tables, "H",    "Mean entropy at offset" );
   add_hdstats_var( hdstats_offset_tables, "C",    "Mean confidence at offset" );
   add_hdstats_var( hdstats_offset_tables, "MG",   "Mean margin at offset" );
@@ -4517,9 +4542,13 @@ void cmddefs_t::init()
   add_hdstats_var( hdstats_offset_tables, "P_R",  "Mean REM posterior at offset" );
 
   add_table( "HDSTATS" , "TRANS,OFFSET"            , "Transition-pair-specific aligned profiles" );
+  add_table( "HDSTATS" , "QUAL,TRANS,OFFSET"       , "Clean transition-pair-specific aligned profiles" );
   add_table( "HDSTATS" , "STATE,TRANS,OFFSET"      , "Transition-pair-specific aligned profiles by state representation" );
+  add_table( "HDSTATS" , "STATE,QUAL,TRANS,OFFSET" , "Clean transition-pair-specific aligned profiles by state representation" );
   add_table( "HDSTATS" , "ANNOT,TRANS,OFFSET"      , "Same, stratified by annotation level" );
+  add_table( "HDSTATS" , "ANNOT,QUAL,TRANS,OFFSET" , "Same clean profiles, stratified by annotation level" );
   add_table( "HDSTATS" , "ANNOT,STATE,TRANS,OFFSET", "Same, stratified by annotation level and state representation" );
+  add_table( "HDSTATS" , "ANNOT,STATE,QUAL,TRANS,OFFSET", "Same clean profiles, stratified by annotation level and state representation" );
   add_hdstats_var( hdstats_trans_offset_tables, "H",    "Mean entropy at offset" );
   add_hdstats_var( hdstats_trans_offset_tables, "C",    "Mean confidence at offset" );
   add_hdstats_var( hdstats_trans_offset_tables, "MG",   "Mean margin at offset" );
@@ -4557,12 +4586,14 @@ void cmddefs_t::init()
   add_var(   "HDSTATS" , "TIME"             , "ARGMAX"      , "Argmax state index (0=W 1=N1 2=N2 3=N3 4=R)" );
   add_var(   "HDSTATS" , "TIME"             , "IS_TRANS"    , "1 if sample is in a transition zone" );
   add_var(   "HDSTATS" , "TIME"             , "IS_STABLE"   , "1 if sample is in stable-core" );
+  add_var(   "HDSTATS" , "TIME"             , "IS_NEITHER"  , "1 if sample is neither in a transition zone nor stable-core" );
   add_var(   "HDSTATS" , "TIME"             , "H3"          , "Entropy in the 3-state representation" );
   add_var(   "HDSTATS" , "TIME"             , "C3"          , "Confidence in the 3-state representation" );
   add_var(   "HDSTATS" , "TIME"             , "TV3"         , "Total-variation step in the 3-state representation" );
   add_var(   "HDSTATS" , "TIME"             , "ARGMAX3"     , "Argmax state index in the 3-state representation (0=W 1=NR 2=R)" );
   add_var(   "HDSTATS" , "TIME"             , "IS_TRANS3"   , "1 if sample is in a transition zone in the 3-state representation" );
   add_var(   "HDSTATS" , "TIME"             , "IS_STABLE3"  , "1 if sample is in stable-core in the 3-state representation" );
+  add_var(   "HDSTATS" , "TIME"             , "IS_NEITHER3" , "1 if sample is neither in a transition zone nor stable-core in the 3-state representation" );
   add_var(   "HDSTATS" , "TIME"             , "MIX_A3"      , "W/NREM mixing in the 3-state representation" );
   add_var(   "HDSTATS" , "TIME"             , "MIX_C3"      , "NREM/R mixing in the 3-state representation" );
 

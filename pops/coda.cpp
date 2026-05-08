@@ -33,9 +33,12 @@
 #include "helper/logger.h"
 #include "defs/defs.h"
 #include "db/db.h"
+#include "edf/edf.h"
 
 #include <cmath>
 #include <algorithm>
+#include <array>
+#include <map>
 #include <numeric>
 #include <fstream>
 #include <limits>
@@ -64,6 +67,182 @@ int coda_effective_label( int label , const bool three_state )
   if ( three_state && ( label == POPS_N2 || label == POPS_N3 ) )
     return POPS_N1;
   return label;
+}
+
+struct coda_file_subject_t {
+  std::string id;
+  Eigen::MatrixXd P;
+  std::vector<int> S;
+  std::vector<int> E;
+  std::vector<std::string> start;
+  std::vector<std::string> stop;
+  bool has_prior = false;
+  bool has_start = false;
+  bool has_stop = false;
+};
+
+void load_coda_posteriors_file( const std::string & filename ,
+                                bool require_prior ,
+                                pops_coda_t::options_t * opt ,
+                                std::vector<coda_file_subject_t> * out )
+{
+  out->clear();
+
+  const std::string expanded_filename = Helper::expand( filename );
+  if ( !Helper::fileExists( expanded_filename ) )
+    Helper::halt( "POPS-CODA: posteriors file not found: " + filename );
+
+  std::ifstream IN( expanded_filename.c_str() );
+  if ( !IN.good() )
+    Helper::halt( "POPS-CODA: could not open: " + filename );
+
+  std::string hdr;
+  Helper::safe_getline( IN , hdr );
+  if ( hdr.empty() )
+    Helper::halt( "POPS-CODA: empty header in " + filename );
+
+  std::vector<std::string> cols = Helper::parse( hdr , "\t " );
+
+  int col_id = -1 , col_e = -1 , col_prior = -1;
+  int col_ppW = -1 , col_ppR = -1;
+  int col_ppN1 = -1 , col_ppN2 = -1 , col_ppN3 = -1 , col_ppNR = -1;
+  int col_start = -1 , col_stop = -1;
+
+  for (int c = 0; c < (int)cols.size(); c++)
+    {
+      const std::string & s = cols[c];
+      if      ( s == "ID"    ) col_id    = c;
+      else if ( s == "E"     ) col_e     = c;
+      else if ( s == "PRIOR" ) col_prior = c;
+      else if ( s == "PP_W"  ) col_ppW   = c;
+      else if ( s == "PP_R"  ) col_ppR   = c;
+      else if ( s == "PP_N1" ) col_ppN1  = c;
+      else if ( s == "PP_N2" ) col_ppN2  = c;
+      else if ( s == "PP_N3" ) col_ppN3  = c;
+      else if ( s == "PP_NR" ) col_ppNR  = c;
+      else if ( s == "START" ) col_start = c;
+      else if ( s == "STOP"  ) col_stop  = c;
+    }
+
+  if ( col_id  < 0 ) Helper::halt( "POPS-CODA: missing ID column in " + filename );
+  if ( col_e   < 0 ) Helper::halt( "POPS-CODA: missing E column in " + filename );
+  if ( require_prior && col_prior < 0 )
+    Helper::halt( "POPS-CODA: missing PRIOR column in " + filename );
+  if ( col_ppW < 0 ) Helper::halt( "POPS-CODA: missing PP_W column in " + filename );
+  if ( col_ppR < 0 ) Helper::halt( "POPS-CODA: missing PP_R column in " + filename );
+
+  const bool file_5state = ( col_ppN1 >= 0 && col_ppN2 >= 0 && col_ppN3 >= 0 );
+  const bool file_3state = ( col_ppNR >= 0 && !file_5state );
+
+  if ( !file_5state && !file_3state )
+    Helper::halt( "POPS-CODA: file must have PP_N1+PP_N2+PP_N3 (5-state) "
+                  "or PP_NR (3-state) columns; found neither" );
+
+  if ( file_3state && opt != NULL )
+    opt->three_state = true;
+
+  const int ns_file = file_5state ? 5 : 3;
+
+  struct Row {
+    int e;
+    std::array<double,5> pp;
+    int prior;
+    std::string start;
+    std::string stop;
+  };
+
+  std::map< std::string , std::vector<Row> > subjects;
+
+  while ( true )
+    {
+      std::string line;
+      Helper::safe_getline( IN , line );
+      if ( IN.eof() || IN.bad() ) break;
+      if ( line.empty() ) continue;
+
+      std::vector<std::string> tok = Helper::parse( line , "\t " );
+      const int nt = (int)tok.size();
+
+      auto get_dbl = [&]( int c ) -> double {
+        if ( c < 0 || c >= nt ) return std::numeric_limits<double>::quiet_NaN();
+        double d;
+        return Helper::str2dbl( tok[c] , &d ) ? d : std::numeric_limits<double>::quiet_NaN();
+      };
+
+      auto get_str = [&]( int c ) -> std::string {
+        return c >= 0 && c < nt ? tok[c] : "";
+      };
+
+      const std::string id = get_str( col_id );
+      if ( id.empty() ) continue;
+
+      int ei = -1;
+      if ( col_e < nt )
+        {
+          Helper::str2int( tok[col_e] , &ei );
+          ei -= 1;
+        }
+      if ( ei < 0 ) continue;
+
+      Row r;
+      r.e      = ei;
+      r.pp[0]  = get_dbl( col_ppW );
+      r.pp[1]  = get_dbl( col_ppR );
+      r.pp[2]  = file_5state ? get_dbl( col_ppN1 ) : get_dbl( col_ppNR );
+      r.pp[3]  = file_5state ? get_dbl( col_ppN2 ) : 0.0;
+      r.pp[4]  = file_5state ? get_dbl( col_ppN3 ) : 0.0;
+      r.start  = get_str( col_start );
+      r.stop   = get_str( col_stop );
+
+      const std::string stg = get_str( col_prior );
+      if      ( stg == "W"                  ) r.prior = POPS_WAKE;
+      else if ( stg == "R"                  ) r.prior = POPS_REM;
+      else if ( stg == "N1" || stg == "NR" ) r.prior = POPS_N1;
+      else if ( stg == "N2"                 ) r.prior = POPS_N2;
+      else if ( stg == "N3"                 ) r.prior = POPS_N3;
+      else                                    r.prior = POPS_UNKNOWN;
+
+      subjects[id].push_back( r );
+    }
+  IN.close();
+
+  if ( subjects.empty() )
+    Helper::halt( "POPS-CODA: no data rows parsed from " + filename );
+
+  for ( auto & kv : subjects )
+    {
+      std::vector<Row> & rows = kv.second;
+      if ( rows.empty() ) continue;
+
+      std::sort( rows.begin() , rows.end() ,
+                 []( const Row & a , const Row & b ){ return a.e < b.e; } );
+
+      coda_file_subject_t subj;
+      subj.id = kv.first;
+      subj.P.resize( rows.size() , ns_file );
+      subj.S.resize( rows.size() );
+      subj.E.resize( rows.size() );
+      subj.start.resize( rows.size() );
+      subj.stop.resize( rows.size() );
+      subj.has_prior = col_prior >= 0;
+      subj.has_start = col_start >= 0;
+      subj.has_stop  = col_stop >= 0;
+
+      for (int i = 0; i < (int)rows.size(); i++)
+        {
+          subj.E[i] = rows[i].e;
+          subj.S[i] = rows[i].prior;
+          subj.start[i] = rows[i].start;
+          subj.stop[i] = rows[i].stop;
+          for (int s = 0; s < ns_file; s++)
+            subj.P(i,s) = rows[i].pp[s];
+        }
+
+      out->push_back( subj );
+    }
+
+  logger << "  POPS-CODA: read posteriors for " << out->size()
+         << " subjects from " << filename << "\n";
 }
 
 }
@@ -859,7 +1038,10 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
                             int ne_total ,
                             bool has_staging ,
                             const std::vector<int> & S ,
-                            edf_t * pedf )
+                            edf_t * pedf ,
+                            const std::vector<std::string> * start ,
+                            const std::vector<std::string> * stop ,
+                            bool emit_stage1 )
 {
   if ( !lgbm.has_booster )
     Helper::halt( "POPS-CODA: no model loaded" );
@@ -905,262 +1087,311 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
   for (int e = 0; e < ne; e++) e2e[ E[e] ] = e;
 
   const std::vector<std::string> & slabs = stage_labels();
+  const double epoch_to_min = pops_opt_t::epoch_len / 60.0;
+  const bool use_mdl_strata = emit_stage1;
 
-  // -------------------------------------------------------
-  // Write stage-1 (E) posteriors under MDL=E
-  // -------------------------------------------------------
-  writer.level( "E" , "MDL" );
-  for (int epoch = 0; epoch < ne_total; epoch++)
+  std::vector<int> pred_stage( ne , POPS_UNKNOWN );
+  std::vector<double> pred_conf( ne , std::numeric_limits<double>::quiet_NaN() );
+  std::vector<double> dur_pred1( nc , 0.0 );
+  std::vector<double> dur_predf( nc , 0.0 );
+  std::vector<double> dur_obs( nc , 0.0 );
+  std::vector<double> dur_obs_orig( nc , 0.0 );
+
+  int slp_lat_obs = -1 , slp_lat_prd = -1;
+  int rem_lat_obs = -1 , rem_lat_prd = -1;
+  double mean_conf = 0.0;
+  int n_pred_valid = 0;
+
+  std::vector<int> obs, pred;
+  obs.reserve( ne );
+  pred.reserve( ne );
+
+  for (int e = 0; e < ne; e++)
     {
-      writer.epoch( epoch + 1 );
-      if ( e2e.find( epoch ) == e2e.end() ) { writer.value( "FLAG" , -1 ); continue; }
-      const int e = e2e[ epoch ];
-      if ( flagged[e] )                     { writer.value( "FLAG" , -1 ); continue; }
-      if ( nc == 3 )
-        {
-          writer.value( "PP_W"  , P(e,0) );
-          writer.value( "PP_R"  , P(e,1) );
-          writer.value( "PP_NR" , P(e,2) );
-        }
-      else
-        {
-          writer.value( "PP_W"  , P(e,0) );
-          writer.value( "PP_R"  , P(e,1) );
-          writer.value( "PP_N1" , P(e,2) );
-          writer.value( "PP_N2" , P(e,3) );
-          writer.value( "PP_N3" , P(e,4) );
-        }
-      int predx = 0;
-      double pmax = P.row(e).maxCoeff( &predx );
-      writer.value( "CONF" , pmax );
-      writer.value( "PRED" , slabs[ predx ] );
-      if ( has_staging )
-        writer.value( "PRIOR" , pops_t::label( (pops_stage_t)S[e] ) );
-      writer.value( "FLAG" , 0 );
-    }
-  writer.unepoch();
+      if ( flagged[e] ) continue;
 
-  // -------------------------------------------------------
-  // Write CODA outputs under MDL=CODA
-  // -------------------------------------------------------
-  writer.level( "CODA" , "MDL" );
-
-  for (int epoch = 0; epoch < ne_total; epoch++)
-    {
-      writer.epoch( epoch + 1 );
-
-      bool skipped = e2e.find( epoch ) == e2e.end();
-      if ( skipped )
-        {
-          writer.value( "FLAG" , -1 );
-          continue;
-        }
-
-      const int e = e2e[ epoch ];
-
-      if ( e < 0 || e >= ne )
-        Helper::halt( "POPS-CODA: e2e index out of range: e=" + Helper::int2str(e) +
-                      " ne=" + Helper::int2str(ne) + " epoch=" + Helper::int2str(epoch) );
-
-      // Flagged epoch within valid set
-      if ( flagged[e] )
-        {
-          writer.value( "FLAG" , -1 );
-          continue;
-        }
-
-      // Posterior probabilities  (PP_W, PP_R, PP_N1, PP_N2, PP_N3 / PP_NR)
-      if ( nc == 3 )
-        {
-          writer.value( "PP_W"  , P_coda(e,0) );
-          writer.value( "PP_R"  , P_coda(e,1) );
-          writer.value( "PP_NR" , P_coda(e,2) );
-        }
-      else
-        {
-          writer.value( "PP_W"  , P_coda(e,0) );
-          writer.value( "PP_R"  , P_coda(e,1) );
-          writer.value( "PP_N1" , P_coda(e,2) );
-          writer.value( "PP_N2" , P_coda(e,3) );
-          writer.value( "PP_N3" , P_coda(e,4) );
-        }
-
-      // Predicted stage and confidence
       int predx = 0;
       double pmax = P_coda.row(e).maxCoeff( &predx );
-      writer.value( "CONF" , pmax );
-      writer.value( "PRED" , slabs[ predx ] );
+      pred_stage[e] = predx;
+      pred_conf[e] = pmax;
+      mean_conf += pmax;
+      ++n_pred_valid;
 
-      // Observed label (if available)
-      if ( has_staging )
-        writer.value( "PRIOR" , pops_t::label( (pops_stage_t)S[e] ) );
+      if ( predx >= 0 && predx < nc ) dur_pred1[predx]++;
+      for (int ss = 0; ss < nc; ss++) dur_predf[ss] += P_coda(e,ss);
 
-      // FLAG = 0 (concordant), written after PRIOR so it reflects CODA vs obs
-      if ( has_staging )
-        {
-          const bool obs_w  = S[e] == POPS_WAKE;
-          const bool obs_r  = S[e] == POPS_REM;
-          const bool obs_nr = S[e] == POPS_N1 || S[e] == POPS_N2 || S[e] == POPS_N3;
-          const bool prd_w  = predx == POPS_WAKE;
-          const bool prd_r  = predx == POPS_REM;
-          const bool prd_nr = predx == POPS_N1 || predx == POPS_N2 || predx == POPS_N3;
-          int flag = 0;
-          if ( S[e] != predx ) {
-            flag = 1;
-            if ( (obs_w && (prd_r || prd_nr)) ||
-                 (obs_r && (prd_w || prd_nr)) ||
-                 (obs_nr && (prd_w || prd_r)) ) flag = 2;
-          }
-          writer.value( "FLAG" , flag );
-        }
-      else
-        {
-          writer.value( "FLAG" , 0 );
-        }
+      if ( slp_lat_prd == -1 && predx != POPS_WAKE )
+        slp_lat_prd = E[e];
+      if ( rem_lat_prd == -1 && predx == POPS_REM )
+        rem_lat_prd = E[e] - slp_lat_prd;
+
+      if ( ! has_staging || S[e] == POPS_UNKNOWN ) continue;
+
+      const int obsx = coda_effective_label( S[e] , opt.three_state );
+      if ( obsx < 0 || obsx >= nc ) continue;
+
+      obs.push_back( obsx );
+      pred.push_back( predx );
+      dur_obs[obsx]++;
+      dur_obs_orig[obsx]++;
+
+      if ( slp_lat_obs == -1 && S[e] != POPS_WAKE )
+        slp_lat_obs = E[e];
+      if ( rem_lat_obs == -1 && S[e] == POPS_REM )
+        rem_lat_obs = E[e] - slp_lat_obs;
     }
 
-  writer.unepoch();
+  if ( n_pred_valid > 0 ) mean_conf /= (double)n_pred_valid;
 
-  if ( has_staging )
+  clocktime_t starttime( pedf ? pedf->header.starttime : "." );
+  const bool file_has_times = start != NULL || stop != NULL;
+  bool hms = pedf != NULL && ! file_has_times;
+  if ( pedf && hms && ! starttime.valid )
     {
-      std::vector<int> obs, pred;
-      obs.reserve( ne );
-      pred.reserve( ne );
+      logger << " ** could not find valid start-time in EDF header **\n";
+      hms = false;
+    }
 
+  auto emit_times = [&]( int epoch , int e ) {
+    if ( start != NULL && e >= 0 && e < (int)start->size() && (*start)[e] != "" )
+      writer.value( "START" , (*start)[e] );
+    if ( stop != NULL && e >= 0 && e < (int)stop->size() && (*stop)[e] != "" )
+      writer.value( "STOP" , (*stop)[e] );
+    if ( ! hms ) return;
+
+    interval_t interval = pedf->timeline.epoch( epoch );
+
+    double tp1_sec = interval.start / (double)globals::tp_1sec;
+    clocktime_t present1 = starttime;
+    present1.advance_seconds( tp1_sec );
+    double tp1_extra = tp1_sec - (long)tp1_sec;
+
+    double tp2_sec = interval.stop / (double)globals::tp_1sec;
+    clocktime_t present2 = starttime;
+    present2.advance_seconds( tp2_sec );
+    double tp2_extra = tp2_sec - (long)tp2_sec;
+
+    writer.value( "START" , present1.as_string(':') +
+                  Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp ).substr(1) );
+    writer.value( "STOP" , present2.as_string(':') +
+                  Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp ).substr(1) );
+  };
+
+  auto write_epoch_block = [&]( const std::string & mdl ,
+                                const Eigen::MatrixXd & post ,
+                                const std::vector<int> & pred_vec ,
+                                const std::vector<double> & conf_vec ) {
+    if ( use_mdl_strata )
+      writer.level( mdl , "MDL" );
+    for (int epoch = 0; epoch < ne_total; epoch++)
+      {
+        writer.epoch( epoch + 1 );
+
+        const std::map<int,int>::const_iterator ii = e2e.find( epoch );
+        if ( ii == e2e.end() )
+          {
+            writer.value( "FLAG" , -1 );
+            continue;
+          }
+
+        const int e = ii->second;
+        if ( e < 0 || e >= ne )
+          Helper::halt( "POPS-CODA: e2e index out of range: e=" + Helper::int2str(e) +
+                        " ne=" + Helper::int2str(ne) + " epoch=" + Helper::int2str(epoch) );
+
+        emit_times( epoch , e );
+
+        if ( flagged[e] )
+          {
+            writer.value( "FLAG" , -1 );
+            continue;
+          }
+
+        if ( nc == 3 )
+          {
+            writer.value( "PP_W"  , post(e,0) );
+            writer.value( "PP_R"  , post(e,1) );
+            writer.value( "PP_NR" , post(e,2) );
+          }
+        else
+          {
+            writer.value( "PP_W"  , post(e,0) );
+            writer.value( "PP_R"  , post(e,1) );
+            writer.value( "PP_N1" , post(e,2) );
+            writer.value( "PP_N2" , post(e,3) );
+            writer.value( "PP_N3" , post(e,4) );
+          }
+
+        writer.value( "CONF" , conf_vec[e] );
+        writer.value( "PRED" , slabs[ pred_vec[e] ] );
+
+        if ( has_staging )
+          writer.value( "PRIOR" , pops_t::label( (pops_stage_t)S[e] ) );
+
+        int flag = 0;
+        if ( has_staging && S[e] != POPS_UNKNOWN )
+          {
+            const bool obs_w  = S[e] == POPS_WAKE;
+            const bool obs_r  = S[e] == POPS_REM;
+            const bool obs_nr = S[e] == POPS_N1 || S[e] == POPS_N2 || S[e] == POPS_N3;
+            const bool prd_w  = pred_vec[e] == POPS_WAKE;
+            const bool prd_r  = pred_vec[e] == POPS_REM;
+            const bool prd_nr = pred_vec[e] == POPS_N1 || pred_vec[e] == POPS_N2 || pred_vec[e] == POPS_N3;
+            if ( coda_effective_label( S[e] , opt.three_state ) != pred_vec[e] )
+              {
+                flag = 1;
+                if ( (obs_w && (prd_r || prd_nr)) ||
+                     (obs_r && (prd_w || prd_nr)) ||
+                     (obs_nr && (prd_w || prd_r)) ) flag = 2;
+              }
+          }
+        writer.value( "FLAG" , flag );
+      }
+    writer.unepoch();
+  };
+
+  if ( emit_stage1 )
+    {
+      std::vector<int> pred_stage1( ne , POPS_UNKNOWN );
+      std::vector<double> conf_stage1( ne , std::numeric_limits<double>::quiet_NaN() );
       for (int e = 0; e < ne; e++)
         {
           if ( flagged[e] ) continue;
-          if ( S[e] == POPS_UNKNOWN ) continue;
-
           int predx = 0;
-          P_coda.row(e).maxCoeff( &predx );
-
-          obs.push_back( S[e] );
-          pred.push_back( predx );
+          conf_stage1[e] = P.row(e).maxCoeff( &predx );
+          pred_stage1[e] = predx;
         }
-
-      if ( obs.size() >= 10 )
-        {
-          double mean_conf = 0.0;
-          for (int e = 0; e < ne; e++)
-            {
-              if ( flagged[e] ) continue;
-              if ( S[e] == POPS_UNKNOWN ) continue;
-
-              int predx = 0;
-              double pmax = P_coda.row(e).maxCoeff( &predx );
-              mean_conf += pmax;
-            }
-          mean_conf /= (double)obs.size();
-
-	          std::vector<double> dur_obs( nc , 0.0 );
-	          std::vector<double> dur_pred1( nc , 0.0 );
-	          std::vector<double> dur_predf( nc , 0.0 );
-          for (int e = 0; e < ne; e++)
-            {
-              if ( flagged[e] ) continue;
-              if ( S[e] == POPS_UNKNOWN ) continue;
-
-              if ( S[e] >= 0 && S[e] < nc ) dur_obs[ S[e] ]++;
-
-              int predx = 0;
-              P_coda.row(e).maxCoeff( &predx );
-              if ( predx >= 0 && predx < nc ) dur_pred1[ predx ]++;
-
-	              for (int ss = 0; ss < nc; ss++)
-	                dur_predf[ss] += P_coda(e,ss);
-	            }
-
-	          const double epoch_to_min = pops_opt_t::epoch_len / 60.0;
-
-          if ( nc == 5 )
-            {
-              pops_stats_t stats5( obs , pred , 5 );
-              pops_stats_t stats3( pops_t::NRW( obs ) , pops_t::NRW( pred ) , 3 );
-
-              writer.value( "K" , stats5.kappa );
-              writer.value( "K3" , stats3.kappa );
-              writer.value( "ACC" , stats5.acc );
-              writer.value( "ACC3" , stats3.acc );
-              writer.value( "CONF" , mean_conf );
-              writer.value( "MCC" , stats5.mcc );
-              writer.value( "MCC3" , stats3.mcc );
-              writer.value( "F1" , stats5.macro_f1 );
-              writer.value( "PREC" , stats5.macro_precision );
-              writer.value( "RECALL" , stats5.macro_recall );
-              writer.value( "F1_WGT" , stats5.avg_weighted_f1 );
-              writer.value( "PREC_WGT" , stats5.avg_weighted_precision );
-              writer.value( "RECALL_WGT" , stats5.avg_weighted_recall );
-              writer.value( "F13" , stats3.macro_f1 );
-              writer.value( "PREC3" , stats3.macro_precision );
-              writer.value( "RECALL3" , stats3.macro_recall );
-
-	              for (int ss = 0; ss < nc; ss++)
-	                {
-	                  writer.level( pops_t::label5( (pops_stage_t)ss ) , globals::stage_strat );
-	                  writer.value( "F1" , stats5.f1[ss] );
-	                  writer.value( "PREC" , stats5.precision[ss] );
-	                  writer.value( "RECALL" , stats5.recall[ss] );
-	                  writer.value( "OBS" , dur_obs[ss] * epoch_to_min );
-	                  writer.value( "PRF" , dur_predf[ss] * epoch_to_min );
-	                  writer.value( "PR1" , dur_pred1[ss] * epoch_to_min );
-	                }
-              writer.unlevel( globals::stage_strat );
-
-              logger << "  kappa = " << stats5.kappa
-                     << "; 3-class kappa = " << stats3.kappa
-                     << " (n = " << obs.size() << " epochs)\n";
-              logger << "  Confusion matrix:\n";
-              pops_t::tabulate( obs , pred , true );
-              logger << "\n";
-              logger << "  3-class confusion matrix:\n";
-              pops_t::tabulate( pops_t::NRW( obs ) , pops_t::NRW( pred ) , true );
-              logger << "\n";
-            }
-          else
-            {
-              pops_stats_t stats3( obs , pred , 3 );
-
-              writer.value( "K" , stats3.kappa );
-              writer.value( "K3" , stats3.kappa );
-              writer.value( "ACC" , stats3.acc );
-              writer.value( "ACC3" , stats3.acc );
-              writer.value( "CONF" , mean_conf );
-              writer.value( "MCC" , stats3.mcc );
-              writer.value( "MCC3" , stats3.mcc );
-              writer.value( "F1" , stats3.macro_f1 );
-              writer.value( "PREC" , stats3.macro_precision );
-              writer.value( "RECALL" , stats3.macro_recall );
-              writer.value( "F1_WGT" , stats3.avg_weighted_f1 );
-              writer.value( "PREC_WGT" , stats3.avg_weighted_precision );
-              writer.value( "RECALL_WGT" , stats3.avg_weighted_recall );
-              writer.value( "F13" , stats3.macro_f1 );
-              writer.value( "PREC3" , stats3.macro_precision );
-              writer.value( "RECALL3" , stats3.macro_recall );
-
-	              for (int ss = 0; ss < nc; ss++)
-	                {
-	                  writer.level( pops_t::label3( (pops_stage_t)ss ) , globals::stage_strat );
-	                  writer.value( "F1" , stats3.f1[ss] );
-	                  writer.value( "PREC" , stats3.precision[ss] );
-	                  writer.value( "RECALL" , stats3.recall[ss] );
-	                  writer.value( "OBS" , dur_obs[ss] * epoch_to_min );
-	                  writer.value( "PRF" , dur_predf[ss] * epoch_to_min );
-	                  writer.value( "PR1" , dur_pred1[ss] * epoch_to_min );
-	                }
-              writer.unlevel( globals::stage_strat );
-
-              logger << "  kappa = " << stats3.kappa
-                     << "; 3-class kappa = " << stats3.kappa
-                     << " (n = " << obs.size() << " epochs)\n";
-              logger << "  Confusion matrix:\n";
-              pops_t::tabulate( obs , pred , true );
-              logger << "\n";
-            }
-        }
+      write_epoch_block( "E" , P , pred_stage1 , conf_stage1 );
+      if ( use_mdl_strata )
+        writer.unlevel( "MDL" );
     }
 
-  writer.unlevel( "MDL" );
+  write_epoch_block( "CODA" , P_coda , pred_stage , pred_conf );
+
+  writer.value( "CONF" , mean_conf );
+
+  if ( slp_lat_prd >= 0 ) writer.value( "SLP_LAT_PRD" , slp_lat_prd * epoch_to_min );
+  if ( rem_lat_prd >= 0 ) writer.value( "REM_LAT_PRD" , rem_lat_prd * epoch_to_min );
+
+  if ( ! has_staging || obs.empty() )
+    {
+      for (int ss = 0; ss < nc; ss++)
+        {
+          writer.level( nc == 5 ? pops_t::label5( (pops_stage_t)ss )
+                                : pops_t::label3( (pops_stage_t)ss ) ,
+                        globals::stage_strat );
+          writer.value( "PRF" , dur_predf[ss] * epoch_to_min );
+          writer.value( "PR1" , dur_pred1[ss] * epoch_to_min );
+        }
+      writer.level( pops_t::label( POPS_UNKNOWN ) , globals::stage_strat );
+      writer.value( "PRF" , ( ne_total - n_pred_valid ) * epoch_to_min );
+      writer.value( "PR1" , ( ne_total - n_pred_valid ) * epoch_to_min );
+      writer.unlevel( globals::stage_strat );
+      if ( use_mdl_strata )
+        writer.unlevel( "MDL" );
+      return;
+    }
+
+  if ( slp_lat_obs >= 0 ) writer.value( "SLP_LAT_OBS" , slp_lat_obs * epoch_to_min );
+  if ( rem_lat_obs >= 0 ) writer.value( "REM_LAT_OBS" , rem_lat_obs * epoch_to_min );
+
+  if ( nc == 5 )
+    {
+      pops_stats_t stats5( obs , pred , 5 );
+      pops_stats_t stats3( pops_t::NRW( obs ) , pops_t::NRW( pred ) , 3 );
+
+      writer.value( "K" , stats5.kappa );
+      writer.value( "K3" , stats3.kappa );
+      writer.value( "ACC" , stats5.acc );
+      writer.value( "ACC3" , stats3.acc );
+      writer.value( "MCC" , stats5.mcc );
+      writer.value( "MCC3" , stats3.mcc );
+      writer.value( "F1" , stats5.macro_f1 );
+      writer.value( "PREC" , stats5.macro_precision );
+      writer.value( "RECALL" , stats5.macro_recall );
+      writer.value( "F1_WGT" , stats5.avg_weighted_f1 );
+      writer.value( "PREC_WGT" , stats5.avg_weighted_precision );
+      writer.value( "RECALL_WGT" , stats5.avg_weighted_recall );
+      writer.value( "F13" , stats3.macro_f1 );
+      writer.value( "PREC3" , stats3.macro_precision );
+      writer.value( "RECALL3" , stats3.macro_recall );
+
+      for (int ss = 0; ss < nc; ss++)
+        {
+          writer.level( pops_t::label5( (pops_stage_t)ss ) , globals::stage_strat );
+          writer.value( "F1" , stats5.f1[ss] );
+          writer.value( "PREC" , stats5.precision[ss] );
+          writer.value( "RECALL" , stats5.recall[ss] );
+          writer.value( "OBS" , dur_obs[ss] * epoch_to_min );
+          writer.value( "ORIG" , dur_obs_orig[ss] * epoch_to_min );
+          writer.value( "PRF" , dur_predf[ss] * epoch_to_min );
+          writer.value( "PR1" , dur_pred1[ss] * epoch_to_min );
+        }
+      writer.level( pops_t::label( POPS_UNKNOWN ) , globals::stage_strat );
+      writer.value( "OBS" , ( ne_total - (int)obs.size() ) * epoch_to_min );
+      writer.value( "ORIG" , ( ne_total - (int)obs.size() ) * epoch_to_min );
+      writer.value( "PRF" , ( ne_total - n_pred_valid ) * epoch_to_min );
+      writer.value( "PR1" , ( ne_total - n_pred_valid ) * epoch_to_min );
+      writer.unlevel( globals::stage_strat );
+
+      logger << "  kappa = " << stats5.kappa
+             << "; 3-class kappa = " << stats3.kappa
+             << " (n = " << obs.size() << " epochs)\n";
+      logger << "  Confusion matrix:\n";
+      pops_t::tabulate( obs , pred , true );
+      logger << "\n";
+      logger << "  3-class confusion matrix:\n";
+      pops_t::tabulate( pops_t::NRW( obs ) , pops_t::NRW( pred ) , true );
+      logger << "\n";
+    }
+  else
+    {
+      pops_stats_t stats3( obs , pred , 3 );
+
+      writer.value( "K" , stats3.kappa );
+      writer.value( "K3" , stats3.kappa );
+      writer.value( "ACC" , stats3.acc );
+      writer.value( "ACC3" , stats3.acc );
+      writer.value( "MCC" , stats3.mcc );
+      writer.value( "MCC3" , stats3.mcc );
+      writer.value( "F1" , stats3.macro_f1 );
+      writer.value( "PREC" , stats3.macro_precision );
+      writer.value( "RECALL" , stats3.macro_recall );
+      writer.value( "F1_WGT" , stats3.avg_weighted_f1 );
+      writer.value( "PREC_WGT" , stats3.avg_weighted_precision );
+      writer.value( "RECALL_WGT" , stats3.avg_weighted_recall );
+      writer.value( "F13" , stats3.macro_f1 );
+      writer.value( "PREC3" , stats3.macro_precision );
+      writer.value( "RECALL3" , stats3.macro_recall );
+
+      for (int ss = 0; ss < nc; ss++)
+        {
+          writer.level( pops_t::label3( (pops_stage_t)ss ) , globals::stage_strat );
+          writer.value( "F1" , stats3.f1[ss] );
+          writer.value( "PREC" , stats3.precision[ss] );
+          writer.value( "RECALL" , stats3.recall[ss] );
+          writer.value( "OBS" , dur_obs[ss] * epoch_to_min );
+          writer.value( "ORIG" , dur_obs_orig[ss] * epoch_to_min );
+          writer.value( "PRF" , dur_predf[ss] * epoch_to_min );
+          writer.value( "PR1" , dur_pred1[ss] * epoch_to_min );
+        }
+      writer.level( pops_t::label( POPS_UNKNOWN ) , globals::stage_strat );
+      writer.value( "OBS" , ( ne_total - (int)obs.size() ) * epoch_to_min );
+      writer.value( "ORIG" , ( ne_total - (int)obs.size() ) * epoch_to_min );
+      writer.value( "PRF" , ( ne_total - n_pred_valid ) * epoch_to_min );
+      writer.value( "PR1" , ( ne_total - n_pred_valid ) * epoch_to_min );
+      writer.unlevel( globals::stage_strat );
+
+      logger << "  kappa = " << stats3.kappa
+             << "; 3-class kappa = " << stats3.kappa
+             << " (n = " << obs.size() << " epochs)\n";
+      logger << "  Confusion matrix:\n";
+      pops_t::tabulate( obs , pred , true );
+      logger << "\n";
+    }
+
+  if ( use_mdl_strata )
+    writer.unlevel( "MDL" );
 }
 
 Eigen::MatrixXd pops_coda_t::rescore( const Eigen::MatrixXd & P_in ,
@@ -1279,58 +1510,9 @@ void pops_coda_t::train_from_posteriors_file( const std::string & filename ,
   S_train.clear();
   X_valid_rows.clear();
   S_valid.clear();
+  std::vector<coda_file_subject_t> subjects;
+  load_coda_posteriors_file( filename , true , &opt , &subjects );
 
-  const std::string expanded_filename = Helper::expand( filename );
-  if ( !Helper::fileExists( expanded_filename ) )
-    Helper::halt( "POPS-CODA: posteriors file not found: " + filename );
-
-  std::ifstream IN( expanded_filename.c_str() );
-  if ( !IN.good() )
-    Helper::halt( "POPS-CODA: could not open: " + filename );
-
-  // Parse header — locate required columns by name
-  std::string hdr;
-  Helper::safe_getline( IN , hdr );
-  if ( hdr.empty() )
-    Helper::halt( "POPS-CODA: empty header in " + filename );
-
-  std::vector<std::string> cols = Helper::parse( hdr , "\t " );
-
-  int col_id = -1 , col_e = -1 , col_prior = -1;
-  int col_ppW = -1 , col_ppR = -1;
-  int col_ppN1 = -1 , col_ppN2 = -1 , col_ppN3 = -1 , col_ppNR = -1;
-
-  for (int c = 0; c < (int)cols.size(); c++)
-    {
-      const std::string & s = cols[c];
-      if      ( s == "ID"    ) col_id    = c;
-      else if ( s == "E"     ) col_e     = c;
-      else if ( s == "PRIOR" ) col_prior = c;
-      else if ( s == "PP_W"  ) col_ppW   = c;
-      else if ( s == "PP_R"  ) col_ppR   = c;
-      else if ( s == "PP_N1" ) col_ppN1  = c;
-      else if ( s == "PP_N2" ) col_ppN2  = c;
-      else if ( s == "PP_N3" ) col_ppN3  = c;
-      else if ( s == "PP_NR" ) col_ppNR  = c;
-    }
-
-  if ( col_id    < 0 ) Helper::halt( "POPS-CODA: missing ID column in "    + filename );
-  if ( col_e     < 0 ) Helper::halt( "POPS-CODA: missing E column in "     + filename );
-  if ( col_prior < 0 ) Helper::halt( "POPS-CODA: missing PRIOR column in " + filename );
-  if ( col_ppW   < 0 ) Helper::halt( "POPS-CODA: missing PP_W column in "  + filename );
-  if ( col_ppR   < 0 ) Helper::halt( "POPS-CODA: missing PP_R column in "  + filename );
-
-  const bool file_5state = ( col_ppN1 >= 0 && col_ppN2 >= 0 && col_ppN3 >= 0 );
-  const bool file_3state = ( col_ppNR >= 0 && !file_5state );
-
-  if ( !file_5state && !file_3state )
-    Helper::halt( "POPS-CODA: file must have PP_N1+PP_N2+PP_N3 (5-state) "
-                  "or PP_NR (3-state) columns; found neither" );
-
-  // When the file carries only 3-state posteriors, force three_state mode
-  if ( file_3state ) opt.three_state = true;
-
-  const int ns_file = file_5state ? 5 : 3;
   // Build per-stage epoch thresholds (W=0,R=1,N1=2,N2=3,N3=4); size-1 applies to all
   auto mins_to_epochs = []( int m ) -> int {
     return m <= 0 ? 0 : ( m * 60 + 29 ) / 30;
@@ -1343,66 +1525,6 @@ void pops_coda_t::train_from_posteriors_file( const std::string & filename ,
   const bool any_min_stage = std::any_of( min_stage_epochs.begin(), min_stage_epochs.end(),
                                           []( int v ){ return v > 0; } );
 
-  // Parse rows per subject
-  struct Row { int e; std::array<double,5> pp; int prior; };
-  std::map< std::string , std::vector<Row> > subjects;
-
-  while ( true )
-    {
-      std::string line;
-      Helper::safe_getline( IN , line );
-      if ( IN.eof() || IN.bad() ) break;
-      if ( line.empty() ) continue;
-
-      std::vector<std::string> tok = Helper::parse( line , "\t " );
-      const int nt = (int)tok.size();
-
-      auto get_dbl = [&]( int c ) -> double {
-        if ( c < 0 || c >= nt ) return std::numeric_limits<double>::quiet_NaN();
-        double d;
-        return Helper::str2dbl( tok[c] , &d ) ? d : std::numeric_limits<double>::quiet_NaN();
-      };
-
-      const std::string id = ( col_id < nt ) ? tok[col_id] : "";
-      if ( id.empty() ) continue;
-
-      int ei = -1;
-      if ( col_e < nt ) { Helper::str2int( tok[col_e] , &ei ); ei -= 1; } // 1-based → 0-based
-      if ( ei < 0 ) continue;
-
-      Row r;
-      r.e      = ei;
-      r.pp[0]  = get_dbl( col_ppW );
-      r.pp[1]  = get_dbl( col_ppR );
-      r.pp[2]  = file_5state ? get_dbl( col_ppN1 ) : get_dbl( col_ppNR );
-      r.pp[3]  = file_5state ? get_dbl( col_ppN2 ) : 0.0;
-      r.pp[4]  = file_5state ? get_dbl( col_ppN3 ) : 0.0;
-
-      const std::string stg = ( col_prior < nt ) ? tok[col_prior] : "";
-      if      ( stg == "W"                    ) r.prior = POPS_WAKE;
-      else if ( stg == "R"                    ) r.prior = POPS_REM;
-      else if ( stg == "N1" || stg == "NR"   ) r.prior = POPS_N1;
-      else if ( stg == "N2"                   ) r.prior = POPS_N2;
-      else if ( stg == "N3"                   ) r.prior = POPS_N3;
-      else                                      r.prior = POPS_UNKNOWN;
-
-      subjects[id].push_back( r );
-    }
-  IN.close();
-
-  if ( subjects.empty() )
-    Helper::halt( "POPS-CODA: no data rows parsed from " + filename );
-
-  logger << "  POPS-CODA: read posteriors for " << subjects.size()
-         << " subjects from " << filename << "\n";
-
-  struct SubjectData {
-    std::string id;
-    Eigen::MatrixXd P;
-    std::vector<int> S;
-    std::vector<int> E;
-  };
-
   struct ScreenCounts {
     int insufficient_contiguous = 0;
     int missing_stages = 0;
@@ -1411,31 +1533,25 @@ void pops_coda_t::train_from_posteriors_file( const std::string & filename ,
     int dropped_any = 0;
   } screen_counts;
 
+  struct SubjectData {
+    std::string id;
+    Eigen::MatrixXd P;
+    std::vector<int> S;
+    std::vector<int> E;
+  };
+
   std::vector<SubjectData> good_subjects;
   good_subjects.reserve( subjects.size() );
 
-  for ( auto & kv : subjects )
+  for ( int subj_idx = 0 ; subj_idx < (int)subjects.size() ; subj_idx++ )
     {
-      std::vector<Row> & rows = kv.second;
-      if ( rows.empty() ) continue;
-
-      std::sort( rows.begin() , rows.end() ,
-                 []( const Row & a , const Row & b ){ return a.e < b.e; } );
-
-      const int ne = (int)rows.size();
+      const coda_file_subject_t & src = subjects[subj_idx];
+      const int ne = src.P.rows();
       SubjectData subj;
-      subj.id = kv.first;
-      subj.P.resize( ne , ns_file );
-      subj.S.resize( ne );
-      subj.E.resize( ne );
-
-      for (int i = 0; i < ne; i++)
-        {
-          subj.E[i] = rows[i].e;
-          subj.S[i] = rows[i].prior;
-          for (int s = 0; s < ns_file; s++)
-            subj.P(i,s) = rows[i].pp[s];
-        }
+      subj.id = src.id;
+      subj.P = src.P;
+      subj.S = src.S;
+      subj.E = src.E;
 
       Eigen::MatrixXd P = validate_and_normalise( subj.P );
       const int ns = P.cols();
@@ -1619,6 +1735,40 @@ void pops_coda_t::train_from_posteriors_file( const std::string & filename ,
     Helper::halt( "POPS-CODA: no training subjects remain after screening and validation selection" );
 
   train_model( config_file , n_iterations );
+}
+
+void pops_coda_t::predict_from_posteriors_file( const std::string & filename )
+{
+  std::vector<coda_file_subject_t> subjects;
+  load_coda_posteriors_file( filename , false , &opt , &subjects );
+
+  for ( int subj_idx = 0 ; subj_idx < (int)subjects.size() ; subj_idx++ )
+    {
+      const coda_file_subject_t & subj = subjects[subj_idx];
+      const int ne = subj.P.rows();
+      if ( ne == 0 ) continue;
+
+      std::vector<bool> flagged( ne , false );
+      for (int e = 0; e < ne; e++)
+        for (int j = 0; j < subj.P.cols(); j++)
+          if ( std::isnan( subj.P(e,j) ) ) { flagged[e] = true; break; }
+
+      int ne_total = 0;
+      for (int e = 0; e < ne; e++)
+        if ( subj.E[e] + 1 > ne_total ) ne_total = subj.E[e] + 1;
+
+      writer.id( subj.id , filename );
+      predict( subj.P ,
+               subj.E ,
+               flagged ,
+               ne_total ,
+               subj.has_prior ,
+               subj.S ,
+               NULL ,
+               subj.has_start ? &subj.start : NULL ,
+               subj.has_stop ? &subj.stop : NULL ,
+               false );
+    }
 }
 
 #endif

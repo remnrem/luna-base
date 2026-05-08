@@ -2060,6 +2060,8 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
 
   // durations in minutes, so get scaling factor
   const double fac = pops_opt_t::epoch_len / 60.0 ; 
+  const int ne_okay = ne;
+  const int ne_flagged = ne_total - ne;
 
   
   //
@@ -2070,6 +2072,8 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
     {
       
       // indiv-level
+      writer.value( "NE_OKAY" , ne_okay );
+      writer.value( "NE_FLAGGED" , ne_flagged );
       writer.value( "CONF" , avg_pmax / (double)ne );
       
       if ( slp_lat_prd >= 0 ) 
@@ -2124,6 +2128,8 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   writer.value( "ACC" , stats.acc );
   writer.value( "ACC3" , stats3.acc );
 
+  writer.value( "NE_OKAY" , ne_okay );
+  writer.value( "NE_FLAGGED" , ne_flagged );
   writer.value( "CONF" , avg_pmax / (double)ne );
     
   writer.value( "MCC" , stats.mcc );
@@ -2147,6 +2153,8 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   writer.value( "K3" , stats3.kappa );
   writer.value( "ACC" , stats.acc );
   writer.value( "ACC3" , stats3.acc );
+  writer.value( "NE_OKAY" , ne_okay );
+  writer.value( "NE_FLAGGED" , ne_flagged );
   writer.value( "CONF" , avg_pmax / (double)ne );
   writer.value( "MCC" , stats.mcc );
   writer.value( "MCC3" , stats3.mcc );
