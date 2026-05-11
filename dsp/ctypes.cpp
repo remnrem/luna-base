@@ -1,9 +1,4 @@
 
-// TODO
-//  --> |skew| for polarity invariant features / check all other features are polarity invariant
-//  --> added phys |median| & IQR (polarity invariant)
-//  --> select up to N of each epochs class only
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
