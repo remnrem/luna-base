@@ -3708,12 +3708,20 @@ void edf_t::reset_record_size( const double new_record_duration )
   
   record_size = new_record_size ; 
 
-  // make a new timeline & re-epoch
-  timeline.re_init_timeline();
-  //re-epoch? or not needed here (as WRITE then end)
-  //timeline.set_epoch( globals::default_epoch_len , globals::default_epoch_len );
+  // records have been renumbered 0..new_nr-1; sync nr_all so that
+  // nr_all-based bounds checks (e.g. update_records) remain correct
+  header.nr_all = header.nr;
 
-  // all done
+  // make a new timeline
+  timeline.re_init_timeline();
+
+  // clear any stale epoch structure (re_init_timeline rebuilds rec<->tp maps
+  // but does not clear epochs, masks, or rec2epoch/epoch2rec)
+  if ( timeline.epoched() )
+    {
+      logger << "  clearing epoch structure: re-run EPOCH if needed\n";
+      timeline.unepoch();
+    }
 
 }
 
@@ -6710,10 +6718,12 @@ void edf_t::update_edf_pointers( edf_t * p )
 {
   for (int r = 0 ; r < header.nr_all; r++)
     {
-      bool found = records.find(r) != records.end();
-      records.find(r)->second.edf = p; 
+      std::map<int,edf_record_t>::iterator it = records.find(r);
+      if ( it == records.end() ) continue;
+      it->second.edf = p;
     }
 }
+
 
 void edf_t::preread( param_t & param )
 {

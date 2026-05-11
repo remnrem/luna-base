@@ -79,6 +79,11 @@ double pops_opt_t::epoch_inc;
 bool pops_opt_t::ignore_obs_staging;
 
 bool pops_opt_t::epoch_level_SHAP;
+int pops_opt_t::posterior_resolution;
+bool pops_opt_t::emit_pp;
+std::string pops_opt_t::posterior_channels;
+std::string pops_opt_t::posterior_prefix_stage1;
+std::string pops_opt_t::posterior_prefix_coda;
 
 std::vector<double> pops_opt_t::slope_range{ 30.0 , 45.0 } ;
 double pops_opt_t::slope_th  = 3;
@@ -110,6 +115,29 @@ double pops_opt_t::soap_grid_mean_conf;
 
 bool pops_opt_t::eval_mode = false;
 
+bool pops_opt_t::resolution_is_5s()
+{
+  return posterior_resolution == 5;
+}
+
+double pops_opt_t::posterior_row_seconds()
+{
+  return (double)posterior_resolution;
+}
+
+bool pops_opt_t::write_stage1_posteriors_to_edf()
+{
+  if ( resolution_is_5s() ) return false;
+  return posterior_channels == "E" || posterior_channels == "STG1" ||
+         posterior_channels == "STAGE1" || posterior_channels == "BOTH";
+}
+
+bool pops_opt_t::write_coda_posteriors_to_edf()
+{
+  if ( resolution_is_5s() ) return false;
+  return posterior_channels == "CODA" || posterior_channels == "BOTH";
+}
+
 
 void pops_opt_t::set_options( param_t & param )
 {
@@ -129,6 +157,38 @@ void pops_opt_t::set_options( param_t & param )
 
 
   ignore_obs_staging = param.has( "ignore-obs-staging" );
+
+  posterior_resolution = param.has( "resolution" ) ? param.requires_int( "resolution" ) : 30;
+  if ( posterior_resolution != 30 && posterior_resolution != 5 )
+    Helper::halt( "resolution must be 30 or 5" );
+
+  emit_pp = param.has( "emit-pp" ) ? param.yesno( "emit-pp" ) : false;
+  posterior_channels = "";
+  posterior_prefix_stage1 = "PP";
+  posterior_prefix_coda = "PP";
+
+  if ( emit_pp )
+    posterior_channels = param.has( "coda" ) || param.has( "predict-coda" ) ? "CODA" : "E";
+
+  if ( param.has( "posterior-channels" ) )
+    {
+      posterior_channels = Helper::toupper( param.value( "posterior-channels" ) );
+      if ( posterior_channels != "E" &&
+           posterior_channels != "STG1" &&
+           posterior_channels != "STAGE1" &&
+           posterior_channels != "CODA" &&
+           posterior_channels != "BOTH" )
+        Helper::halt( "posterior-channels must be one of E, CODA or BOTH" );
+    }
+
+  if ( param.has( "posterior-prefix" ) )
+    {
+      std::vector<std::string> tok = param.strvector( "posterior-prefix" );
+      if ( tok.size() < 1 || tok.size() > 2 )
+        Helper::halt( "posterior-prefix expects PREFIX or STG1_PREFIX,CODA_PREFIX" );
+      posterior_prefix_stage1 = tok[0];
+      posterior_prefix_coda = tok.size() == 2 ? tok[1] : tok[0];
+    }
   
 
   // under root-specification, able to use/not use ranges, es-priors

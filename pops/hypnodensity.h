@@ -27,8 +27,9 @@
 
 struct edf_t;
 struct param_t;
+struct pops_indiv_t;
 
-void pops_hypnodensity( edf_t & , param_t & );
+void pops_hypnodensity( edf_t & , param_t & , const pops_indiv_t * base_indiv = nullptr );
 
 #endif
 #endif

@@ -54,6 +54,7 @@ class pops_coda_t {
 
   struct options_t {
     int    context_epochs       = 20;   // half-window in epochs (10 min at 30 s)
+    double row_duration_sec     = 30.0; // spacing between posterior rows
     int    min_subject_contiguous_epochs = 0; // require at least this many contiguous valid epochs to include a subject
     std::vector<int> min_stage_minutes = {5};  // per-stage minimums in W,R,N1,N2,N3 order; size-1 applies to all
     double min_stage1_kappa     = 0.5;  // require stage-1 hard calls vs PRIOR to reach at least this kappa
@@ -155,6 +156,7 @@ class pops_coda_t {
   // Build the feature-name list for the current options (deterministic)
   std::vector<std::string> feature_names() const;
   int n_features() const { return (int)feature_names().size(); }
+  static int scale_context_epochs( int context_30s_epochs , double row_duration_sec );
 
  private:
 

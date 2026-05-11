@@ -24,6 +24,7 @@
 
 #include "pops/coda.h"
 #include "pops/pops.h"
+#include "pops/posteriors.h"
 #include "pops/options.h"
 #include "lgbm/lgbm.h"
 #include "miscmath/crandom.h"
@@ -277,6 +278,13 @@ std::string pops_coda_t::coda_default_params( int num_class , int n_iterations )
   p += "lambda_l2=5.0 ";
   p += "min_data_in_leaf=50";
   return p;
+}
+
+int pops_coda_t::scale_context_epochs( int context_30s_epochs , double row_duration_sec )
+{
+  if ( context_30s_epochs <= 0 ) return 0;
+  if ( row_duration_sec <= 0 ) row_duration_sec = 30.0;
+  return std::max( 1 , (int)std::lround( context_30s_epochs * 30.0 / row_duration_sec ) );
 }
 
 double pops_coda_t::coda_quantile( std::vector<double> v , double q )
@@ -577,7 +585,7 @@ void pops_coda_t::make_features( const Eigen::MatrixXd & P ,
       for (int s = 0; s < ns; s++) X(e, col++) = P(e,s);
 
       // B. Elapsed time
-      double esec = ( E[e] - first_E ) * pops_opt_t::epoch_len;
+      double esec = ( E[e] - first_E ) * opt.row_duration_sec;
       X(e, col++) = esec;
       X(e, col++) = ( last_E > first_E ) ? (double)( E[e] - first_E ) / (double)( last_E - first_E ) : 0.0;
 
@@ -1049,8 +1057,15 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
   const int ne = P_in.rows();
   if ( ne == 0 ) return;
 
+  Eigen::MatrixXd P_sanitised = P_in;
+  const double uniform = 1.0 / (double)P_in.cols();
+  for (int e = 0; e < ne; e++)
+    if ( flagged[e] )
+      for (int j = 0; j < P_sanitised.cols(); j++)
+        P_sanitised(e,j) = uniform;
+
   // Adapt and validate posteriors
-  Eigen::MatrixXd P = validate_and_normalise( P_in );
+  Eigen::MatrixXd P = validate_and_normalise( P_sanitised );
   const int ns = P.cols();
 
   const int nc = n_classes();
@@ -1087,7 +1102,7 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
   for (int e = 0; e < ne; e++) e2e[ E[e] ] = e;
 
   const std::vector<std::string> & slabs = stage_labels();
-  const double epoch_to_min = pops_opt_t::epoch_len / 60.0;
+  const double epoch_to_min = opt.row_duration_sec / 60.0;
   const bool use_mdl_strata = emit_stage1;
 
   std::vector<int> pred_stage( ne , POPS_UNKNOWN );
@@ -1267,6 +1282,16 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
     }
 
   write_epoch_block( "CODA" , P_coda , pred_stage , pred_conf );
+
+  if ( pops_opt_t::write_coda_posteriors_to_edf() )
+    pops_posteriors::add_edf_channels( pedf ,
+                                       P_coda ,
+                                       E ,
+                                       &flagged ,
+                                       ne_total ,
+                                       nc == 3 ,
+                                       pops_opt_t::posterior_prefix_coda ,
+                                       "POPS-CODA" );
 
   writer.value( "CONF" , mean_conf );
 
@@ -1514,8 +1539,11 @@ void pops_coda_t::train_from_posteriors_file( const std::string & filename ,
   load_coda_posteriors_file( filename , true , &opt , &subjects );
 
   // Build per-stage epoch thresholds (W=0,R=1,N1=2,N2=3,N3=4); size-1 applies to all
-  auto mins_to_epochs = []( int m ) -> int {
-    return m <= 0 ? 0 : ( m * 60 + 29 ) / 30;
+  const double row_duration_sec = opt.row_duration_sec <= 0 ? 30.0 : opt.row_duration_sec;
+  auto mins_to_epochs = [row_duration_sec]( int m ) -> int {
+    if ( m <= 0 ) return 0;
+    const double rows = ( m * 60.0 ) / row_duration_sec;
+    return (int)std::ceil( rows - 1e-9 );
   };
   std::array<int,5> min_stage_epochs;
   if ( opt.min_stage_minutes.size() == 5 )

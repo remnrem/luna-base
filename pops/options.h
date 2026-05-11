@@ -113,13 +113,22 @@ struct pops_opt_t {
   
   // outputs
   static bool epoch_level_SHAP;
+  static int posterior_resolution;
+  static bool emit_pp;
+  static std::string posterior_channels;
+  static std::string posterior_prefix_stage1;
+  static std::string posterior_prefix_coda;
 
 
   // no P (i.e. if in eval mode)
   static bool eval_mode;
 
+  static bool resolution_is_5s();
+  static double posterior_row_seconds();
+  static bool write_stage1_posteriors_to_edf();
+  static bool write_coda_posteriors_to_edf();
+
 };
 
 #endif
 #endif
-

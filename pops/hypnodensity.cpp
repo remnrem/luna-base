@@ -31,6 +31,7 @@
 
 #include "edf/edf.h"
 #include "annot/annot.h"
+#include "db/db.h"
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "param.h"
@@ -42,9 +43,10 @@
 #include <memory>
 
 extern logger_t logger;
+extern writer_t writer;
 
 
-void pops_hypnodensity( edf_t & edf , param_t & param )
+void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * base_indiv )
 {
 
   //
@@ -67,15 +69,17 @@ void pops_hypnodensity( edf_t & edf , param_t & param )
   // Parse parameters
   //
 
-  const int N = param.value( "hypnodensity" ) != "" ? param.requires_int( "hypnodensity" ) : 6;
+  const int resolution_sec =
+    param.has( "resolution" ) ? param.requires_int( "resolution" ) : 30;
 
-  if ( N < 1 || 30 % N != 0 )
-    Helper::halt( "hypnodensity=N requires N to divide 30 evenly (valid: 1,2,3,5,6,10,15,30)" );
+  if ( resolution_sec != 5 )
+    Helper::halt( "5-second posterior emission requires resolution=5" );
 
   if ( pops_opt_t::n_stages == 3 )
-    Helper::halt( "hypnodensity mode requires a 5-class model (not 3-class)" );
+    Helper::halt( "resolution=5 posterior emission requires a 5-class model (not 3-class)" );
 
-  const double stride_sec = 30.0 / N;
+  const int N = 30 / resolution_sec;
+  const double stride_sec = (double)resolution_sec;
 
   //
   // Check EDF record duration is compatible with the requested stride before doing anything else
@@ -89,8 +93,8 @@ void pops_hypnodensity( edf_t & edf , param_t & param )
   const int n_spr = (int)std::lround( n_spr_d );
   if ( std::fabs( n_spr_d - n_spr ) > 1e-6 || n_spr < 1 )
     Helper::halt( "EDF record duration (" + Helper::dbl2str( edf.header.record_duration )
-		  + "s) is not divisible by hypnodensity stride (" + Helper::dbl2str( stride_sec )
-		  + "s); use RECORD-SIZE (e.g. dur=30) before running POPS hypnodensity" );
+		  + "s) is not divisible by posterior stride (" + Helper::dbl2str( stride_sec )
+		  + "s); use RECORD-SIZE (e.g. dur=30) before running POPS resolution=5" );
 
   // sample index offset: use (N-1)/2 (integer division) rather than N/2
   // This gives floor((N-1)/2) leading edge samples and ceil((N-1)/2) trailing edge samples —
@@ -99,6 +103,7 @@ void pops_hypnodensity( edf_t & edf , param_t & param )
   const int mid_offset = ( N - 1 ) / 2;
 
   const std::string prefix = param.has( "prefix" ) ? param.value( "prefix" ) : "PP" ;
+  const bool emit_pp_signals = param.has( "emit-pp" ) ? param.yesno( "emit-pp" ) : false;
 
   // add-nrem123 (individual N1/N2/N3 channels): default true
   const bool add_nrem123 = param.has( "add-nrem123" ) ? param.yesno( "add-nrem123" ) : true ;
@@ -115,8 +120,8 @@ void pops_hypnodensity( edf_t & edf , param_t & param )
   const double range_th   = param.has( "ranges-th" )   ? param.requires_dbl( "ranges-th" )   : 4 ;
   const double range_prop = param.has( "ranges-prop" )  ? param.requires_dbl( "ranges-prop" )  : 0.33 ;
 
-  if ( ! add_nrem123 && ! add_nrem )
-    Helper::halt( "hypnodensity: at least one of add-nrem123 (default T) or add-nrem must be true" );
+  if ( emit_pp_signals && ! add_nrem123 && ! add_nrem )
+    Helper::halt( "resolution=5 emit-pp: at least one of add-nrem123 (default T) or add-nrem must be true" );
 
   // model iterations
   int num_iter = 0;
@@ -145,7 +150,7 @@ void pops_hypnodensity( edf_t & edf , param_t & param )
     model_file = pops_t::update_filepath( model_file );
 
   if ( model_file == "." )
-    Helper::halt( "POPS hypnodensity requires a model file, via model or lib args" );
+    Helper::halt( "POPS resolution=5 emission requires a model file, via model or lib args" );
 
   if ( pops_t::lgbm_model_loaded != model_file )
     {
@@ -176,7 +181,10 @@ void pops_hypnodensity( edf_t & edf , param_t & param )
           coda_opt.three_state = false;
 
           if ( param.has( "coda-context" ) )
-            coda_opt.context_epochs = param.requires_int( "coda-context" );
+            coda_opt.context_epochs =
+              pops_coda_t::scale_context_epochs( param.requires_int( "coda-context" ) ,
+                                                 stride_sec );
+          coda_opt.row_duration_sec = stride_sec;
           if ( param.has( "coda-lambda" ) )
             coda_opt.lambda = param.requires_dbl( "coda-lambda" );
           if ( param.has( "coda-no-future" ) )
@@ -204,7 +212,7 @@ void pops_hypnodensity( edf_t & edf , param_t & param )
 
           coda = coda_cache.get();
 
-          logger << "  hypnodensity mode: using CODA rescoring model "
+          logger << "  resolution=5 mode: using CODA rescoring model "
                  << coda_file << " for each stride\n";
         }
     }
@@ -260,7 +268,7 @@ void pops_hypnodensity( edf_t & edf , param_t & param )
   // Per-stride loop
   //
 
-  logger << "  hypnodensity mode: N=" << N
+  logger << "  resolution=5 posterior stream: N=" << N
 	 << " strides, stride=" << stride_sec << "s"
 	 << ", output sample rate=1/" << (int)stride_sec << "Hz"
 	 << ", " << n_spr << " sample(s) per EDF record\n";
@@ -528,29 +536,109 @@ void pops_hypnodensity( edf_t & edf , param_t & param )
   // Add signals to EDF
   //
 
-  if ( add_nrem123 )
+  if ( emit_pp_signals )
     {
-      edf.add_signal( prefix + "_N1" , Fs_code , sigN1 );
-      edf.add_signal( prefix + "_N2" , Fs_code , sigN2 );
-      edf.add_signal( prefix + "_N3" , Fs_code , sigN3 );
-      edf.add_signal( prefix + "_R"  , Fs_code , sigR  );
-      edf.add_signal( prefix + "_W"  , Fs_code , sigW  );
+      if ( add_nrem123 )
+        {
+          edf.add_signal( prefix + "_N1" , Fs_code , sigN1 );
+          edf.add_signal( prefix + "_N2" , Fs_code , sigN2 );
+          edf.add_signal( prefix + "_N3" , Fs_code , sigN3 );
+          edf.add_signal( prefix + "_R"  , Fs_code , sigR  );
+          edf.add_signal( prefix + "_W"  , Fs_code , sigW  );
+        }
+
+      if ( add_nrem )
+        edf.add_signal( prefix + "_NR" , Fs_code , sigNR );
+
+      logger << "  added resolution=5 posterior channels with prefix '" << prefix << "'\n";
     }
 
-  if ( add_nrem )
-    edf.add_signal( prefix + "_NR" , Fs_code , sigNR );
 
-  logger << "  added hypnodensity channels with prefix '" << prefix << "'\n";
+  //
+  // Emit 5-second epoch table rows directly for CODA training / destrat.
+  // Summary metrics remain on the standard 30-second POPS path.
+  //
+
+  clocktime_t starttime( edf.header.starttime );
+  const bool hms = starttime.valid;
+  const bool have_obs_staging = base_indiv != NULL && base_indiv->has_staging;
+
+  for ( auto it = sample_to_post.begin(); it != sample_to_post.end(); ++it )
+    {
+      const int m = it->first;
+      const Eigen::VectorXd & post = it->second;
+      const uint64_t row_start_tp = (uint64_t)m * stride_tp;
+      const uint64_t row_stop_tp = row_start_tp + stride_tp - 1LLU;
+
+      writer.epoch( m + 1 );
+
+      if ( hms )
+        {
+          const double tp1_sec = row_start_tp / (double)globals::tp_1sec;
+          clocktime_t present1 = starttime;
+          present1.advance_seconds( tp1_sec );
+          const double tp1_extra = tp1_sec - (long)tp1_sec;
+
+          const double tp2_sec = row_stop_tp / (double)globals::tp_1sec;
+          clocktime_t present2 = starttime;
+          present2.advance_seconds( tp2_sec );
+          const double tp2_extra = tp2_sec - (long)tp2_sec;
+
+          writer.value( "START" , present1.as_string(':') + Helper::dbl2str_fixed( tp1_extra , globals::time_format_dp ).substr(1) );
+          writer.value( "STOP"  , present2.as_string(':') + Helper::dbl2str_fixed( tp2_extra , globals::time_format_dp ).substr(1) );
+        }
+
+      writer.value( "PP_W"  , post[ POPS_WAKE ] );
+      writer.value( "PP_R"  , post[ POPS_REM  ] );
+      writer.value( "PP_N1" , post[ POPS_N1   ] );
+      writer.value( "PP_N2" , post[ POPS_N2   ] );
+      writer.value( "PP_N3" , post[ POPS_N3   ] );
+
+      int predx = 0;
+      const double pmax = post.maxCoeff( &predx );
+      writer.value( "CONF" , pmax );
+      writer.value( "PRED" , pops_t::labels5[ predx ] );
+
+      int flag = 0;
+      if ( have_obs_staging )
+        {
+          const int obs_epoch = (int)( row_start_tp / ( 30LLU * globals::tp_1sec ) );
+          int prior = POPS_UNKNOWN;
+          if ( obs_epoch >= 0 && obs_epoch < (int)base_indiv->Sorig.size() )
+            prior = base_indiv->Sorig[ obs_epoch ];
+          writer.value( "PRIOR" , pops_t::label( (pops_stage_t)prior ) );
+
+          if ( prior == POPS_UNKNOWN )
+            flag = -1;
+          else if ( prior != predx )
+            {
+              const bool obs_w  = prior == POPS_WAKE;
+              const bool obs_r  = prior == POPS_REM;
+              const bool obs_nr = prior == POPS_N1 || prior == POPS_N2 || prior == POPS_N3;
+              const bool prd_w  = predx == POPS_WAKE;
+              const bool prd_r  = predx == POPS_REM;
+              const bool prd_nr = predx == POPS_N1 || predx == POPS_N2 || predx == POPS_N3;
+              flag = 1;
+              if ( ( obs_w  && ( prd_r || prd_nr ) ) ||
+                   ( obs_r  && ( prd_w || prd_nr ) ) ||
+                   ( obs_nr && ( prd_w || prd_r  ) ) ) flag = 2;
+            }
+        }
+
+      writer.value( "FLAG" , flag );
+    }
+
+  writer.unepoch();
 
 
   //
   // Edge annotation: mark ZOH-filled leading and trailing regions
   //
 
-  if ( first_valid_sample > 0 || last_valid_sample < total_samples - 1 )
+  if ( emit_pp_signals && ( first_valid_sample > 0 || last_valid_sample < total_samples - 1 ) )
     {
       annot_t * aedge = edf.annotations->add( prefix + "/edge" );
-      aedge->description = "POPS hypnodensity ZOH-filled edge region";
+      aedge->description = "POPS resolution=5 posterior ZOH-filled edge region";
 
       if ( first_valid_sample > 0 )
 	{

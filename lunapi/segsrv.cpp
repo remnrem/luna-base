@@ -172,6 +172,7 @@ void segsrv_t::do_summaries( const std::string & ch , const int sr , const std::
 {
 
   if ( ! ( do_band || do_hjorth ) ) return ;
+  if ( sr < 1 ) return;
   
   // this is called per-epoch from populate() only 
   double fft_segment_size = 4;
@@ -559,9 +560,23 @@ double segsrv_t::get_total_sec_original() const
   return p->last_sec_original();
 }
 
-Eigen::VectorXf segsrv_t::decimate( const Eigen::VectorXf & x0 , const int sr, const int q )
+int segsrv_t::sr_key( const double sr )
+{
+  if ( sr <= 0 ) return 0;
+
+  const double nearest = std::round( sr );
+  if ( sr >= 1.0 && std::fabs( sr - nearest ) < 1e-6 )
+    return (int)nearest;
+
+  const long long qsr = std::llround( sr * 1000000.0 );
+  return -(int)std::max<long long>( 1 , qsr );
+}
+
+
+Eigen::VectorXf segsrv_t::decimate( const Eigen::VectorXf & x0 , const double sr, const int q )
 {
   if ( x0.size() == 0 ) return x0;
+  if ( sr <= 0 || q <= 1 ) return x0;
   
   // new sample rate (min 1 Hz) 
   const double sr2 = sr / (double)q ;
@@ -589,12 +604,20 @@ bool segsrv_t::add_channel( const std::string & ch )
   if ( slot == -1 ) return false;
     
   // (original) sample rate
-  int sr = p->edf.header.sampling_freq( slot );
+  const double sr_d = p->edf.header.sampling_freq( slot );
+  if ( sr_d <= 0 )
+    {
+      Helper::warn( "skipping non-positive sample-rate channel in renderer: " + ch
+                    + " [" + Helper::dbl2str( sr_d ) + " Hz]" );
+      return false;
+    }
+  const int sr = sr_key( sr_d );
   
   // decimate?
   int decimation_fac = 1;
-  if ( sr > max_samples_in )
-    decimation_fac = sr / max_samples_in ;
+  if ( sr_d > max_samples_in )
+    decimation_fac = (int)( sr_d / max_samples_in );
+  if ( decimation_fac < 1 ) decimation_fac = 1;
 
   // get all data
   slice_t slice( p->edf , slot , p->edf.timeline.wholetrace() );
@@ -613,7 +636,8 @@ bool segsrv_t::add_channel( const std::string & ch )
   //  std::cout << " is dis = " << is_discrete << " " << ch << "\n";
   
   // do means, min/max & SD, as well as spectral/hjorth summaries? (on original data)
-  do_summaries( ch, sr, data , bands.find( ch ) != bands.end() , hjorth.find( ch ) != hjorth.end() );  
+  do_summaries( ch, (int)std::lround( sr_d ), data ,
+                bands.find( ch ) != bands.end() , hjorth.find( ch ) != hjorth.end() );  
 
   // get signal (copying nfull samples, so may contain zero-padded partial last records)
   // bur only copy n smaples over into the nfull space
@@ -627,12 +651,11 @@ bool segsrv_t::add_channel( const std::string & ch )
   // store
   sigmap[ ch ] = d;
 
-  // store SR - note, just use original integer SR as a label
-  //  for lookup - so it doesn't matter if we've decimated
+  // store SR label for lookup/grouping
   srmap[ ch ] = sr;
 
   // store new SR post any decimation
-  decimated_srmap[ sr ] = sr / (double)decimation_fac;
+  decimated_srmap[ sr ] = sr_d / (double)decimation_fac;
 
   //  std::cout << "adding::: ch = " << ch << " " << sr << " " << sr / (double)decimation_fac << "\n";
   
@@ -1196,14 +1219,16 @@ Eigen::VectorXf segsrv_t::get_scaled_signal( const std::string & ch , const int 
       auto sri = srmap.find( ch );
       if ( sri != srmap.end() )
         {
-          const int sr = sri->second;
+          const int sr_key = sri->second;
+          const auto dsr = decimated_srmap.find( sr_key );
+          const int sr = dsr == decimated_srmap.end() ? 0 : (int)std::lround( dsr->second );
           const bool is_filt = filtered.count( ch ) > 0;
           const Eigen::VectorXf & data = is_filt
             ? sigmap_f.find( ch )->second
             : sigmap.find( ch )->second;
-          auto ai = aidx.find( sr );
-          auto bi = bidx.find( sr );
-          if ( ai != aidx.end() && bi != bidx.end() && bi->second > ai->second )
+          auto ai = aidx.find( sr_key );
+          auto bi = bidx.find( sr_key );
+          if ( sr >= 1 && ai != aidx.end() && bi != bidx.end() && bi->second > ai->second )
             compute_psd_( ch, data.segment( ai->second, bi->second - ai->second ), sr );
         }
     }

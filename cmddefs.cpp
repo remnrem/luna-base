@@ -4065,7 +4065,11 @@ void cmddefs_t::init()
   add_param( "POPS" , "posteriors" , "pops-out.txt" , "POPS-CODA: file of stage-1 posteriors for standalone CODA training or posterior-file CODA prediction (destrat POPS -r E format; PRIOR required for training, optional for prediction; START/STOP copied through if present)" );
   add_param( "POPS" , "train-coda" , "coda.mod" , "POPS-CODA: explicit output model file for standalone CODA training (legacy override; otherwise coda[=<file>] with lib=ROOT defaults to ROOT.coda.mod)" );
   add_param( "POPS" , "coda" , "coda.mod" , "POPS-CODA: apply the second-stage CODA model in the original POPS/RUN-POPS scoring path, or name the output model for standalone CODA training from posteriors=" );
-  add_param( "POPS" , "predict-coda" , "" , "POPS-CODA: rescore a posteriors= file with the model resolved as <lib>.coda.mod (default lib=s2), without reading EDF/signals" );
+  add_param( "POPS" , "predict-coda" , "" , "POPS-CODA: stage-2-only rescoring with the model resolved as <lib>.coda.mod (default lib=s2); uses posteriors= file if given, otherwise reads attached EDF posterior channels (default PP_W/PP_R/PP_N1/PP_N2/PP_N3 or PP_NR)" );
+  add_param( "POPS" , "resolution" , "30|5" , "Posterior stream resolution: 30-second epochs (default) or 5-second stride/native posterior rows" );
+  add_param( "POPS" , "emit-pp" , "" , "Emit PP_* posterior channels/signals to the in-memory EDF using the active stream (stage-1 unless CODA rescoring is requested)" );
+  add_param( "POPS" , "posterior-channels" , "E|CODA|BOTH" , "Add posterior channels to the in-memory EDF after scoring: stage-1 POPS (E), CODA, or BOTH; requires one 30s EDF record per epoch and skips any channel that already exists" );
+  add_param( "POPS" , "posterior-prefix" , "PP or PP,CP" , "Prefix for emitted posterior output; one token applies to both, or give STG1_PREFIX,CODA_PREFIX to separate stage-1 and CODA channel sets" );
   add_param( "POPS" , "coda-config" , "coda.conf" , "POPS-CODA: LightGBM config file for CODA training (default: built-in)" );
   add_param( "POPS" , "coda-iter" , "200" , "POPS-CODA: number of LightGBM iterations for CODA training (default 200)" );
   add_param( "POPS" , "coda-context" , "20" , "POPS-CODA: context window in epochs (default 20)" );
@@ -4317,12 +4321,12 @@ void cmddefs_t::init()
             "RUN-POPS copies the requested signals, optionally re-references them, "
             "resamples to 128 Hz, band-pass filters, normalizes, optionally runs "
             "EDGER, and then invokes POPS with the assembled temporary signals.\n\n"
-            "Hypnodensity mode (hypnodensity=N): instead of epoch-level stage calls, "
-            "emits per-stage posterior probability signals at 1/(30/N) Hz by running "
-            "N independent POPS predictions with staggered epoch offsets (0, 30/N, "
-            "2*30/N, ... seconds).  Edge regions are filled by zero-order hold and "
-            "marked with an annotation.  Requires a 5-class model; EDGER is disabled "
-            "by default in this mode (set edger=T to override)." );
+            "Resolution=5 keeps the standard 30-second staging summaries but also "
+            "supports a 5-second posterior stream for PP_* emission / HDSTATS by "
+            "running staggered 30-second POPS windows every 5 seconds. Edge regions "
+            "are filled by zero-order hold and marked with an annotation. Requires "
+            "a 5-class model; EDGER is disabled by default in this mode (set edger=T "
+            "to override)." );
   add_param( "RUN-POPS" , "sig" , "C3,C4" , "Primary EEG signal(s)" );
   add_param( "RUN-POPS" , "ref" , "M2,M1" , "Reference signal(s), matching sig length" );
   add_param( "RUN-POPS" , "args" , "trim=10 3-class" , "Additional arguments passed to POPS" );
@@ -4330,11 +4334,12 @@ void cmddefs_t::init()
   add_param( "RUN-POPS" , "lib" , "s2" , "POPS library root" );
   add_param( "RUN-POPS" , "path" , "." , "Base path for POPS resources" );
   add_param( "RUN-POPS" , "filter" , "T" , "Band-pass filter copied signals before POPS" );
-  add_param( "RUN-POPS" , "edger" , "T" , "Run EDGER on the copied signals (default F in hypnodensity mode)" );
-  add_param( "RUN-POPS" , "hypnodensity" , "6" , "Hypnodensity mode: N strides over 30s window, default 6 (1/5 Hz)" );
-  add_param( "RUN-POPS" , "prefix" , "PP" , "Channel prefix for hypnodensity output signals" );
-  add_param( "RUN-POPS" , "add-nrem123" , "T" , "Add individual N1/N2/N3 posterior channels (hypnodensity)" );
-  add_param( "RUN-POPS" , "add-nrem" , "F" , "Add summed NR=N1+N2+N3 posterior channel (hypnodensity)" );
+  add_param( "RUN-POPS" , "edger" , "T" , "Run EDGER on the copied signals (default F in resolution=5 mode)" );
+  add_param( "RUN-POPS" , "resolution" , "30|5" , "Posterior stream resolution: 30-second epochs (default) or 5-second stride/native posterior rows" );
+  add_param( "RUN-POPS" , "emit-pp" , "" , "Emit PP_* posterior channels/signals to the in-memory EDF using the active stream (stage-1 unless CODA rescoring is requested)" );
+  add_param( "RUN-POPS" , "prefix" , "PP" , "Channel prefix for emitted posterior output signals" );
+  add_param( "RUN-POPS" , "add-nrem123" , "T" , "Add individual N1/N2/N3 posterior channels when emitting 5-second PP signals" );
+  add_param( "RUN-POPS" , "add-nrem" , "F" , "Add summed NR=N1+N2+N3 posterior channel when emitting 5-second PP signals" );
   add_param( "RUN-POPS" , "coda" , "coda.mod" , "Apply POPS-CODA second-stage rescoring model; if no file is given and lib=ROOT then uses ROOT.coda.mod under path=" );
   add_param( "RUN-POPS" , "pops-SHAP" , "" , "Emit SHAP values for the stage-1 POPS model only" );
   add_param( "RUN-POPS" , "coda-SHAP" , "" , "Emit SHAP values for the CODA model only" );
@@ -4345,6 +4350,8 @@ void cmddefs_t::init()
   add_param( "RUN-POPS" , "coda-weights" , "1,1.5,1.5,1,1" , "CODA training class weights in W,R,N1,N2,N3 order (or W,R,NR for 3-class); defaults upweight R and N1/NR" );
   add_param( "RUN-POPS" , "coda-lambda" , "5" , "CODA denominator smoothing for rel-elapsed features (default 5)" );
   add_param( "RUN-POPS" , "coda-no-future" , "" , "Disable future-context features in CODA" );
+  add_param( "RUN-POPS" , "posterior-channels" , "E|CODA|BOTH" , "Compatibility override for POPS posterior export stream selection" );
+  add_param( "RUN-POPS" , "posterior-prefix" , "PP or PP,CP" , "Forwarded to POPS: prefix for posterior emission to the in-memory EDF" );
 
   //
   // EVAL-STAGES

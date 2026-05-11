@@ -399,7 +399,7 @@ struct segsrv_t {
   
 public:
 
-  static Eigen::VectorXf decimate( const Eigen::VectorXf & x0 , const int sr, const int q );
+  static Eigen::VectorXf decimate( const Eigen::VectorXf & x0 , const double sr, const int q );
   
   // set up
   segsrv_t( lunapi_inst_ptr ); 
@@ -594,10 +594,16 @@ private:
   // add actual data
   bool add_channel( const std::string & );
 
+  // Map an EDF sample rate to an internal key for shared time tracks.
+  // Integer-Hz channels keep their natural label; fractional rates get a
+  // negative quantized key so they do not collapse to zero.
+  static int sr_key( const double sr );
+
   // given two times and a sample rate, get indices
   bool get_tidx( double a, double b , int sr , int * aidx, int *bidx ) const;
   
   // signal data
+  // srmap stores the internal sampling-rate key, not necessarily the literal Hz.
   std::map<std::string,int> srmap;
   std::map<std::string,Eigen::VectorXf> sigmap;
   std::map<std::string,Eigen::VectorXf> sigmap_f; // filtered version of the data

@@ -24,6 +24,8 @@
 #include "eval.h"
 #include "param.h"
 #include "luna.h"
+#include "edf/slice.h"
+#include "pops/posteriors.h"
 #include "timeline/actig.h"
 #include <memory>
 
@@ -1733,15 +1735,17 @@ void proc_runpops( edf_t & edf , param_t & param )
   // optional path
   const std::string pops_path = param.has( "path" ) ? param.value( "path" ) : "." ; 
 
-  // hypnodensity mode
-  const bool do_hypnodensity = param.has( "hypnodensity" );
-  const int  hypnodensity_n  = do_hypnodensity ? ( param.value( "hypnodensity" ) != "" ? param.requires_int( "hypnodensity" ) : 6 ) : 0;
+  const int posterior_resolution =
+    param.has( "resolution" ) ? param.requires_int( "resolution" ) : 30;
+  if ( posterior_resolution != 30 && posterior_resolution != 5 )
+    Helper::halt( "resolution must be 30 or 5" );
+  const bool do_5s_stream = posterior_resolution == 5;
 
   // other options
   const bool do_filter = param.has( "filter" ) ? param.yesno( "filter" ) : true ;
 
-  // edger defaults to off in hypnodensity mode (ZOH handles edges; trim would distort output)
-  const bool do_edger  = param.has( "edger" ) ? param.yesno( "edger" ) : ( do_hypnodensity ? false : true );
+  // edger defaults to off in resolution=5 mode (ZOH handles edges; trim would distort output)
+  const bool do_edger  = param.has( "edger" ) ? param.yesno( "edger" ) : ( do_5s_stream ? false : true );
 
 
   // xsigs handles
@@ -1879,18 +1883,18 @@ void proc_runpops( edf_t & edf , param_t & param )
   if ( ignore_obs_staging )
     pops_param.add( "ignore-obs-staging" );
 
-  // hypnodensity: forward trigger and output-control params to POPS
-  if ( do_hypnodensity )
-    {
-      pops_param.add( "hypnodensity" , Helper::int2str( hypnodensity_n ) );
-      pops_param.add( "ignore-obs-staging" ); // always implied in hypnodensity mode
-      if ( param.has( "prefix" ) )
-	pops_param.add( "prefix" , param.value( "prefix" ) );
-      if ( param.has( "add-nrem123" ) )
-	pops_param.add( "add-nrem123" , param.value( "add-nrem123" ) );
-      if ( param.has( "add-nrem" ) )
-	pops_param.add( "add-nrem" , param.value( "add-nrem" ) );
-    }
+  if ( do_5s_stream )
+    pops_param.add( "ignore-obs-staging" );
+
+  pops_param.add( "resolution" , Helper::int2str( posterior_resolution ) );
+  if ( param.has( "emit-pp" ) )
+    pops_param.add( "emit-pp" , param.value( "emit-pp" ) );
+  if ( param.has( "prefix" ) )
+    pops_param.add( "prefix" , param.value( "prefix" ) );
+  if ( param.has( "add-nrem123" ) )
+    pops_param.add( "add-nrem123" , param.value( "add-nrem123" ) );
+  if ( param.has( "add-nrem" ) )
+    pops_param.add( "add-nrem" , param.value( "add-nrem" ) );
 
   if ( opt_args != "" )
     {
@@ -1921,6 +1925,12 @@ void proc_runpops( edf_t & edf , param_t & param )
     pops_param.add( "coda-lambda" , param.value( "coda-lambda" ) );
   if ( param.has( "coda-no-future" ) )
     pops_param.add( "coda-no-future" );
+  if ( param.has( "emit-pp" ) )
+    pops_param.add( "emit-pp" , param.value( "emit-pp" ) );
+  if ( param.has( "posterior-channels" ) )
+    pops_param.add( "posterior-channels" , param.value( "posterior-channels" ) );
+  if ( param.has( "posterior-prefix" ) )
+    pops_param.add( "posterior-prefix" , param.value( "posterior-prefix" ) );
 
   proc_pops( edf , pops_param );
 
@@ -1952,8 +1962,11 @@ void proc_pops( edf_t & edf , param_t & param )
   auto apply_coda_options = [&]( pops_coda_t & coda , bool for_prediction )
     {
       coda.opt.three_state = param.has( "3-class" ) || ( pops_opt_t::n_stages == 3 );
+      coda.opt.row_duration_sec = pops_opt_t::posterior_row_seconds();
       if ( param.has( "coda-context" ) )
-        coda.opt.context_epochs = param.requires_int( "coda-context" );
+        coda.opt.context_epochs =
+          pops_coda_t::scale_context_epochs( param.requires_int( "coda-context" ) ,
+                                             coda.opt.row_duration_sec );
       if ( param.has( "coda-lambda" ) )
         coda.opt.lambda = param.requires_dbl( "coda-lambda" );
       if ( param.has( "coda-min-contiguous" ) )
@@ -1981,6 +1994,124 @@ void proc_pops( edf_t & edf , param_t & param )
         coda.load_validation_ids( param.value( "validation" ) );
     };
 
+  auto load_coda_posteriors_from_edf =
+    [&]( pops_coda_t & coda ,
+         Eigen::MatrixXd * P ,
+         std::vector<int> * E ,
+         std::vector<bool> * flagged ,
+         int * ne_total ,
+         bool * has_staging ,
+         std::vector<int> * S ) -> void
+    {
+      if ( pops_opt_t::resolution_is_5s() )
+        edf.timeline.set_epoch( 5.0 , 5.0 );
+      else
+        edf.timeline.ensure_epoched();
+
+      const bool want_3state = coda.opt.three_state;
+      std::vector<std::string> ch;
+
+      if ( want_3state )
+        {
+          ch.push_back( param.has( "W" )  ? param.value( "W" )  : "PP_W" );
+          ch.push_back( param.has( "R" )  ? param.value( "R" )  : "PP_R" );
+          ch.push_back( param.has( "NR" ) ? param.value( "NR" ) : "PP_NR" );
+        }
+      else
+        {
+          ch.push_back( param.has( "W" )  ? param.value( "W" )  : "PP_W" );
+          ch.push_back( param.has( "R" )  ? param.value( "R" )  : "PP_R" );
+          ch.push_back( param.has( "N1" ) ? param.value( "N1" ) : "PP_N1" );
+          ch.push_back( param.has( "N2" ) ? param.value( "N2" ) : "PP_N2" );
+          ch.push_back( param.has( "N3" ) ? param.value( "N3" ) : "PP_N3" );
+        }
+
+      std::vector<int> sidx( ch.size() , -1 );
+      for (int k = 0; k < (int)ch.size(); k++)
+        {
+          signal_list_t sl = edf.header.signal_list( ch[k] );
+          if ( sl.size() == 0 )
+            Helper::halt( "POPS-CODA: channel not found: " + ch[k] );
+          if ( edf.header.is_annotation_channel( sl(0) ) )
+            Helper::halt( "POPS-CODA: " + ch[k] + " is an annotation channel, not a signal" );
+          sidx[k] = sl(0);
+        }
+
+      *ne_total = edf.timeline.num_total_epochs();
+      *has_staging = false;
+
+      E->clear();
+      flagged->clear();
+      S->clear();
+
+      if ( *ne_total == 0 )
+        {
+          P->resize( 0 , (int)ch.size() );
+          return;
+        }
+
+      P->resize( *ne_total , (int)ch.size() );
+      P->setConstant( std::numeric_limits<double>::quiet_NaN() );
+      E->reserve( *ne_total );
+      flagged->reserve( *ne_total );
+      S->reserve( *ne_total );
+
+      edf.timeline.first_epoch();
+      for (int i = 0; i < *ne_total; i++)
+        {
+          const int epoch = edf.timeline.next_epoch_ignoring_mask();
+          if ( epoch < 0 ) break;
+
+          E->push_back( epoch );
+          S->push_back( POPS_UNKNOWN );
+
+          const interval_t interval = edf.timeline.epoch( epoch );
+          bool bad_epoch = false;
+
+          for (int k = 0; k < (int)ch.size(); k++)
+            {
+              slice_t slice( edf , sidx[k] , interval );
+              const std::vector<double> * d = slice.pdata();
+              if ( d == NULL || d->empty() )
+                {
+                  bad_epoch = true;
+                  break;
+                }
+
+              double sum = 0.0;
+              int n = 0;
+              for (int j = 0; j < (int)d->size(); j++)
+                {
+                  if ( std::isnan( (*d)[j] ) ) continue;
+                  sum += (*d)[j];
+                  ++n;
+                }
+
+              if ( n == 0 )
+                {
+                  bad_epoch = true;
+                  break;
+                }
+
+              const double mean = sum / n;
+              if ( ! std::isfinite( mean ) || mean < 0.0 || mean > 1.0 )
+                {
+                  bad_epoch = true;
+                  (*P)( i , k ) = mean;
+                  break;
+                }
+
+              (*P)( i , k ) = mean;
+            }
+
+          flagged->push_back( bad_epoch );
+        }
+
+      logger << "  POPS-CODA: loaded " << P->rows()
+             << " epoch posteriors from attached EDF channels ["
+             << Helper::stringize( ch , "," ) << "]\n";
+    };
+
   //
   // Standalone CODA prediction from a posteriors file.
   //
@@ -2006,6 +2137,48 @@ void proc_pops( edf_t & edf , param_t & param )
           coda.load( coda_model );
           coda.predict_from_posteriors_file( post_file );
         }
+      return;
+    }
+
+  //
+  // Standalone CODA prediction from EDF-attached PP_* channels.
+  //
+
+  if ( param.has( "predict-coda" ) )
+    {
+      pops_opt_t::set_options( param );
+
+      const std::string pops_lib = param.has( "lib" ) ? Helper::expand( param.value( "lib" ) ) : "s2";
+      const std::string coda_model  =
+        pops_lib != "" ? pops_t::update_filepath( pops_lib + ".coda.mod" )
+                       : pops_t::update_filepath( "coda.mod" );
+
+      pops_coda_t coda;
+      apply_coda_options( coda , true );
+      coda.load( coda_model );
+
+      Eigen::MatrixXd P;
+      std::vector<int> E;
+      std::vector<bool> flagged;
+      std::vector<int> S;
+      int ne_total = 0;
+      bool has_staging = false;
+
+      load_coda_posteriors_from_edf( coda , &P , &E , &flagged , &ne_total , &has_staging , &S );
+      if ( pops_opt_t::resolution_is_5s() && pops_opt_t::emit_pp )
+        {
+          const Eigen::MatrixXd P_coda = coda.rescore( P , E , flagged );
+          pops_posteriors::add_edf_signals( &edf ,
+                                            P_coda ,
+                                            E ,
+                                            &flagged ,
+                                            ne_total ,
+                                            coda.opt.three_state ,
+                                            coda.opt.row_duration_sec ,
+                                            pops_opt_t::posterior_prefix_coda ,
+                                            "POPS-CODA" );
+        }
+      coda.predict( P , E , flagged , ne_total , has_staging , S , &edf , NULL , NULL , false );
       return;
     }
 
@@ -2080,18 +2253,8 @@ void proc_pops( edf_t & edf , param_t & param )
       return; 
     }
   
-  pops_t::specs.emit_feature_defs = ! param.has( "hypnodensity" );
+  pops_t::specs.emit_feature_defs = true;
   pops_t::specs.read( feature_file );
-
-  //
-  // hypnodensity mode: separate pathway, does not use the standard pops_indiv_t flow
-  //
-
-  if ( param.has( "hypnodensity" ) )
-    {
-      pops_hypnodensity( edf , param );
-      return;
-    }
 
   //
   // process individual (either trainer, or target)
@@ -2125,8 +2288,11 @@ void proc_pops( edf_t & edf , param_t & param )
           pops_coda_t::options_t coda_opt;
           coda_opt.three_state = ( pops_opt_t::n_stages == 3 );
 
+          coda_opt.row_duration_sec = 30.0;
           if ( param.has( "coda-context" ) )
-            coda_opt.context_epochs = param.requires_int( "coda-context" );
+            coda_opt.context_epochs =
+              pops_coda_t::scale_context_epochs( param.requires_int( "coda-context" ) ,
+                                                 coda_opt.row_duration_sec );
           if ( param.has( "coda-lambda" ) )
             coda_opt.lambda = param.requires_dbl( "coda-lambda" );
           if ( param.has( "coda-no-future" ) )
@@ -2172,6 +2338,9 @@ void proc_pops( edf_t & edf , param_t & param )
                          indiv.pedf );
         }
     }
+
+  if ( pops_opt_t::resolution_is_5s() )
+    pops_hypnodensity( edf , param , &indiv );
 
 #else
   Helper::halt( "no LGBM support compiled in" );
@@ -4865,14 +5034,20 @@ void proc_dereference( edf_t & edf , param_t & param )
 // RECSIZE: change record size for one or more signals
 void proc_rerecord( edf_t & edf , param_t & param )
 {
-  double rs = param.requires_dbl( "dur" ); 
-  
+  double rs = param.requires_dbl( "dur" );
+
   logger << "  altering record size from " << edf.header.record_duration << " to " <<  rs << " seconds\n";
-  
+
   edf.reset_record_size( rs );
-  
+
+  if ( param.has( "continue" ) )
+    {
+      logger << "  continuing with new record size\n";
+      return;
+    }
+
   logger << "  *** now WRITE'ing EDF to disk, and will set 'problem' flag to skip to next EDF *** \n";
-  
+
   proc_write( edf , param );
 
   if ( ! param.has( "no-problem" ) ) // special case for lunascope to not throw error

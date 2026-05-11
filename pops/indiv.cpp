@@ -23,6 +23,8 @@
 #ifdef HAS_LGBM
 
 #include "pops/indiv.h"
+#include "pops/posteriors.h"
+#include "pops/options.h"
 
 #include "param.h"
 #include "helper/helper.h"
@@ -1883,6 +1885,7 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
     
   clocktime_t starttime( pedf ? pedf->header.starttime : "." );
   bool hms = pedf ? true : false; // if no EDF attached...
+  const bool emit_epoch_rows = ! pops_opt_t::resolution_is_5s();
   if ( pedf && ! starttime.valid )
     {
       logger << " ** could not find valid start-time in EDF header **\n";
@@ -1898,9 +1901,10 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       
       //std::cout << " epoch " << epoch << " " << skipped << " of " << ne_total << "\n";
       
-      writer.epoch( epoch + 1 );
+      if ( emit_epoch_rows )
+        writer.epoch( epoch + 1 );
 
-      if ( hms )
+      if ( emit_epoch_rows && hms )
 	{
 
 	  interval_t interval = pedf->timeline.epoch( epoch );
@@ -1922,7 +1926,8 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
 
       if ( skipped )
 	{
-	  writer.value( "FLAG" , -1 );		    
+	  if ( emit_epoch_rows )
+	    writer.value( "FLAG" , -1 );
 	  continue;
 	}
 
@@ -1931,18 +1936,27 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       const int e = e2e[ epoch ] ;
 
       // predicted stage
-      int predx = -1;
+      int predx = PS[e];
+      double pmax = std::numeric_limits<double>::quiet_NaN();
             
       // null-predicted? (i.e. non N*/R/W from file in EVAL mode)       
       //      std::cout << " PS[e] == POPS_UNKNOWN " << PS[e] << " " <<  POPS_UNKNOWN << "\n";
       if ( PS[e] == POPS_UNKNOWN ) 
 	{
-	  writer.value( "FLAG" , -1 );
+	  if ( emit_epoch_rows )
+	    writer.value( "FLAG" , -1 );
           continue;
 	}
 
-      // format always: W R N1 N2 N3
       if ( ! pops_opt_t::eval_mode )
+	{
+	  pmax = P.row(e).maxCoeff(&predx);
+	  if ( predx != PS[e] ) Helper::halt( "internal error in assigned PS" );
+	  avg_pmax += pmax;
+	}
+
+      // format always: W R N1 N2 N3
+      if ( emit_epoch_rows && ! pops_opt_t::eval_mode )
 	{
 	  if ( pops_opt_t::n_stages == 3 ) 
 	    {
@@ -1959,26 +1973,19 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
 	      writer.value( "PP_N3" , P(e,4) );      
 	    }
 
-	  // predicted (original) --> predx
-	  double pmax = P.row(e).maxCoeff(&predx);
-	  
-	  // this should have already been made and match
-	  if ( predx != PS[e] ) Helper::halt( "internal error in assigned PS" );
-	  
 	  writer.value( "CONF" , pmax );
-	  avg_pmax += pmax;
 	  writer.value( "PRED" , pops_opt_t::n_stages == 3 ? pops_t::labels3[ predx ] : pops_t::labels5[ predx ] ) ; 
 	}
 
       // 'predictions' from an external file?
-      if ( pops_opt_t::eval_mode )
+      if ( emit_epoch_rows && pops_opt_t::eval_mode )
 	{
 	  predx = PS[e];
 	  writer.value( "PRED" , pops_opt_t::n_stages == 3 ? pops_t::labels3[ PS[e] ] : pops_t::labels5[ PS[e] ] );
 	}
 
       // priors
-      if ( has_staging )
+      if ( emit_epoch_rows && has_staging )
 	{
 	  writer.value( "PRIOR" , pops_t::label( (pops_stage_t)S[e] ) );
 
@@ -2039,7 +2046,31 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
 	  dur_predf[ ss ] += P(e,ss);
     }
 
-  writer.unepoch();
+  if ( emit_epoch_rows )
+    writer.unepoch();
+
+  if ( sol == NULL &&
+       pops_opt_t::write_stage1_posteriors_to_edf() &&
+       ! pops_opt_t::eval_mode )
+    {
+      std::vector<bool> flagged( ne , false );
+      for (int e = 0; e < ne; e++)
+        {
+          flagged[e] = PS[e] == POPS_UNKNOWN;
+          if ( flagged[e] ) continue;
+          for (int j = 0; j < P.cols(); j++)
+            if ( std::isnan( P(e,j) ) ) { flagged[e] = true; break; }
+        }
+
+      pops_posteriors::add_edf_channels( pedf ,
+                                         P ,
+                                         E ,
+                                         &flagged ,
+                                         ne_total ,
+                                         pops_opt_t::n_stages == 3 ,
+                                         pops_opt_t::posterior_prefix_stage1 ,
+                                         "POPS stage-1" );
+    }
 
 
   //
