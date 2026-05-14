@@ -201,11 +201,12 @@ void caches_t::load( const std::string & filename )
 
 
 
-void caches_t::import( const std::string & filename , 
-		       const std::string & cache_name , 
-		       const std::string & id , 
-		       const std::set<std::string> & factors , 
-		       const std::set<std::string> * variables )
+void caches_t::import( const std::string & filename ,
+		       const std::string & cache_name ,
+		       const std::string & id ,
+		       const std::set<std::string> & factors ,
+		       const std::set<std::string> * variables ,
+		       const std::string & cmd_prefix )
 {
   
   // we assume all values are NUMERIC   
@@ -285,7 +286,8 @@ void caches_t::import( const std::string & filename ,
 	  double x;
 	  if ( Helper::str2dbl( tok[ vv->second ] , &x ) )
 	    {
-	      num_cache->add( ckey_t( vv->first , curr_strata ) , x );
+	      const std::string keyname = cmd_prefix.empty() ? vv->first : cmd_prefix + ":" + vv->first;
+	      num_cache->add( ckey_t( keyname , curr_strata ) , x );
 	      ++cnt2;
 	    }
           ++vv;

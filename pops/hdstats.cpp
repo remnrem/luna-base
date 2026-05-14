@@ -23,14 +23,12 @@
 //
 //  HDSTATS: analysis of hypnodensity signals (posterior-probability EDF channels)
 //
-//  Organizes output around four conceptual domains:
-//    A. MIXEDNESS  - how diffuse is the posterior at each sample
-//    B. INSTABILITY - how much does the posterior move over time
-//    C. TRANSITION STRUCTURE - what happens near likely state boundaries
-//    D. CONTEXT - how A/B/C vary across user-defined annotation strata
+//  Organizes output around three core domains:
+//    MIXEDNESS            - how diffuse is the posterior at each sample
+//    INSTABILITY          - how much does the posterior move over time
+//    TRANSITION STRUCTURE - what happens near likely state boundaries
 //
-//  The primary scientific distinction preserved throughout is:
-//    stable mixed/intermediate states  vs.  transitional instability
+//    i.e. stable mixed/intermediate states  vs.  transitional instability
 //
 
 #include "hdstats.h"
@@ -60,18 +58,14 @@ extern writer_t writer;
 // Internal types
 // ============================================================
 
-enum hd_trans_method_t { HD_HARD, HD_MOTION, HD_BOTH };
-
 struct hd_params_t
 {
   std::vector<std::string> ch;      // channel names [W, N1, N2, N3, R]
   bool do_3state;
   bool do_hd_metrics;
-  hd_trans_method_t method;
-  double motion_th;                 // TV threshold for motion-based detection
   double window_sec;                // transition window half-width (seconds)
   double lag_sec;                   // lag for TV_lag (seconds)
-  double stable_min_sec;            // min seconds from any event to qualify as stable-core
+  double stable_min_sec;            // min seconds of contiguous flank stability for STABLE events
   double conf_th;                   // confidence threshold for frac_below metric
   double hd_smooth_sec;             // smoothing window for soft sleep/REM trajectories
   double hd_onset_win_min;          // forward integrated-area window for onset detection
@@ -101,7 +95,7 @@ struct hd_data_t
   double Fs;
   std::vector<std::vector<double>> p;   // p[5][N], stages: W N1 N2 N3 R
   std::vector<std::vector<double>> p3;  // p3[3][N], stages: W NREM R
-  std::vector<uint64_t> tp;            // timepoints (in Luna units)
+  std::vector<uint64_t> tp;             // timepoints
 
   bool load( edf_t & edf, const hd_params_t & par )
   {
@@ -113,9 +107,9 @@ struct hd_data_t
       {
 	signal_list_t sl = edf.header.signal_list( par.ch[k] );
 	if ( sl.size() == 0 )
-	  Helper::halt( "HDSTATS: channel not found: " + par.ch[k] );
+	  Helper::halt( "channel not found: " + par.ch[k] );
 	if ( edf.header.is_annotation_channel( sl(0) ) )
-	  Helper::halt( "HDSTATS: " + par.ch[k] + " is an annotation channel, not a signal" );
+	  Helper::halt( par.ch[k] + " is an annotation channel, not a signal" );
 	sidx[k] = sl(0);
       }
 
@@ -125,7 +119,7 @@ struct hd_data_t
       {
 	double fk = edf.header.sampling_freq( sidx[k] );
 	if ( std::fabs( fk - Fs ) > 1e-6 )
-	  Helper::halt( "HDSTATS: all hypnodensity channels must share the same sample rate; "
+	  Helper::halt( "all hypnodensity channels must share the same sample rate; "
 			+ par.ch[k] + " has " + Helper::dbl2str(fk) + " Hz vs "
 			+ Helper::dbl2str(Fs) + " Hz for " + par.ch[0] );
       }
@@ -146,11 +140,11 @@ struct hd_data_t
 	    tp = *tps;
 	  }
 	else if ( (int)p[k].size() != N )
-	  Helper::halt( "HDSTATS: channel length mismatch for " + par.ch[k] );
+	  Helper::halt( "channel length mismatch for " + par.ch[k] );
       }
 
     if ( N == 0 )
-      Helper::halt( "HDSTATS: no samples found" );
+      Helper::halt( "no samples found" );
 
     // Validate and optionally renormalize row sums
     int n_renorm = 0;
@@ -160,7 +154,7 @@ struct hd_data_t
 	for ( int k = 0; k < K; k++ ) rowsum += p[k][i];
 
 	if ( rowsum < 0.5 || rowsum > 1.5 )
-	  Helper::halt( "HDSTATS: row sum " + Helper::dbl2str(rowsum)
+	  Helper::halt( "row sum " + Helper::dbl2str(rowsum)
 			+ " at sample " + Helper::int2str(i) + " is implausible" );
 
 	if ( std::fabs( rowsum - 1.0 ) > 1e-4 )
@@ -178,7 +172,7 @@ struct hd_data_t
       }
 
     if ( n_renorm > 0 )
-      logger << "  HDSTATS: renormalized " << n_renorm << " of " << N << " samples\n";
+      logger << "  renormalized " << n_renorm << " of " << N << " samples\n";
 
     // Build 3-state collapsed posteriors: W, NREM=N1+N2+N3, R
     if ( par.do_3state )
@@ -205,7 +199,7 @@ struct hd_derived_t
 {
   // 5-state signals
   std::vector<double> H, C, Mg;          // entropy, confidence, margin
-  std::vector<double> TV, TV_lag;         // motion metrics
+  std::vector<double> TV, TV_lag;        // motion metrics
   std::vector<double> mix_wn1;           // min(W, N1)
   std::vector<double> mix_n2n3;          // min(N2, N3)
   std::vector<double> mix_rn1;           // min(R, N1)
@@ -343,121 +337,66 @@ struct hd_derived_t
 
 struct hd_event_t
 {
-  int    idx;         // sample index of event center
-  int    from_st;     // argmax state just before (hard method; -1 if motion-only)
-  int    to_st;       // argmax state just after (hard method; -1 if motion-only)
-  double peak_tv;     // TV value at event (motion method; NaN if hard-only)
-  bool   is_clean;    // true if STABLE regions exist on both sides of the event window
-  hd_event_t() : idx(0), from_st(-1), to_st(-1), peak_tv(0.0), is_clean(false) {}
+  int    idx;         // boundary between samples idx-1 and idx
+  int    from_st;     // dominant left state
+  int    to_st;       // dominant right state
+  double shift;       // 0.5 * L1(left,right)
+  double peak_tv;     // local TV summary around boundary
+  bool   is_dir;      // definite X->Y transition
+  bool   is_stable;   // stable-X to stable-Y transition
+  hd_event_t() : idx(0), from_st(-1), to_st(-1), shift(0.0), peak_tv(0.0), is_dir(false), is_stable(false) {}
 };
 
-// Detect transitions by hard argmax changes
-static std::vector<hd_event_t> detect_hard(
-    const std::vector<int> & argmax,
-    const std::vector<double> & tv,
-    int N )
+static std::vector<double> make_linear_weights( const int n )
 {
-  std::vector<hd_event_t> events;
-  for ( int i = 1; i < N; i++ )
-    {
-      if ( argmax[i] != argmax[i-1] )
-	{
-	  hd_event_t e;
-	  e.idx     = i;
-	  e.from_st = argmax[i-1];
-	  e.to_st   = argmax[i];
-	  e.peak_tv = tv[i];
-	  events.push_back( e );
-	}
-    }
-  return events;
+  std::vector<double> w( n , 1.0 );
+  if ( n <= 1 ) return w;
+  for ( int i = 0 ; i < n ; i++ )
+    w[i] = ( i + 1 ) / (double)n;
+  return w;
 }
 
-// Detect transitions by TV peaks above threshold, then merge events within min_gap samples
-static std::vector<hd_event_t> detect_motion(
-    const std::vector<double> & tv,
-    const std::vector<int> & argmax,
-    int N,
-    double threshold,
-    int min_gap )
+static std::vector<double> weighted_support(
+    const std::vector<std::vector<double>> & P,
+    int lo,
+    int hi,
+    bool reverse_weights )
 {
-  // Find local peaks above threshold
-  std::vector<int> peaks;
-  for ( int i = 1; i < N - 1; i++ )
+  const int K = P.size();
+  std::vector<double> out( K , 0.0 );
+  if ( hi < lo ) return out;
+  const int n = hi - lo + 1;
+  const std::vector<double> w = make_linear_weights( n );
+  double wsum = 0.0;
+  for ( int j = 0 ; j < n ; j++ )
     {
-      if ( tv[i] >= threshold &&
-	   tv[i] >= tv[i-1] &&
-	   tv[i] >= tv[i+1] )
-	peaks.push_back( i );
+      const int si = lo + j;
+      const double ww = reverse_weights ? w[n - 1 - j] : w[j];
+      wsum += ww;
+      for ( int k = 0 ; k < K ; k++ )
+        out[k] += ww * P[k][si];
     }
-  // Handle edge: last sample can be a peak
-  if ( N > 1 && tv[N-1] >= threshold && tv[N-1] >= tv[N-2] )
-    peaks.push_back( N - 1 );
-
-  // Merge peaks within min_gap: keep the higher-TV peak in each cluster
-  std::vector<hd_event_t> events;
-  int prev = -1;
-  int prev_peak_idx = -1;
-  double prev_peak_tv = 0.0;
-
-  for ( int pi = 0; pi < (int)peaks.size(); pi++ )
-    {
-      int cur = peaks[pi];
-      double cur_tv = tv[cur];
-
-      if ( prev_peak_idx >= 0 && ( cur - prev_peak_idx ) < min_gap )
-	{
-	  // Same cluster: keep higher-TV peak
-	  if ( cur_tv > prev_peak_tv )
-	    {
-	      prev_peak_idx = cur;
-	      prev_peak_tv  = cur_tv;
-	    }
-	}
-      else
-	{
-	  // Emit the previous cluster's representative
-	  if ( prev_peak_idx >= 0 )
-	    {
-	      hd_event_t e;
-	      e.idx     = prev_peak_idx;
-	      e.from_st = ( prev_peak_idx > 0 ) ? argmax[prev_peak_idx - 1] : -1;
-	      e.to_st   = argmax[prev_peak_idx];
-	      e.peak_tv = prev_peak_tv;
-	      events.push_back( e );
-	    }
-	  prev_peak_idx = cur;
-	  prev_peak_tv  = cur_tv;
-	}
-    }
-  // Emit the last cluster
-  if ( prev_peak_idx >= 0 )
-    {
-      hd_event_t e;
-      e.idx     = prev_peak_idx;
-      e.from_st = ( prev_peak_idx > 0 ) ? argmax[prev_peak_idx - 1] : -1;
-      e.to_st   = argmax[prev_peak_idx];
-      e.peak_tv = prev_peak_tv;
-      events.push_back( e );
-    }
-
-  return events;
+  if ( wsum > 0.0 )
+    for ( int k = 0 ; k < K ; k++ ) out[k] /= wsum;
+  return out;
 }
 
-// TRANS mask: samples within window_samples of any event center
-static void build_trans_mask(
-    const std::vector<hd_event_t> & events,
-    int N,
-    int window_samples,
-    std::vector<bool> & is_trans )
+static int dominant_state( const std::vector<double> & p )
 {
-  is_trans.assign( N, false );
-  for ( const auto & e : events )
-    {
-      int lo = std::max( 0,     e.idx - window_samples );
-      int hi = std::min( N - 1, e.idx + window_samples );
-      for ( int i = lo; i <= hi; i++ ) is_trans[i] = true;
-    }
+  int amax = -1;
+  double mx = -1.0;
+  for ( int k = 0 ; k < (int)p.size() ; k++ )
+    if ( p[k] > mx ) { mx = p[k]; amax = k; }
+  return amax;
+}
+
+static double dominant_margin( const std::vector<double> & p , const int amax )
+{
+  if ( amax < 0 || amax >= (int)p.size() ) return 0.0;
+  double mx2 = -1.0;
+  for ( int k = 0 ; k < (int)p.size() ; k++ )
+    if ( k != amax && p[k] > mx2 ) mx2 = p[k];
+  return p[amax] - std::max( 0.0 , mx2 );
 }
 
 // STABLE mask: contiguous runs where TV < tv_th AND C > conf_th for >= min_run_samples
@@ -485,40 +424,6 @@ static void build_stable_mask(
     }
 }
 
-// Filter events by requiring a minimum L1 shift in the posterior between pre- and post-windows
-static std::vector<hd_event_t> filter_by_shift(
-    std::vector<hd_event_t> events,
-    const std::vector<std::vector<double>> & P,
-    int N,
-    int shift_win_smp,
-    double min_shift )
-{
-  if ( min_shift <= 0.0 ) return events;
-  const int K = (int)P.size();
-  std::vector<hd_event_t> out;
-  for ( const auto & e : events )
-    {
-      int ci      = e.idx;
-      int pre_lo  = std::max( 0,     ci - shift_win_smp );
-      int pre_hi  = ci - 1;
-      int post_lo = ci;
-      int post_hi = std::min( N - 1, ci + shift_win_smp - 1 );
-      if ( pre_hi < pre_lo ) { out.push_back( e ); continue; }  // edge: keep
-      int n_pre  = pre_hi  - pre_lo  + 1;
-      int n_post = post_hi - post_lo + 1;
-      double l1 = 0.0;
-      for ( int k = 0; k < K; k++ )
-        {
-          double mp = 0.0, mq = 0.0;
-          for ( int i = pre_lo;  i <= pre_hi;  i++ ) mp += P[k][i];
-          for ( int i = post_lo; i <= post_hi; i++ ) mq += P[k][i];
-          l1 += std::fabs( mq / n_post - mp / n_pre );
-        }
-      if ( 0.5 * l1 >= min_shift ) out.push_back( e );
-    }
-  return out;
-}
-
 struct hd_trans_t
 {
   std::vector<hd_event_t> events5;
@@ -531,6 +436,145 @@ struct hd_trans_t
   std::vector<bool>       is_stable3;
   std::vector<bool>       is_neither3;
 
+  static std::vector<hd_event_t> detect_boundary_events(
+      const std::vector<std::vector<double>> & P,
+      const std::vector<double> & tv,
+      const std::vector<bool> & is_stable,
+      const std::vector<int> & argmax,
+      const hd_params_t & par,
+      const double Fs )
+  {
+    const int N = argmax.size();
+    const int stable_smp = std::max( 1, (int)std::round( par.stable_min_sec * Fs ) );
+    const int shift_smp  = std::max( 1, (int)std::round( par.shift_win_sec  * Fs ) );
+    const int win_smp    = std::max( 1, (int)std::round( par.window_sec     * Fs ) );
+    std::vector<hd_event_t> candidates;
+
+    const double dir_margin_th = std::max( 0.0 , 0.5 * par.min_shift );
+
+    for ( int i = 1 ; i < N ; i++ )
+      {
+        const int pre_lo  = std::max( 0, i - shift_smp );
+        const int pre_hi  = i - 1;
+        const int post_lo = i;
+        const int post_hi = std::min( N - 1, i + shift_smp - 1 );
+        if ( pre_hi < pre_lo || post_hi < post_lo ) continue;
+
+        const std::vector<double> left  = weighted_support( P, pre_lo, pre_hi, true );
+        const std::vector<double> right = weighted_support( P, post_lo, post_hi, false );
+        const int left_st  = dominant_state( left );
+        const int right_st = dominant_state( right );
+
+        double l1 = 0.0;
+        for ( int k = 0 ; k < (int)P.size() ; k++ )
+          l1 += std::fabs( right[k] - left[k] );
+        const double shift = 0.5 * l1;
+
+        if ( shift < par.min_shift ) continue;
+
+        hd_event_t e;
+        e.idx = i;
+        e.shift = shift;
+        e.peak_tv = std::max( tv[ std::max( 0, i - 1 ) ] , tv[ std::min( N - 1, i ) ] );
+
+        const double left_margin  = dominant_margin( left, left_st );
+        const double right_margin = dominant_margin( right, right_st );
+
+        if ( left_st >= 0 && right_st >= 0 &&
+             left_st != right_st &&
+             left_margin >= dir_margin_th &&
+             right_margin >= dir_margin_th )
+          {
+            e.from_st = left_st;
+            e.to_st = right_st;
+            e.is_dir = true;
+          }
+
+        // Only directional X->Y boundaries count as transition events.
+        if ( ! e.is_dir ) continue;
+
+        if ( e.is_dir &&
+             i - stable_smp >= 0 &&
+             i + stable_smp - 1 < N )
+          {
+            bool left_ok = true, right_ok = true;
+            for ( int j = i - stable_smp ; j < i ; j++ )
+              if ( ! is_stable[j] || argmax[j] != e.from_st ) { left_ok = false; break; }
+            for ( int j = i ; j < i + stable_smp ; j++ )
+              if ( ! is_stable[j] || argmax[j] != e.to_st ) { right_ok = false; break; }
+            e.is_stable = left_ok && right_ok;
+          }
+
+        candidates.push_back( e );
+      }
+
+    if ( candidates.empty() ) return candidates;
+
+    // Require each accepted event to be a salient local maximum in left/right shift
+    // among nearby candidates with the same directional label.
+    std::vector<hd_event_t> peak_candidates;
+    for ( int ci = 0 ; ci < (int)candidates.size() ; ci++ )
+      {
+        const hd_event_t & cur = candidates[ci];
+        bool is_peak = true;
+        for ( int cj = 0 ; cj < (int)candidates.size() ; cj++ )
+          {
+            if ( ci == cj ) continue;
+            const hd_event_t & oth = candidates[cj];
+            if ( std::abs( oth.idx - cur.idx ) > shift_smp ) continue;
+            if ( oth.from_st != cur.from_st || oth.to_st != cur.to_st ) continue;
+            if ( oth.shift > cur.shift )
+              {
+                is_peak = false;
+                break;
+              }
+          }
+        if ( is_peak ) peak_candidates.push_back( cur );
+      }
+
+    if ( peak_candidates.empty() ) return peak_candidates;
+
+    const int min_gap = std::max( shift_smp , win_smp );
+    std::vector<hd_event_t> events;
+    hd_event_t best = peak_candidates[0];
+
+    for ( int ci = 1 ; ci < (int)peak_candidates.size() ; ci++ )
+      {
+        const hd_event_t & cur = peak_candidates[ci];
+        if ( cur.idx - best.idx < min_gap &&
+             cur.from_st == best.from_st &&
+             cur.to_st == best.to_st )
+          {
+            if ( cur.shift > best.shift ||
+                 ( cur.shift == best.shift && cur.peak_tv > best.peak_tv ) )
+              best = cur;
+          }
+        else
+          {
+            events.push_back( best );
+            best = cur;
+          }
+      }
+
+    events.push_back( best );
+    return events;
+  }
+
+  static void build_trans_mask(
+      const std::vector<hd_event_t> & events,
+      int N,
+      int window_samples,
+      std::vector<bool> & is_trans )
+  {
+    is_trans.assign( N, false );
+    for ( const auto & e : events )
+      {
+        int lo = std::max( 0,     e.idx - window_samples );
+        int hi = std::min( N - 1, e.idx + window_samples );
+        for ( int i = lo; i <= hi; i++ ) is_trans[i] = true;
+      }
+  }
+
   void detect( const hd_data_t & dat,
 	       const hd_derived_t & der,
 	       const hd_params_t & par )
@@ -538,45 +582,13 @@ struct hd_trans_t
     const int N          = dat.N;
     const int win_smp    = std::max( 1, (int)std::round( par.window_sec     * dat.Fs ) );
     const int stable_smp = std::max( 1, (int)std::round( par.stable_min_sec * dat.Fs ) );
-    const int shift_smp  = std::max( 1, (int)std::round( par.shift_win_sec  * dat.Fs ) );
-    const int min_gap    = win_smp;
-
-    auto merge_events = []( std::vector<hd_event_t> evts, int gap ) {
-      std::sort( evts.begin(), evts.end(),
-                 [](const hd_event_t & a, const hd_event_t & b){ return a.idx < b.idx; } );
-      std::vector<hd_event_t> merged;
-      for ( const auto & e : evts )
-        {
-          if ( !merged.empty() && e.idx - merged.back().idx < gap )
-            { if ( e.peak_tv > merged.back().peak_tv ) merged.back() = e; }
-          else
-            merged.push_back( e );
-        }
-      return merged;
-    };
 
     // 5-state detection
     {
-      std::vector<hd_event_t> hard5, motion5;
-      if ( par.method == HD_HARD   || par.method == HD_BOTH )
-        hard5   = detect_hard( der.argmax5, der.TV, N );
-      if ( par.method == HD_MOTION || par.method == HD_BOTH )
-        motion5 = detect_motion( der.TV, der.argmax5, N, par.motion_th, min_gap );
-
-      if ( par.method == HD_HARD )        events5 = hard5;
-      else if ( par.method == HD_MOTION ) events5 = motion5;
-      else
-        {
-          events5 = hard5;
-          events5.insert( events5.end(), motion5.begin(), motion5.end() );
-          events5 = merge_events( events5, min_gap );
-        }
-
-      events5 = filter_by_shift( events5, dat.p, N, shift_smp, par.min_shift );
-
-      build_trans_mask( events5, N, win_smp, is_trans5 );
       build_stable_mask( der.TV, der.C, N, stable_smp,
                          par.stable_tv_th, par.stable_conf_th, is_stable5 );
+      events5 = detect_boundary_events( dat.p, der.TV, is_stable5, der.argmax5, par, dat.Fs );
+      build_trans_mask( events5, N, win_smp, is_trans5 );
 
       // TRANS takes priority: clear stable for any peri-event sample
       for ( int i = 0; i < N; i++ )
@@ -585,40 +597,16 @@ struct hd_trans_t
       is_neither5.assign( N, false );
       for ( int i = 0; i < N; i++ )
         is_neither5[i] = !is_trans5[i] && !is_stable5[i];
-
-      for ( auto & e : events5 )
-        {
-          int pre  = e.idx - win_smp - 1;
-          int post = e.idx + win_smp + 1;
-          e.is_clean = ( pre  >= 0 && is_stable5[pre]  ) &&
-                       ( post <  N && is_stable5[post] );
-        }
     }
 
     if ( ! par.do_3state ) return;
 
     // 3-state detection (independent from 5-state)
     {
-      std::vector<hd_event_t> hard3, motion3;
-      if ( par.method == HD_HARD   || par.method == HD_BOTH )
-        hard3   = detect_hard( der.argmax3, der.TV3, N );
-      if ( par.method == HD_MOTION || par.method == HD_BOTH )
-        motion3 = detect_motion( der.TV3, der.argmax3, N, par.motion_th, min_gap );
-
-      if ( par.method == HD_HARD )        events3 = hard3;
-      else if ( par.method == HD_MOTION ) events3 = motion3;
-      else
-        {
-          events3 = hard3;
-          events3.insert( events3.end(), motion3.begin(), motion3.end() );
-          events3 = merge_events( events3, min_gap );
-        }
-
-      events3 = filter_by_shift( events3, dat.p3, N, shift_smp, par.min_shift );
-
-      build_trans_mask( events3, N, win_smp, is_trans3 );
       build_stable_mask( der.TV3, der.C3, N, stable_smp,
                          par.stable_tv_th, par.stable_conf_th, is_stable3 );
+      events3 = detect_boundary_events( dat.p3, der.TV3, is_stable3, der.argmax3, par, dat.Fs );
+      build_trans_mask( events3, N, win_smp, is_trans3 );
 
       // TRANS takes priority: clear stable for any peri-event sample
       for ( int i = 0; i < N; i++ )
@@ -627,14 +615,6 @@ struct hd_trans_t
       is_neither3.assign( N, false );
       for ( int i = 0; i < N; i++ )
         is_neither3[i] = !is_trans3[i] && !is_stable3[i];
-
-      for ( auto & e : events3 )
-        {
-          int pre  = e.idx - win_smp - 1;
-          int post = e.idx + win_smp + 1;
-          e.is_clean = ( pre  >= 0 && is_stable3[pre]  ) &&
-                       ( post <  N && is_stable3[post] );
-        }
     }
   }
 };
@@ -983,6 +963,8 @@ static void compute_trans_shape(
     const hd_params_t & par,
     double Fs,
     bool threestate,
+    bool require_dir,
+    bool require_stable,
     hd_trans_stats_t & tshape,
     hd_profile_t & profile )
 {
@@ -992,7 +974,10 @@ static void compute_trans_shape(
   // Filter events to those whose center sample falls within the region
   std::vector<const hd_event_t *> local_events;
   for ( const auto & e : all_events )
-    if ( e.idx >= 0 && e.idx < N && region_mask[e.idx] )
+    if ( e.idx >= 0 && e.idx < N &&
+         region_mask[e.idx] &&
+         ( !require_dir || e.is_dir ) &&
+         ( !require_stable || e.is_stable ) )
       local_events.push_back( &e );
 
   tshape.n_events = (int)local_events.size();
@@ -1384,51 +1369,38 @@ static void write_hdstats(
 	  const std::vector<hd_event_t> & evts = threestate ? tr.events3 : tr.events5;
 	  hd_trans_stats_t tshape;
 	  hd_profile_t     profile;
-	  compute_trans_shape( der, evts, context_mask, is_stable, dat, par, dat.Fs, threestate, tshape, profile );
+	  compute_trans_shape( der, evts, context_mask, is_stable, dat, par, dat.Fs, threestate,
+                               false, false, tshape, profile );
 	  if ( emit_top_level_transition_stats )
 	    {
 	      write_trans_stats( tshape );
-	      // Count clean events falling in this context
-	      int n_clean = 0;
+	      int n_stable = 0;
 	      for ( const auto & e : evts )
-		if ( e.idx >= 0 && e.idx < (int)context_mask.size() && context_mask[e.idx] && e.is_clean )
-		  ++n_clean;
+		if ( e.idx >= 0 && e.idx < (int)context_mask.size() && context_mask[e.idx] )
+                  {
+                    if ( e.is_stable ) ++n_stable;
+                  }
 	      int n_in_region = 0;
 	      for ( bool b : context_mask ) if (b) ++n_in_region;
 	      double dur_hr = (double)n_in_region / dat.Fs / 3600.0;
-	      writer.value( "N_CLEAN",   n_clean );
-	      writer.value( "DENS_CLEAN", dur_hr > 0 ? n_clean / dur_hr : 0.0 );
+	      writer.value( "N_CLEAN",   n_stable );
+	      writer.value( "DENS_CLEAN", dur_hr > 0 ? n_stable / dur_hr : 0.0 );
 	    }
 
 	  if ( ! emit_profiles_and_pairs ) return;
 
-	  // HDTRANS_PROFILE: all events
-	  if ( profile.valid )
-	    emit_profile_rows( profile );
+          // Generic OFFSET analyses use stable directional events only.
+          hd_trans_stats_t tshape_stable;
+          hd_profile_t     profile_stable;
+          compute_trans_shape( der, evts, context_mask, is_stable, dat, par, dat.Fs, threestate,
+                               true, true, tshape_stable, profile_stable );
+	  if ( profile_stable.valid )
+	    emit_profile_rows( profile_stable );
 
-	  // HDTRANS_PROFILE: clean events only (QUAL=CLEAN stratum)
-	  {
-	    std::vector<hd_event_t> clean_evts;
-	    for ( const auto & e : evts )
-	      if ( e.is_clean ) clean_evts.push_back( e );
-	    if ( !clean_evts.empty() )
-	      {
-		hd_trans_stats_t tshape_clean;
-		hd_profile_t     profile_clean;
-		compute_trans_shape( der, clean_evts, context_mask, is_stable, dat, par, dat.Fs, threestate, tshape_clean, profile_clean );
-		if ( profile_clean.valid )
-		  {
-		    writer.level( "CLEAN", "QUAL" );
-		    emit_profile_rows( profile_clean );
-		    writer.unlevel( "QUAL" );
-		  }
-	      }
-	  }
-
-	  // Transition-pair specific outputs for definite argmax changes only.
+	  // Pair-specific summaries use directional events; pair-specific OFFSET uses only stable directional events.
 	  std::set<std::pair<int,int>> trans_pairs;
 	  for ( const auto & e : evts )
-	    if ( e.from_st >= 0 && e.to_st >= 0 && e.from_st != e.to_st )
+	    if ( e.is_dir && e.from_st >= 0 && e.to_st >= 0 && e.from_st != e.to_st )
 	      trans_pairs.insert( std::make_pair( e.from_st , e.to_st ) );
 
 	  for ( const auto & tp : trans_pairs )
@@ -1441,16 +1413,22 @@ static void write_hdstats(
 	      if ( evts_pair.empty() ) continue;
 
 	      hd_trans_stats_t tshape_pair;
-	      hd_profile_t     profile_pair;
-	      compute_trans_shape( der, evts_pair, context_mask, is_stable, dat, par, dat.Fs, threestate, tshape_pair, profile_pair );
+              hd_profile_t     profile_pair_dir;
+	      compute_trans_shape( der, evts_pair, context_mask, is_stable, dat, par, dat.Fs, threestate,
+                                   true, false, tshape_pair, profile_pair_dir );
+
+              hd_trans_stats_t tshape_pair_stable;
+              hd_profile_t     profile_pair_stable;
+              compute_trans_shape( der, evts_pair, context_mask, is_stable, dat, par, dat.Fs, threestate,
+                                   true, true, tshape_pair_stable, profile_pair_stable );
 
 	      const std::string trans_label = hd_state_label( threestate , tp.first ) + "to"
 		+ hd_state_label( threestate , tp.second );
 
 	      writer.level( trans_label , "TRANS" );
 	      write_trans_stats( tshape_pair );
-	      if ( profile_pair.valid )
-		emit_profile_rows( profile_pair );
+	      if ( profile_pair_stable.valid )
+		emit_profile_rows( profile_pair_stable );
 	      writer.unlevel( "TRANS" );
 	    }
 	}
@@ -1541,8 +1519,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
   par.do_3state       = param.yesno( "3state" );
   par.window_sec      = param.has( "window"    ) ? param.requires_dbl( "window"     ) : 60.0;
   par.lag_sec         = param.has( "lag"       ) ? param.requires_dbl( "lag"        ) : 30.0;
-  par.stable_min_sec  = param.has( "stable-min") ? param.requires_dbl( "stable-min" ) : 60.0;
-  par.motion_th       = param.has( "motion-th" ) ? param.requires_dbl( "motion-th"  ) : 0.1;
+  par.stable_min_sec  = param.has( "stable-min") ? param.requires_dbl( "stable-min" ) : 30.0;
   par.conf_th         = param.has( "conf-th"   ) ? param.requires_dbl( "conf-th"    ) : 0.8;
   par.hd_smooth_sec   = param.has( "hd-smooth" ) ? param.requires_dbl( "hd-smooth" ) : 30.0;
   par.hd_onset_win_min = param.has( "hd-onset-win" ) ? param.requires_dbl( "hd-onset-win" ) : 10.0;
@@ -1554,19 +1531,18 @@ void proc_hdstats( edf_t & edf, param_t & param )
   par.verbose         = param.yesno( "verbose" );
   par.min_events_profile = param.has( "min-events" ) ? param.requires_int( "min-events" ) : 3;
   par.min_samples_region = param.has( "min-samples" ) ? param.requires_int( "min-samples" ) : 20;
-  par.emit_annot_label   = param.has( "emit-annots" ) ? param.value( "emit-annots" ) : "";
+  par.emit_annot_label   = param.has( "emit-annots" ) ? ( ( ! param.empty("emit-annots" ) ) ? param.value( "emit-annots" ) : "hd" ) : "" ;
   par.stable_tv_th    = param.has( "stable-tv"   ) ? param.requires_dbl( "stable-tv"   ) : 0.05;
   par.stable_conf_th  = param.has( "stable-conf" ) ? param.requires_dbl( "stable-conf" ) : 0.70;
   par.min_shift       = param.has( "min-shift"   ) ? param.requires_dbl( "min-shift"   ) : 0.10;
   par.shift_win_sec   = param.has( "shift-win"   ) ? param.requires_dbl( "shift-win"   ) : 30.0;
 
-  std::string method_str = param.has( "transition" ) ? param.value( "transition" ) : "motion";
-  if      ( method_str == "hard"   ) par.method = HD_HARD;
-  else if ( method_str == "motion" ) par.method = HD_MOTION;
-  else if ( method_str == "both"   ) par.method = HD_BOTH;
-  else Helper::halt( "HDSTATS: transition must be hard, motion, or both" );
+  if ( param.has( "transition" ) )
+    logger << "   'transition' option is ignored; using boundary-based transition detection\n";
+  if ( param.has( "motion-th" ) )
+    logger << "   'motion-th' option is ignored by boundary-based transition detection\n";
 
-  logger << "  HDSTATS: loading hypnodensity channels ["
+  logger << "  loading hypnodensity channels ["
 	 << par.ch[0] << ", " << par.ch[1] << ", " << par.ch[2] << ", "
 	 << par.ch[3] << ", " << par.ch[4] << "]\n";
 
@@ -1574,7 +1550,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
   hd_data_t dat;
   if ( ! dat.load( edf, par ) ) return;
 
-  logger << "  HDSTATS: N=" << dat.N << " samples at Fs=" << dat.Fs << " Hz ("
+  logger << "  N=" << dat.N << " samples at Fs=" << dat.Fs << " Hz ("
 	 << dat.N / dat.Fs / 3600.0 << " hours)\n";
 
   // Layer 2: derive per-sample signals
@@ -1585,9 +1561,9 @@ void proc_hdstats( edf_t & edf, param_t & param )
   hd_trans_t tr;
   tr.detect( dat, der, par );
 
-  logger << "  HDSTATS: detected " << tr.events5.size() << " transition events (5-state)\n";
+  logger << "  detected " << tr.events5.size() << " transition events (5-state)\n";
   if ( par.do_3state )
-    logger << "  HDSTATS: detected " << tr.events3.size() << " transition events (3-state)\n";
+    logger << "  detected " << tr.events3.size() << " transition events (3-state)\n";
 
   // Optionally emit transition events as annotations
   if ( ! par.emit_annot_label.empty() && ! dat.tp.empty() )
@@ -1610,13 +1586,14 @@ void proc_hdstats( edf_t & edf, param_t & param )
 
       // Emit 5-state transitions as point events; use instance label "from->to" or "." if states unknown
       annot_t * atr = edf.annotations->add( par.emit_annot_label );
+      const uint64_t half_sample_tp = sample_tp / 2;
       for ( const auto & e : tr.events5 )
 	{
 	  const std::string inst =
-	    ( e.from_st >= 0 && e.to_st >= 0 )
+	    ( e.is_dir && e.from_st >= 0 && e.to_st >= 0 )
 	    ? hd_state_label( false, e.from_st ) + "to" + hd_state_label( false, e.to_st )
 	    : ".";
-	  uint64_t tp0 = dat.tp[ e.idx ];
+	  uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
 	  atr->add( inst , interval_t( tp0 , tp0 ) , "." );
 	}
 
@@ -1637,10 +1614,10 @@ void proc_hdstats( edf_t & edf, param_t & param )
 	  for ( const auto & e : tr.events3 )
 	    {
 	      const std::string inst =
-		( e.from_st >= 0 && e.to_st >= 0 )
+		( e.is_dir && e.from_st >= 0 && e.to_st >= 0 )
 		? hd_state_label( true, e.from_st ) + "to" + hd_state_label( true, e.to_st )
 		: ".";
-	      uint64_t tp0 = dat.tp[ e.idx ];
+	      uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
 	      atr3->add( inst , interval_t( tp0 , tp0 ) , "." );
 	    }
 
@@ -1654,7 +1631,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
 	  emit_runs( atr3_neither , tr.is_neither3 , "neither" );
 	}
 
-      logger << "  HDSTATS: emitting transition annotations under '" << par.emit_annot_label << "'\n";
+      logger << "  emitting transition annotations under '" << par.emit_annot_label << "'\n";
     }
 
   hd_hypno_metrics_t hm;
@@ -1712,11 +1689,11 @@ void proc_hdstats( edf_t & edf, param_t & param )
   annot_t * annot = (*edf.annotations)( par.annot_name );
   if ( annot == NULL )
     {
-      logger << "  HDSTATS: annotation '" << par.annot_name << "' not found; skipping stratification\n";
+      logger << "  annotation '" << par.annot_name << "' not found; skipping stratification\n";
       return;
     }
   if ( annot->empty() )
-    Helper::halt( "HDSTATS: annotation '" + par.annot_name + "' is empty" );
+    Helper::halt( " annotation '" + par.annot_name + "' is empty" );
 
   // Collect all unique level IDs in this annotation
   std::set<std::string> levels;

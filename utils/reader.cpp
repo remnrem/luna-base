@@ -1243,8 +1243,134 @@ void get_matching_strata( bool show_table)
 
   if ( ! match_found ) 
     {
-      std::cerr << "No matching strata found.\n"; 
-      std::exit(0);
+      std::string requested_cmd = ".";
+      std::stringstream reqss;
+      bool first = true;
+
+      std::set<request_t>::const_iterator ri = rvars.begin();
+      while ( ri != rvars.end() )
+        {
+          if ( ri->fac.size() > 0 && ri->fac[0] == '_' )
+            {
+              requested_cmd = ri->fac;
+              break;
+            }
+          ++ri;
+        }
+
+      if ( requested_cmd == "." )
+        {
+          ri = cvars.begin();
+          while ( ri != cvars.end() )
+            {
+              if ( ri->fac.size() > 0 && ri->fac[0] == '_' )
+                {
+                  requested_cmd = ri->fac;
+                  break;
+                }
+              ++ri;
+            }
+        }
+
+      if ( requested_cmd != "." )
+        {
+          reqss << "[" << requested_cmd.substr(1) << "]";
+          first = false;
+        }
+
+      ri = rvars.begin();
+      while ( ri != rvars.end() )
+        {
+          if ( ri->fac == "E" || ri->fac == "T" ) { ++ri; continue; }
+          if ( ri->fac.size() > 0 && ri->fac[0] == '_' ) { ++ri; continue; }
+          if ( ! first ) reqss << " ";
+          reqss << ri->fac;
+          first = false;
+          ++ri;
+        }
+
+      ri = cvars.begin();
+      while ( ri != cvars.end() )
+        {
+          if ( ri->fac == "E" || ri->fac == "T" ) { ++ri; continue; }
+          if ( ri->fac.size() > 0 && ri->fac[0] == '_' ) { ++ri; continue; }
+          if ( ! first ) reqss << " ";
+          reqss << ri->fac;
+          first = false;
+          ++ri;
+        }
+
+      std::stringstream availss;
+      bool first_avail = true;
+      std::map<fstrata_t,int>::const_iterator fm = fstrata.begin();
+      while ( fm != fstrata.end() )
+        {
+          bool has_requested_cmd = requested_cmd == ".";
+          std::stringstream tblss;
+          bool first_tbl = true;
+
+          std::set<factor_t>::const_iterator ff = fm->first.factors.begin();
+          while ( ff != fm->first.factors.end() )
+            {
+              const std::string & fac = ff->factor_name;
+
+              if ( fac.size() > 0 && fac[0] == '_' )
+                {
+                  if ( requested_cmd != "." && fac == requested_cmd ) has_requested_cmd = true;
+                  ++ff;
+                  continue;
+                }
+
+              if ( ! first_tbl ) tblss << ",";
+              tblss << fac;
+              first_tbl = false;
+              ++ff;
+            }
+
+          if ( ! has_requested_cmd ) { ++fm; continue; }
+
+          const std::string label = tblss.str().size() == 0 ? "." : tblss.str();
+          if ( ! first_avail ) availss << " | ";
+          availss << label;
+          first_avail = false;
+          ++fm;
+        }
+
+      std::string msg = "no matching strata found for request "
+        + std::string( reqss.str().size() ? reqss.str() : "[baseline]" );
+
+      if ( availss.str().size() )
+        msg += "; available strata: " + availss.str();
+
+      Helper::halt( msg );
+    }
+
+  std::set<request_t>::const_iterator ri = rvars.begin();
+  while ( ri != rvars.end() )
+    {
+      if ( ri->fac == "E" || ri->fac == "T" ) { ++ri; continue; }
+      if ( ri->fac.size() > 0 && ri->fac[0] == '_' ) { ++ri; continue; }
+      if ( writer.factors_idmap.find( ri->fac ) == writer.factors_idmap.end() ) { ++ri; continue; }
+
+      const factor_t & factor = writer.factors[ writer.factors_idmap[ ri->fac ] ];
+      if ( fmatch.factors.find( factor ) == fmatch.factors.end() )
+        Helper::halt( "requested row factor " + ri->fac + " is not present in the matched strata" );
+
+      ++ri;
+    }
+
+  ri = cvars.begin();
+  while ( ri != cvars.end() )
+    {
+      if ( ri->fac == "E" || ri->fac == "T" ) { ++ri; continue; }
+      if ( ri->fac.size() > 0 && ri->fac[0] == '_' ) { ++ri; continue; }
+      if ( writer.factors_idmap.find( ri->fac ) == writer.factors_idmap.end() ) { ++ri; continue; }
+
+      const factor_t & factor = writer.factors[ writer.factors_idmap[ ri->fac ] ];
+      if ( fmatch.factors.find( factor ) == fmatch.factors.end() )
+        Helper::halt( "requested column factor " + ri->fac + " is not present in the matched strata" );
+
+      ++ri;
     }
 
 
@@ -1636,6 +1762,38 @@ void display()
 
   // nothing to display?
   if ( o_ind.size() == 0 ) return;
+
+  std::vector<std::string> requested_row_factors;
+  std::set<std::string>::const_iterator rf = rfacs.begin();
+  while ( rf != rfacs.end() )
+    {
+      if ( (*rf).size() > 0 && (*rf)[0] != '_' )
+        requested_row_factors.push_back( *rf );
+      ++rf;
+    }
+
+  if ( requested_row_factors.size() > 0 )
+    {
+      if ( o_row.size() == 0 )
+        Helper::halt( "requested row factor(s) not present in extracted rows" );
+
+      for (int i=0; i<(int)requested_row_factors.size(); i++)
+        {
+          bool found = false;
+          std::map<std::string,std::map<std::string,std::string> >::const_iterator rr = row2fac2level.begin();
+          while ( rr != row2fac2level.end() )
+            {
+              if ( rr->second.find( requested_row_factors[i] ) != rr->second.end() )
+                {
+                  found = true;
+                  break;
+                }
+              ++rr;
+            }
+          if ( ! found )
+            Helper::halt( "requested row factor " + requested_row_factors[i] + " not present in extracted rows" );
+        }
+    }
   
 
   //
@@ -1826,16 +1984,17 @@ void display()
 	      //
 	      
 	      std::map<std::string,std::string> & fac2lvl = rr->second;
-	      
-	      std::map<std::string,std::string>::iterator ff = fac2lvl.begin();
-	      while ( ff != fac2lvl.end() )
-		{
-		  if ( ff->first[0] != '_' ) 
-		    {
-		      std::cout << "\t" << ff->second; // display level-value for this row-strata
-		    }
-		  ++ff;
-		}
+
+              std::set<std::string>::const_iterator ff = rfacs.begin();
+              while ( ff != rfacs.end() )
+                {
+                  if ( (*ff)[0] != '_' )
+                    {
+                      std::map<std::string,std::string>::iterator ll = fac2lvl.find( *ff );
+                      std::cout << "\t" << ( ll == fac2lvl.end() ? "NA" : ll->second );
+                    }
+                  ++ff;
+                }
 	      
 	      //
 	      // variables, w/ or w/out col-stratifiers

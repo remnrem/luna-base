@@ -262,10 +262,11 @@ struct caches_t {
   void load( const std::string & f );
 
   // from destra output
-  void import( const std::string & f , const std::string & cache , 
-	       const std::string & id , 
-	       const std::set<std::string> & factors , 
-	       const std::set<std::string> * variables );
+  void import( const std::string & f , const std::string & cache ,
+	       const std::string & id ,
+	       const std::set<std::string> & factors ,
+	       const std::set<std::string> * variables ,
+	       const std::string & cmd_prefix = "" );
   
   bool has_int( const std::string & n ) const { return cache_int.find(n) != cache_int.end(); }
   bool has_str( const std::string & n ) const { return cache_str.find(n) != cache_str.end(); }

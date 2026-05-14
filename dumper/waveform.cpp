@@ -21,6 +21,7 @@
 
 #include "dumper/waveform.h"
 
+#include "annot/annotate.h"
 #include "luna.h"
 #include "lunapi/waveforms.h"
 
@@ -48,6 +49,13 @@ std::vector<std::string> * g_recursive_lwf_files = NULL;
 
 const char * const LWF_MAGIC = "LWF1";
 const int LWF_VERSION = 2;
+
+std::string get_lwf_dir_param( param_t & param )
+{
+  if ( param.has( "lwf-dir" ) ) return param.value( "lwf-dir" );
+  if ( param.has( "dir" ) ) return param.value( "dir" );
+  return param.requires( "lwf-dir" );
+}
 
 struct channel_info_t {
   int slot;
@@ -326,13 +334,13 @@ std::vector<std::string> list_lwf_files_recursive( const std::string & dir )
 std::vector<std::string> get_summary_dirs( param_t & param )
 {
   std::vector<std::string> dirs;
-  const std::vector<std::string> raw = Helper::parse( param.requires( "dir" ) , "," );
+  const std::vector<std::string> raw = Helper::parse( get_lwf_dir_param( param ) , "," );
   for (int i=0; i<raw.size(); i++)
     {
       const std::string dir = norm_dir( Helper::trim( raw[i] ) );
       if ( dir != "" ) dirs.push_back( dir );
     }
-  if ( dirs.size() == 0 ) Helper::halt( "no valid dir= specified for --waveforms" );
+  if ( dirs.size() == 0 ) Helper::halt( "no valid lwf-dir= specified for --waveforms" );
   return dirs;
 }
 
@@ -388,6 +396,12 @@ std::string get_require_mode( param_t & param )
 }
 
 
+bool get_match_annot_channel( param_t & param )
+{
+  return param.yesno( "annot-ch-match" , true , true );
+}
+
+
 std::vector<channel_info_t> get_channels( edf_t & edf , param_t & param )
 {
   signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) , true );
@@ -419,19 +433,41 @@ std::vector<std::string> get_annots( edf_t & edf , param_t & param )
   const std::vector<std::string> requested = param.strvector( "annot" );
   if ( requested.size() == 0 ) Helper::halt( "annot= is required for WAVEFORM" );
 
+  std::set<std::string> expanded =
+    annotate_t::root_match( param.strset_xsigs( "annot" ) , edf.annotations->names() );
+
   std::vector<std::string> annots;
   std::set<std::string> seen;
   for (int a=0; a<requested.size(); a++)
     {
-      const std::string annot = requested[a];
-      if ( seen.find( annot ) != seen.end() ) continue;
-      if ( edf.annotations->find( annot ) == NULL )
+      const std::string pattern = requested[a];
+
+      if ( pattern.size() > 0 && pattern[ pattern.size() - 1 ] == '*' )
         {
-          logger << "  could not find annotation " << annot << " - skipping\n";
+          const std::string root = pattern.substr( 0 , pattern.size() - 1 );
+          bool matched = false;
+          std::set<std::string>::const_iterator ee = expanded.begin();
+          while ( ee != expanded.end() )
+            {
+              if ( ee->size() >= root.size() && ee->substr( 0 , root.size() ) == root )
+                {
+                  matched = true;
+                  if ( seen.insert( *ee ).second ) annots.push_back( *ee );
+                }
+              ++ee;
+            }
+          if ( ! matched )
+            logger << "  could not find annotation " << pattern << " - skipping\n";
           continue;
         }
-      seen.insert( annot );
-      annots.push_back( annot );
+
+      if ( expanded.find( pattern ) == expanded.end() || edf.annotations->find( pattern ) == NULL )
+        {
+          logger << "  could not find annotation " << pattern << " - skipping\n";
+          continue;
+        }
+
+      if ( seen.insert( pattern ).second ) annots.push_back( pattern );
     }
 
   if ( annots.size() == 0 )
@@ -771,7 +807,7 @@ file_summary_t read_summary( const std::string & file )
 void writer_output_for_file( const std::string & cmd , const file_summary_t & s )
 {
   writer.level( s.file , "FILE" );
-  writer.value( "ID" , s.id );
+  writer.value( "EDF_ID" , s.id );
   writer.value( "EDF" , s.edf );
   writer.value( "TAG" , s.tag == "" ? "." : s.tag );
   writer.value( "ALIGN" , s.align );
@@ -802,10 +838,11 @@ void writer_output_for_file( const std::string & cmd , const file_summary_t & s 
 
 void dsptools::waveform( edf_t & edf , param_t & param )
 {
-  const std::string dir = norm_dir( param.requires( "dir" ) );
+  const std::string dir = norm_dir( get_lwf_dir_param( param ) );
   const std::string tag = param.has( "tag" ) ? param.value( "tag" ) : "";
   const std::string align = get_align( param );
   const std::string require = get_require_mode( param );
+  const bool match_annot_channel = get_match_annot_channel( param );
   const double w_left = get_wave_left( param );
   const double w_right = get_wave_right( param );
 
@@ -818,7 +855,7 @@ void dsptools::waveform( edf_t & edf , param_t & param )
   const waveform_feature_options_t feature_options = get_feature_options( param , &features_enabled );
 
   waveform_extract_result_t extracted =
-    waveform_core::extract_annotation_window_waveforms( edf , annots , channel_labels , w_left , w_right , align , require );
+    waveform_core::extract_annotation_window_waveforms( edf , annots , channel_labels , w_left , w_right , align , require , match_annot_channel );
 
   if ( extracted.total_events == 0 )
     Helper::halt( "no annotation events available for WAVEFORM" );
@@ -827,6 +864,14 @@ void dsptools::waveform( edf_t & edf , param_t & param )
 
   if ( features_enabled )
     waveform_core::compute_features( &extracted , feature_options );
+
+  std::map<std::string,int>::const_iterator dd = extracted.dropped.begin();
+  while ( dd != extracted.dropped.end() )
+    {
+      if ( dd->second > 0 )
+        logger << "  dropped " << dd->second << " event(s) due to " << dd->first << "\n";
+      ++dd;
+    }
 
   for (int e=0; e<extracted.events.size(); e++)
     {
@@ -850,13 +895,6 @@ void dsptools::waveform( edf_t & edf , param_t & param )
   const std::string outfile = next_output_file( dir , edf.id , tag );
 
   logger << "  writing " << extracted.events.size() << " waveform(s) to " << outfile << "\n";
-  std::map<std::string,int>::const_iterator dd = extracted.dropped.begin();
-  while ( dd != extracted.dropped.end() )
-    {
-      if ( dd->second > 0 )
-        logger << "  dropped " << dd->second << " event(s) due to " << dd->first << "\n";
-      ++dd;
-    }
 
   std::ofstream O( outfile.c_str() , std::ios::binary | std::ios::out );
   if ( ! O ) Helper::halt( "could not open output file " + outfile );

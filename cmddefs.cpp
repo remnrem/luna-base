@@ -2064,6 +2064,7 @@ void cmddefs_t::init()
   add_param( "CACHE" , "import" , "out.txt" , "Import cache values from long-format output" );
   add_param( "CACHE" , "factors" , "CH,B" , "When importing, specify which factors are present" );
   add_param( "CACHE" , "v" , "PSD" , "When importing, limit to these variables" );
+  add_param( "CACHE" , "cmd" , "PSD" , "When importing, prefix variable names as cmd:var (e.g. for PSC)" );
   add_param( "CACHE" , "dump" , "" , "Dump a cache to stdout" );
   add_param( "CACHE" , "int" , "C1" , "Dump this integer cache" );
   add_param( "CACHE" , "num" , "C1" , "Dump this numeric cache" );
@@ -2951,6 +2952,7 @@ void cmddefs_t::init()
 
   add_var( "ALIGN-SCAN" , "" , "ANN_AT_EPOCH"          , "Annotation starts coinciding with an epoch start" );
   add_var( "ALIGN-SCAN" , "" , "ANN_OFF_EPOCH"         , "Annotation starts falling between epoch starts" );
+  add_var( "ALIGN-SCAN" , "" , "ANN_OFF_EPOCH_EDF_TAIL", "Subset of ANN_OFF_EPOCH that start on the next theoretical epoch boundary after the last full epoch and extend beyond the EDF end" );
   add_var( "ALIGN-SCAN" , "" , "ANN_AT_EPOCH_PCT"      , "Percentage of annotation starts on an epoch boundary" );
   add_var( "ALIGN-SCAN" , "" , "ALIGN_OFFSET"          , "Offset EPOCH align would use (seconds from EDF start)" );
   add_var( "ALIGN-SCAN" , "" , "ALIGN_WOULD_FIX_DRIFT" , "1 = running EPOCH align would resolve all annotation drift" );
@@ -2967,6 +2969,7 @@ void cmddefs_t::init()
   add_var( "ALIGN-SCAN" , "" , "WARN_REC_NOT_DIV"   , "1 = epoch size is not an exact multiple of record size" );
   add_var( "ALIGN-SCAN" , "" , "WARN_EPOCH_OFF_REC" , "1 = some epoch starts are not on record boundaries" );
   add_var( "ALIGN-SCAN" , "" , "WARN_STAGE_DRIFT"   , "1 = some annotation starts fall between epoch boundaries" );
+  add_var( "ALIGN-SCAN" , "" , "WARN_STAGE_DRIFT_EDF_TAIL" , "1 = at least one off-epoch annotation is an end-of-EDF tail case, where the final annotation extends beyond the EDF end because no last full epoch exists" );
   add_var( "ALIGN-SCAN" , "" , "WARN_MULTI_STAGE"   , "1 = some epochs span >1 stage label" );
   add_var( "ALIGN-SCAN" , "" , "WARN_GAP_ANNS"      , "1 = some annotations fall in or span EDF+D gaps" );
 
@@ -2988,6 +2991,7 @@ void cmddefs_t::init()
   add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "START_HMS" , "Annotation start (hh:mm:ss)" );
   add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "STOP_HMS"  , "Annotation stop (hh:mm:ss)" );
   add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "AT_EPOCH"  , "1 = annotation start coincides with an epoch start" );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "EDF_TAIL_TRUNC" , "1 = annotation starts on the next theoretical epoch boundary after the last full epoch, but extends beyond the EDF end" );
   add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "EPOCH"     , "Epoch number (1-based) if AT_EPOCH=1, else -1" );
   add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "OFF_SEC"   , "Offset (seconds) from nearest epoch boundary" );
   add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "REC_START" , "First EDF record overlapping this annotation" );
@@ -4384,16 +4388,16 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "N3"         , "PP_N3"  , "Channel name for N3 posterior" );
   add_param( "HDSTATS" , "R"          , "PP_R"   , "Channel name for REM posterior" );
   add_param( "HDSTATS" , "3state"     , ""       , "Also compute 3-state (W/NREM/R) summaries" );
-  add_param( "HDSTATS" , "transition" , "motion" , "Transition detection method: hard, motion, or both" );
-  add_param( "HDSTATS" , "motion-th"  , "0.1"    , "TV threshold for motion-based transition detection" );
+  add_param( "HDSTATS" , "transition" , "boundary" , "Legacy option retained for compatibility; HDSTATS now uses boundary-based left/right support to detect transitions" );
+  add_param( "HDSTATS" , "motion-th"  , "0.1"    , "Legacy option retained for compatibility; ignored by boundary-based transition detection" );
   add_param( "HDSTATS" , "window"     , "60"     , "Transition window half-width (seconds)" );
   add_param( "HDSTATS" , "lag"        , "30"     , "Lag for longer-lag TV metric (seconds)" );
-  add_param( "HDSTATS" , "stable-min" , "60"     , "Minimum duration (seconds) for a TV-low, confidence-high run to qualify as stable-core" );
+  add_param( "HDSTATS" , "stable-min" , "30"     , "Minimum contiguous duration (seconds) required on each flank for a directional transition to qualify as stable-to-stable" );
   add_param( "HDSTATS" , "stable-tv"  , "0.05"   , "Per-sample TV must be below this threshold to qualify as stable-core" );
   add_param( "HDSTATS" , "stable-conf", "0.70"   , "Per-sample confidence must exceed this threshold to qualify as stable-core" );
   add_param( "HDSTATS" , "conf-th"    , "0.8"    , "Confidence threshold for FRAC_C_LT metric" );
-  add_param( "HDSTATS" , "min-shift"  , "0.10"   , "Minimum pre/post posterior L1 shift required to retain a detected transition event" );
-  add_param( "HDSTATS" , "shift-win"  , "30"     , "Pre/post window (seconds) used to compute min-shift filtering" );
+  add_param( "HDSTATS" , "min-shift"  , "0.10"   , "Minimum left/right posterior L1 shift required to retain a detected boundary transition event" );
+  add_param( "HDSTATS" , "shift-win"  , "30"     , "Left/right support window (seconds) used to compute boundary-transition support and min-shift filtering" );
   add_param( "HDSTATS" , "hd-metrics" , "T"      , "Emit HD_ hypnodensity analogs of selected HYPNO metrics" );
   add_param( "HDSTATS" , "hd-smooth"  , "30"     , "Smoothing window (seconds) for soft sleep/REM trajectories" );
   add_param( "HDSTATS" , "hd-onset-win" , "10"   , "Forward integrated-area window (minutes) for sustained sleep/REM entry detection" );
@@ -6269,7 +6273,9 @@ void cmddefs_t::init()
             "interval is the original annotation span, optionally expanded left and/or\n"
             "right by a fixed number of seconds. Time alignment is stored as metadata\n"
             "using the annotation start, midpoint or stop; the raw samples remain in\n"
-            "their original time units.\n"
+            "their original time units. By default, channel-specific annotations are\n"
+            "only considered when the annotation channel matches one of the requested\n"
+            "signal labels; channel-agnostic annotations ('.') are still included.\n"
             "\n"
             "This command is intended to sit naturally in the normal Luna pipeline,\n"
             "for example after MASK/RE, filtering or annotation remapping. One call\n"
@@ -6277,9 +6283,11 @@ void cmddefs_t::init()
             "multiple files for the same EDF into a shared folder." );
   add_param( "WAVEFORMS" , "sig" , "C3,C4" , "One or more signals to dump" );
   add_param( "WAVEFORMS" , "annot" , "SPINDLE,SO" , "One or more annotation classes defining the waveform events" );
-  add_param( "WAVEFORMS" , "dir" , "waves/" , "Output folder for .lwf files" );
+  add_param( "WAVEFORMS" , "lwf-dir" , "waves/" , "Output folder for .lwf files" );
+  add_param( "WAVEFORMS" , "dir" , "waves/" , "Deprecated alias for lwf-dir" );
   add_param( "WAVEFORMS" , "tag" , "spindle-v1" , "User-defined tag stored in the file and used in auto-generated filenames" );
   add_param( "WAVEFORMS" , "align" , "mid" , "Anchor to store for each waveform: start, mid or stop" );
+  add_param( "WAVEFORMS" , "annot-ch-match" , "T" , "Match channel-specific annotations to the requested sig= channels; '.' or empty annotation channels still match" );
   add_param( "WAVEFORMS" , "require" , "full" , "Retention rule after MASK/RE: full requires the entire waveform interval be retained; any allows partial overlap" );
   add_param( "WAVEFORMS" , "w" , "0.5" , "Symmetric flank in seconds to add on both sides of each annotation" );
   add_param( "WAVEFORMS" , "w-left" , "0.25" , "Additional seconds to extend left of the annotation" );
@@ -6289,7 +6297,7 @@ void cmddefs_t::init()
   add_param( "WAVEFORMS" , "basic-stats" , "" , "Also store basic waveform metrics (duration, range, mean, SD) for each stored channel waveform" );
 
   add_table( "WAVEFORMS" , "FILE" , "Per-file waveform dump summary" );
-  add_var( "WAVEFORMS" , "FILE" , "ID" , "EDF/individual ID" );
+  add_var( "WAVEFORMS" , "FILE" , "EDF_ID" , "EDF/individual ID stored in the shard" );
   add_var( "WAVEFORMS" , "FILE" , "EDF" , "Source EDF filename" );
   add_var( "WAVEFORMS" , "FILE" , "TAG" , "User-defined tag stored in the .lwf file" );
   add_var( "WAVEFORMS" , "FILE" , "ALIGN" , "Stored anchor mode" );
@@ -7480,14 +7488,15 @@ void cmddefs_t::init()
             "and channel-level metadata without requiring a sample list or EDF input. "
             "It is intended as the standalone inspection utility for waveform datasets, "
             "similar in spirit to project-level helper modes such as --build.\n\n"
-            "Use dir= to point at one folder, or a comma-delimited list of folders, "
+            "Use lwf-dir= to point at one folder, or a comma-delimited list of folders, "
             "containing waveform shards previously written by WAVEFORMS. Add recur "
             "to scan those folder(s) recursively." );
-  add_param( "--waveforms" , "dir" , "dir=waves/,waves2/" , "Folder or comma-delimited list of folders containing .lwf files" );
+  add_param( "--waveforms" , "lwf-dir" , "lwf-dir=waves/,waves2/" , "Folder or comma-delimited list of folders containing .lwf files" );
+  add_param( "--waveforms" , "dir" , "dir=waves/,waves2/" , "Deprecated alias for lwf-dir" );
   add_param( "--waveforms" , "recur" , "" , "Recursively scan the specified folder(s) for .lwf files" );
 
   add_table( "--waveforms" , "FILE" , "Per-file waveform shard summary" );
-  add_var( "--waveforms" , "FILE" , "ID" , "EDF/individual ID" );
+  add_var( "--waveforms" , "FILE" , "EDF_ID" , "EDF/individual ID stored in the shard" );
   add_var( "--waveforms" , "FILE" , "EDF" , "Source EDF filename stored in the shard" );
   add_var( "--waveforms" , "FILE" , "TAG" , "User-defined tag stored in the shard" );
   add_var( "--waveforms" , "FILE" , "ALIGN" , "Stored anchor mode" );

@@ -45,6 +45,59 @@
 extern logger_t logger;
 extern writer_t writer;
 
+namespace {
+
+const char * pops_hypno_soft_fail_msg = "POPS resolution=5: no usable posterior rows remain";
+
+int count_flagged_rows( const std::vector<bool> & flagged )
+{
+  int n = 0;
+  for (int e = 0; e < (int)flagged.size(); e++)
+    if ( flagged[e] ) ++n;
+  return n;
+}
+
+void emit_hypno_soft_fail( const std::string & msg , const int ne_flagged )
+{
+  logger << "  " << msg << "\n";
+  writer.value( "NE_OKAY" , 0 );
+  writer.value( "NE_FLAGGED" , ne_flagged );
+  writer.value( "OK" , 0 );
+  writer.value( "MSG" , msg );
+}
+
+bool pops_has_usable_epochs( const int ne )
+{
+  int min_epochs = 2;
+
+  for (int i = 0; i < (int)pops_t::specs.specs.size(); i++)
+    {
+      const pops_spec_t & spec = pops_t::specs.specs[i];
+
+      if ( spec.ftr == POPS_SMOOTH || spec.ftr == POPS_DERIV )
+        {
+          const int hw = spec.narg( "half-window" );
+          if ( hw > 0 )
+            min_epochs = std::max( min_epochs , 1 + 2 * hw );
+        }
+      else if ( spec.ftr == POPS_RESCALE )
+        {
+          const int nsegs = spec.has( "n" ) ? spec.narg( "n" ) : 50;
+          if ( nsegs > 0 )
+            min_epochs = std::max( min_epochs , nsegs );
+        }
+    }
+
+  return ne >= 2 * min_epochs;
+}
+
+double safe_conf_mean( const double sum_pmax , const int n )
+{
+  return n > 0 ? sum_pmax / (double)n : 0.0;
+}
+
+}
+
 
 void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * base_indiv )
 {
@@ -135,6 +188,7 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
   const int total_samples = edf.header.nr * n_spr;
 
   const uint64_t stride_tp = (uint64_t)( stride_sec * globals::tp_1sec );
+  const uint64_t epoch30_tp = (uint64_t)( 30.0 * globals::tp_1sec );
 
 
   //
@@ -180,11 +234,14 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
           pops_coda_t::options_t coda_opt;
           coda_opt.three_state = false;
 
-          if ( param.has( "coda-context" ) )
-            coda_opt.context_epochs =
-              pops_coda_t::scale_context_epochs( param.requires_int( "coda-context" ) ,
-                                                 stride_sec );
           coda_opt.row_duration_sec = stride_sec;
+          {
+            const int context_30s_epochs =
+              param.has( "coda-context" ) ? param.requires_int( "coda-context" ) : 20;
+            coda_opt.context_epochs =
+              pops_coda_t::scale_context_epochs( context_30s_epochs ,
+                                                 stride_sec );
+          }
           if ( param.has( "coda-lambda" ) )
             coda_opt.lambda = param.requires_dbl( "coda-lambda" );
           if ( param.has( "coda-no-future" ) )
@@ -263,6 +320,20 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 
   pops_indiv_t indiv( &edf );
 
+  const bool have_base_staging_mask =
+    base_indiv != NULL &&
+    base_indiv->ne_total > 0 &&
+    base_indiv->Sorig.size() == base_indiv->ne_total;
+
+  std::vector<bool> base_epoch_valid;
+  if ( have_base_staging_mask )
+    {
+      base_epoch_valid.assign( base_indiv->ne_total , false );
+      for (int i = 0; i < (int)base_indiv->E.size(); i++)
+        if ( base_indiv->E[i] >= 0 && base_indiv->E[i] < base_indiv->ne_total )
+          base_epoch_valid[ base_indiv->E[i] ] = true;
+    }
+
 
   //
   // Per-stride loop
@@ -272,6 +343,8 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 	 << " strides, stride=" << stride_sec << "s"
 	 << ", output sample rate=1/" << (int)stride_sec << "Hz"
 	 << ", " << n_spr << " sample(s) per EDF record\n";
+
+  int n_candidate_rows = 0;
 
   if ( equivn )
     {
@@ -294,6 +367,74 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 
       if ( edf.timeline.num_epochs() == 0 )
 	continue;
+
+      // Recreate a stride-specific staging scaffold.
+      // In hypnodensity prediction mode, shifted windows should only become
+      // missing if they overlap an epoch that was already missing on the
+      // original offset=0 POPS pass.
+      if ( have_base_staging_mask )
+        {
+          indiv.ne = indiv.ne_total = edf.timeline.first_epoch();
+          indiv.E.resize( indiv.ne );
+          indiv.S.resize( indiv.ne );
+          indiv.Sorig.resize( indiv.ne );
+
+          int n_stride_scored = 0;
+          for (int e = 0; e < indiv.ne; e++)
+            {
+              indiv.E[e] = e;
+
+              interval_t interval = edf.timeline.epoch( e );
+              const int first_orig = (int)( interval.start / epoch30_tp );
+              const int last_orig =
+                interval.stop > 0 ? (int)( ( interval.stop - 1 ) / epoch30_tp ) : first_orig;
+
+              bool valid = first_orig >= 0 && last_orig < base_indiv->ne_total;
+              if ( valid )
+                for (int oe = first_orig; oe <= last_orig; oe++)
+                  if ( ! base_epoch_valid[oe] )
+                    {
+                      valid = false;
+                      break;
+                    }
+
+              if ( ! valid )
+                {
+                  indiv.S[e] = POPS_UNKNOWN;
+                  indiv.Sorig[e] = POPS_UNKNOWN;
+                  continue;
+                }
+
+              const uint64_t center_tp = interval.start + ( interval.stop - interval.start ) / 2;
+              const int owner_orig = (int)( center_tp / epoch30_tp );
+              if ( owner_orig < 0 || owner_orig >= base_indiv->ne_total ||
+                   ! base_epoch_valid[ owner_orig ] ||
+                   base_indiv->Sorig[ owner_orig ] == POPS_UNKNOWN )
+                {
+                  indiv.S[e] = POPS_UNKNOWN;
+                  indiv.Sorig[e] = POPS_UNKNOWN;
+                  continue;
+                }
+
+              indiv.S[e] = base_indiv->Sorig[ owner_orig ];
+              indiv.Sorig[e] = base_indiv->Sorig[ owner_orig ];
+              ++n_stride_scored;
+            }
+
+          indiv.has_staging = n_stride_scored >= 20;
+        }
+      else
+        {
+          param_t stride_param = param;
+          stride_param.add( "suppress-stage-conflicts" );
+          indiv.staging( edf , stride_param );
+        }
+      const bool stride_has_staging = indiv.has_staging;
+      const int stride_ne = indiv.ne;
+      const int stride_ne_total = indiv.ne_total;
+      const std::vector<int> stride_S = indiv.S;
+      const std::vector<int> stride_Sorig = indiv.Sorig;
+      const std::vector<int> stride_E = indiv.E;
 
 
       //
@@ -348,15 +489,20 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 	  // Level 1: extract per-epoch features
 	  //
 
+	  indiv.has_staging = stride_has_staging;
+	  indiv.ne = stride_ne;
+	  indiv.ne_total = stride_ne_total;
+	  indiv.S = stride_S;
+	  indiv.Sorig = stride_Sorig;
+	  indiv.E = stride_E;
+
 	  indiv.level1( edf );
 
-	  // Populate E, S, Sorig (not done by level1 -- normally done by staging())
-	  // E: 0-based epoch indices; S/Sorig: all WAKE (ignored in output, needed by combine())
-	  indiv.E.resize( indiv.ne );
-	  std::iota( indiv.E.begin() , indiv.E.end() , 0 );
-	  indiv.S.assign( indiv.ne , POPS_WAKE );
-	  indiv.Sorig.assign( indiv.ne , POPS_WAKE );
-	  indiv.has_staging = false;
+	  if ( ! pops_has_usable_epochs( indiv.ne ) )
+	    {
+	      if ( equivn == 0 ) break;
+	      continue;
+	    }
 
 
 	  //
@@ -372,6 +518,12 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 
 	  if ( ranges_file != "." )
 	    indiv.apply_ranges( range_th , range_prop );
+
+	  if ( ! pops_has_usable_epochs( indiv.ne ) || indiv.X1.rows() == 0 )
+	    {
+	      if ( equivn == 0 ) break;
+	      continue;
+	    }
 
 
 	  //
@@ -414,23 +566,32 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
       if ( equivn )
 	logger << "\n";
 
+      if ( ! pops_has_usable_epochs( indiv.ne ) ||
+           indiv.E.empty() ||
+           indiv.P.rows() <= 1 ||
+           indiv.PS.size() <= 1 )
+        continue;
+
+      std::vector<bool> flagged( indiv.ne , false );
+      for (int e = 0; e < indiv.ne; e++)
+        {
+          if ( indiv.PS[e] == POPS_UNKNOWN )
+            { flagged[e] = true; continue; }
+          for (int j = 0; j < indiv.P.cols(); j++)
+            if ( std::isnan( indiv.P(e,j) ) ) { flagged[e] = true; break; }
+        }
+
+      n_candidate_rows += indiv.ne;
+      const int n_flagged = count_flagged_rows( flagged );
+
 
       //
       // Optionally rescore the stride's final 30 s posteriors with CODA before
       // mapping them into the overlapping hypnodensity PP traces.
       //
 
-      if ( coda && indiv.ne > 0 )
+      if ( coda && indiv.ne > 0 && n_flagged < indiv.ne )
         {
-          std::vector<bool> flagged( indiv.ne , false );
-          for (int e = 0; e < indiv.ne; e++)
-            {
-              if ( indiv.PS[e] == POPS_UNKNOWN )
-                { flagged[e] = true; continue; }
-              for (int j = 0; j < indiv.P.cols(); j++)
-                if ( std::isnan( indiv.P(e,j) ) ) { flagged[e] = true; break; }
-            }
-
           logger << "    rescoring stride posteriors with CODA\n";
           indiv.P = coda->rescore( indiv.P , indiv.E , flagged );
         }
@@ -450,6 +611,7 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 
       for ( int e = 0; e < (int)indiv.E.size(); e++ )
 	{
+	  if ( flagged[e] ) continue;
 	  interval_t interval = edf.timeline.epoch( indiv.E[e] );
 	  // Compute sample index using pure integer stride arithmetic.
 	  // interval.start is always an exact multiple of stride_tp, so the
@@ -465,6 +627,12 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 
   // restore default 30s non-overlapping epochs
   edf.timeline.set_epoch( 30.0 , 30.0 );
+
+  if ( sample_to_post.empty() )
+    {
+      emit_hypno_soft_fail( pops_hypno_soft_fail_msg , n_candidate_rows );
+      return;
+    }
 
 
   //
@@ -561,14 +729,24 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 
   clocktime_t starttime( edf.header.starttime );
   const bool hms = starttime.valid;
-  const bool have_obs_staging = base_indiv != NULL && base_indiv->has_staging;
+  bool have_obs_staging = false;
+  if ( base_indiv != NULL &&
+       base_indiv->Sorig.size() == base_indiv->ne_total &&
+       base_indiv->ne_total > 0 )
+    {
+      int n_obs_scored = 0;
+      for (int e = 0; e < (int)base_indiv->Sorig.size(); e++)
+        if ( base_indiv->Sorig[e] != POPS_UNKNOWN )
+          ++n_obs_scored;
+      have_obs_staging = n_obs_scored >= 20;
+    }
 
   for ( auto it = sample_to_post.begin(); it != sample_to_post.end(); ++it )
     {
       const int m = it->first;
       const Eigen::VectorXd & post = it->second;
       const uint64_t row_start_tp = (uint64_t)m * stride_tp;
-      const uint64_t row_stop_tp = row_start_tp + stride_tp - 1LLU;
+      const uint64_t row_stop_tp = row_start_tp + stride_tp;
 
       writer.epoch( m + 1 );
 
@@ -602,11 +780,16 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
       int flag = 0;
       if ( have_obs_staging )
         {
-          const int obs_epoch = (int)( row_start_tp / ( 30LLU * globals::tp_1sec ) );
+          // The emitted 5 s row is anchored at sample index m, but it represents
+          // the 30 s window whose start is (m - mid_offset) stride-steps from t=0.
+          // PRIOR30 must follow that represented 30 s window, otherwise rows near
+          // every 30 s boundary are trained against the wrong epoch label.
+          const int window_start_sample = m - mid_offset;
+          const int obs_epoch = window_start_sample >= 0 ? ( window_start_sample / N ) : -1;
           int prior = POPS_UNKNOWN;
           if ( obs_epoch >= 0 && obs_epoch < (int)base_indiv->Sorig.size() )
             prior = base_indiv->Sorig[ obs_epoch ];
-          writer.value( "PRIOR" , pops_t::label( (pops_stage_t)prior ) );
+          writer.value( "PRIOR30" , pops_t::label( (pops_stage_t)prior ) );
 
           if ( prior == POPS_UNKNOWN )
             flag = -1;
@@ -629,6 +812,104 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
     }
 
   writer.unepoch();
+
+
+  //
+  // If a 5-second CODA model was applied, back-project the final 5-second posterior
+  // stream to one posterior per original 30-second epoch by averaging each block of
+  // N stride rows, then score that against the original observed 30-second staging.
+  //
+
+  if ( coda != NULL &&
+       base_indiv != NULL &&
+       base_indiv->has_staging &&
+       ! base_indiv->E.empty() &&
+       base_indiv->E.size() == base_indiv->S.size() )
+    {
+      std::vector<int> obs30;
+      std::vector<int> pred30;
+      double avg_pmax_30 = 0.0;
+
+      const int ne_total = base_indiv->ne_total;
+      const int ne_scored = base_indiv->E.size();
+
+      for ( int i = 0; i < ne_scored; i++ )
+        {
+          const int e = base_indiv->E[i];
+          const int obs = base_indiv->S[i];
+          if ( obs == POPS_UNKNOWN ) continue;
+          if ( e < 0 || e >= ne_total ) continue;
+
+          // A 5 s row at sample index m represents the 30 s window whose start is
+          // (m - mid_offset) stride-steps from recording start. Therefore, for the
+          // original 30 s epoch starting at e*N stride-steps, the six stride-shifted
+          // windows that start within that epoch map to sample indices:
+          //   e*N + mid_offset ... e*N + mid_offset + (N-1)
+          //
+          // Use only genuinely observed rows from sample_to_post here; do not let
+          // leading/trailing ZOH-filled edge samples influence the 30 s comparison.
+          const int start_m = e * N + mid_offset;
+          const int stop_m = start_m + N;
+
+          Eigen::VectorXd post30 = Eigen::VectorXd::Zero( 5 );
+          int n_rows_30 = 0;
+          for ( int m = start_m; m < stop_m; m++ )
+            {
+              if ( m < 0 || m >= total_samples ) continue;
+              std::map<int,Eigen::VectorXd>::const_iterator it = sample_to_post.find( m );
+              if ( it == sample_to_post.end() ) continue;
+              post30 += it->second;
+              ++n_rows_30;
+            }
+          if ( n_rows_30 == 0 ) continue;
+          post30 /= (double)n_rows_30;
+
+          int predx = 0;
+          const double pmax = post30.maxCoeff( &predx );
+          avg_pmax_30 += pmax;
+
+          obs30.push_back( obs );
+          pred30.push_back( predx );
+        }
+
+      if ( ! obs30.empty() )
+        {
+          pops_stats_t stats5( obs30 , pred30 , 5 );
+          pops_stats_t stats3( pops_t::NRW( obs30 ) , pops_t::NRW( pred30 ) , 3 );
+
+          writer.level( "CODA5" , "MDL" );
+          writer.value( "K" , stats5.kappa );
+          writer.value( "K3" , stats3.kappa );
+          writer.value( "ACC" , stats5.acc );
+          writer.value( "ACC3" , stats3.acc );
+          writer.value( "NE_OKAY" , (int)obs30.size() );
+          writer.value( "NE_FLAGGED" , ne_total - (int)obs30.size() );
+          writer.value( "CONF" , safe_conf_mean( avg_pmax_30 , (int)obs30.size() ) );
+          writer.value( "MCC" , stats5.mcc );
+          writer.value( "MCC3" , stats3.mcc );
+          writer.value( "F1" , stats5.macro_f1 );
+          writer.value( "PREC" , stats5.macro_precision );
+          writer.value( "RECALL" , stats5.macro_recall );
+          writer.value( "F1_WGT" , stats5.avg_weighted_f1 );
+          writer.value( "PREC_WGT" , stats5.avg_weighted_precision );
+          writer.value( "RECALL_WGT" , stats5.avg_weighted_recall );
+          writer.value( "F13" , stats3.macro_f1 );
+          writer.value( "PREC3" , stats3.macro_precision );
+          writer.value( "RECALL3" , stats3.macro_recall );
+          writer.unlevel( "MDL" );
+
+          logger << "  resolution=5 CODA back-projected to 30s:"
+                 << " kappa = " << stats5.kappa
+                 << "; 3-class kappa = " << stats3.kappa
+                 << " (n = " << obs30.size() << " epochs)\n";
+          logger << "  Confusion matrix:\n";
+          pops_t::tabulate( obs30 , pred30 , true );
+          logger << "\n";
+          logger << "  3-class confusion matrix:\n";
+          pops_t::tabulate( pops_t::NRW( obs30 ) , pops_t::NRW( pred30 ) , true );
+          logger << "\n";
+        }
+    }
 
 
   //

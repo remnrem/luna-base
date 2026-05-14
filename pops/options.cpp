@@ -84,6 +84,8 @@ bool pops_opt_t::emit_pp;
 std::string pops_opt_t::posterior_channels;
 std::string pops_opt_t::posterior_prefix_stage1;
 std::string pops_opt_t::posterior_prefix_coda;
+bool pops_opt_t::pre_coda_output;
+bool pops_opt_t::coda_prediction_mode;
 
 std::vector<double> pops_opt_t::slope_range{ 30.0 , 45.0 } ;
 double pops_opt_t::slope_th  = 3;
@@ -166,6 +168,8 @@ void pops_opt_t::set_options( param_t & param )
   posterior_channels = "";
   posterior_prefix_stage1 = "PP";
   posterior_prefix_coda = "PP";
+  pre_coda_output = param.has( "pre-coda" ) ? param.yesno( "pre-coda" ) : false;
+  coda_prediction_mode = ( param.has( "coda" ) && ! param.has( "train" ) ) || param.has( "predict-coda" );
 
   if ( emit_pp )
     posterior_channels = param.has( "coda" ) || param.has( "predict-coda" ) ? "CODA" : "E";

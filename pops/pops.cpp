@@ -1220,10 +1220,12 @@ std::string pops_t::resolve_coda_model_file( const param_t & param ,
   if ( param.has( "coda" ) && !param.empty( "coda" ) )
     return update_filepath( param.value( "coda" ) );
 
-  if ( pops_opt_t::pops_root != "" )
-    return update_filepath( pops_opt_t::pops_root + ".coda.mod" );
+  const std::string coda_tag = pops_opt_t::resolution_is_5s() ? "coda5" : "coda30";
 
-  return update_filepath( "coda.mod" );
+  if ( pops_opt_t::pops_root != "" )
+    return update_filepath( pops_opt_t::pops_root + "." + coda_tag + ".mod" );
+
+  return update_filepath( "s2." + coda_tag + ".mod" );
 }
 
 
@@ -1865,8 +1867,6 @@ void pops_t::stage_association()
 
 
 #endif
-
-
 
 
 

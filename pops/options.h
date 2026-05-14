@@ -118,6 +118,8 @@ struct pops_opt_t {
   static std::string posterior_channels;
   static std::string posterior_prefix_stage1;
   static std::string posterior_prefix_coda;
+  static bool pre_coda_output;
+  static bool coda_prediction_mode;
 
 
   // no P (i.e. if in eval mode)

@@ -411,7 +411,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   const bool     verbose_time_phase_locking = param.has( "verbose-coupling" );
 
   // generate a feature file of spindles
-  const bool     save_annots                = param.has( "annot" );
+  const bool     save_annots                = param.has( "annot" )
+    || param.has( "annot-ch" )
+    || param.has( "annot-frq" )
+    || param.has( "annot-frq-ch" ) ;
  
   
 
@@ -513,12 +516,15 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   
   if ( save_annots ) 
     {
-      if ( param.value( "annot" ) != "" )
+      if ( ! param.empty( "annot" ) )
 	sp_label = param.value( "annot" );       
     }
-  const bool annot_ch = save_annots && param.has( "annot-ch" );
+  
+  const bool annot_ch = param.has( "annot-ch" ) || param.has( "annot-frq-ch" );
 
-
+  const bool annot_frq = param.has( "annot-frq" ) || param.has( "annot-frq-ch" );
+  
+  
   
   //
   // Add new channels?
@@ -2924,8 +2930,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      // annot label
 	      const std::string analysis_label = Helper::dbl2str(frq[fi]) ;
 	      
-	      const std::string aname = annot_ch ? sp_label + "_" + signals.label(s) : sp_label;
-	      
+	      std::string aname = sp_label;
+	      if ( annot_frq ) aname += "_" + analysis_label ; 
+	      if ( annot_ch ) aname += "_" + signals.label(s);
+				
 	      annot_t * a = edf.annotations->add( aname );
 	      a->description = "Spindle intervals";
 	      annot_t * a_neg_pk = save_annot_peaks ? edf.annotations->add( aname + "_neg_pk" ) : NULL;

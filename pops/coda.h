@@ -55,9 +55,10 @@ class pops_coda_t {
   struct options_t {
     int    context_epochs       = 20;   // half-window in epochs (10 min at 30 s)
     double row_duration_sec     = 30.0; // spacing between posterior rows
-    int    min_subject_contiguous_epochs = 0; // require at least this many contiguous valid epochs to include a subject
+    int    min_subject_contiguous_epochs = 0; // require at least this many contiguous valid rows to include a subject
     std::vector<int> min_stage_minutes = {5};  // per-stage minimums in W,R,N1,N2,N3 order; size-1 applies to all
-    double min_stage1_kappa     = 0.5;  // require stage-1 hard calls vs PRIOR to reach at least this kappa
+    double min_stage1_kappa     = -1.0; // optional minimum 5-class K threshold; <0 disables
+    double min_stage1_kappa3    = -1.0; // optional minimum 3-class K3 threshold; <0 disables
     int    random_validation_subjects = 0; // additionally sample this many good subjects into validation
     double lambda               = 2.0;  // denominator smoothing for rel_elapsed features
     std::vector<double> class_weights;  // per-class training weights in W,R,N1,N2,N3 / W,R,NR order
@@ -71,6 +72,7 @@ class pops_coda_t {
     bool   broad_stage_qc      = false; // group N1+N2+N3 as NREM for require_all_stages / min_stage_minutes checks
     bool   three_state          = false; // 3-state (W R NR) vs 5-state (W R N1 N2 N3)
     bool   do_SHAP             = false; // emit CODA SHAP values during prediction
+    bool   output_both_stages  = false; // when predicting, emit both pre-CODA and CODA outputs under CODA=0/1
   } opt;
 
   pops_coda_t() {}
@@ -93,8 +95,8 @@ class pops_coda_t {
                   const std::string & subject_id = "" );
 
   // Train CODA from a plain-text posteriors file (destrat POPS -r E format).
-  // Columns required: ID  E  PP_W  PP_R  PP_N1+PP_N2+PP_N3 (5-state) or PP_NR (3-state)  PRIOR
-  // E is 1-based; PRIOR is a stage label string (W/R/N1/N2/N3/NR/? ...)
+  // Columns required: ID  E  PP_W  PP_R  PP_N1+PP_N2+PP_N3 (5-state) or PP_NR (3-state)  PRIOR/PRIOR30
+  // E is 1-based; PRIOR or PRIOR30 is a stage label string (W/R/N1/N2/N3/NR/? ...)
   // Calls accumulate() per subject then train_model().
   void train_from_posteriors_file( const std::string & filename ,
                                    const std::string & config_file = "." ,
@@ -108,6 +110,10 @@ class pops_coda_t {
   // Load a file of subject IDs to hold out for LightGBM validation.
   // Uses the same plain-text one-ID-per-token format as POPS validation= / hold-outs=.
   void load_validation_ids( const std::string & filename );
+
+  // Load a file of subject IDs to exclude from CODA training when reading a
+  // posteriors file. Matching is case-sensitive and expects one ID per token.
+  void load_exclude_ids( const std::string & filename );
 
   // Fit the CODA LightGBM model on accumulated data.
   // config_file: path to an LightGBM config file, or "." for CODA defaults
@@ -134,8 +140,9 @@ class pops_coda_t {
   // flagged:    ne  – flagged[e] = true if epoch is bad (POPS_UNKNOWN or NaN in P)
   // ne_total:   total recording epochs (including skipped ones not in E)
   // has_staging: whether manual labels are present
-  // S:          ne manual labels (used to write PRIOR field)
+  // S:          ne manual labels (used to write PRIOR / PRIOR30 field)
   // pedf:       pointer to EDF (for clock times), may be NULL
+  // emit_stage1: also emit pre-CODA stage-1 outputs (for standalone predict-coda paths)
   void predict( const Eigen::MatrixXd & P ,
                 const std::vector<int> & E ,
                 const std::vector<bool> & flagged ,
@@ -145,7 +152,7 @@ class pops_coda_t {
                 edf_t * pedf ,
                 const std::vector<std::string> * start = NULL ,
                 const std::vector<std::string> * stop = NULL ,
-                bool emit_stage1 = true );
+                bool emit_stage1 = false );
 
   // Matrix-only rescoring path for callers that want CODA posteriors without
   // writing the standard epoch-level MDL=CODA outputs.
@@ -165,9 +172,12 @@ class pops_coda_t {
   // Accumulated training / validation rows and labels (buffered as row vectors for efficiency)
   std::vector<Eigen::VectorXd> X_train_rows;
   std::vector<int>             S_train;
+  std::vector<float>           W_train;
   std::vector<Eigen::VectorXd> X_valid_rows;
   std::vector<int>             S_valid;
+  std::vector<float>           W_valid;
   std::set<std::string>        holdouts;
+  std::set<std::string>        exclude_ids;
 
   // Feature names as loaded from the .fnames file (used to validate at predict time)
   std::vector<std::string> loaded_fnames;

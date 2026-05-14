@@ -268,6 +268,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
 
   int ann_at_epoch  = 0;
   int ann_off_epoch = 0;
+  int ann_off_epoch_edf_tail = 0;
 
   // Per-label: offset from nearest epoch boundary (for verbose table)
   // offset = min |ann_start - nearest epoch_start|  in time-points
@@ -293,6 +294,9 @@ void proc_review_alignment( edf_t & edf , param_t & param )
 
   // Build sorted vector of epoch starts for binary-search nearest-boundary
   std::vector<uint64_t> epoch_starts_vec( epoch_starts_set.begin() , epoch_starts_set.end() );
+  const uint64_t edf_stop_tp = edf.timeline.last_time_point_tp + 1LLU;
+  const uint64_t epoch_grid_anchor_tp = epoch_starts_vec.empty() ? 0LLU : epoch_starts_vec.front();
+  const uint64_t last_epoch_start_tp = epoch_starts_vec.empty() ? 0LLU : epoch_starts_vec.back();
 
   for ( const auto & ai : all_anns )
     {
@@ -305,7 +309,28 @@ void proc_review_alignment( edf_t & edf , param_t & param )
       bool on_epoch = epoch_starts_set.count(s) > 0;
       info.on_epoch = on_epoch;
       if ( on_epoch ) { ++ann_at_epoch;  ++lstats[label].n_at_epoch;  }
-      else            { ++ann_off_epoch; ++lstats[label].n_off_epoch; }
+      else
+        {
+          ++ann_off_epoch;
+          ++lstats[label].n_off_epoch;
+
+          const bool on_theoretical_epoch_grid =
+            epoch_inc_tp > 0 &&
+            ! epoch_starts_vec.empty() &&
+            s >= epoch_grid_anchor_tp &&
+            ( ( s - epoch_grid_anchor_tp ) % epoch_inc_tp ) == 0;
+
+          const bool is_edf_tail_truncation =
+            ! is_generic &&
+            ! is_contig &&
+            on_theoretical_epoch_grid &&
+            s > last_epoch_start_tp &&
+            s < edf_stop_tp &&
+            ai.first.stop > edf_stop_tp;
+
+          if ( is_edf_tail_truncation )
+            ++ann_off_epoch_edf_tail;
+        }
 
       if ( ! on_epoch && ! epoch_starts_vec.empty() )
         {
@@ -486,6 +511,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
   const bool warn_rec_not_div   = ! nonstandard_epoch && ! rec_divides_epoch;
   const bool warn_epoch_off_rec = ! nonstandard_epoch && epochs_off_rec > 0;
   const bool warn_stage_drift   = ann_off_epoch > 0;
+  const bool warn_stage_drift_edf_tail = ann_off_epoch_edf_tail > 0;
   const bool warn_multi_stage   = ! is_generic && ! is_contig && ep_multi_stage > 0;
   const bool warn_gap_anns      = ( anns_in_gap + anns_span_gap ) > 0;
   const bool warn_nonstandard   = nonstandard_epoch;   // informational, not a hard error
@@ -609,6 +635,15 @@ void proc_review_alignment( edf_t & edf , param_t & param )
           logger << "   * " << ann_off_epoch
                  << " annotation start(s) fall between epoch boundaries\n"
                  << "     -> those stages will not map 1:1 to a single epoch\n";
+
+          if ( warn_stage_drift_edf_tail )
+            {
+              logger << "     -> " << ann_off_epoch_edf_tail
+                     << " of these start on the next theoretical epoch boundary after the last full epoch,\n"
+                     << "       but the EDF ends before that epoch completes; see SPANNING for the overhang\n";
+              if ( ann_off_epoch_edf_tail == ann_off_epoch )
+                logger << "     -> this is an end-of-EDF tail case rather than mid-study stage drift\n";
+            }
 
           if ( align_active )
             {
@@ -734,6 +769,9 @@ void proc_review_alignment( edf_t & edf , param_t & param )
       if ( warn_rec_not_div   ) logger << "   [WARN] epoch size not an exact multiple of record size\n";
       if ( warn_epoch_off_rec ) logger << "   [WARN] some epoch starts are not on record boundaries\n";
       if ( warn_stage_drift   ) logger << "   [WARN] some annotation starts fall between epoch boundaries\n";
+      if ( warn_stage_drift_edf_tail )
+        logger << "          -> includes " << ann_off_epoch_edf_tail
+               << " end-of-EDF tail case(s) where the final annotation extends past the EDF end\n";
       if ( suggest_epoch_align) logger << "          -> suggest: EPOCH align\n";
       if ( warn_multi_stage   ) logger << "   [WARN] some epochs span >1 stage label\n";
       if ( warn_gap_anns      ) logger << "   [WARN] some annotations fall in or span EDF+D gaps\n";
@@ -751,6 +789,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
         {
           annot_t * conf_annot      = edf.annotations->add( annot_prefix + "CONF" );
           annot_t * off_epoch_annot = edf.annotations->add( annot_prefix + "OFF_EPOCH" );
+          annot_t * off_epoch_tail_annot = edf.annotations->add( annot_prefix + "OFF_EPOCH_TAIL" );
           annot_t * in_gap_annot    = edf.annotations->add( annot_prefix + "IN_GAP" );
           annot_t * span_gap_annot  = edf.annotations->add( annot_prefix + "SPAN_GAP" );
           annot_t * rec_ambig_annot = edf.annotations->add( annot_prefix + "REC_AMBIG" );
@@ -776,6 +815,28 @@ void proc_review_alignment( edf_t & edf , param_t & param )
                   inst->set( "TYPE" , "OFF_EPOCH" );
                   inst->set( "STAGE" , info.label );
                   inst->set( "OFF_SEC" , info.off_sec );
+
+                  const bool on_theoretical_epoch_grid =
+                    epoch_inc_tp > 0 &&
+                    ! epoch_starts_vec.empty() &&
+                    info.interval.start >= epoch_grid_anchor_tp &&
+                    ( ( info.interval.start - epoch_grid_anchor_tp ) % epoch_inc_tp ) == 0;
+
+                  const bool is_edf_tail_truncation =
+                    ! is_generic &&
+                    ! is_contig &&
+                    on_theoretical_epoch_grid &&
+                    info.interval.start > last_epoch_start_tp &&
+                    info.interval.start < edf_stop_tp &&
+                    info.interval.stop > edf_stop_tp;
+
+                  if ( is_edf_tail_truncation )
+                    {
+                      instance_t * tail = off_epoch_tail_annot->add( "." , info.interval , "." );
+                      tail->set( "TYPE" , "OFF_EPOCH_TAIL" );
+                      tail->set( "STAGE" , info.label );
+                      tail->set( "OFF_SEC" , info.off_sec );
+                    }
                 }
 
               if ( ! is_continuous )
@@ -898,6 +959,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
 
   writer.value( "ANN_AT_EPOCH"          , ann_at_epoch );
   writer.value( "ANN_OFF_EPOCH"         , ann_off_epoch );
+  writer.value( "ANN_OFF_EPOCH_EDF_TAIL", ann_off_epoch_edf_tail );
   writer.value( "ANN_AT_EPOCH_PCT"      ,
                 total_ann_starts > 0 ? 100.0 * ann_at_epoch / total_ann_starts : 0.0 );
   writer.value( "ALIGN_OFFSET"          , align_offset_sec );
@@ -919,6 +981,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
   writer.value( "WARN_REC_NOT_DIV"   , (int)warn_rec_not_div );
   writer.value( "WARN_EPOCH_OFF_REC" , (int)warn_epoch_off_rec );
   writer.value( "WARN_STAGE_DRIFT"   , (int)warn_stage_drift );
+  writer.value( "WARN_STAGE_DRIFT_EDF_TAIL" , (int)warn_stage_drift_edf_tail );
   writer.value( "WARN_MULTI_STAGE"   , (int)warn_multi_stage );
   writer.value( "WARN_GAP_ANNS"      , (int)warn_gap_anns );
 
@@ -1064,6 +1127,21 @@ void proc_review_alignment( edf_t & edf , param_t & param )
           // On an epoch boundary?
           const bool at_ep = epoch_starts_set.count( iv.start ) > 0;
           writer.value( "AT_EPOCH" , (int)at_ep );
+
+          const bool on_theoretical_epoch_grid =
+            epoch_inc_tp > 0 &&
+            ! epoch_starts_vec.empty() &&
+            iv.start >= epoch_grid_anchor_tp &&
+            ( ( iv.start - epoch_grid_anchor_tp ) % epoch_inc_tp ) == 0;
+          const bool is_edf_tail_truncation =
+            ! at_ep &&
+            ! is_generic &&
+            ! is_contig &&
+            on_theoretical_epoch_grid &&
+            iv.start > last_epoch_start_tp &&
+            iv.start < edf_stop_tp &&
+            iv.stop > edf_stop_tp;
+          writer.value( "EDF_TAIL_TRUNC" , (int)is_edf_tail_truncation );
 
           // Which epoch (1-based), -1 if not on a boundary
           int epoch_num = -1;

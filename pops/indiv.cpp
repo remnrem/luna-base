@@ -44,9 +44,60 @@
 extern logger_t logger;
 extern writer_t writer;
 
+namespace {
+
+const char * pops_stage1_soft_fail_msg = "POPS: no usable epochs remain after QC/pruning";
+const char * pops_stage1_too_few_rows_msg = "POPS: too few usable epochs remain after QC/pruning";
+
+void emit_pops_soft_fail( const std::string & msg , const int ne_flagged )
+{
+  logger << "  " << msg << "\n";
+  writer.value( "NE_OKAY" , 0 );
+  writer.value( "NE_FLAGGED" , ne_flagged );
+  writer.value( "OK" , 0 );
+  writer.value( "MSG" , msg );
+}
+
+double safe_conf_mean( const double total_conf , const int n )
+{
+  return n > 0 ? total_conf / (double)n : 0.0;
+}
+
+int pops_min_usable_epochs()
+{
+  int min_epochs = 2;
+
+  for (int i = 0; i < (int)pops_t::specs.specs.size(); i++)
+    {
+      const pops_spec_t & spec = pops_t::specs.specs[i];
+
+      if ( spec.ftr == POPS_SMOOTH || spec.ftr == POPS_DERIV )
+        {
+          const int hw = spec.narg( "half-window" );
+          if ( hw > 0 )
+            min_epochs = std::max( min_epochs , 1 + 2 * hw );
+        }
+      else if ( spec.ftr == POPS_RESCALE )
+        {
+          const int nsegs = spec.has( "n" ) ? spec.narg( "n" ) : 50;
+          if ( nsegs > 0 )
+            min_epochs = std::max( min_epochs , nsegs );
+        }
+    }
+
+  return 2 * min_epochs;
+}
+
+bool pops_has_usable_epochs( const int ne )
+{
+  return ne >= pops_min_usable_epochs();
+}
+
+}
+
   
 pops_indiv_t::pops_indiv_t( edf_t * pedf_ )
-  : pedf( pedf_ ) , trainer( false ) , has_staging( false ) , ne( 0 ) , ne_total( 0 )
+  : pedf( pedf_ ) , trainer( false ) , has_staging( false ) , skip_eval( false ) , ne( 0 ) , ne_total( 0 )
 {
 }
 
@@ -54,6 +105,8 @@ pops_indiv_t::pops_indiv_t( edf_t * pedf_ )
 pops_indiv_t::pops_indiv_t( edf_t & edf ,
 			    param_t & param )
 {
+
+  skip_eval = false;
 
   //
   // Track this EDF
@@ -297,6 +350,17 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  
 	  level1( edf );
 
+	  if ( ! pops_has_usable_epochs( ne ) )
+	    {
+	      const std::string msg = ne == 0 ? pops_stage1_soft_fail_msg : pops_stage1_too_few_rows_msg;
+	      if ( equivn == 0 )
+		{
+		  emit_pops_soft_fail( msg , ne_total - ne );
+		  return;
+		}
+	      continue;
+	    }
+
 	  level2( pops_opt_t::verbose && eq1 == 1 ? false : true ); // set to quiet mode, if repeating or non-verbose
 	  	  
 	  logger << "  feature matrix: " << X1.rows() << " rows (epochs) and " << X1.cols() << " columns (features)\n";
@@ -323,6 +387,17 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  if ( ranges_file != "." ) 
 	    apply_ranges( range_th, range_prop );
 
+	  if ( ! pops_has_usable_epochs( ne ) || X1.rows() == 0 )
+	    {
+	      const std::string msg = ne == 0 ? pops_stage1_soft_fail_msg : pops_stage1_too_few_rows_msg;
+	      if ( equivn == 0 )
+		{
+		  emit_pops_soft_fail( msg , ne_total - ne );
+		  return;
+		}
+
+	      continue;
+	    }
 
 	  //
 	  // Summary stats --> output to db, after doing apply_incexcvars() and apply_ranges()
@@ -466,7 +541,13 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       if ( equivn )
 	{
 	  logger << "  Combined solution: " << equivn << " equivalence channels:\n";
-	  combine( sols , comb_method, comb_conf );	  	  
+	  combine( sols , comb_method, comb_conf );
+	  if ( ! pops_has_usable_epochs( ne ) || E.empty() || P.rows() <= 1 || PS.size() <= 1 )
+	    {
+	      const std::string msg = ne == 0 ? pops_stage1_soft_fail_msg : pops_stage1_too_few_rows_msg;
+	      emit_pops_soft_fail( msg , ne_total - ne );
+	      return;
+	    }
 	}
 
       //
@@ -533,7 +614,8 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
       // All done, now summarize (& also print final confusion matrix)
       //
       
-      summarize();
+      if ( ! ( pops_opt_t::coda_prediction_mode && ! pops_opt_t::pre_coda_output ) )
+        summarize();
 
       
     } // end of PREDICTION mode
@@ -1758,6 +1840,13 @@ void pops_indiv_t::level2( const bool quiet_mode )
 
 void pops_indiv_t::predict( const int iter )
 {
+  if ( X1.rows() == 0 )
+    {
+      P.resize( 0 , pops_opt_t::n_stages );
+      PS.clear();
+      return;
+    }
+
   // get posteriors
   P = pops_t::lgbm.predict( X1 , iter );
 
@@ -1847,6 +1936,10 @@ void pops_indiv_t::SHAP()
 
 void pops_indiv_t::summarize( pops_sol_t * sol )
 {
+  const bool coda_stage1_level = sol == NULL && pops_opt_t::coda_prediction_mode && pops_opt_t::pre_coda_output;
+  const bool suppress_mdl_e = coda_stage1_level;
+  if ( coda_stage1_level )
+    writer.level( "0" , "CODA" );
 
   //
   // note - this may be called in '--eval-stages' context, in which case there is no
@@ -1865,6 +1958,23 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   //
   
   ne = E.size();
+
+  if ( ! pops_has_usable_epochs( ne ) || PS.size() <= 1 )
+    {
+      if ( sol != NULL )
+        {
+          sol->E.clear();
+          sol->S.clear();
+          sol->P.resize( 0 , pops_opt_t::n_stages );
+          return;
+        }
+
+      const std::string msg = ne == 0 ? pops_stage1_soft_fail_msg : pops_stage1_too_few_rows_msg;
+      emit_pops_soft_fail( msg , ne_total - ne );
+      if ( coda_stage1_level )
+        writer.unlevel( "CODA" );
+      return;
+    }
 
 
   //
@@ -1893,6 +2003,7 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
     }
   
   double avg_pmax = 0;
+  int pred_unknown = 0;
   
   for (int epoch=0; epoch<ne_total; epoch++)
     {
@@ -1943,6 +2054,7 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       //      std::cout << " PS[e] == POPS_UNKNOWN " << PS[e] << " " <<  POPS_UNKNOWN << "\n";
       if ( PS[e] == POPS_UNKNOWN ) 
 	{
+	  ++pred_unknown;
 	  if ( emit_epoch_rows )
 	    writer.value( "FLAG" , -1 );
           continue;
@@ -2105,7 +2217,7 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       // indiv-level
       writer.value( "NE_OKAY" , ne_okay );
       writer.value( "NE_FLAGGED" , ne_flagged );
-      writer.value( "CONF" , avg_pmax / (double)ne );
+      writer.value( "CONF" , safe_conf_mean( avg_pmax , ne ) );
       
       if ( slp_lat_prd >= 0 ) 
 	writer.value( "SLP_LAT_PRD" , slp_lat_prd * fac );
@@ -2130,10 +2242,12 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       writer.level( pops_t::label( POPS_UNKNOWN ) , "SS" );
       if ( ! pops_opt_t::eval_mode )
 	writer.value( "PRF" ,  fac * masked );
-      writer.value( "PR1" ,  fac * masked );
+      writer.value( "PR1" ,  fac * ( masked + ( pops_opt_t::eval_mode ? pred_unknown : 0 ) ) );
       writer.unlevel( "SS" );
       
       // now quit
+      if ( coda_stage1_level )
+        writer.unlevel( "CODA" );
       return;
     }
   
@@ -2161,7 +2275,7 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
 
   writer.value( "NE_OKAY" , ne_okay );
   writer.value( "NE_FLAGGED" , ne_flagged );
-  writer.value( "CONF" , avg_pmax / (double)ne );
+  writer.value( "CONF" , safe_conf_mean( avg_pmax , ne ) );
     
   writer.value( "MCC" , stats.mcc );
   writer.value( "MCC3" , stats3.mcc );
@@ -2179,26 +2293,29 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   writer.value( "RECALL3" , stats3.macro_recall );
 
   // Mirror core stage-1 summary metrics under MDL=E for easy model comparisons.
-  writer.level( "E" , "MDL" );
-  writer.value( "K" , stats.kappa );
-  writer.value( "K3" , stats3.kappa );
-  writer.value( "ACC" , stats.acc );
-  writer.value( "ACC3" , stats3.acc );
-  writer.value( "NE_OKAY" , ne_okay );
-  writer.value( "NE_FLAGGED" , ne_flagged );
-  writer.value( "CONF" , avg_pmax / (double)ne );
-  writer.value( "MCC" , stats.mcc );
-  writer.value( "MCC3" , stats3.mcc );
-  writer.value( "F1" , stats.macro_f1 );
-  writer.value( "PREC" , stats.macro_precision );
-  writer.value( "RECALL" , stats.macro_recall );
-  writer.value( "F1_WGT" , stats.avg_weighted_f1 );
-  writer.value( "PREC_WGT" , stats.avg_weighted_precision );
-  writer.value( "RECALL_WGT" , stats.avg_weighted_recall );
-  writer.value( "F13" , stats3.macro_f1 );
-  writer.value( "PREC3" , stats3.macro_precision );
-  writer.value( "RECALL3" , stats3.macro_recall );
-  writer.unlevel( "MDL" );
+  if ( ! suppress_mdl_e )
+    {
+      writer.level( "E" , "MDL" );
+      writer.value( "K" , stats.kappa );
+      writer.value( "K3" , stats3.kappa );
+      writer.value( "ACC" , stats.acc );
+      writer.value( "ACC3" , stats3.acc );
+      writer.value( "NE_OKAY" , ne_okay );
+      writer.value( "NE_FLAGGED" , ne_flagged );
+      writer.value( "CONF" , safe_conf_mean( avg_pmax , ne ) );
+      writer.value( "MCC" , stats.mcc );
+      writer.value( "MCC3" , stats3.mcc );
+      writer.value( "F1" , stats.macro_f1 );
+      writer.value( "PREC" , stats.macro_precision );
+      writer.value( "RECALL" , stats.macro_recall );
+      writer.value( "F1_WGT" , stats.avg_weighted_f1 );
+      writer.value( "PREC_WGT" , stats.avg_weighted_precision );
+      writer.value( "RECALL_WGT" , stats.avg_weighted_recall );
+      writer.value( "F13" , stats3.macro_f1 );
+      writer.value( "PREC3" , stats3.macro_precision );
+      writer.value( "RECALL3" , stats3.macro_recall );
+      writer.unlevel( "MDL" );
+    }
 
   //
   // sleep and REM latencies
@@ -2381,31 +2498,34 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   writer.value( "ORIG" , fac * dur_obs_orig[ POPS_UNKNOWN ] );
   if ( ! pops_opt_t::eval_mode )
     writer.value( "PRF" ,  fac * masked );
-  writer.value( "PR1" ,  fac * masked );
+  writer.value( "PR1" ,  fac * ( masked + ( pops_opt_t::eval_mode ? pred_unknown : 0 ) ) );
 
   writer.unlevel(  globals::stage_strat  );
 
-  writer.level( "E" , "MDL" );
-  for (int ss=0; ss < pops_opt_t::n_stages ; ss++ )
+  if ( ! suppress_mdl_e )
     {
-      writer.level( pops_t::label( (pops_stage_t)ss ) , globals::stage_strat );
-      writer.value( "F1" , stats.f1[ss] );
-      writer.value( "PREC" , stats.precision[ss] );
-      writer.value( "RECALL" , stats.recall[ss] );
-      writer.value( "OBS" ,  fac * dur_obs[ss] );
-      writer.value( "ORIG" , fac * dur_obs_orig[ss] );
+      writer.level( "E" , "MDL" );
+      for (int ss=0; ss < pops_opt_t::n_stages ; ss++ )
+        {
+          writer.level( pops_t::label( (pops_stage_t)ss ) , globals::stage_strat );
+          writer.value( "F1" , stats.f1[ss] );
+          writer.value( "PREC" , stats.precision[ss] );
+          writer.value( "RECALL" , stats.recall[ss] );
+          writer.value( "OBS" ,  fac * dur_obs[ss] );
+          writer.value( "ORIG" , fac * dur_obs_orig[ss] );
+          if ( ! pops_opt_t::eval_mode )
+            writer.value( "PRF" ,  fac * dur_predf[ss] );
+          writer.value( "PR1" ,  fac * dur_pred1[ss] );
+        }
+      writer.level( pops_t::label( POPS_UNKNOWN ) , globals::stage_strat );
+      writer.value( "OBS" ,  fac * masked );
+      writer.value( "ORIG" , fac * dur_obs_orig[ POPS_UNKNOWN ] );
       if ( ! pops_opt_t::eval_mode )
-        writer.value( "PRF" ,  fac * dur_predf[ss] );
-      writer.value( "PR1" ,  fac * dur_pred1[ss] );
+        writer.value( "PRF" ,  fac * masked );
+      writer.value( "PR1" ,  fac * ( masked + ( pops_opt_t::eval_mode ? pred_unknown : 0 ) ) );
+      writer.unlevel( globals::stage_strat );
+      writer.unlevel( "MDL" );
     }
-  writer.level( pops_t::label( POPS_UNKNOWN ) , globals::stage_strat );
-  writer.value( "OBS" ,  fac * masked );
-  writer.value( "ORIG" , fac * dur_obs_orig[ POPS_UNKNOWN ] );
-  if ( ! pops_opt_t::eval_mode )
-    writer.value( "PRF" ,  fac * masked );
-  writer.value( "PR1" ,  fac * masked );
-  writer.unlevel( globals::stage_strat );
-  writer.unlevel( "MDL" );
 
 
   //
@@ -2417,6 +2537,9 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   logger << "  Confusion matrix: \n";
   std::map<int,std::map<int,int> > table = pops_t::tabulate( S, PS, true );
   logger << "\n";
+
+  if ( coda_stage1_level )
+    writer.unlevel( "CODA" );
 
 }
 
@@ -2448,6 +2571,15 @@ void pops_indiv_t::combine( std::vector<pops_sol_t> & sols ,
   //  also, if 'has_staging', then S as well (from the original/obs staging)
   
   int nsol = sols.size();
+  if ( nsol == 0 )
+    {
+      E.clear();
+      S.clear();
+      P.resize( 0 , pops_opt_t::n_stages );
+      PS.clear();
+      ne = 0;
+      return;
+    }
   
   // get consensus # of good epochs
   // epoch --> solution # --> row in that sol
@@ -2465,6 +2597,15 @@ void pops_indiv_t::combine( std::vector<pops_sol_t> & sols ,
   //
   
   const int ne_comb = EE.size();
+  if ( ne_comb == 0 )
+    {
+      E.clear();
+      S.clear();
+      P.resize( 0 , pops_opt_t::n_stages );
+      PS.clear();
+      ne = 0;
+      return;
+    }
 
   E.clear();
   std::map<int,std::map<int,int> >::const_iterator ee = EE.begin();
@@ -2596,6 +2737,7 @@ void pops_indiv_t::combine( std::vector<pops_sol_t> & sols ,
   // Populate final PS
   //
 
+  ne = ne_comb;
   update_predicted();
   
 }
@@ -2611,6 +2753,8 @@ void pops_indiv_t::apply_ranges( double th, double prop )
   
   const int ne = X1.rows();
   const int nv = X1.cols();
+
+  if ( ne == 0 || nv == 0 ) return;
 
   const double NaN_value = std::numeric_limits<double>::quiet_NaN();
 
@@ -2752,8 +2896,8 @@ void pops_indiv_t::ftr_summaries()
 	if ( std::isnan( X1(e,j) ) )
 	  ++missing;
 
-      const bool dropped = missing == ne ;
-      const double missing_prop = missing / (double)ne;
+      const bool dropped = ne == 0 ? true : missing == ne ;
+      const double missing_prop = ne == 0 ? 1.0 : missing / (double)ne;
       
       writer.value( "BAD" , missing );
       writer.value( "PROP" , missing_prop );

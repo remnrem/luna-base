@@ -40,6 +40,7 @@ pops_indiv_t::pops_indiv_t( param_t & param ,
 			    const std::string & file1, 
 			    const std::string & file2 )
 {
+  skip_eval = false;
   
   // we'll call this, but should not have any impact
   pops_opt_t::set_options( param );
@@ -140,6 +141,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 			    const std::string & file1 )
   
 {
+  skip_eval = false;
 
   // track the EDF
   pedf = &edf;
@@ -155,7 +157,11 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
   bool has_valid_staging = staging( edf , param );
   
   if ( ! has_valid_staging ) 
-    Helper::halt( "no valid staging data found" );
+    {
+      logger << "  ** no valid staging data found, skipping EVAL-STAGES for " << edf.id << "\n";
+      skip_eval = true;
+      return;
+    }
     
   
   // build 'PS' from file1
@@ -219,6 +225,5 @@ void pops_indiv_t::eval_stages()
 
 
 #endif
-
 
 

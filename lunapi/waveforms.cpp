@@ -110,6 +110,15 @@ std::vector<event_seed_t> collect_events(edf_t & edf, const std::vector<std::str
   return events;
 }
 
+bool annotation_channel_matches(const std::string & annot_ch,
+                                const std::vector<std::string> & channels)
+{
+  if ( annot_ch == "" || annot_ch == "." ) return true;
+  for (int i = 0; i < channels.size(); ++i)
+    if ( annot_ch == channels[i] ) return true;
+  return false;
+}
+
 std::vector<channel_cache_t> build_channel_caches(edf_t & edf, const std::vector<std::string> & channels)
 {
   std::vector<channel_cache_t> caches;
@@ -317,7 +326,8 @@ waveform_extract_result_t extract_annotation_window_waveforms(
   const double flank_left_secs ,
   const double flank_right_secs ,
   const std::string & align0 ,
-  const std::string & require )
+  const std::string & require ,
+  const bool match_annot_channel )
 {
   const std::string align = normalize_align( align0 );
   if ( require != "full" && require != "any" )
@@ -341,6 +351,12 @@ waveform_extract_result_t extract_annotation_window_waveforms(
 
   for (int e = 0; e < events.size(); ++e)
     {
+      if ( match_annot_channel && ! annotation_channel_matches( events[e].annot_ch , channels ) )
+        {
+          ++out.dropped["annot_ch"];
+          continue;
+        }
+
       interval_t wave_iv = events[e].annot_interval;
       if ( left_tp ) wave_iv.expand_left( left_tp );
       if ( right_tp ) wave_iv.expand_right( right_tp );

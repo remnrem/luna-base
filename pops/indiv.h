@@ -104,6 +104,9 @@ struct pops_indiv_t {
 
   // has manual staging?
   bool has_staging;
+
+  // special-case soft skip for EVAL-STAGES when no valid reference staging exists
+  bool skip_eval;
   
   // number of epochs
   int ne;
@@ -156,4 +159,3 @@ struct pops_indiv_t {
 
 #endif
 #endif
-

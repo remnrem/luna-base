@@ -263,7 +263,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
       bool other = ! ( wake || n1 || n2 || n3 || n4 || rem || lights );
       bool conflict = ( (int)wake + (int)n1 + (int)n2 + (int)n3 + (int)n4 + (int)rem + (int)lights ) > 1;
 
-      if ( conflict ) 
+      if ( conflict && ! param.has( "suppress-stage-conflicts" ) ) 
 	{
 	  std::cout << " conflict (>1 stage overlaps this epoch): " << interval.start << " " << interval.stop << "\n";
 	}
@@ -350,7 +350,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   // Report any conflicts
   //
   
-  if ( n_conflicts )
+  if ( n_conflicts && ! param.has( "suppress-stage-conflicts" ) )
     logger << "  *** found " << n_conflicts << " epoch(s) of " << ne << " with conflicting spanning annotations\n"
 	   << "  *** check that epochs and annotations align as intended\n"
 	   << "  *** see EPOCH 'align' or 'offset' options\n"; 
@@ -5044,4 +5044,3 @@ void hypnogram_t::do_slide()
 	}
     }
 }
-

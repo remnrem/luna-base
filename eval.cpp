@@ -1659,6 +1659,7 @@ void proc_eval_stages( edf_t & edf , param_t & param )
 #ifdef HAS_LGBM
   // one external file, vesus internal staging
   pops_indiv_t indiv( edf , param , param.requires( "file" ) );
+  if ( indiv.skip_eval ) return;
 #else
   Helper::halt( "no LGBM support compiled in" );
 #endif
@@ -1744,8 +1745,8 @@ void proc_runpops( edf_t & edf , param_t & param )
   // other options
   const bool do_filter = param.has( "filter" ) ? param.yesno( "filter" ) : true ;
 
-  // edger defaults to off in resolution=5 mode (ZOH handles edges; trim would distort output)
-  const bool do_edger  = param.has( "edger" ) ? param.yesno( "edger" ) : ( do_5s_stream ? false : true );
+  // EDGER defaults to on for both 30s and 5s POPS wrapper paths; callers can still override via edger=Y/N.
+  const bool do_edger  = param.has( "edger" ) ? param.yesno( "edger" ) : true;
 
 
   // xsigs handles
@@ -1883,9 +1884,6 @@ void proc_runpops( edf_t & edf , param_t & param )
   if ( ignore_obs_staging )
     pops_param.add( "ignore-obs-staging" );
 
-  if ( do_5s_stream )
-    pops_param.add( "ignore-obs-staging" );
-
   pops_param.add( "resolution" , Helper::int2str( posterior_resolution ) );
   if ( param.has( "emit-pp" ) )
     pops_param.add( "emit-pp" , param.value( "emit-pp" ) );
@@ -1911,6 +1909,8 @@ void proc_runpops( edf_t & edf , param_t & param )
     pops_param.add( "SHAP" );
   if ( param.has( "shap" ) )
     pops_param.add( "shap" );
+  if ( param.has( "verbose" ) )
+    pops_param.add( "verbose" );
   if ( param.has( "pops-SHAP" ) )
     pops_param.add( "pops-SHAP" );
   if ( param.has( "coda-SHAP" ) )
@@ -1923,10 +1923,10 @@ void proc_runpops( edf_t & edf , param_t & param )
     pops_param.add( "coda-context" , param.value( "coda-context" ) );
   if ( param.has( "coda-lambda" ) )
     pops_param.add( "coda-lambda" , param.value( "coda-lambda" ) );
+  if ( param.has( "pre-coda" ) )
+    pops_param.add( "pre-coda" , param.value( "pre-coda" ) );
   if ( param.has( "coda-no-future" ) )
     pops_param.add( "coda-no-future" );
-  if ( param.has( "emit-pp" ) )
-    pops_param.add( "emit-pp" , param.value( "emit-pp" ) );
   if ( param.has( "posterior-channels" ) )
     pops_param.add( "posterior-channels" , param.value( "posterior-channels" ) );
   if ( param.has( "posterior-prefix" ) )
@@ -1963,18 +1963,32 @@ void proc_pops( edf_t & edf , param_t & param )
     {
       coda.opt.three_state = param.has( "3-class" ) || ( pops_opt_t::n_stages == 3 );
       coda.opt.row_duration_sec = pops_opt_t::posterior_row_seconds();
-      if ( param.has( "coda-context" ) )
+      {
+        const int context_30s_epochs =
+          param.has( "coda-context" ) ? param.requires_int( "coda-context" ) : 20;
         coda.opt.context_epochs =
-          pops_coda_t::scale_context_epochs( param.requires_int( "coda-context" ) ,
+          pops_coda_t::scale_context_epochs( context_30s_epochs ,
                                              coda.opt.row_duration_sec );
+      }
       if ( param.has( "coda-lambda" ) )
         coda.opt.lambda = param.requires_dbl( "coda-lambda" );
       if ( param.has( "coda-min-contiguous" ) )
-        coda.opt.min_subject_contiguous_epochs = param.requires_int( "coda-min-contiguous" );
+        {
+          const int min_contiguous_minutes = param.requires_int( "coda-min-contiguous" );
+          const double rows = ( min_contiguous_minutes * 60.0 ) / coda.opt.row_duration_sec;
+          coda.opt.min_subject_contiguous_epochs = min_contiguous_minutes <= 0
+            ? 0
+            : std::max( 1 , (int)std::ceil( rows - 1e-9 ) );
+        }
       if ( param.has( "coda-min-stage-minutes" ) )
         coda.opt.min_stage_minutes = param.intvector( "coda-min-stage-minutes" );
       if ( param.has( "coda-min-kappa" ) )
-        coda.opt.min_stage1_kappa = param.requires_dbl( "coda-min-kappa" );
+        {
+          coda.opt.min_stage1_kappa = param.requires_dbl( "coda-min-kappa" );
+          coda.opt.min_stage1_kappa3 = coda.opt.min_stage1_kappa;
+        }
+      if ( param.has( "coda-min-kappa3" ) )
+        coda.opt.min_stage1_kappa3 = param.requires_dbl( "coda-min-kappa3" );
       if ( param.has( "coda-valid-n" ) )
         coda.opt.random_validation_subjects = param.requires_int( "coda-valid-n" );
       if ( param.has( "coda-weights" ) )
@@ -1986,12 +2000,20 @@ void proc_pops( edf_t & edf , param_t & param )
       if ( param.has( "coda-broad-stage-qc" ) )
         coda.opt.broad_stage_qc = true;
       if ( for_prediction )
-        coda.opt.do_SHAP = param.has( "SHAP" ) || param.has( "shap" ) ||
-                           param.has( "coda-SHAP" );
-      else if ( param.has( "hold-outs" ) )
-        coda.load_validation_ids( param.value( "hold-outs" ) );
-      else if ( param.has( "validation" ) )
-        coda.load_validation_ids( param.value( "validation" ) );
+        {
+          coda.opt.do_SHAP = param.has( "SHAP" ) || param.has( "shap" ) ||
+                             param.has( "coda-SHAP" );
+          coda.opt.output_both_stages = param.has( "pre-coda" ) ? param.yesno( "pre-coda" ) : false;
+        }
+      else
+        {
+          if ( param.has( "coda-exclude" ) )
+            coda.load_exclude_ids( param.value( "coda-exclude" ) );
+          if ( param.has( "hold-outs" ) )
+            coda.load_validation_ids( param.value( "hold-outs" ) );
+          else if ( param.has( "validation" ) )
+            coda.load_validation_ids( param.value( "validation" ) );
+        }
     };
 
   auto load_coda_posteriors_from_edf =
@@ -2112,6 +2134,15 @@ void proc_pops( edf_t & edf , param_t & param )
              << Helper::stringize( ch , "," ) << "]\n";
     };
 
+  auto coda_has_usable_rows = [&]( const Eigen::MatrixXd & P ,
+                                   const std::vector<bool> & flagged ) -> bool
+    {
+      for (int e = 0; e < P.rows(); e++)
+        if ( e >= (int)flagged.size() || ! flagged[e] )
+          return true;
+      return false;
+    };
+
   //
   // Standalone CODA prediction from a posteriors file.
   //
@@ -2121,10 +2152,7 @@ void proc_pops( edf_t & edf , param_t & param )
       pops_opt_t::set_options( param );
 
       static std::set<std::string> _coda_predicted;
-      const std::string pops_lib = param.has( "lib" ) ? Helper::expand( param.value( "lib" ) ) : "s2";
-      const std::string coda_model  =
-        pops_lib != "" ? pops_t::update_filepath( pops_lib + ".coda.mod" )
-                                    : pops_t::update_filepath( "coda.mod" );
+      const std::string coda_model  = pops_t::resolve_coda_model_file( param );
       const std::string post_file   = param.value( "posteriors" );
       const std::string guard_key   = coda_model + "|" + post_file + "|predict";
 
@@ -2148,10 +2176,7 @@ void proc_pops( edf_t & edf , param_t & param )
     {
       pops_opt_t::set_options( param );
 
-      const std::string pops_lib = param.has( "lib" ) ? Helper::expand( param.value( "lib" ) ) : "s2";
-      const std::string coda_model  =
-        pops_lib != "" ? pops_t::update_filepath( pops_lib + ".coda.mod" )
-                       : pops_t::update_filepath( "coda.mod" );
+      const std::string coda_model  = pops_t::resolve_coda_model_file( param );
 
       pops_coda_t coda;
       apply_coda_options( coda , true );
@@ -2165,7 +2190,9 @@ void proc_pops( edf_t & edf , param_t & param )
       bool has_staging = false;
 
       load_coda_posteriors_from_edf( coda , &P , &E , &flagged , &ne_total , &has_staging , &S );
-      if ( pops_opt_t::resolution_is_5s() && pops_opt_t::emit_pp )
+      if ( pops_opt_t::resolution_is_5s() &&
+           pops_opt_t::emit_pp &&
+           coda_has_usable_rows( P , flagged ) )
         {
           const Eigen::MatrixXd P_coda = coda.rescore( P , E , flagged );
           pops_posteriors::add_edf_signals( &edf ,
@@ -2178,7 +2205,7 @@ void proc_pops( edf_t & edf , param_t & param )
                                             pops_opt_t::posterior_prefix_coda ,
                                             "POPS-CODA" );
         }
-      coda.predict( P , E , flagged , ne_total , has_staging , S , &edf , NULL , NULL , false );
+      coda.predict( P , E , flagged , ne_total , has_staging , S , &edf , NULL , NULL , coda.opt.output_both_stages );
       return;
     }
 
@@ -2273,69 +2300,80 @@ void proc_pops( edf_t & edf , param_t & param )
 
   if ( !training_mode && param.has( "coda" ) )
     {
-      const std::string coda_file = pops_t::resolve_coda_model_file( param );
-
-      if ( !Helper::fileExists( coda_file ) )
+      if ( pops_opt_t::resolution_is_5s() )
         {
-          logger << "  ** POPS-CODA: model file not found: " << coda_file << " -- skipping\n";
-        }
-      else if ( indiv.ne == 0 )
-        {
-          logger << "  ** POPS-CODA: no valid epochs -- skipping\n";
+          logger << "  resolution=5 mode: skipping standard 30s CODA pass; "
+                 << "CODA will be applied within the 5s stride rescoring path\n";
         }
       else
         {
-          pops_coda_t::options_t coda_opt;
-          coda_opt.three_state = ( pops_opt_t::n_stages == 3 );
+          const std::string coda_file = pops_t::resolve_coda_model_file( param );
 
-          coda_opt.row_duration_sec = 30.0;
-          if ( param.has( "coda-context" ) )
-            coda_opt.context_epochs =
-              pops_coda_t::scale_context_epochs( param.requires_int( "coda-context" ) ,
-                                                 coda_opt.row_duration_sec );
-          if ( param.has( "coda-lambda" ) )
-            coda_opt.lambda = param.requires_dbl( "coda-lambda" );
-          if ( param.has( "coda-no-future" ) )
-            coda_opt.include_future = false;
-          coda_opt.do_SHAP = param.has( "SHAP" ) || param.has( "shap" ) ||
-                             param.has( "coda-SHAP" );
-
-          const std::string coda_key =
-            coda_file + "|" +
-            Helper::int2str( coda_opt.three_state ? 1 : 0 ) + "|" +
-            Helper::int2str( coda_opt.context_epochs ) + "|" +
-            Helper::dbl2str( coda_opt.lambda ) + "|" +
-            Helper::int2str( coda_opt.include_future ? 1 : 0 ) + "|" +
-            Helper::int2str( coda_opt.do_SHAP ? 1 : 0 );
-
-          static std::unique_ptr<pops_coda_t> coda;
-          static std::string coda_loaded_key = "";
-
-          if ( !coda || coda_loaded_key != coda_key )
+          if ( !Helper::fileExists( coda_file ) )
             {
-              coda.reset( new pops_coda_t() );
-              coda->opt = coda_opt;
-              coda->load( coda_file );
-              coda_loaded_key = coda_key;
+              logger << "  ** POPS-CODA: model file not found: " << coda_file << " -- skipping\n";
             }
-
-          // Build flagged[] for valid epochs: POPS_UNKNOWN or NaN in P
-          std::vector<bool> flagged( indiv.ne , false );
-          for (int e = 0; e < indiv.ne; e++)
+          else if ( indiv.ne == 0 || indiv.P.rows() == 0 || indiv.PS.empty() )
+            { }
+          else
             {
-              if ( indiv.PS[e] == POPS_UNKNOWN )
-                { flagged[e] = true; continue; }
-              for (int j = 0; j < indiv.P.cols(); j++)
-                if ( std::isnan( indiv.P(e,j) ) ) { flagged[e] = true; break; }
-            }
+              pops_coda_t::options_t coda_opt;
+              coda_opt.three_state = ( pops_opt_t::n_stages == 3 );
 
-          coda->predict( indiv.P ,
-                         indiv.E ,
-                         flagged ,
-                         indiv.ne_total ,
-                         indiv.has_staging ,
-                         indiv.S ,
-                         indiv.pedf );
+              coda_opt.row_duration_sec = 30.0;
+              if ( param.has( "coda-context" ) )
+                coda_opt.context_epochs =
+                  pops_coda_t::scale_context_epochs( param.requires_int( "coda-context" ) ,
+                                                     coda_opt.row_duration_sec );
+              if ( param.has( "coda-lambda" ) )
+                coda_opt.lambda = param.requires_dbl( "coda-lambda" );
+              if ( param.has( "coda-no-future" ) )
+                coda_opt.include_future = false;
+              coda_opt.do_SHAP = param.has( "SHAP" ) || param.has( "shap" ) ||
+                                 param.has( "coda-SHAP" );
+              coda_opt.output_both_stages = param.has( "pre-coda" ) ? param.yesno( "pre-coda" ) : false;
+
+              const std::string coda_key =
+                coda_file + "|" +
+                Helper::int2str( coda_opt.three_state ? 1 : 0 ) + "|" +
+                Helper::int2str( coda_opt.context_epochs ) + "|" +
+                Helper::dbl2str( coda_opt.lambda ) + "|" +
+                Helper::int2str( coda_opt.include_future ? 1 : 0 ) + "|" +
+                Helper::int2str( coda_opt.do_SHAP ? 1 : 0 ) + "|" +
+                Helper::int2str( coda_opt.output_both_stages ? 1 : 0 );
+
+              static std::unique_ptr<pops_coda_t> coda;
+              static std::string coda_loaded_key = "";
+
+              if ( !coda || coda_loaded_key != coda_key )
+                {
+                  coda.reset( new pops_coda_t() );
+                  coda->opt = coda_opt;
+                  coda->load( coda_file );
+                  coda_loaded_key = coda_key;
+                }
+
+              // Build flagged[] for valid epochs: POPS_UNKNOWN or NaN in P
+              std::vector<bool> flagged( indiv.ne , false );
+              for (int e = 0; e < indiv.ne; e++)
+                {
+                  if ( indiv.PS[e] == POPS_UNKNOWN )
+                    { flagged[e] = true; continue; }
+                  for (int j = 0; j < indiv.P.cols(); j++)
+                    if ( std::isnan( indiv.P(e,j) ) ) { flagged[e] = true; break; }
+                }
+
+              coda->predict( indiv.P ,
+                             indiv.E ,
+                             flagged ,
+                             indiv.ne_total ,
+                             indiv.has_staging ,
+                             indiv.S ,
+                             indiv.pedf ,
+                             NULL ,
+                             NULL ,
+                             false );
+            }
         }
     }
 
@@ -4295,11 +4333,12 @@ void proc_dump_cache( edf_t & edf , param_t & param )
       if ( param.has( "v" ) ) 
 	vars = param.strset( "v" );
       
-      edf.timeline.cache.import( filename , 
-				 param.requires( "cache" ) , 				 
-				 edf.id , 
+      edf.timeline.cache.import( filename ,
+				 param.requires( "cache" ) ,
+				 edf.id ,
 				 factors ,
-				 param.has( "v" ) ? &vars : NULL );
+				 param.has( "v" ) ? &vars : NULL ,
+				 param.has( "cmd" ) ? param.value( "cmd" ) : "" );
       
     }
 

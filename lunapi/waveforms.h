@@ -93,7 +93,8 @@ namespace waveform_core
     const double flank_left_secs ,
     const double flank_right_secs ,
     const std::string & align = "mid" ,
-    const std::string & require = "full" );
+    const std::string & require = "full" ,
+    const bool match_annot_channel = true );
 
   std::vector<std::string> feature_names(
     const waveform_feature_options_t & options = waveform_feature_options_t() );
