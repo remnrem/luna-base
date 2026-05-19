@@ -4439,8 +4439,15 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
       if ( outdir[ outdir.size() - 1 ] != globals::folder_delimiter ) 
 	outdir += globals::folder_delimiter;
 
-      // Write one file per EDF, mirroring WRITE edf-dir behavior.
-      filename = outdir + edf.id + ( xml_format ? ".xml" : ".annot" ); 
+      // Use path-stripped edf.id as stem (mirrors WRITE edf-dir; honors --id if set)
+      std::string id_stem = edf.id;
+      {
+	int v = 0;
+	for (int j = (int)id_stem.size()-1; j >= 0; j--)
+	  if (id_stem[j] == globals::folder_delimiter) { v=j+1; break; }
+	id_stem = id_stem.substr(v);
+      }
+      filename = outdir + id_stem + ( xml_format ? ".xml" : ".annot" );
       
       // create folder if it does not exist 
       // -p is (usually?) not needed for Windows

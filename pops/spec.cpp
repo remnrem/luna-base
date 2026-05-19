@@ -435,6 +435,8 @@ void pops_specs_t::init()
   lab2ftr[ "HP" ] = POPS_HJORTH;
   lab2ftr[ "FD" ] = POPS_FD;
   lab2ftr[ "PE" ] = POPS_PE;
+  lab2ftr[ "C22" ] = POPS_C22;
+  
   lab2ftr[ "MEAN" ] = POPS_MEAN;
   lab2ftr[ "OUTLIERS" ] = POPS_EPOCH_OUTLIER;
   lab2ftr[ "COVAR" ] = POPS_COVAR;
@@ -464,7 +466,8 @@ void pops_specs_t::init()
   ftr2lab[ POPS_HJORTH_LEGACY ] = "HJORTH";
   ftr2lab[ POPS_HJORTH ] = "HP";
   ftr2lab[ POPS_FD ] = "FD";      
-  ftr2lab[ POPS_PE ] = "PE";  
+  ftr2lab[ POPS_PE ] = "PE";
+  ftr2lab[ POPS_C22 ] = "C22";
   ftr2lab[ POPS_MEAN ] = "MEAN";
   ftr2lab[ POPS_EPOCH_OUTLIER ] = "OUTLIERS";
   ftr2lab[ POPS_COVAR ] = "COVAR";
@@ -552,6 +555,7 @@ void pops_specs_t::check_args()
 	    Helper::halt( "from=x and to=y must be between 3 and 7" );	  
         }
 
+      
       // COVAR (individual-level)
       if ( spec.ftr == pops_feature_t::POPS_COVAR )
 	{
@@ -911,6 +915,15 @@ int pops_spec_t::cols( int * t )
       return size ;
     }
 
+  // C22 
+  if ( ftr == POPS_C22 )
+    {
+      // assume: broad,slow,delta,theta,alpha,sigma,beta(7)
+      size = 22 * 7;
+      *t += size;
+      return size;
+    }
+  
   // COVAR
   if ( ftr == POPS_COVAR )
     {

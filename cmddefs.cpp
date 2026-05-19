@@ -7863,6 +7863,111 @@ void cmddefs_t::init()
   add_var( "DESAT" , "" , "T_SLEEP_VALID", "[matlab mode] Valid signal duration within sleep epochs (seconds)" );
 
   //
+  // RESP-LINK
+  //
+
+  add_cmd( "physio" , "RESP-LINK" , "Link respiratory events to likely desaturation and arousal responses" );
+  add_url( "RESP-LINK" , "resp/#desat-link" );
+  add_verb( "RESP-LINK" ,
+            "RESP-LINK performs event-centered response analysis rather than standalone desaturation detection. "
+            "It starts from respiratory annotations, anchors each event on event end, learns a record-level delayed "
+            "SpO2 response template when enough events are available, and then searches for each event's baseline, "
+            "nadir and recovery inside fixed hard windows. It also links qualifying arousal annotations back to the "
+            "same respiratory event using arousal onset timing. The design keeps the spirit of the Raichel/Azarbarzin "
+            "MATLAB approach while remaining simpler and easier to reason about in Luna.\n\n"
+            "Processing steps:\n"
+            "  1. Resolve respiratory annotation classes from resp= (default apnea,hypopnea).\n"
+            "  2. Resolve arousal annotation classes from arousal= (default arousal).\n"
+            "  3. Optionally restrict to sleep events if staging annotations are present.\n"
+            "  4. Apply a Matlab-style SpO2 preprocessing pass: optional 1 Hz low-pass, integer rounding,\n"
+            "     artifact rejection for low/out-of-range values, spikes, and +/- neighbor expansion.\n"
+            "  5. Extract wide windows around each event end and, if at least min-template events survive,\n"
+            "     build a median event-centered template waveform.\n"
+            "  6. Derive template baseline, nadir and recovery times. If the learned template is weak,\n"
+            "     fall back to Raichel-style defaults: baseline -7 s, nadir +22 s, recovery +34 s.\n"
+            "  7. For each event, search for baseline/nadir/recovery near the learned template times but clipped\n"
+            "     to hard windows and trimmed to avoid neighboring events.\n"
+            "  8. Link arousals whose onset is >= respiratory-event start and < respiratory-event end + 5 seconds.\n"
+            "  9. Write linkage metadata back onto the source respiratory annotations and emit per-event output tables." );
+
+  add_param( "RESP-LINK" , "sig"          , "SpO2"           , "Signal label for oxygen saturation (default SpO2)" );
+  add_param( "RESP-LINK" , "resp"         , "apnea,hypopnea" , "Comma-separated respiratory annotation class labels. Matching is exact, case-insensitive, against annotation class names." );
+  add_param( "RESP-LINK" , "arousal"      , "arousal"        , "Comma-separated arousal annotation class labels. Matching is exact, case-insensitive, against annotation class names." );
+  add_param( "RESP-LINK" , "sleep"        , "yes"            , "If yes and staging is present, restrict both template building and linking to sleep events only (default yes)" );
+
+  add_param( "RESP-LINK" , "low"          , "40"  , "Low artifact threshold for SpO2. This default follows the Raichel artifact rejector." );
+  add_param( "RESP-LINK" , "spike"        , "10"  , "Spike threshold: |delta| greater than this between adjacent valid samples flags artifact" );
+  add_param( "RESP-LINK" , "neighbor"     , "2"   , "Expand artifact regions by +/- N seconds. This default follows the Raichel artifact rejector." );
+  add_param( "RESP-LINK" , "lp"           , "1"   , "Low-pass cutoff Hz applied before artifact detection. This default follows the Raichel artifact rejector." );
+  add_param( "RESP-LINK" , "lp-order"     , "2"   , "Low-pass filter order (default 2, as in the Raichel artifact rejector)" );
+  add_param( "RESP-LINK" , "no-round"     , ""    , "If present, skip integer rounding after low-pass filtering. Rounding is on by default to follow the Raichel preprocessing." );
+
+  add_param( "RESP-LINK" , "template-pre" , "120" , "Seconds of pre-event-end signal used when building the learned template. This default follows Raichel's makeHBboxes range." );
+  add_param( "RESP-LINK" , "template-post", "120" , "Seconds of post-event-end signal used when building the learned template. This default follows Raichel's makeHBboxes range." );
+  add_param( "RESP-LINK" , "min-template" , "8"   , "Minimum number of usable events required to learn a template. This default follows the Raichel minimum-event rule." );
+  add_param( "RESP-LINK" , "baseline-pre" , "30"  , "Hard maximum look-back window for baseline search (seconds before event end)" );
+  add_param( "RESP-LINK" , "baseline-hw"  , "8"   , "Half-width of the learned baseline search window around the template baseline time (seconds)" );
+  add_param( "RESP-LINK" , "nadir-min"    , "5"   , "Earliest allowed nadir time after event end (seconds)" );
+  add_param( "RESP-LINK" , "nadir-max"    , "45"  , "Latest allowed nadir time after event end (seconds). The 45 s default follows Raichel's capped search range." );
+  add_param( "RESP-LINK" , "nadir-hw"     , "12"  , "Half-width of the learned nadir search window around the template nadir time (seconds)" );
+  add_param( "RESP-LINK" , "recovery-max" , "60"  , "Hard maximum recovery time after event end (seconds)" );
+  add_param( "RESP-LINK" , "recovery-hw"  , "15"  , "Half-width of the learned recovery search window around the template recovery time (seconds)" );
+  add_param( "RESP-LINK" , "recovery"     , "0.75", "Recovery fraction used to mark recovery after nadir: first sample reaching nadir + recovery * (baseline - nadir)" );
+  add_param( "RESP-LINK" , "drop"         , "2"   , "Minimum baseline-to-nadir drop required for a link to be accepted (default 2%)" );
+  add_param( "RESP-LINK" , "gap-tol"      , "2"   , "Neighbor-event guard tolerance in seconds when trimming search windows. This keeps the spirit of Raichel's overlap protection." );
+
+  add_table( "RESP-LINK" , "" , "Individual-level summary" );
+  add_var( "RESP-LINK" , "" , "N_RESP"            , "Number of respiratory events analyzed" );
+  add_var( "RESP-LINK" , "" , "N_TEMPLATE"        , "Number of events contributing to the learned template" );
+  add_var( "RESP-LINK" , "" , "N_LINKED"          , "Number of respiratory events assigned a linked desaturation" );
+  add_var( "RESP-LINK" , "" , "PCT_LINKED"        , "Percentage of analyzed respiratory events with a linked desaturation" );
+  add_var( "RESP-LINK" , "" , "TEMPLATE_LEARNED"  , "1 if a learned template was used; 0 if fallback timings were used" );
+  add_var( "RESP-LINK" , "" , "TEMPLATE_BASE_T"   , "Template baseline time relative to event end (seconds)" );
+  add_var( "RESP-LINK" , "" , "TEMPLATE_NADIR_T"  , "Template nadir time relative to event end (seconds)" );
+  add_var( "RESP-LINK" , "" , "TEMPLATE_REC_T"    , "Template recovery time relative to event end (seconds)" );
+  add_var( "RESP-LINK" , "" , "TEMPLATE_DROP"     , "Template baseline-to-nadir drop magnitude (%)" );
+  add_var( "RESP-LINK" , "" , "DROP_MEAN"         , "Mean linked desaturation magnitude across linked events (%)" );
+  add_var( "RESP-LINK" , "" , "DELAY_MEAN"        , "Mean event-end to nadir delay across linked events (seconds)" );
+
+  add_table( "RESP-LINK" , "TPL" , "Learned event-centered template profile" );
+  add_var( "RESP-LINK" , "TPL" , "T"      , "Time relative to respiratory event end (seconds)" );
+  add_var( "RESP-LINK" , "TPL" , "D_SPO2" , "Robust-mean baseline-centered template SpO2 profile (%)" );
+  add_var( "RESP-LINK" , "TPL" , "D_SPO2_S" , "Smoothed robust-mean baseline-centered template SpO2 profile used for landmark detection (%)" );
+
+  add_table( "RESP-LINK" , "RDL" , "Per-event respiratory/desaturation/arousal linkage output" );
+  add_var( "RESP-LINK" , "RDL" , "RESP_START" , "Respiratory event start time (seconds from recording start)" );
+  add_var( "RESP-LINK" , "RDL" , "RESP_STOP"  , "Respiratory event stop time (seconds from recording start)" );
+  add_var( "RESP-LINK" , "RDL" , "RESP_DUR"   , "Respiratory event duration (seconds)" );
+  add_var( "RESP-LINK" , "RDL" , "TYPE"       , "Source respiratory annotation label" );
+  add_var( "RESP-LINK" , "RDL" , "SLEEP"      , "1 if the respiratory event occurred during sleep (or if no staging is available)" );
+  add_var( "RESP-LINK" , "RDL" , "LINKED"     , "1 if a desaturation was linked to this respiratory event" );
+  add_var( "RESP-LINK" , "RDL" , "REJECT"     , "Reason a respiratory event was not linked or could not be localized; '.' if linked" );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_LINKED" , "1 if a qualifying arousal was linked to this respiratory event" );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_REJECT" , "Reason no arousal was linked; '.' if linked" );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_TYPE" , "Source arousal annotation label" );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_START" , "Linked arousal start time (seconds from recording start)" );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_STOP" , "Linked arousal stop time (seconds from recording start)" );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_DUR" , "Linked arousal duration (seconds)" );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_ONSET_FROM_START" , "Linked arousal onset relative to respiratory event start (seconds)" );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_ONSET_FROM_STOP" , "Linked arousal onset relative to respiratory event stop (seconds)" );
+  add_var( "RESP-LINK" , "RDL" , "BASE_CENTER_T" , "Target baseline-center time relative to respiratory event end (seconds)" );
+  add_var( "RESP-LINK" , "RDL" , "NADIR_CENTER_T" , "Target nadir-center time relative to respiratory event end (seconds)" );
+  add_var( "RESP-LINK" , "RDL" , "REC_CENTER_T" , "Target recovery-center time relative to respiratory event end (seconds)" );
+  add_var( "RESP-LINK" , "RDL" , "PREV_REL_STOP" , "Previous respiratory event stop time relative to current respiratory event end (seconds)" );
+  add_var( "RESP-LINK" , "RDL" , "NEXT_REL_START" , "Next respiratory event start time relative to current respiratory event end (seconds)" );
+  add_var( "RESP-LINK" , "RDL" , "BASE_A"     , "Baseline-search window start time (seconds from recording start)" );
+  add_var( "RESP-LINK" , "RDL" , "BASE_B"     , "Baseline-search window stop time (seconds from recording start)" );
+  add_var( "RESP-LINK" , "RDL" , "NAD_A"      , "Nadir-search window start time (seconds from recording start)" );
+  add_var( "RESP-LINK" , "RDL" , "NAD_B"      , "Nadir-search window stop time (seconds from recording start)" );
+  add_var( "RESP-LINK" , "RDL" , "BASE_T"     , "Linked baseline time (seconds from recording start)" );
+  add_var( "RESP-LINK" , "RDL" , "BASELINE"   , "Linked baseline SpO2 (%)" );
+  add_var( "RESP-LINK" , "RDL" , "NADIR_T"    , "Linked nadir time (seconds from recording start)" );
+  add_var( "RESP-LINK" , "RDL" , "NADIR"      , "Linked nadir SpO2 (%)" );
+  add_var( "RESP-LINK" , "RDL" , "REC_T"      , "Linked recovery time (seconds from recording start)" );
+  add_var( "RESP-LINK" , "RDL" , "RECOVERY"   , "Linked recovery SpO2 (%)" );
+  add_var( "RESP-LINK" , "RDL" , "DROP"       , "Linked desaturation magnitude: baseline - nadir (%)" );
+
+  //
   // RESPBREATH
   //
 

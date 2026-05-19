@@ -47,6 +47,7 @@ enum pops_feature_t
     POPS_HJORTH ,        // moving forward, 'typical' Hjorth complexity --> 'HP' 
     POPS_FD ,
     POPS_PE ,
+    POPS_C22 ,  
     POPS_MEAN ,
     POPS_COVAR ,     // from ivars
     

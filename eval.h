@@ -353,6 +353,7 @@ void proc_combine_suds_cmdline();
 
 void proc_hypoxic_burden( edf_t & , param_t & );
 void proc_desat( edf_t & , param_t & );
+void proc_desat_link( edf_t & , param_t & );
 void proc_respbreath( edf_t & , param_t & );
 
 void proc_annotate( edf_t & , param_t & );

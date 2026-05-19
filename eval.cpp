@@ -24,6 +24,7 @@
 #include "eval.h"
 #include "param.h"
 #include "luna.h"
+#include "resp/resp_desat_link.h"
 #include "edf/slice.h"
 #include "pops/posteriors.h"
 #include "timeline/actig.h"
@@ -1017,7 +1018,8 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "EPOCH-ANNOT" ) )  { fnd = true; proc_file_annot( edf , param(c) ); }
       if ( (!fnd) && is( c, "EPOCH-MASK" ) )   { fnd = true; proc_epoch_mask( edf, param(c) ); }
       if ( (!fnd) && is( c, "HB" ) )           { fnd = true; proc_hypoxic_burden( edf, param(c) ); }
-      if ( (!fnd) && is( c, "DESAT" ) )        { fnd = true; proc_desat( edf, param(c) ); }
+      if ( (!fnd) && is( c, "DESAT" ) )       { fnd = true; proc_desat( edf, param(c) ); }
+      if ( (!fnd) && is( c, "RESP-LINK" ) )   { fnd = true; proc_desat_link( edf, param(c) ); }
       if ( (!fnd) && is( c, "RESPBREATH" ) )  { fnd = true; proc_respbreath( edf, param(c) ); }
       if ( (!fnd) && is( c, "FILTER" ) )       { fnd = true; proc_filter( edf, param(c) ); }
       if ( (!fnd) && is( c, "FILTER-DESIGN" )) { fnd = true; proc_filter_design( edf, param(c) ); }
@@ -3233,13 +3235,31 @@ void proc_write( edf_t & edf , param_t & param )
 
       //Helper::halt("edf-dir value must end in '" + std::string(1,globals::folder_delimiter) + "' to specify a folder" );
 
-      int p=filename.size()-1;
-      int v = 0;
-      for (int j=p;j>=0;j--)
+      if ( param.has("edf") )
 	{
-	  if ( filename[j] == globals::folder_delimiter ) { v=j+1; break; }
+	  // explicit output filename: strip path and prepend outdir
+	  int p=filename.size()-1;
+	  int v = 0;
+	  for (int j=p;j>=0;j--)
+	    if ( filename[j] == globals::folder_delimiter ) { v=j+1; break; }
+	  filename = outdir + filename.substr( v );
 	}
-      filename = outdir + filename.substr( v );            
+      else
+	{
+	  // Use path-stripped edf.id as stem (honors --id if set)
+	  std::string stem = edf.id;
+	  {
+	    int v = 0;
+	    for (int j=(int)stem.size()-1; j>=0; j--)
+	      if (stem[j] == globals::folder_delimiter) { v=j+1; break; }
+	    stem = stem.substr(v);
+	  }
+	  std::string ext = std::string(".edf") + (edfz ? ".gz" : "");
+	  if ( param.has("edf-tag") )
+	    filename = outdir + stem + "-" + param.value("edf-tag") + ext;
+	  else
+	    filename = outdir + stem + ext;
+	}
       
       // create folder if it does not exist 
       // -p is (usually?) not needed for Windows
@@ -4460,6 +4480,12 @@ void proc_desat( edf_t & edf , param_t & param )
   desat_t ds( edf , param );
 }
 
+// RESP-LINK : Respiratory event response linker
+void proc_desat_link( edf_t & edf , param_t & param )
+{
+  resp_desat_link_t rdl( edf , param );
+}
+
 // RESPBREATH : Respiratory breath segmentation
 void proc_respbreath( edf_t & edf , param_t & param )
 {
@@ -5008,6 +5034,8 @@ void proc_reference( edf_t & edf , param_t & param )
   signal_list_t references;
   std::string refstr = param.requires( "ref" );
   if ( refstr != "." ) references = edf.header.signal_list( refstr );
+  if ( refstr != "." && references.size() == 0 )
+    Helper::halt( "no valid ref channels specified" );
 
   // if new channel label given, then also rename signal 
   // REFERENCE sig=C3 ref=A2 new=C3_A2
@@ -5045,6 +5073,8 @@ void proc_dereference( edf_t & edf , param_t & param )
   signal_list_t references;
   std::string refstr = param.requires( "ref" );
   if ( refstr != "." ) references = edf.header.signal_list( refstr );
+  if ( refstr != "." && references.size() == 0 )
+    Helper::halt( "no valid ref channels specified" );
 
   bool make_new = param.has( "new" );
   std::vector<std::string> new_channels;

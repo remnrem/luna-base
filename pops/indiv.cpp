@@ -1250,7 +1250,8 @@ void pops_indiv_t::level1( edf_t & edf )
 	  const bool do_pe = pops_t::specs.has( pops_feature_t::POPS_PE , siglab );
 	  
 	  const bool do_pfd = pops_t::specs.has( pops_feature_t::POPS_FD , siglab );
-	
+
+	  const bool do_catch22 = pops_t::specs.has( pops_feature_t::POPS_C22 , siglab );
 	  
 	  //
 	  // PSD (Welch)
@@ -1582,6 +1583,16 @@ void pops_indiv_t::level1( edf_t & edf )
 		 }	       
 	     }
 
+	   
+	   // catch22 * 7 bands
+	   if ( do_catch22 && ! bad_epoch )
+	     {
+	       //
+	       // ... add
+	       //
+	     }
+
+	   
 	   //
 	   // Hjorth parameters (legacy calculation of complexity):
 	   // these are always calculated for (trainer) QC, but 
