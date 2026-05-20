@@ -266,7 +266,7 @@ void globals::init_defs()
 
   major_version_number = 1;
   minor_version_number = 6;
-  patch_version_number = 0;
+  patch_version_number = 1;
 
   // should always be 11 chars
   date    = "20-May-2026";

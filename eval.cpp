@@ -6907,12 +6907,16 @@ void proc_requires( edf_t & edf , param_t & param )
       // std::cout << " n1 " << n1 << " " << globals::major_version_number << "\n"
       // 		<< " n2 " << n2 << " " << globals::minor_version_number << "\n"
       // 		<< " n3 " << n3 << " " << globals::patch_version_number << "\n";
-      
-	if ( n1 > globals::major_version_number ||
-	   ( has2 && n2 > globals::minor_version_number ) ||
-	   ( has3 && n3 > globals::patch_version_number ) )
-	Helper::halt( "required version " + v + " but current Luna is " + globals::version );
 
+      bool okay = true;
+      
+      if ( n1 > globals::major_version_number ) okay = false;
+      else if ( has2 && n2 > globals::minor_version_number ) okay = false;
+      else if ( has3 && n3 > globals::patch_version_number ) okay = false;
+
+      if ( ! okay ) 
+	Helper::halt( "required version " + v + " but current Luna is " + globals::version );
+      
       logger << "  current Luna version " << globals::version << " satisfies required version " << v << "\n";
       
     }
