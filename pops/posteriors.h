@@ -35,6 +35,8 @@ struct edf_t;
 
 namespace pops_posteriors {
 
+std::string invalid_channel_label( const std::string & prefix );
+
 bool add_edf_channels( edf_t * pedf ,
                        const Eigen::MatrixXd & P ,
                        const std::vector<int> & E ,

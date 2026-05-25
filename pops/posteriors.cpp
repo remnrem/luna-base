@@ -85,6 +85,11 @@ bool can_add_epoch_posteriors( edf_t * pedf , const int ne_total , const std::st
 
 }
 
+std::string pops_posteriors::invalid_channel_label( const std::string & prefix )
+{
+  return prefix + "_INVALID";
+}
+
 bool pops_posteriors::add_edf_channels( edf_t * pedf ,
                                         const Eigen::MatrixXd & P ,
                                         const std::vector<int> & E ,
@@ -110,6 +115,7 @@ bool pops_posteriors::add_edf_channels( edf_t * pedf ,
     Helper::halt( source_tag + ": posterior column count does not match requested state space" );
 
   std::vector< std::vector<double> > data( nc , std::vector<double>( ne_total , -9.0 ) );
+  std::vector<double> invalid( ne_total , 1.0 );
   int n_bad = 0;
 
   for (int e = 0; e < (int)E.size(); e++)
@@ -124,6 +130,7 @@ bool pops_posteriors::add_edf_channels( edf_t * pedf ,
           continue;
         }
 
+      invalid[epoch] = 0.0;
       for (int j = 0; j < nc; j++)
         data[j][epoch] = P(e,j);
     }
@@ -143,9 +150,19 @@ bool pops_posteriors::add_edf_channels( edf_t * pedf ,
       ++added;
     }
 
+  const std::string invalid_ch = invalid_channel_label( prefix );
+  if ( pedf->header.has_signal( invalid_ch ) )
+    logger << "  ** " << source_tag << ": channel " << invalid_ch
+           << " already exists, skipping\n";
+  else
+    {
+      pedf->add_signal( invalid_ch , -1 , invalid , 0.0 , 1.0 );
+      ++added;
+    }
+
   if ( added > 0 )
     logger << "  " << source_tag << ": added " << added
-           << " posterior channel(s) to EDF with prefix '" << prefix << "'"
+           << " channel(s) to EDF with prefix '" << prefix << "'"
            << ( n_bad ? " (" + Helper::int2str( n_bad ) + " flagged/skipped epochs written as -9)" : "" )
            << "\n";
 

@@ -48,7 +48,7 @@ namespace {
 std::vector<std::string> * g_recursive_lwf_files = NULL;
 
 const char * const LWF_MAGIC = "LWF1";
-const int LWF_VERSION = 2;
+const int LWF_VERSION = 3;
 
 std::string get_lwf_dir_param( param_t & param )
 {
@@ -61,7 +61,8 @@ struct channel_info_t {
   int slot;
   std::string label;
   std::string unit;
-  int sr;
+  double sr;
+  uint64_t sample_step_tp;
   int min_samples;
   int max_samples;
 };
@@ -101,6 +102,12 @@ struct file_summary_t {
   int n_waves;
   std::map<std::string,int> annot_counts;
 };
+
+long long sr_summary_key( const double sr )
+{
+  if ( sr <= 0 ) return 0;
+  return std::llround( sr * 1000000.0 );
+}
 
 
 void write_u32( std::ofstream & O , const uint32_t x )
@@ -345,11 +352,14 @@ std::vector<std::string> get_summary_dirs( param_t & param )
 }
 
 
-std::string next_output_file( const std::string & dir , const std::string & id , const std::string & tag )
+std::string next_output_file( const std::string & dir , const std::string & id , const std::string & tag , const bool overwrite )
 {
   const std::string sid = sanitize_filename_part( id , "ID" );
   const std::string stag = sanitize_filename_part( tag , "waveform" );
   const std::string prefix = sid + "__" + stag + "__";
+
+  if ( overwrite )
+    return dir + prefix + "0001.lwf";
 
   int seq = 1;
   DIR * dp = opendir( dir.c_str() );
@@ -415,7 +425,8 @@ std::vector<channel_info_t> get_channels( edf_t & edf , param_t & param )
       ch.slot = signals(s);
       ch.label = signals.label(s);
       ch.unit = edf.header.phys_dimension[ signals(s) ];
-      ch.sr = (int)edf.header.sampling_freq( signals(s) );
+      ch.sr = edf.header.sampling_freq( signals(s) );
+      ch.sample_step_tp = 0LLU;
       ch.min_samples = std::numeric_limits<int>::max();
       ch.max_samples = 0;
       if ( ch.sr <= 0 )
@@ -624,7 +635,8 @@ uint64_t header_storage_bytes( edf_t & edf , const std::string & outfile , const
     {
       n += string_storage_bytes( channels[i].label );
       n += string_storage_bytes( channels[i].unit );
-      n += (uint64_t)sizeof(int);
+      n += (uint64_t)sizeof(uint64_t);
+      n += (uint64_t)sizeof(double);
     }
   n += (uint64_t)sizeof(int);
   for (int i=0; i<feature_names.size(); i++) n += string_storage_bytes( feature_names[i] );
@@ -655,7 +667,8 @@ void write_header( std::ofstream & O , edf_t & edf , const std::string & outfile
     {
       write_string( O , channels[i].label );
       write_string( O , channels[i].unit );
-      write_i32( O , channels[i].sr );
+      write_u64( O , channels[i].sample_step_tp );
+      write_f64( O , channels[i].sr );
     }
 
   write_i32( O , feature_names.size() );
@@ -735,7 +748,7 @@ file_summary_t read_summary( const std::string & file )
     Helper::halt( "invalid .lwf file: " + file );
 
   const int version = read_i32( I );
-  if ( version != 1 && version != LWF_VERSION )
+  if ( version != LWF_VERSION )
     Helper::halt( "unsupported .lwf version in " + file );
 
   s.id = read_string( I );
@@ -756,17 +769,14 @@ file_summary_t read_summary( const std::string & file )
       s.channels[c].slot = -1;
       s.channels[c].label = read_string( I );
       s.channels[c].unit = read_string( I );
-      s.channels[c].sr = read_i32( I );
+      s.channels[c].sample_step_tp = read_u64( I );
+      s.channels[c].sr = read_f64( I );
       s.channels[c].min_samples = std::numeric_limits<int>::max();
       s.channels[c].max_samples = 0;
     }
 
-  if ( version >= 2 )
-    {
-      const int n_features = read_i32( I );
-      for (int i=0; i<n_features; i++) s.feature_names.push_back( read_string( I ) );
-    }
-
+  const int n_features = read_i32( I );
+  for (int i=0; i<n_features; i++) s.feature_names.push_back( read_string( I ) );
   s.n_waves = read_i32( I );
 
   for (int w=0; w<s.n_waves; w++)
@@ -840,6 +850,7 @@ void dsptools::waveform( edf_t & edf , param_t & param )
 {
   const std::string dir = norm_dir( get_lwf_dir_param( param ) );
   const std::string tag = param.has( "tag" ) ? param.value( "tag" ) : "";
+  const bool overwrite = param.has( "overwrite" ) ? param.yesno( "overwrite" ) : false;
   const std::string align = get_align( param );
   const std::string require = get_require_mode( param );
   const bool match_annot_channel = get_match_annot_channel( param );
@@ -878,11 +889,20 @@ void dsptools::waveform( edf_t & edf , param_t & param )
       const waveform_event_t & wave = extracted.events[e];
       for (int c=0; c<wave.blocks.size() && c<channels.size(); c++)
         {
+          if ( channels[c].sample_step_tp == 0LLU )
+            channels[c].sample_step_tp = wave.blocks[c].sample_step_tp;
+          else if ( wave.blocks[c].sample_step_tp != 0LLU
+                    && channels[c].sample_step_tp != wave.blocks[c].sample_step_tp )
+            Helper::halt( "inconsistent sample_step_tp for signal " + channels[c].label + " in WAVEFORM" );
           const int n = wave.blocks[c].values.size();
           if ( n < channels[c].min_samples ) channels[c].min_samples = n;
           if ( n > channels[c].max_samples ) channels[c].max_samples = n;
         }
     }
+
+  for (int c=0; c<channels.size(); c++)
+    if ( channels[c].sample_step_tp == 0LLU )
+      Helper::halt( "could not determine exact sample step for signal " + channels[c].label + " in WAVEFORM" );
 
   if ( extracted.events.size() == 0 )
     Helper::halt( "no valid waveforms could be extracted for WAVEFORM" );
@@ -892,9 +912,10 @@ void dsptools::waveform( edf_t & edf , param_t & param )
   for (int i=0; i<extracted.events.size(); i++)
     valid_index.push_back( make_wave_index( extracted.events[i] ) );
 
-  const std::string outfile = next_output_file( dir , edf.id , tag );
+  const std::string outfile = next_output_file( dir , edf.id , tag , overwrite );
 
-  logger << "  writing " << extracted.events.size() << " waveform(s) to " << outfile << "\n";
+  logger << "  writing " << extracted.events.size() << " waveform(s) to " << outfile
+         << ( overwrite ? " [overwrite]" : "" ) << "\n";
 
   std::ofstream O( outfile.c_str() , std::ios::binary | std::ios::out );
   if ( ! O ) Helper::halt( "could not open output file " + outfile );
@@ -950,7 +971,7 @@ void dsptools::waveform_summary( param_t & param )
   std::set<std::string> ids;
   std::set<std::string> tags;
   std::set<std::string> annots;
-  std::map<std::string,std::set<int> > ch2sr;
+  std::map<std::string,std::set<long long> > ch2sr;
   std::map<std::string,int> event_counts;
 
   for (int i=0; i<files.size(); i++)
@@ -961,7 +982,7 @@ void dsptools::waveform_summary( param_t & param )
       ids.insert( s.id );
       if ( s.tag != "" ) tags.insert( s.tag );
       for (int a=0; a<s.def_annots.size(); a++) annots.insert( s.def_annots[a] );
-      for (int c=0; c<s.channels.size(); c++) ch2sr[ s.channels[c].label ].insert( s.channels[c].sr );
+      for (int c=0; c<s.channels.size(); c++) ch2sr[ s.channels[c].label ].insert( sr_summary_key( s.channels[c].sr ) );
       std::map<std::string,int>::const_iterator aa = s.annot_counts.begin();
       while ( aa != s.annot_counts.end() )
         {
@@ -989,7 +1010,7 @@ void dsptools::waveform_summary( param_t & param )
   if ( tags.size() )
     logger << "  tags             = " << join_strings( std::vector<std::string>( tags.begin() , tags.end() ) , ", " ) << "\n";
 
-  std::map<std::string,std::set<int> >::const_iterator cc = ch2sr.begin();
+  std::map<std::string,std::set<long long> >::const_iterator cc = ch2sr.begin();
   while ( cc != ch2sr.end() )
     {
       if ( cc->second.size() > 1 )

@@ -52,7 +52,9 @@ struct channel_cache_t {
   std::string label;
   std::string unit;
   int slot = -1;
-  int sr = 0;
+  double sr = 0.0;
+  uint64_t sample_step_tp = 0LLU;
+  std::vector<uint64_t> timepoints;
   std::vector<double> times;
   std::vector<double> values;
 };
@@ -131,7 +133,7 @@ std::vector<channel_cache_t> build_channel_caches(edf_t & edf, const std::vector
       ch.label = channels[c];
       ch.unit = edf.header.phys_dimension[ slot ];
       ch.slot = slot;
-      ch.sr = (int)edf.header.sampling_freq( slot );
+      ch.sr = edf.header.sampling_freq( slot );
       if ( ch.sr <= 0 ) continue;
 
       slice_t slice( edf , slot , edf.timeline.wholetrace() );
@@ -139,7 +141,32 @@ std::vector<channel_cache_t> build_channel_caches(edf_t & edf, const std::vector
       const std::vector<uint64_t> * tp = slice.ptimepoints();
       if ( data == NULL || tp == NULL || data->size() == 0 || tp->size() != data->size() ) continue;
 
+      if ( tp->size() >= 2 )
+        {
+          uint64_t step_tp = 0LLU;
+          bool valid_step = true;
+          for (int i = 1; i < tp->size(); ++i)
+            {
+              if ( (*tp)[i] <= (*tp)[i - 1] )
+                {
+                  valid_step = false;
+                  break;
+                }
+              const uint64_t delta = (*tp)[i] - (*tp)[i - 1];
+              if ( step_tp == 0LLU ) step_tp = delta;
+              else if ( delta != step_tp )
+                {
+                  valid_step = false;
+                  break;
+                }
+            }
+          if ( ! valid_step || step_tp == 0LLU ) continue;
+          ch.sample_step_tp = step_tp;
+        }
+      if ( ch.sample_step_tp == 0LLU ) continue;
+
       ch.values.assign( data->begin() , data->end() );
+      ch.timepoints.assign( tp->begin() , tp->end() );
       ch.times.resize( tp->size() );
       for (int i = 0; i < tp->size(); ++i)
         ch.times[i] = (*tp)[i] * globals::tp_duration;
@@ -231,9 +258,12 @@ waveform_extract_result_t extract_fixed_window_waveforms(
   const std::vector<std::string> & channels ,
   const double pre_secs ,
   const double post_secs ,
-  const std::string & align0 )
+  const std::string & align0 ,
+  const std::string & require )
 {
   const std::string align = normalize_align( align0 );
+  if ( require != "full" )
+    Helper::halt( "fixed-window waveform extraction currently requires require=full" );
   waveform_extract_result_t out;
   out.requested_annots = annots;
   out.requested_channels = channels;
@@ -261,9 +291,15 @@ waveform_extract_result_t extract_fixed_window_waveforms(
       for (int c = 0; c < caches.size(); ++c)
         {
           const channel_cache_t & ch = caches[c];
-          if ( ch.times.size() < 2 ) { ++out.dropped["too_short"]; continue; }
-          const int n_pre = (int)std::llround( pre_secs * ch.sr );
-          const int n_post = (int)std::llround( post_secs * ch.sr );
+          if ( ch.times.size() < 2 || ch.timepoints.size() != ch.times.size() || ch.sample_step_tp == 0LLU )
+            {
+              ++out.dropped["too_short"];
+              continue;
+            }
+          const uint64_t pre_tp = (uint64_t)std::llround( std::max( 0.0 , pre_secs ) * globals::tp_1sec );
+          const uint64_t post_tp = (uint64_t)std::llround( std::max( 0.0 , post_secs ) * globals::tp_1sec );
+          const int n_pre = (int)std::llround( (double)pre_tp / (double)ch.sample_step_tp );
+          const int n_post = (int)std::llround( (double)post_tp / (double)ch.sample_step_tp );
           const int center = nearest_index( ch.times , events[e].anchor_sec );
           const int lo = center - n_pre;
           const int hi = center + n_post;
@@ -273,28 +309,29 @@ waveform_extract_result_t extract_fixed_window_waveforms(
               continue;
             }
 
-          const double sample_dt = 1.0 / (double)ch.sr;
-          const double gap_tol = std::max( 1e-6 , sample_dt * 0.25 );
+          const double sample_dt = (double)ch.sample_step_tp * globals::tp_duration;
           waveform_block_t block;
           block.label = ch.label;
           block.unit = ch.unit;
           block.sr = ch.sr;
+          block.sample_step_tp = ch.sample_step_tp;
           block.data_start_sec = ch.times[lo];
           block.data_stop_sec = ch.times[hi] + sample_dt;
           block.rel_time.resize( hi - lo + 1 );
           block.values.resize( hi - lo + 1 );
           bool okay = true;
+          const uint64_t center_tp = ch.timepoints[center];
           for (int i = lo; i <= hi; ++i)
             {
               const int j = i - lo;
-              const double expected = ( j - n_pre ) / (double)ch.sr;
-              const double rel = ch.times[i] - ch.times[center];
-              if ( std::fabs( rel - expected ) > gap_tol )
+              const int64_t offset = (int64_t)( j - n_pre );
+              const int64_t expected_tp = (int64_t)center_tp + offset * (int64_t)ch.sample_step_tp;
+              if ( (int64_t)ch.timepoints[i] != expected_tp )
                 {
                   okay = false;
                   break;
                 }
-              block.rel_time[j] = rel;
+              block.rel_time[j] = ( (double)ch.timepoints[i] - (double)center_tp ) * globals::tp_duration;
               block.values[j] = ch.values[i];
             }
           if ( ! okay )
@@ -397,8 +434,9 @@ waveform_extract_result_t extract_annotation_window_waveforms(
           block.label = ch.label;
           block.unit = ch.unit;
           block.sr = ch.sr;
+          block.sample_step_tp = ch.sample_step_tp;
           block.data_start_sec = (*tp)[0] * globals::tp_duration;
-          block.data_stop_sec = (*tp)[ tp->size() - 1 ] * globals::tp_duration + ( 1.0 / (double)ch.sr );
+          block.data_stop_sec = (*tp)[ tp->size() - 1 ] * globals::tp_duration + ( (double)ch.sample_step_tp * globals::tp_duration );
           block.rel_time.resize( tp->size() );
           block.values.resize( data->size() );
           for (int i = 0; i < tp->size(); ++i)
@@ -463,7 +501,7 @@ waveform_extract_result_t lunapi_inst_t::extract_event_waveforms(
   if ( require != "full" && require != "any" )
     Helper::halt( "require must be full or any" );
   lunapi_inst_t * self = const_cast<lunapi_inst_t*>( this );
-  return waveform_core::extract_fixed_window_waveforms( self->edf , annots , chs , pre_secs , post_secs , align );
+  return waveform_core::extract_fixed_window_waveforms( self->edf , annots , chs , pre_secs , post_secs , align , require );
 }
 
 

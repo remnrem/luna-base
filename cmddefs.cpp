@@ -4386,7 +4386,10 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "N1"         , "PP_N1"  , "Channel name for N1 posterior" );
   add_param( "HDSTATS" , "N2"         , "PP_N2"  , "Channel name for N2 posterior" );
   add_param( "HDSTATS" , "N3"         , "PP_N3"  , "Channel name for N3 posterior" );
+  add_param( "HDSTATS" , "NR"         , "PP_NR"  , "Channel name for NREM posterior output used by emit-nr-pp" );
   add_param( "HDSTATS" , "R"          , "PP_R"   , "Channel name for REM posterior" );
+  add_param( "HDSTATS" , "emit-nr-pp" , "F"      , "If set, create NR by summing any available N1/N2/N3 posterior channels unless NR already exists; errors if none of N1/N2/N3 are present, then continues with HDSTATS unless emit-stats=F" );
+  add_param( "HDSTATS" , "emit-stats" , "T"      , "Emit the normal HDSTATS summaries/tables; set F to only run helper actions such as emit-nr-pp" );
   add_param( "HDSTATS" , "3state"     , ""       , "Also compute 3-state (W/NREM/R) summaries" );
   add_param( "HDSTATS" , "transition" , "boundary" , "Legacy option retained for compatibility; HDSTATS now uses boundary-based left/right support to detect transitions" );
   add_param( "HDSTATS" , "motion-th"  , "0.1"    , "Legacy option retained for compatibility; ignored by boundary-based transition detection" );
@@ -4409,6 +4412,7 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "annot"      , ""       , "Annotation class to stratify output by" );
   add_param( "HDSTATS" , "min-events"  , "3"      , "Minimum events required to emit aligned transition profile" );
   add_param( "HDSTATS" , "emit-annots", ""       , "Emit detected transitions as annotations under this class name" );
+  add_param( "HDSTATS" , "emit-annots-by-type", "F" , "If set, encode directional transition type in the emitted point-event annotation class name; implies emit-annots with default label hd" );
   add_param( "HDSTATS" , "verbose"    , ""       , "Emit per-sample HDSIG time-series table" );
 
   const std::vector<std::string> hdstats_top_tables = { "", "ANNOT", "STATE", "ANNOT,STATE" };
@@ -5424,6 +5428,8 @@ void cmddefs_t::init()
 
   add_param( "SPINDLES" , "epoch" , "" , "Show epoch-level counts" );
   add_param( "SPINDLES" , "per-spindle" , "" , "Show per-spindle output" );
+  add_param( "SPINDLES" , "per-so" , "" , "When using so, show per-SO output from the embedded SO detector" );
+  add_param( "SPINDLES" , "so-verbose" , "" , "When using so, show verbose per-SO/epoch output from the embedded SO detector" );
   add_param( "SPINDLES" , "dynam" , "" , "Add per-epoch summaries suitable for ultradian dynamics analyses" );
   
   add_param( "SPINDLES" , "empirical" , "" , "Empirically determine thresholds" );
@@ -6286,6 +6292,7 @@ void cmddefs_t::init()
   add_param( "WAVEFORMS" , "lwf-dir" , "waves/" , "Output folder for .lwf files" );
   add_param( "WAVEFORMS" , "dir" , "waves/" , "Deprecated alias for lwf-dir" );
   add_param( "WAVEFORMS" , "tag" , "spindle-v1" , "User-defined tag stored in the file and used in auto-generated filenames" );
+  add_param( "WAVEFORMS" , "overwrite" , "F" , "If set, always write/replace the 0001 .lwf shard for this ID/tag instead of allocating the next sequence number" );
   add_param( "WAVEFORMS" , "align" , "mid" , "Anchor to store for each waveform: start, mid or stop" );
   add_param( "WAVEFORMS" , "annot-ch-match" , "T" , "Match channel-specific annotations to the requested sig= channels; '.' or empty annotation channels still match" );
   add_param( "WAVEFORMS" , "require" , "full" , "Retention rule after MASK/RE: full requires the entire waveform interval be retained; any allows partial overlap" );

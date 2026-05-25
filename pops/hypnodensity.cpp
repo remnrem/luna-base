@@ -658,12 +658,13 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
   const int first_valid_sample = have_any ? sample_to_post.begin()->first  : -1;
   int       last_valid_sample  = have_any ? sample_to_post.rbegin()->first : -1;
 
-  std::vector<double> sigW ( total_samples , 0.0 );
-  std::vector<double> sigR ( total_samples , 0.0 );
-  std::vector<double> sigN1( total_samples , 0.0 );
-  std::vector<double> sigN2( total_samples , 0.0 );
-  std::vector<double> sigN3( total_samples , 0.0 );
-  std::vector<double> sigNR( total_samples , 0.0 );
+  std::vector<double> sigW    ( total_samples , 0.0 );
+  std::vector<double> sigR    ( total_samples , 0.0 );
+  std::vector<double> sigN1   ( total_samples , 0.0 );
+  std::vector<double> sigN2   ( total_samples , 0.0 );
+  std::vector<double> sigN3   ( total_samples , 0.0 );
+  std::vector<double> sigNR   ( total_samples , 0.0 );
+  std::vector<double> sigInvalid( total_samples , 1.0 );  // 0=real posterior, 1=ZOH-filled/invalid
 
   Eigen::VectorXd last_seen_post = global_first_post;
 
@@ -675,6 +676,7 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 	{
 	  post = sample_to_post[ m ];
 	  last_seen_post = post;
+	  sigInvalid[ m ] = 0.0;   // genuine posterior, not ZOH-filled
 	}
       else if ( ! have_any )
 	{
@@ -717,6 +719,8 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 
       if ( add_nrem )
         edf.add_signal( prefix + "_NR" , Fs_code , sigNR );
+
+      edf.add_signal( prefix + "_INVALID" , Fs_code , sigInvalid );
 
       logger << "  added resolution=5 posterior channels with prefix '" << prefix << "'\n";
     }

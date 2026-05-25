@@ -26,6 +26,7 @@
 #include <limits>
 #include <map>
 #include <string>
+#include <cstdint>
 #include <vector>
 
 struct edf_t;
@@ -39,7 +40,8 @@ struct waveform_feature_options_t {
 struct waveform_block_t {
   std::string label;
   std::string unit;
-  int sr = 0;
+  double sr = 0.0;
+  uint64_t sample_step_tp = 0LLU;
   double data_start_sec = std::numeric_limits<double>::quiet_NaN();
   double data_stop_sec = std::numeric_limits<double>::quiet_NaN();
   std::vector<double> rel_time;
@@ -84,7 +86,8 @@ namespace waveform_core
     const std::vector<std::string> & channels ,
     const double pre_secs ,
     const double post_secs ,
-    const std::string & align = "mid" );
+    const std::string & align = "mid" ,
+    const std::string & require = "full" );
 
   waveform_extract_result_t extract_annotation_window_waveforms(
     edf_t & edf ,

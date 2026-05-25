@@ -736,9 +736,16 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  // and phase
 	  p_sw->phase_slow_waves();
 
-	  // and display 
-	  if ( sw_coupling ) 
-	    p_sw->display_slow_waves( param.has( "verbose" ) , &edf );
+	  // and display; mirror standalone SO per-event triggers
+	  if ( sw_coupling )
+	    {
+	      const bool so_per_event =
+		param.has( "verbose" )
+		|| param.has( "so-verbose" )
+		|| param.has( "per-so" )
+		|| calc_dynamics;
+	      p_sw->display_slow_waves( so_per_event , &edf );
+	    }
 	  
 	  //
 	  // display SO characteristics 

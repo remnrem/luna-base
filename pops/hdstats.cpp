@@ -53,6 +53,42 @@
 extern logger_t logger;
 extern writer_t writer;
 
+namespace {
+
+std::string make_invalid_channel_label( const std::string & prefix )
+{
+  return prefix + "_INVALID";
+}
+
+std::string infer_invalid_channel_label( const std::vector<std::string> & ch )
+{
+  if ( ch.empty() ) return "PP_INVALID";
+
+  std::string prefix = "";
+  for ( int i = 0; i < (int)ch.size(); i++ )
+    {
+      const std::string & label = ch[i];
+      const std::string::size_type pos = label.rfind( '_' );
+      if ( pos == std::string::npos || pos == 0 ) return "PP_INVALID";
+      const std::string cur = label.substr( 0 , pos );
+      if ( i == 0 )
+        prefix = cur;
+      else if ( cur != prefix )
+        return "PP_INVALID";
+    }
+
+  return make_invalid_channel_label( prefix );
+}
+
+std::string infer_invalid_channel_label( const std::string & signal_label )
+{
+  const std::string::size_type pos = signal_label.rfind( '_' );
+  if ( pos == std::string::npos || pos == 0 ) return "";
+  return make_invalid_channel_label( signal_label.substr( 0 , pos ) );
+}
+
+}
+
 
 // ============================================================
 // Internal types
@@ -82,6 +118,10 @@ struct hd_params_t
   double stable_conf_th;            // per-sample C must be > this to qualify as stable
   double min_shift;                 // minimum L1 posterior shift for TR event acceptance (0=disabled)
   double shift_win_sec;             // pre/post window (seconds) for shift computation
+  bool emit_annot_typed_classes;    // if true, encode directional transition type in point-event class name
+  double clean_min_sec;             // minimum stable-run span (seconds) for clean transition flanks
+  double clean_gap_sec;             // max within-run gap (seconds) tolerated before splitting a stable run
+  std::string ch_valid;             // channel name for PP_INVALID invalidity flag (optional)
 };
 
 
@@ -96,6 +136,10 @@ struct hd_data_t
   std::vector<std::vector<double>> p;   // p[5][N], stages: W N1 N2 N3 R
   std::vector<std::vector<double>> p3;  // p3[3][N], stages: W NREM R
   std::vector<uint64_t> tp;             // timepoints
+  std::vector<bool> valid;              // per-sample validity (false = NA/ZOH-filled)
+  int n_invalid_lead  = 0;             // consecutive invalid samples at start
+  int n_invalid_trail = 0;             // consecutive invalid samples at end
+  int n_invalid_mid   = 0;             // invalid samples in the interior
 
   bool load( edf_t & edf, const hd_params_t & par )
   {
@@ -146,16 +190,56 @@ struct hd_data_t
     if ( N == 0 )
       Helper::halt( "no samples found" );
 
-    // Validate and optionally renormalize row sums
-    int n_renorm = 0;
+    // Load optional PP_INVALID channel to seed the validity mask.
+    // Any sample with PP_INVALID >= 0.5 (i.e. flagged invalid) is masked out.
+    // If channel is absent all samples start as valid.
+    valid.assign( N, true );
+    {
+      signal_list_t sl_v = edf.header.signal_list( par.ch_valid );
+      if ( sl_v.size() > 0 && ! edf.header.is_annotation_channel( sl_v(0) ) )
+        {
+          slice_t sv( edf, sl_v(0), whole );
+          const std::vector<double> * dv = sv.pdata();
+          if ( (int)dv->size() == N )
+            {
+              for ( int i = 0; i < N; i++ )
+                valid[i] = (*dv)[i] < 0.5;   // 0=genuine, 1=ZOH-filled/invalid
+              logger << "  loaded invalidity channel '" << par.ch_valid << "'\n";
+            }
+          else
+            logger << "  invalidity channel '" << par.ch_valid << "' length mismatch — ignoring\n";
+        }
+    }
+
+    // Validate and optionally renormalize row sums.
+    // Samples already marked invalid (PP_INVALID=1) are zeroed out and skipped.
+    // Samples marked valid but with implausible row sums are warned and marked invalid.
+    int n_renorm = 0, n_bad_rowsum = 0;
     for ( int i = 0; i < N; i++ )
       {
-	double rowsum = 0.0;
-	for ( int k = 0; k < K; k++ ) rowsum += p[k][i];
+        if ( ! valid[i] )
+          {
+            for ( int k = 0; k < K; k++ ) p[k][i] = 0.0;
+            continue;
+          }
 
-	if ( rowsum < 0.5 || rowsum > 1.5 )
-	  Helper::halt( "row sum " + Helper::dbl2str(rowsum)
-			+ " at sample " + Helper::int2str(i) + " is implausible" );
+        bool sample_nonfinite = false;
+	double rowsum = 0.0;
+	for ( int k = 0; k < K; k++ )
+          {
+            if ( ! std::isfinite( p[k][i] ) ) sample_nonfinite = true;
+            rowsum += p[k][i];
+          }
+
+	if ( sample_nonfinite || ! std::isfinite( rowsum ) || rowsum < 0.5 || rowsum > 1.5 )
+	  {
+	    logger << "  warning: invalid posterior row at sample " << i
+		   << " (rowsum=" << rowsum << ") — marking invalid\n";
+	    valid[i] = false;
+	    ++n_bad_rowsum;
+	    for ( int k = 0; k < K; k++ ) p[k][i] = 0.0;
+	    continue;
+	  }
 
 	if ( std::fabs( rowsum - 1.0 ) > 1e-4 )
 	  {
@@ -173,6 +257,22 @@ struct hd_data_t
 
     if ( n_renorm > 0 )
       logger << "  renormalized " << n_renorm << " of " << N << " samples\n";
+    if ( n_bad_rowsum > 0 )
+      logger << "  " << n_bad_rowsum << " samples had implausible row sums and were marked invalid\n";
+
+    // Classify invalid samples as leading / trailing / middle
+    {
+      int lo = 0;
+      while ( lo < N && ! valid[lo] ) ++lo;
+      n_invalid_lead = lo;
+
+      int hi = N - 1;
+      while ( hi >= lo && ! valid[hi] ) --hi;
+      n_invalid_trail = ( N - 1 ) - hi;
+
+      for ( int i = lo; i <= hi; i++ )
+        if ( ! valid[i] ) ++n_invalid_mid;
+    }
 
     // Build 3-state collapsed posteriors: W, NREM=N1+N2+N3, R
     if ( par.do_3state )
@@ -1188,6 +1288,131 @@ static std::string hd_state_label( const bool threestate , const int st )
   return "?";
 }
 
+static std::string hd_run_state_label( const std::vector<int> & argmax ,
+				       const int lo ,
+				       const int hi ,
+				       const bool threestate )
+{
+  if ( lo > hi || lo < 0 || hi >= (int)argmax.size() ) return ".";
+
+  std::map<int,int> counts;
+  for ( int i = lo ; i <= hi ; i++ ) ++counts[ argmax[i] ];
+  if ( counts.empty() ) return ".";
+
+  int best_st = -1;
+  int best_n = -1;
+  for ( std::map<int,int>::const_iterator cc = counts.begin() ; cc != counts.end() ; ++cc )
+    if ( cc->second > best_n )
+      {
+	best_st = cc->first;
+	best_n = cc->second;
+      }
+
+  if ( best_st < 0 ) return ".";
+  return hd_state_label( threestate , best_st );
+}
+
+static bool hd_make_pp_nrem( edf_t & edf , param_t & param )
+{
+  const std::string out_label = param.has( "NR" ) ? param.value( "NR" ) : "PP_NR";
+  const std::vector<std::string> in_labels = {
+    param.has( "N1" ) ? param.value( "N1" ) : "PP_N1",
+    param.has( "N2" ) ? param.value( "N2" ) : "PP_N2",
+    param.has( "N3" ) ? param.value( "N3" ) : "PP_N3"
+  };
+
+  if ( edf.header.has_signal( out_label ) )
+    {
+      logger << "  HDSTATS emit-nr-pp: " << out_label << " already exists, skipping\n";
+      return false;
+    }
+
+  interval_t whole = edf.timeline.wholetrace();
+  std::vector<double> nr;
+  std::vector<double> invalid;
+  double ref_sr = 0.0;
+  std::string ref_label = ".";
+  int n_found = 0;
+  bool have_invalid = false;
+  const std::string out_invalid_label =
+    param.has( "VALID" ) ? param.value( "VALID" ) : out_label + "_INVALID";
+
+  for ( int i = 0 ; i < (int)in_labels.size() ; i++ )
+    {
+      signal_list_t sl = edf.header.signal_list( in_labels[i] );
+      if ( sl.size() == 0 ) continue;
+      if ( edf.header.is_annotation_channel( sl(0) ) )
+	Helper::halt( "HDSTATS emit-nr-pp: " + in_labels[i] + " is an annotation channel, not a signal" );
+
+      const int slot = sl(0);
+      const double sr = edf.header.sampling_freq( slot );
+      slice_t s( edf , slot , whole );
+      const std::vector<double> * d = s.pdata();
+
+      if ( n_found == 0 )
+	{
+	  ref_sr = sr;
+	  ref_label = in_labels[i];
+	  nr = *d;
+          invalid.assign( nr.size() , 0.0 );
+	}
+      else
+	{
+	  if ( std::fabs( sr - ref_sr ) > 1e-6 )
+	    Helper::halt( "HDSTATS emit-nr-pp: sample-rate mismatch for "
+			  + in_labels[i] + " (" + Helper::dbl2str(sr) + " Hz) vs "
+			  + ref_label + " (" + Helper::dbl2str(ref_sr) + " Hz)" );
+	  if ( d->size() != nr.size() )
+	    Helper::halt( "HDSTATS emit-nr-pp: length mismatch for " + in_labels[i] );
+	  for ( int j = 0 ; j < (int)nr.size() ; j++ ) nr[j] += (*d)[j];
+	}
+
+      const std::string invalid_label = infer_invalid_channel_label( in_labels[i] );
+      if ( invalid_label != "" )
+        {
+          signal_list_t sl_invalid = edf.header.signal_list( invalid_label );
+          if ( sl_invalid.size() > 0 && ! edf.header.is_annotation_channel( sl_invalid(0) ) )
+            {
+              slice_t s_invalid( edf , sl_invalid(0) , whole );
+              const std::vector<double> * d_invalid = s_invalid.pdata();
+              if ( d_invalid->size() == invalid.size() )
+                {
+                  have_invalid = true;
+                  for ( int j = 0 ; j < (int)invalid.size() ; j++ )
+                    if ( (*d_invalid)[j] >= 0.5 ) invalid[j] = 1.0;
+                }
+            }
+        }
+
+      ++n_found;
+    }
+
+  if ( n_found == 0 )
+    Helper::halt( "HDSTATS emit-nr-pp: could not find any source NREM posterior channels; "
+		  "require at least one of "
+		  + in_labels[0] + ", " + in_labels[1] + ", " + in_labels[2] );
+
+  for ( int j = 0 ; j < (int)nr.size() ; j++ )
+    {
+      bool bad = have_invalid && invalid[j] >= 0.5;
+      if ( ! bad && ( ! std::isfinite( nr[j] ) || nr[j] < 0.0 ) )
+        {
+          bad = true;
+          invalid[j] = 1.0;
+          have_invalid = true;
+        }
+
+      if ( bad ) nr[j] = 0.0;
+    }
+
+  edf.add_signal( out_label , ref_sr , nr );
+  if ( have_invalid && ! edf.header.has_signal( out_invalid_label ) )
+    edf.add_signal( out_invalid_label , ref_sr , invalid );
+  logger << "  HDSTATS emit-nr-pp: added " << out_label
+	 << " from " << n_found << " available NREM posterior channel(s)\n";
+  return true;
+}
+
 static void write_hd_hypno_metrics( const hd_hypno_metrics_t & hm )
 {
   if ( hm.valid_onset ) writer.value( "HD_SOL" , hm.hd_sol );
@@ -1374,12 +1599,57 @@ static void write_hdstats(
 	  if ( emit_top_level_transition_stats )
 	    {
 	      write_trans_stats( tshape );
+	      // Clean transitions: adjacent stable-run pairs with different dominant stages.
+	      // Region-centric: flank consolidation matters; transition dynamics are irrelevant.
+	      // Runs of the same dominant stage separated by <= clean_gap_sec are merged before
+	      // applying the clean_min_sec duration threshold.
 	      int n_stable = 0;
-	      for ( const auto & e : evts )
-		if ( e.idx >= 0 && e.idx < (int)context_mask.size() && context_mask[e.idx] )
-                  {
-                    if ( e.is_stable ) ++n_stable;
-                  }
+	      {
+		const int clean_min_smp = std::max( 1, (int)std::round( par.clean_min_sec * dat.Fs ) );
+		const int clean_gap_smp = std::max( 0, (int)std::round( par.clean_gap_sec * dat.Fs ) );
+
+		struct srun_t { int lo, hi, dom; };
+
+		// Step 1: find raw stable runs within context
+		std::vector<srun_t> raw;
+		const int Ns = (int)context_mask.size();
+		int si = 0;
+		while ( si < Ns )
+		  {
+		    if ( !context_mask[si] || !is_stable[si] ) { ++si; continue; }
+		    int lo = si;
+		    while ( si < Ns && context_mask[si] && is_stable[si] ) ++si;
+		    std::map<int,int> scnt;
+		    for ( int j = lo; j < si; j++ ) ++scnt[ argmax[j] ];
+		    int dom = -1, best = -1;
+		    for ( const auto & kv : scnt )
+		      if ( kv.second > best ) { best = kv.second; dom = kv.first; }
+		    srun_t r; r.lo = lo; r.hi = si - 1; r.dom = dom;
+		    raw.push_back( r );
+		  }
+
+		// Step 2: merge adjacent same-stage runs separated by <= clean_gap_smp
+		std::vector<srun_t> merged;
+		for ( const auto & r : raw )
+		  {
+		    if ( !merged.empty() &&
+			 r.dom == merged.back().dom &&
+			 r.lo - merged.back().hi - 1 <= clean_gap_smp )
+		      merged.back().hi = r.hi;   // extend span
+		    else
+		      merged.push_back( r );
+		  }
+
+		// Step 3: require span >= clean_min_sec
+		std::vector<srun_t> long_runs;
+		for ( const auto & r : merged )
+		  if ( r.hi - r.lo + 1 >= clean_min_smp )
+		    long_runs.push_back( r );
+
+		// Step 4: count adjacent pairs with different dominant stages
+		for ( int ri = 1; ri < (int)long_runs.size(); ri++ )
+		  if ( long_runs[ri].dom != long_runs[ri-1].dom ) ++n_stable;
+	      }
 	      int n_in_region = 0;
 	      for ( bool b : context_mask ) if (b) ++n_in_region;
 	      double dur_hr = (double)n_in_region / dat.Fs / 3600.0;
@@ -1504,6 +1774,15 @@ void proc_hdstats( edf_t & edf, param_t & param )
 {
   hdstats_offset_outputs_scope_t offset_outputs_scope;
 
+  const bool emit_nr_pp =
+    ( param.has( "emit-nr-pp" ) && param.yesno( "emit-nr-pp" ) );
+  const bool emit_stats = param.has( "emit-stats" ) ? param.yesno( "emit-stats" ) : true;
+
+  if ( emit_nr_pp )
+    hd_make_pp_nrem( edf , param );
+
+  if ( ! emit_stats ) return;
+
   // Parse parameters
   hd_params_t par;
 
@@ -1531,11 +1810,17 @@ void proc_hdstats( edf_t & edf, param_t & param )
   par.verbose         = param.yesno( "verbose" );
   par.min_events_profile = param.has( "min-events" ) ? param.requires_int( "min-events" ) : 3;
   par.min_samples_region = param.has( "min-samples" ) ? param.requires_int( "min-samples" ) : 20;
-  par.emit_annot_label   = param.has( "emit-annots" ) ? ( ( ! param.empty("emit-annots" ) ) ? param.value( "emit-annots" ) : "hd" ) : "" ;
+  par.emit_annot_typed_classes = param.has( "emit-annots-by-type" ) ? param.yesno( "emit-annots-by-type" ) : false;
+  par.emit_annot_label   =
+    param.has( "emit-annots" ) ? ( ( ! param.empty("emit-annots" ) ) ? param.value( "emit-annots" ) : "hd" )
+    : ( par.emit_annot_typed_classes ? "hd" : "" );
   par.stable_tv_th    = param.has( "stable-tv"   ) ? param.requires_dbl( "stable-tv"   ) : 0.05;
   par.stable_conf_th  = param.has( "stable-conf" ) ? param.requires_dbl( "stable-conf" ) : 0.70;
   par.min_shift       = param.has( "min-shift"   ) ? param.requires_dbl( "min-shift"   ) : 0.10;
   par.shift_win_sec   = param.has( "shift-win"   ) ? param.requires_dbl( "shift-win"   ) : 30.0;
+  par.clean_min_sec   = param.has( "clean-min"   ) ? param.requires_dbl( "clean-min"   ) : 300.0;
+  par.clean_gap_sec   = param.has( "clean-gap"   ) ? param.requires_dbl( "clean-gap"   ) : 30.0;
+  par.ch_valid        = param.has( "VALID" ) ? param.value( "VALID" ) : infer_invalid_channel_label( par.ch );
 
   if ( param.has( "transition" ) )
     logger << "   'transition' option is ignored; using boundary-based transition detection\n";
@@ -1571,7 +1856,11 @@ void proc_hdstats( edf_t & edf, param_t & param )
       const uint64_t sample_tp = (uint64_t)std::round( (double)globals::tp_1sec / dat.Fs );
 
       // Helper: emit contiguous runs of a boolean mask as whole-interval annotations
-      auto emit_runs = [&]( annot_t * a , const std::vector<bool> & mask , const std::string & inst )
+      auto emit_runs = [&]( annot_t * a ,
+			    const std::vector<bool> & mask ,
+			    const std::string & inst ,
+			    const std::vector<int> * argmax = NULL ,
+			    const bool threestate = false )
         {
           int i = 0;
           while ( i < dat.N )
@@ -1580,12 +1869,13 @@ void proc_hdstats( edf_t & edf, param_t & param )
               int lo = i;
               while ( i < dat.N && mask[i] ) ++i;
               int hi = i - 1;
-              a->add( inst , interval_t( dat.tp[lo] , dat.tp[hi] + sample_tp ) , "." );
+              const std::string run_inst =
+		argmax == NULL ? inst : hd_run_state_label( *argmax , lo , hi , threestate );
+              a->add( run_inst , interval_t( dat.tp[lo] , dat.tp[hi] + sample_tp ) , "." );
             }
         };
 
       // Emit 5-state transitions as point events; use instance label "from->to" or "." if states unknown
-      annot_t * atr = edf.annotations->add( par.emit_annot_label );
       const uint64_t half_sample_tp = sample_tp / 2;
       for ( const auto & e : tr.events5 )
 	{
@@ -1593,13 +1883,17 @@ void proc_hdstats( edf_t & edf, param_t & param )
 	    ( e.is_dir && e.from_st >= 0 && e.to_st >= 0 )
 	    ? hd_state_label( false, e.from_st ) + "to" + hd_state_label( false, e.to_st )
 	    : ".";
+	  const std::string cls =
+	    ( par.emit_annot_typed_classes && inst != "." )
+	    ? par.emit_annot_label + "_" + inst
+	    : par.emit_annot_label;
 	  uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
-	  atr->add( inst , interval_t( tp0 , tp0 ) , "." );
+	  edf.annotations->add( cls )->add( inst , interval_t( tp0 , tp0 ) , "." );
 	}
 
       // Emit stable, trans, and neither whole intervals (5-state)
       annot_t * atr_stable = edf.annotations->add( par.emit_annot_label + "_stable" );
-      emit_runs( atr_stable , tr.is_stable5 , "stable" );
+      emit_runs( atr_stable , tr.is_stable5 , "stable" , &der.argmax5 , false );
 
       annot_t * atr_trans = edf.annotations->add( par.emit_annot_label + "_trans" );
       emit_runs( atr_trans , tr.is_trans5 , "trans" );
@@ -1610,19 +1904,22 @@ void proc_hdstats( edf_t & edf, param_t & param )
       // If 3-state mode, also emit 3-state transitions, stable, trans, and neither intervals
       if ( par.do_3state )
 	{
-	  annot_t * atr3 = edf.annotations->add( par.emit_annot_label + "_3" );
 	  for ( const auto & e : tr.events3 )
 	    {
 	      const std::string inst =
 		( e.is_dir && e.from_st >= 0 && e.to_st >= 0 )
 		? hd_state_label( true, e.from_st ) + "to" + hd_state_label( true, e.to_st )
 		: ".";
+	      const std::string cls =
+		( par.emit_annot_typed_classes && inst != "." )
+		? par.emit_annot_label + "_3_" + inst
+		: par.emit_annot_label + "_3";
 	      uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
-	      atr3->add( inst , interval_t( tp0 , tp0 ) , "." );
+	      edf.annotations->add( cls )->add( inst , interval_t( tp0 , tp0 ) , "." );
 	    }
 
 	  annot_t * atr3_stable = edf.annotations->add( par.emit_annot_label + "_3_stable" );
-	  emit_runs( atr3_stable , tr.is_stable3 , "stable" );
+	  emit_runs( atr3_stable , tr.is_stable3 , "stable" , &der.argmax3 , true );
 
 	  annot_t * atr3_trans = edf.annotations->add( par.emit_annot_label + "_3_trans" );
 	  emit_runs( atr3_trans , tr.is_trans3 , "trans" );
@@ -1638,8 +1935,19 @@ void proc_hdstats( edf_t & edf, param_t & param )
   if ( par.do_hd_metrics )
     hm.compute( dat, par );
 
-  // All-samples mask (true everywhere)
-  std::vector<bool> all_mask( dat.N, true );
+  // All-samples mask: valid samples only
+  std::vector<bool> all_mask( dat.N, false );
+  for ( int i = 0; i < dat.N; i++ ) all_mask[i] = dat.valid[i];
+
+  // Emit validity summary
+  {
+    const int n_valid = (int)std::count( dat.valid.begin(), dat.valid.end(), true );
+    writer.value( "N_VALID",   n_valid );
+    writer.value( "PCT_VALID", dat.N > 0 ? 100.0 * n_valid / dat.N : 0.0 );
+    if ( dat.n_invalid_lead  > 0 ) writer.value( "N_INVALID_LEAD",  dat.n_invalid_lead );
+    if ( dat.n_invalid_trail > 0 ) writer.value( "N_INVALID_TRAIL", dat.n_invalid_trail );
+    if ( dat.n_invalid_mid   > 0 ) writer.value( "N_INVALID_MID",   dat.n_invalid_mid );
+  }
 
   // Global summary
   write_hdstats( der, tr, all_mask, all_mask, par, dat, par.do_hd_metrics ? &hm : NULL );
