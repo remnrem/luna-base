@@ -143,24 +143,30 @@ std::vector<channel_cache_t> build_channel_caches(edf_t & edf, const std::vector
 
       if ( tp->size() >= 2 )
         {
+          const uint64_t sr_step_tp =
+            ch.sr > 0 ? (uint64_t)std::llround( globals::tp_1sec / ch.sr ) : 0LLU;
+          const uint64_t sr_tol_tp =
+            sr_step_tp > 0 ? std::max<uint64_t>( 1LLU , sr_step_tp / 20LLU ) : 0LLU;
           uint64_t step_tp = 0LLU;
-          bool valid_step = true;
           for (int i = 1; i < tp->size(); ++i)
             {
               if ( (*tp)[i] <= (*tp)[i - 1] )
                 {
-                  valid_step = false;
-                  break;
+                  continue;
                 }
               const uint64_t delta = (*tp)[i] - (*tp)[i - 1];
-              if ( step_tp == 0LLU ) step_tp = delta;
-              else if ( delta != step_tp )
+              if ( sr_step_tp != 0LLU )
                 {
-                  valid_step = false;
-                  break;
+                  const uint64_t diff = delta > sr_step_tp ? delta - sr_step_tp : sr_step_tp - delta;
+                  if ( diff > sr_tol_tp )
+                    {
+                      continue;
+                    }
                 }
+              if ( step_tp == 0LLU )
+                step_tp = delta;
             }
-          if ( ! valid_step || step_tp == 0LLU ) continue;
+          if ( step_tp == 0LLU ) continue;
           ch.sample_step_tp = step_tp;
         }
       if ( ch.sample_step_tp == 0LLU ) continue;
@@ -352,9 +358,9 @@ waveform_extract_result_t extract_fixed_window_waveforms(
       else
         out.events.push_back( wave );
     }
-
   return out;
 }
+
 
 waveform_extract_result_t extract_annotation_window_waveforms(
   edf_t & edf ,
