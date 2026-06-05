@@ -739,7 +739,7 @@ file_summary_t read_summary( const std::string & file )
   s.file = file;
   s.n_waves = 0;
 
-  std::ifstream I( file.c_str() , std::ios::binary | std::ios::in );
+  std::ifstream I = LunaIO::open_ifstream( file , std::ios::binary | std::ios::in );
   if ( ! I ) Helper::halt( "could not open " + file );
 
   char magic[4];
@@ -917,7 +917,7 @@ void dsptools::waveform( edf_t & edf , param_t & param )
   logger << "  writing " << extracted.events.size() << " waveform(s) to " << outfile
          << ( overwrite ? " [overwrite]" : "" ) << "\n";
 
-  std::ofstream O( outfile.c_str() , std::ios::binary | std::ios::out );
+  std::ofstream O = LunaIO::open_ofstream( outfile , std::ios::binary | std::ios::out );
   if ( ! O ) Helper::halt( "could not open output file " + outfile );
 
   uint64_t payload_offset = header_storage_bytes( edf , outfile , tag , align , annots , channels , extracted.feature_names );

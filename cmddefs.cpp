@@ -4422,10 +4422,10 @@ void cmddefs_t::init()
     "REGION,ANNOT",
     "REGION,STATE",
     "REGION,ANNOT,STATE",
-    "REGION,STAGE",
-    "REGION,ANNOT,STAGE",
-    "REGION,STATE,STAGE",
-    "REGION,ANNOT,STATE,STAGE"
+    "REGION,SS",
+    "REGION,ANNOT,SS",
+    "REGION,STATE,SS",
+    "REGION,ANNOT,STATE,SS"
   };
   const std::vector<std::string> hdstats_trans_tables = {
     "TRANS",
@@ -4482,10 +4482,10 @@ void cmddefs_t::init()
   add_table( "HDSTATS" , "REGION,ANNOT"            , "Same, stratified by annotation level" );
   add_table( "HDSTATS" , "REGION,STATE"            , "Same, by state representation (5/3); only with 3state option" );
   add_table( "HDSTATS" , "REGION,ANNOT,STATE"      , "Same, stratified by annotation level and state representation" );
-  add_table( "HDSTATS" , "REGION,STAGE"            , "Same, stratified by most-likely stage" );
-  add_table( "HDSTATS" , "REGION,ANNOT,STAGE"      , "Same, stratified by annotation level and most-likely stage" );
-  add_table( "HDSTATS" , "REGION,STATE,STAGE"      , "Same, stratified by state representation and most-likely stage" );
-  add_table( "HDSTATS" , "REGION,ANNOT,STATE,STAGE", "Same, stratified by annotation level, state representation, and most-likely stage" );
+  add_table( "HDSTATS" , "REGION,SS"            , "Same, stratified by most-likely stage" );
+  add_table( "HDSTATS" , "REGION,ANNOT,SS"      , "Same, stratified by annotation level and most-likely stage" );
+  add_table( "HDSTATS" , "REGION,STATE,SS"      , "Same, stratified by state representation and most-likely stage" );
+  add_table( "HDSTATS" , "REGION,ANNOT,STATE,SS", "Same, stratified by annotation level, state representation, and most-likely stage" );
   add_hdstats_var( hdstats_region_tables, "N",         "Number of samples in region" );
   add_hdstats_var( hdstats_region_tables, "H",         "Mean entropy of the posterior distribution across states" );
   add_hdstats_var( hdstats_region_tables, "SD_H",      "SD entropy" );
@@ -7912,6 +7912,7 @@ void cmddefs_t::init()
   add_param( "RESP-LINK" , "template-pre" , "120" , "Seconds of pre-event-end signal used when building the learned template. This default follows Raichel's makeHBboxes range." );
   add_param( "RESP-LINK" , "template-post", "120" , "Seconds of post-event-end signal used when building the learned template. This default follows Raichel's makeHBboxes range." );
   add_param( "RESP-LINK" , "min-template" , "8"   , "Minimum number of usable events required to learn a template. This default follows the Raichel minimum-event rule." );
+  add_param( "RESP-LINK" , "min-post-valid" , "0.70" , "Minimum fraction of valid SpO2 samples required in the post-event nadir-search region for an event to contribute to template learning. In low-sampling-rate mode (<= 2 Hz), the implicit default relaxes to 0.25 unless explicitly set." );
   add_param( "RESP-LINK" , "baseline-pre" , "30"  , "Hard maximum look-back window for baseline search (seconds before event end)" );
   add_param( "RESP-LINK" , "baseline-hw"  , "8"   , "Half-width of the learned baseline search window around the template baseline time (seconds)" );
   add_param( "RESP-LINK" , "nadir-min"    , "5"   , "Earliest allowed nadir time after event end (seconds)" );

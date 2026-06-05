@@ -392,7 +392,7 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
   if ( write_matrix )
     {
 
-      std::ofstream OUT1( outfile.c_str() , std::ios::out );
+      std::ofstream OUT1 = LunaIO::open_ofstream( outfile , std::ios::out );
       for (int i=0;i<nobs;i++)
 	{
 	  for (int j=0;j<nobs;j++) OUT1 << ( j ? "\t" : "" ) << D[i][j];
@@ -406,7 +406,7 @@ void pdc_t::exe_calc_matrix_and_cluster( edf_t & edf , param_t & param ,
       // channel/epoch labels?
       if ( ne_by_ne )
 	{	  
-	  std::ofstream OUT1( ( outfile+".idx").c_str() , std::ios::out );
+	  std::ofstream OUT1 = LunaIO::open_ofstream( ( outfile+".idx") , std::ios::out );
 
 	  OUT1 << "ID\tCH";
 

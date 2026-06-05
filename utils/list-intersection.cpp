@@ -110,7 +110,7 @@ int main(int argc , char ** argv )
       if ( ! Helper::fileExists( bglist ) ) Helper::halt( "could not find " + bglist );
 
       std::cerr << "opening bg-list " << bglist << "\n";
-      std::ifstream IN1( bglist.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( bglist , std::ios::in );
       while ( !IN1.eof() ) 
 	{      
 	  std::string line;      
@@ -154,7 +154,7 @@ int main(int argc , char ** argv )
 
   if ( ! Helper::fileExists( list1 ) ) Helper::halt( "could not find " + list1 );
 
-  std::ifstream IN1( list1.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( list1 , std::ios::in );
   while ( !IN1.eof() ) 
     {      
       std::string line;      
@@ -195,7 +195,7 @@ int main(int argc , char ** argv )
 
   if ( ! Helper::fileExists( list2 ) ) Helper::halt( "could not find " + list2 );
 
-  std::ifstream IN2( list2.c_str() , std::ios::in );
+  std::ifstream IN2 = LunaIO::open_ifstream( list2 , std::ios::in );
   while ( !IN2.eof() ) 
     {      
       std::string line;      

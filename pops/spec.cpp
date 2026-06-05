@@ -71,7 +71,7 @@ void pops_specs_t::read( const std::string & f )
   if ( ! use_default )
     {      
       logger << "  reading feature specification from " << f << "\n";
-      IN1.open( Helper::expand( f ).c_str() , std::ios::in );
+      IN1 = LunaIO::open_ifstream( Helper::expand( f ) , std::ios::in );
     }
   else
     logger << "  using the default feature file\n";

@@ -343,7 +343,7 @@ qda_posteriors_t qda_t::predict( const qda_model_t & model , const Eigen::Matrix
 void qda_model_t::write( const std::string & filename ) const
 {
   if ( ! valid ) Helper::halt( "cannot write an invalid model" );
-  std::ofstream O1( Helper::expand( filename ).c_str() , std::ios::out );
+  std::ofstream O1 = LunaIO::open_ofstream( Helper::expand( filename ) , std::ios::out );
   
   O1 << "QDA\n";
   O1 << "ng: " << prior.size() << "\n";
@@ -395,7 +395,7 @@ void qda_model_t::read( const std::string & filename )
   valid = true;
   errmsg = "";
   
-  std::ifstream I1( Helper::expand( filename ).c_str() , std::ios::in );
+  std::ifstream I1 = LunaIO::open_ifstream( Helper::expand( filename ) , std::ios::in );
   std::string dummy;
 
   int ng, nf;

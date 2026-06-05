@@ -833,7 +833,7 @@ Eigen::MatrixXd eigen_ops::load_mat( const std::string & f ,
   if ( ! Helper::fileExists( filename ) )
     Helper::halt( "could not load " + filename );
 
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
 
   int ncols = 0;
 

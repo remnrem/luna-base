@@ -35,7 +35,7 @@ void pops_indiv_t::save1( const std::string & id , const std::string & f )
 	 << X1.cols() << " features) to " << f << "\n";
   
   // ID, ne, nf { features , row-major }   
-  std::ofstream OUT1( Helper::expand( f ).c_str() , std::ios::binary | std::ios::out );
+  std::ofstream OUT1 = LunaIO::open_ofstream( Helper::expand( f ) , std::ios::binary | std::ios::out );
   bwrite( OUT1, id ) ;
   bwrite( OUT1, ne ) ;
   bwrite( OUT1, pops_t::specs.n1 );  
@@ -57,7 +57,7 @@ void pops_t::load1( const std::string & f )
 {
   
   
-  std::ifstream IN1( Helper::expand( f ).c_str() , std::ios::binary | std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( f ) , std::ios::binary | std::ios::in );
 
   int total_epochs = 0;
   int n_indiv = 0;
@@ -123,7 +123,7 @@ void pops_t::load1( const std::string & f )
   std::vector<std::string> I2;
 
   // re-read
-  std::ifstream IN2( Helper::expand( f ).c_str() , std::ios::binary | std::ios::in );
+  std::ifstream IN2 = LunaIO::open_ifstream( Helper::expand( f ) , std::ios::binary | std::ios::in );
 
   int offset = ne_training; // i.e. for ultimate Istart[i] -> for appended validations
   ne_training = 0;
@@ -205,7 +205,7 @@ void pops_t::load1_stages_only( const std::string & f )
   // only populate S, E and I -- based on ALL individuals in the file
   // alignment does not need to worry about trainers versus validation, etc
   
-  std::ifstream IN1( Helper::expand( f ).c_str() , std::ios::binary | std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( f ) , std::ios::binary | std::ios::in );
   
   int total_epochs = 0;
   int n_indiv = 0;

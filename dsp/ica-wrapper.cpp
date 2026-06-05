@@ -189,7 +189,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
       if ( write_S_matrix )
 	{
 	  	  
-	  std::ofstream S( (matrix_fileroot + "S").c_str() , std::ios::out );
+	  std::ofstream S = LunaIO::open_ofstream( (matrix_fileroot + "S") , std::ios::out );
 	  for (int j=0;j<nc;j++) S << ( j ? "\t" : "" ) << "S" << j+1;
 	  S << "\n";  
 	  for (int i=0;i<rows;i++)
@@ -202,7 +202,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 
       if ( original_signals ) 
 	{
-	  std::ofstream F( (matrix_fileroot + "X").c_str() , std::ios::out );
+	  std::ofstream F = LunaIO::open_ofstream( (matrix_fileroot + "X") , std::ios::out );
 	  for (int j=0;j<cols;j++) F << ( j ? "\t" : "" ) << "X" << j+1;
 	  F << "\n";
 	  for (int i=0;i<rows;i++)
@@ -222,7 +222,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
       // W : nc x nc     mixing matrix
       // S : rows x cols : IC time courses
       
-      std::ofstream K( (matrix_fileroot + "K").c_str() , std::ios::out );
+      std::ofstream K = LunaIO::open_ofstream( (matrix_fileroot + "K") , std::ios::out );
       for (int i=0;i<cols;i++)
 	{
 	  for (int j=0;j<nc;j++) K << ( j ? "\t" : "" ) << ica.K(i,j);
@@ -230,7 +230,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 	}
       K.close();
       
-      std::ofstream W( (matrix_fileroot + "W").c_str() , std::ios::out );
+      std::ofstream W = LunaIO::open_ofstream( (matrix_fileroot + "W") , std::ios::out );
       for (int i=0;i<nc;i++)
 	{
 	  for (int j=0;j<nc;j++) W << ( j ? "\t" : "" ) << ica.W(i,j);
@@ -238,7 +238,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
 	}
       W.close();
             
-      std::ofstream A( (matrix_fileroot + "A").c_str() , std::ios::out );
+      std::ofstream A = LunaIO::open_ofstream( (matrix_fileroot + "A") , std::ios::out );
       for (int i=0;i<nc;i++)
 	{
 	  for (int j=0;j<cols;j++) A << ( j ? "\t" : "" ) << ica.A(i,j);
@@ -249,7 +249,7 @@ void dsptools::ica_wrapper( edf_t & edf , param_t & param )
     }
 
 
-  std::ofstream A( Aout.c_str() , std::ios::out );
+  std::ofstream A = LunaIO::open_ofstream( Aout , std::ios::out );
   for (int i=0;i<nc;i++)
     for (int j=0;j<cols;j++) 
       A << component_tag + Helper::int2str( i+1 )  << "\t"
@@ -275,7 +275,7 @@ void dsptools::ica_adjust( edf_t & edf , param_t & param )
   std::map<std::string,std::map<std::string,double> > Am;
   int cnt = 0;
   std::set<std::string> ics, chs;
-  std::ifstream Ain( Af.c_str() , std::ios::in );
+  std::ifstream Ain = LunaIO::open_ifstream( Af , std::ios::in );
   while ( ! Ain.eof() )
     {
       std::string ic , ch;

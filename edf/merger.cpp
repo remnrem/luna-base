@@ -450,7 +450,7 @@ void Helper::merge_EDFs( const std::vector<std::string> & tok )
   if ( slist != "" )
     {	  
       logger << "  appending " << filename << " to sample-list " << slist << "\n";
-      std::ofstream FL( slist.c_str() , std::ios_base::app );
+      std::ofstream FL = LunaIO::open_ofstream( slist , std::ios_base::app );
       FL << medf.id << "\t" << filename << "\n";
       FL.close();
     }
@@ -734,7 +734,7 @@ void Helper::bind_EDFs( const std::vector<std::string> & tok )
   if ( slist != "" )
     {	  
       logger << "  appending " << filename << " to sample-list " << slist << "\n";
-      std::ofstream FL( slist.c_str() , std::ios_base::app );
+      std::ofstream FL = LunaIO::open_ofstream( slist , std::ios_base::app );
       FL << medf.id << "\t" << filename << "\n";
       FL.close();
     }

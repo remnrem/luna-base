@@ -50,7 +50,7 @@ int fn_luna_slbuilder(const char * fpath, const struct stat *ptr, int type );
 std::string Helper::toupper( const std::string & s )
 {
   std::string j = s;
-  for (int i=0;i<j.size();i++) j[i] = std::toupper( s[i] );
+  for (int i=0;i<(int)j.size();i++) j[i] = (char)std::toupper( (unsigned char)s[i] );
   return j;
 }
 
@@ -1023,7 +1023,7 @@ bool Helper::fileExists( const std::string & f )
 
   FILE *file;
 
-  if ( ( file = fopen( f.c_str() , "r" ) ) ) 
+  if ( ( file = LunaIO::fopen_utf8( f , "r" ) ) )
     {
       fclose(file);
       return true;
@@ -2603,7 +2603,7 @@ bool Helper::swap_in_includes( std::string * t ,
 	Helper::halt( "could not find @{include} file: " + filename );
       
       std::string insert;
-      std::ifstream IN( filename.c_str() , std::ios::in );
+      std::ifstream IN = LunaIO::open_ifstream( filename , std::ios::in );
       while ( ! IN.eof() )
 	{
 	  std::string item;
@@ -2769,7 +2769,7 @@ void Helper::process_block_conditionals( std::string * t , const std::map<std::s
 std::vector<std::string> Helper::file2strvector( const std::string & filename )
 {
   if ( ! Helper::fileExists( filename ) ) Helper::halt( "could not find " + filename );
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   std::vector<std::string> d;
   while ( ! IN1.eof() )
     {
@@ -2894,7 +2894,7 @@ std::string Helper::readfile( const std::string & f )
 
   if ( ! Helper::fileExists( filename ) ) return s;
 
-  std::ifstream IN1( f.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( f , std::ios::in );
 
   while ( 1 )
     {
@@ -2990,8 +2990,8 @@ bool Helper::sl_slicer( const std::string & f , int n , int m , int * s1 , int *
        || Helper::file_extension( f , "edfz" )
        || Helper::file_extension( f , "edf.gz" ) )
     Helper::halt( "cannot use n/m slicing with EDF inputs" );
-  
-  std::ifstream IN1( f.c_str() , std::ios::in );
+
+  std::ifstream IN1 = LunaIO::open_ifstream( f , std::ios::in );
   int cnt = 0;
   *s1 = *s2 = 0;
   

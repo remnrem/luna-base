@@ -71,7 +71,7 @@ int clocs_t::load_cart( const std::string & f0 , bool verbose )
   cloc.clear();
 
   // assume LABEL X Y Z 
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
 
   // stor channel labels (if needed for verbose output)
 

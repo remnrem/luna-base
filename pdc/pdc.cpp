@@ -97,7 +97,7 @@ void pdc_t::construct_tslib( edf_t & edf , param_t & param )
   
   std::string outfile = param.requires( "ts-lib" ) + "-" + edf.id + ".tslib" ;
   
-  std::ofstream OUT1( outfile.c_str() , std::ios::out );
+  std::ofstream OUT1 = LunaIO::open_ofstream( outfile , std::ios::out );
   
   //
   // Signals and sample-rate
@@ -316,8 +316,8 @@ void pdc_t::construct_pdlib( param_t & param )
   
   Helper::fileExists( infile );
   
-  std::ifstream IN( infile.c_str() , std::ios::in );
-  std::ofstream OUT( outfile.c_str() , std::ios::out );
+  std::ifstream IN = LunaIO::open_ifstream( infile , std::ios::in );
+  std::ofstream OUT = LunaIO::open_ofstream( outfile , std::ios::out );
   
   int cnt = 0; 
 
@@ -391,7 +391,7 @@ void pdc_t::read_tslib( const std::string & tslib )
   if ( ! Helper::fileExists( tslib ) ) 
     Helper::halt( "could not find " + tslib );
   
-  std::ifstream IN( tslib.c_str() , std::ios::in );
+  std::ifstream IN = LunaIO::open_ifstream( tslib , std::ios::in );
   
   logger << " reading ts-lib " << tslib << "\n";
   
@@ -524,7 +524,7 @@ void pdc_t::read_pdlib( const std::string & pdlib , const std::set<std::string> 
   if ( ! Helper::fileExists( pdlib ) ) 
     Helper::halt( "could not find " + pdlib );
   
-  std::ifstream IN( pdlib.c_str() , std::ios::in );
+  std::ifstream IN = LunaIO::open_ifstream( pdlib , std::ios::in );
   
   logger << " reading pd-lib " << pdlib << "\n";
   

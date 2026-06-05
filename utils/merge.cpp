@@ -137,7 +137,7 @@ int main( int argc , char ** argv )
   // enforce varl length check ( -ml=999, default is 100)
   data.check_variable_lengths();
   
-  std::ofstream OUT1( outfile.c_str() , std::ios::out );
+  std::ofstream OUT1 = LunaIO::open_ofstream( outfile , std::ios::out );
   data.write(OUT1);
   OUT1.close();
 
@@ -235,7 +235,7 @@ int domain_t::read( const std::string & filename )
   
   if ( ! fileExists( filename ) ) halt( "could not open " + filename );
 
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   
   while ( ! IN1.eof() )
     {
@@ -556,7 +556,7 @@ void dataset_t::read( const std::string & filename )
 
   indiv_t indiv( folder_indiv_id );
   
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   bool had_header = false;
   int cols = 0;
   int id_col = 0;

@@ -25,14 +25,14 @@
 bool edfz2_t::open_for_reading( const std::string & fn )
 {    
   filename = fn;
-  zin.open( fn.c_str() , std::ios::in | std::ios::binary );
+  zin.open( fn , std::ios::in | std::ios::binary );
   return zin.good();
 }
 
 bool edfz2_t::open_for_writing( const std::string & fn )
 {    
   filename = fn;
-  zout.open( fn.c_str() , std::ios::out | std::ios::binary );  
+  zout.open( fn , std::ios::out | std::ios::binary );  
   return zout.good();
 }
 

@@ -416,7 +416,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	      
 	      std::string dfile = Helper::expand( param.value( "dump" ) );
 	      logger << "  dumping feature matrix to " << dfile << "\n";
-	      std::ofstream O1( dfile.c_str() , std::ios::out );
+	      std::ofstream O1 = LunaIO::open_ofstream( dfile , std::ios::out );
 	      O1 << "SS";
 	      std::vector<std::string> labels = pops_t::specs.select_labels();
 	      for (int i=0; i<labels.size(); i++) O1 << "\t" << labels[i];

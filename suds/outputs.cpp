@@ -60,7 +60,7 @@ void suds_indiv_t::dump_svd( const std::string & froot )
   const std::string file_W = Helper::expand( froot ) + ".W";
   const std::string file_V = Helper::expand( froot ) + ".V";
   
-  std::ofstream U1( file_U.c_str() , std::ios::out );
+  std::ofstream U1 = LunaIO::open_ofstream( file_U , std::ios::out );
   U1 << "E\tSS";
 
   for (int i=0; i<nc; i++) U1 << "\tC" << i+1 ;
@@ -76,7 +76,7 @@ void suds_indiv_t::dump_svd( const std::string & froot )
   
   U1.close();
   
-  std::ofstream V1( file_V.c_str() , std::ios::out );
+  std::ofstream V1 = LunaIO::open_ofstream( file_V , std::ios::out );
   V1 << "VAR";
   for (int i=0; i<nc; i++) V1 << "\tC" << i+1 ;
   V1 << "\n";
@@ -96,7 +96,7 @@ void suds_indiv_t::dump_svd( const std::string & froot )
 
   V1.close();
   
-  std::ofstream W1( file_W.c_str() , std::ios::out );
+  std::ofstream W1 = LunaIO::open_ofstream( file_W , std::ios::out );
   W1 << "C\tW\n";
   for (int i=0;i<nc;i++)
     W1 << i+1 << "\t"
@@ -144,7 +144,7 @@ void suds_indiv_t::dump_predictor_matrix( edf_t & edf , const std::string & file
     }
   else
     {
-      std::ofstream X1( filename.c_str() , std::ios::out );
+      std::ofstream X1 = LunaIO::open_ofstream( filename , std::ios::out );
       X1 << "E";
       
       const std::vector<std::string> vars = suds_t::model.labels();
@@ -769,7 +769,7 @@ void suds_indiv_t::dump_trainer_epoch_matrix( edf_t & edf ,
 
   if ( filename == "" ) Helper::halt( "empty file name" );
   
-  std::ofstream P1( Helper::expand( filename ).c_str() , std::ios::out );
+  std::ofstream P1 = LunaIO::open_ofstream( Helper::expand( filename ) , std::ios::out );
 
   // header
   

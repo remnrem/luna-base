@@ -54,7 +54,7 @@ int topo_t::load( const std::string & filename )
   lab2n.clear();
 
   // assume LABEL theta radius(deg)
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   int p = 0;
   while ( !IN1.eof() )
     {

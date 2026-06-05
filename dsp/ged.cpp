@@ -387,7 +387,7 @@ bool ged_read_clocs( const std::string & fname ,
                      std::map<std::string,int>    * chan_lat )
 {
   if ( fname.empty() ) return false;
-  std::ifstream IN( fname.c_str() );
+  std::ifstream IN = LunaIO::open_ifstream( fname );
   if ( ! IN.good() )
     {
       logger << "  ** WARNING: could not open clocs file " << fname << "\n";
@@ -1316,7 +1316,7 @@ void ged_group_t::save_covar( const std::string & fname ,
   const int nc = (int)ch_names.size();
 
   // If file exists, validate that first record's metadata matches
-  std::ifstream CHKF( fname.c_str() );
+  std::ifstream CHKF = LunaIO::open_ifstream( fname );
   if ( CHKF.good() )
     {
       std::string line;
@@ -1340,7 +1340,7 @@ void ged_group_t::save_covar( const std::string & fname ,
     }
 
   // Append record (creates file if new)
-  std::ofstream OUT( fname.c_str() , std::ios::app );
+  std::ofstream OUT = LunaIO::open_ofstream( fname , std::ios::app );
   if ( ! OUT.good() )
     Helper::halt( "GED save-cov: cannot write to " + fname );
 
@@ -1407,7 +1407,7 @@ void ged_group_t::run_group( param_t & param )
   const int min_n       = param.has("min-n") ? param.requires_int("min-n") : 5;
   int nc_out = param.has("nc") ? param.requires_int("nc") : -1;
 
-  std::ifstream IN( dat_file.c_str() );
+  std::ifstream IN = LunaIO::open_ifstream( dat_file );
   if ( ! IN.good() )
     Helper::halt( "ged --ged-group: cannot open " + dat_file );
 
@@ -1566,7 +1566,7 @@ void ged_group_t::write_solution( const std::string & fname ,
   const int nc     = (int)ch_names.size();
   const int nc_sol = (int)L.size();
 
-  std::ofstream OUT( fname.c_str() );
+  std::ofstream OUT = LunaIO::open_ofstream( fname );
   if ( ! OUT.good() )
     Helper::halt( "GED: cannot write solution to " + fname );
 
@@ -1621,7 +1621,7 @@ void ged_group_t::write_solution( const std::string & fname ,
 
 void ged_group_t::load_solution( const std::string & fname )
 {
-  std::ifstream IN( fname.c_str() );
+  std::ifstream IN = LunaIO::open_ifstream( fname );
   if ( ! IN.good() )
     Helper::halt( "GED load: cannot open solution file " + fname );
 

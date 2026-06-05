@@ -241,7 +241,7 @@ void cpt_wrapper( param_t & param )
   if ( ! Helper::fileExists( iv_file ) )
     Helper::halt( "could not load " + iv_file );
   
-  std::ifstream IN1( iv_file.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( iv_file , std::ios::in );
 
   // parse headers
   std::vector<std::string> iv_header;
@@ -377,7 +377,7 @@ void cpt_wrapper( param_t & param )
       if ( ! Helper::fileExists( infile ) ) 
 	Helper::halt( "could not find " + infile );
 
-      std::ifstream IN1( infile.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( infile , std::ios::in );
 
       // header row
 
@@ -954,7 +954,7 @@ void cpt_wrapper( param_t & param )
     {
       logger << "  writing DV matrix to " << dump_dv_matrix << "\n";
       Eigen::IOFormat fmt1( Eigen::StreamPrecision, Eigen::DontAlignCols );
-      std::ofstream O1( dump_dv_matrix.c_str() , std::ios::out );
+      std::ofstream O1 = LunaIO::open_ofstream( dump_dv_matrix , std::ios::out );
       if ( vname.size() != Y.cols() ) Helper::halt( "internal logic error" );
       for (int v=0; v<vname.size(); v++)
 	O1 << ( v != 0 ? "\t" : "" ) << vname[v];
@@ -971,7 +971,7 @@ void cpt_wrapper( param_t & param )
     {
       logger << "  writing DV,IV and covariate matrix to " << dump_all_matrix << "\n";
       Eigen::IOFormat fmt1( Eigen::StreamPrecision, Eigen::DontAlignCols );
-      std::ofstream O1( dump_all_matrix.c_str() , std::ios::out );
+      std::ofstream O1 = LunaIO::open_ofstream( dump_all_matrix , std::ios::out );
       if ( vname.size() != Y.cols() ) Helper::halt( "internal logic error" );
 
       O1 << "ID" << "\t" << "IV";

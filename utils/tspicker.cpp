@@ -49,7 +49,7 @@ int main(int argc, char ** argv)
   std::set<obs_t> obs;
   std::vector<obs_t> nobs;
   
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   while ( ! IN1.eof() ) 
     {
       obs_t o;

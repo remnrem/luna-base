@@ -41,7 +41,7 @@ void dump_intervals( const std::string & ints ,
   
   std::map<std::string,std::string> id2edf;
   
-  std::ifstream EDFLIST( edfs.c_str() );
+  std::ifstream EDFLIST = LunaIO::open_ifstream( edfs );
   while ( ! EDFLIST.eof() )
     {      
       std::string line;
@@ -66,7 +66,7 @@ void dump_intervals( const std::string & ints ,
   
   std::map<std::string,std::vector<feature_t> > id2feature;
 
-  std::ifstream INTLIST( ints.c_str() );
+  std::ifstream INTLIST = LunaIO::open_ifstream( ints );
   
   while ( ! INTLIST.eof() ) 
     {

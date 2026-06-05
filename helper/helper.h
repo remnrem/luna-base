@@ -29,14 +29,16 @@
 #include <sstream>
 #include <vector>
 #include <set>
-#include <algorithm> 
-#include <functional> 
+#include <algorithm>
+#include <functional>
 #include <cctype>
 #include <locale>
 #include <stdint.h>
 #include <map>
 #include <cmath>
 #include <tuple>
+
+#include "luna_io.h"
 
 struct interval_t;
 struct clocktime_t;
@@ -73,19 +75,26 @@ namespace Helper
   
   // trim from start
   static inline std::string ltrim( std::string s ) {
-    s.erase(s.begin(), std::find_if( s.begin(), s.end(),  [](int c) {return !std::isspace(c);} ));
+    s.erase(s.begin(), std::find_if( s.begin(), s.end(),  [](unsigned char c) {return !std::isspace(c);} ));
     return s;
   }
- 
+
   // trim from end
   static inline std::string rtrim(std::string s) {
-    s.erase(std::find_if( s.rbegin(), s.rend(),  [](int c) {return !std::isspace(c);} ).base(), s.end() );
+    s.erase(std::find_if( s.rbegin(), s.rend(),  [](unsigned char c) {return !std::isspace(c);} ).base(), s.end() );
     return s;
   }
   
   // trim from both ends
   static inline std::string lrtrim( std::string s ) {
     return ltrim(rtrim(s));
+  }
+
+  // true iff every byte is in the range 0x00–0x7F (plain ASCII)
+  static inline bool is_ascii( const std::string & s ) {
+    for (unsigned char c : s)
+      if (c > 0x7Fu) return false;
+    return true;
   }
 
   static inline std::string unquote(const std::string &s , const char q2 = '"' ) {

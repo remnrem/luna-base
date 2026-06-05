@@ -35,7 +35,7 @@ void edf_t::set_timestamps( param_t & param )
     Helper::halt( "could not find " + filename );
 
   std::vector<uint64_t> tps;
-  std::ifstream IN( filename.c_str(), std::ios::in );
+  std::ifstream IN = LunaIO::open_ifstream( filename , std::ios::in );
   while ( ! IN.eof() )
     {
       std::string x;

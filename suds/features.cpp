@@ -1963,7 +1963,7 @@ void suds_indiv_t::dump_stage_associations( const std::string & filename )
 {
   //logger << "  dumping stage <-> feature/component associations to " << filename << "\n";
 
-  std::ofstream O1( Helper::expand( filename ).c_str() , std::ios::out );
+  std::ofstream O1 = LunaIO::open_ofstream( Helper::expand( filename ) , std::ios::out );
   
   // 5-level ANOVA
   //  each versus all other 2-level tests

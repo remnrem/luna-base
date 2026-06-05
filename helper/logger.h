@@ -31,6 +31,7 @@
 #include <string>
 #include <iomanip>
 #include <fstream>
+#include "helper/luna_io.h"
 
 #include "defs/defs.h"
 
@@ -71,7 +72,7 @@ class logger_t
     if ( save_log )
       stop_writing_log();
     
-    _log_file.open( log_file.c_str() );
+    _log_file = LunaIO::open_ofstream( log_file );
     save_log = true;
   }
 

@@ -246,6 +246,11 @@ public:
   gzifstream(const char* name,
              std::ios_base::openmode mode = std::ios_base::in);
 
+  explicit
+  gzifstream(const std::string& name,
+             std::ios_base::openmode mode = std::ios_base::in)
+  : gzifstream(name.c_str(), mode) {}
+
   /**
    *  @brief  Construct stream on already open gzipped file.
    *  @param  fd    File descriptor.
@@ -284,6 +289,11 @@ public:
   void
   open(const char* name,
        std::ios_base::openmode mode = std::ios_base::in);
+
+  void
+  open(const std::string& name,
+       std::ios_base::openmode mode = std::ios_base::in)
+  { open(name.c_str(), mode); }
 
   /**
    *  @brief  Attach to already open gzipped file.
@@ -335,6 +345,11 @@ public:
   gzofstream(const char* name,
              std::ios_base::openmode mode = std::ios_base::out);
 
+  explicit
+  gzofstream(const std::string& name,
+             std::ios_base::openmode mode = std::ios_base::out)
+  : gzofstream(name.c_str(), mode) {}
+
   /**
    *  @brief  Construct stream on already open gzipped file.
    *  @param  fd    File descriptor.
@@ -373,6 +388,11 @@ public:
   void
   open(const char* name,
        std::ios_base::openmode mode = std::ios_base::out);
+
+  void
+  open(const std::string& name,
+       std::ios_base::openmode mode = std::ios_base::out)
+  { open(name.c_str(), mode); }
 
   /**
    *  @brief  Attach to already open gzipped file.

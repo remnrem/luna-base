@@ -215,7 +215,7 @@ void dsptools::simul( edf_t & edf , param_t & param )
       int header_size;
       bool has_neg = false;
       
-      std::ifstream IN1( psd_file.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( psd_file , std::ios::in );
       while ( ! IN1.eof() )
 	{
 	  std::string line;

@@ -176,7 +176,7 @@ bool edfz_t::read_index()
   std::string indexname = filename + ".idx";
   if ( ! Helper::fileExists( indexname ) ) return false;
   index.clear();
-  std::ifstream I1( indexname.c_str() , std::ios::in );
+  std::ifstream I1 = LunaIO::open_ifstream( indexname , std::ios::in );
   
   // index version
   std::string line;
@@ -225,7 +225,7 @@ bool edfz_t::write_index( const int rs )
 {
   record_size = rs;
   std::string indexname = filename + ".idx";
-  std::ofstream O1( indexname.c_str() , std::ios::out );
+  std::ofstream O1 = LunaIO::open_ofstream( indexname , std::ios::out );
   
   // index version
   O1 << "EDFZv1\n";    

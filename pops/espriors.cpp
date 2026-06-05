@@ -117,7 +117,7 @@ void pops_indiv_t::apply_espriors( const std::string & f )
       pops_t::ES_mins.clear();
       pops_t::ES_global_priors = Eigen::VectorXd::Zero( 5 );
       
-      std::ifstream IN1( filename.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
 
       int row = 0;
       
@@ -450,7 +450,7 @@ void pops_t::make_espriors( param_t & param )
 	{
 	  logger << "  writing epoch/stage info to " << text_file << "\n";
 	  
-	  std::ofstream O1( text_file.c_str(), std::ios::out );
+	  std::ofstream O1 = LunaIO::open_ofstream( text_file , std::ios::out );
 	  
 	  for (int e=0; e<S.size(); e++)
 	    O1 << E[e] << "\t" << S[e] << "\n";
@@ -471,7 +471,7 @@ void pops_t::make_espriors( param_t & param )
       S.clear();
       E.clear();
       
-      std::ifstream IN1( text_file.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( text_file , std::ios::in );
       while ( IN1 )
 	{
 	  int epoch;
@@ -680,7 +680,7 @@ void pops_t::write_elapsed_sleep_priors( const std::string & f )
   
   std::string filename = Helper::expand( f );
   
-  std::ofstream OUT1( filename.c_str() , std::ios::out );
+  std::ofstream OUT1 = LunaIO::open_ofstream( filename , std::ios::out );
   
   logger << "  writing P( elapsed sleep | stg ) to " << filename << "\n";
   

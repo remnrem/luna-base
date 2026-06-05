@@ -63,7 +63,7 @@ void suds_t::read_elapsed_stages( const std::string & f )
 
   ES_mins.clear();
   
-  std::ifstream IN1( f.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( f , std::ios::in );
   
   while ( ! IN1.eof() )
     {

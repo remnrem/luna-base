@@ -43,6 +43,25 @@ extern logger_t logger;
 
 extern globals global;
 
+// Escape the five XML special characters so annotation names, descriptions,
+// and meta-data values can be written safely into XML attributes and element
+// content regardless of their encoding (ASCII or UTF-8).
+static std::string xml_escape( const std::string & s )
+{
+  std::string r;
+  r.reserve( s.size() );
+  for (unsigned char c : s)
+    {
+      if      (c == '&')  r += "&amp;";
+      else if (c == '<')  r += "&lt;";
+      else if (c == '>')  r += "&gt;";
+      else if (c == '"')  r += "&quot;";
+      else if (c == '\'') r += "&apos;";
+      else                r += (char)c;
+    }
+  return r;
+}
+
 bool instance_idx_t::operator< ( const instance_idx_t & rhs ) const 
 {
   if ( interval < rhs.interval ) return true;
@@ -584,11 +603,11 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   
   if ( ! ( is_eannot || is_annot ) )
     {
-      std::ifstream IN1( f.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( f , std::ios::in );
 
       while ( 1 )
 	{
-	  
+
 	  std::string x;
 	  Helper::safe_getline( IN1 , x );
 
@@ -641,14 +660,14 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
     {
       std::vector<std::string> a;
       
-      std::ifstream IN1( f.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( f , std::ios::in );
       while ( ! IN1.eof() )
 	{
 	  std::string x;
 	  Helper::safe_getline( IN1 , x );
 	  if ( IN1.eof() ) break;
 	  if ( x == "" ) continue;
-	  
+
 	  x = Helper::unquote( x );
 	  
 	  // sanitize? [ done in remap now ] 
@@ -687,7 +706,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
   // Otherwise, this is an .annot file   
   //
 
-  std::ifstream FIN( f.c_str() , std::ios::in );
+  std::ifstream FIN = LunaIO::open_ifstream( f , std::ios::in );
 
   // header with # character
   
@@ -2198,8 +2217,8 @@ int annot_t::load_features( const std::string & f )
   // set basic values for this annotation type, then add events/features  
   
   // logger << " attaching feature-list file " << f << "\n";
-  
-  std::ifstream FIN( f.c_str() , std::ios::in );
+
+  std::ifstream FIN = LunaIO::open_ifstream( f , std::ios::in );
   
   int line_count = 0;
   
@@ -2301,8 +2320,8 @@ bool annot_t::save( const std::string & t)
   //  as this better handles all new formats, etc.
   //
 
-  std::ofstream O1( t.c_str() , std::ios::out );
-  
+  std::ofstream O1 = LunaIO::open_ofstream( t , std::ios::out );
+
   bool has_vars = types.size() > 0 ;
 
   //
@@ -4609,7 +4628,7 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
 	 << " format) to " 
 	 << filename << "\n";
 
-  std::ofstream O1( filename.c_str() , std::ios::out );
+  std::ofstream O1 = LunaIO::open_ofstream( filename , std::ios::out );
 
   if ( O1.fail() ) Helper::halt( "could not write file " + filename + " - does the folder exist?");
     
@@ -4667,16 +4686,16 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
 	  
 	  if ( annot == NULL ) continue;
 	  
-	  O1 << "<Class name=\"" << helper_remap( annot->name , remapping )<< "\">\n"
-	     << " <Description>" << annot->description << "</Description>\n";
+	  O1 << "<Class name=\"" << xml_escape( helper_remap( annot->name , remapping ) ) << "\">\n"
+	     << " <Description>" << xml_escape( annot->description ) << "</Description>\n";
 	  
 	  std::map<std::string, globals::atype_t>::const_iterator aa = annot->types.begin();
 	  while ( aa != annot->types.end() )
 	    {
-	      O1 << "  <Variable type=\"" 
-		 << globals::type_name[ aa->second ] 
-		 << "\">" 
-		 << aa->first 
+	      O1 << "  <Variable type=\""
+		 << globals::type_name[ aa->second ]
+		 << "\">"
+		 << xml_escape( aa->first )
 		 << "</Variable>\n";
 	      ++aa;
 	    }
@@ -4748,10 +4767,10 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
 
 	  // output
 	  
-	  O1 << "<Instance class=\"" << helper_remap( annot->name , remapping ) << "\">\n";
-	  
-	  if ( instance_idx.id != "." && instance_idx.id != "" ) 
-	    O1 << " <Name>" << instance_idx.id << "</Name>\n";
+	  O1 << "<Instance class=\"" << xml_escape( helper_remap( annot->name , remapping ) ) << "\">\n";
+
+	  if ( instance_idx.id != "." && instance_idx.id != "" )
+	    O1 << " <Name>" << xml_escape( instance_idx.id ) << "</Name>\n";
 	  
 	  // adjuts by offset, if needed (ALIGN)
 	  
@@ -4791,16 +4810,16 @@ void annotation_set_t::write( const std::string & filename1 , param_t & param , 
 		  // var-name : dd->first
 		  // value : 
 
-		  O1 << " <Value name=\"" <<  dd->first << "\">" 
-		     << *dd->second 
-		     << "</Value>\n"; 
+		  O1 << " <Value name=\"" << xml_escape( dd->first ) << "\">"
+		     << xml_escape( dd->second->text_value() )
+		     << "</Value>\n";
 		  ++dd;
 		}
 
 
 	      // add ID tag?
 	      if ( set_id )
-		O1 << " <Value name=\"" << set_id_key << "\">" << edf.id << "</Value>\n";
+		O1 << " <Value name=\"" << xml_escape( set_id_key ) << "\">" << xml_escape( edf.id ) << "</Value>\n";
 	      
 	    }
 	  
@@ -6218,7 +6237,7 @@ int annotation_set_t::remap( const std::vector<std::string> & files , int remap_
       if ( ! Helper::fileExists( fname ) )
 	Helper::halt( "could not find " + fname );
 
-      std::ifstream IN1( fname.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( fname , std::ios::in );
       while ( ! IN1.eof() )
 	{
 	  std::string x;

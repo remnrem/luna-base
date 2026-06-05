@@ -59,7 +59,7 @@ void pdc_t::external( param_t & param )
 
   std::map<std::string,std::vector<std::vector<double> > > data;
 	     
-  std::ifstream IN( input.c_str() , std::ios::in );
+  std::ifstream IN = LunaIO::open_ifstream( input , std::ios::in );
 
   int nv = 0;
   
@@ -145,7 +145,7 @@ void pdc_t::external( param_t & param )
   // Write
   //
   
-  std::ofstream OUT( output.c_str() , std::ios::out );
+  std::ofstream OUT = LunaIO::open_ofstream( output , std::ios::out );
   OUT << D.dump();
   OUT.close();
   

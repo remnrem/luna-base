@@ -187,7 +187,7 @@ void load_coda_posteriors_file( const std::string & filename ,
   if ( !Helper::fileExists( expanded_filename ) )
     Helper::halt( "POPS-CODA: posteriors file not found: " + filename );
 
-  std::ifstream IN( expanded_filename.c_str() );
+  std::ifstream IN = LunaIO::open_ifstream( expanded_filename );
   if ( !IN.good() )
     Helper::halt( "POPS-CODA: could not open: " + filename );
 
@@ -1100,7 +1100,7 @@ void pops_coda_t::load_validation_ids( const std::string & filename )
   if ( ! Helper::fileExists( expanded ) )
     Helper::halt( "POPS-CODA: could not open " + filename );
 
-  std::ifstream in( expanded.c_str() , std::ios::in );
+  std::ifstream in = LunaIO::open_ifstream( expanded , std::ios::in );
   while ( ! in.eof() )
     {
       std::string id;
@@ -1123,7 +1123,7 @@ void pops_coda_t::load_exclude_ids( const std::string & filename )
   if ( ! Helper::fileExists( expanded ) )
     Helper::halt( "POPS-CODA: could not open " + filename );
 
-  std::ifstream in( expanded.c_str() , std::ios::in );
+  std::ifstream in = LunaIO::open_ifstream( expanded , std::ios::in );
   while ( ! in.eof() )
     {
       std::string id;
@@ -1261,7 +1261,7 @@ void pops_coda_t::save( const std::string & f )
 
   // Write feature names alongside model
   std::string fn_file = coda_feature_name_file( model_file );
-  std::ofstream FN( Helper::expand( fn_file ).c_str() , std::ios::out );
+  std::ofstream FN = LunaIO::open_ofstream( Helper::expand( fn_file ) , std::ios::out );
   if ( !FN.good() )
     Helper::halt( "POPS-CODA: could not write feature names to " + fn_file );
 
@@ -1340,7 +1340,7 @@ void pops_coda_t::load( const std::string & f )
   bool loaded_include_hard_props = false;
   bool have_include_entropy_margin = false;
   bool loaded_include_entropy_margin = false;
-  std::ifstream FN( Helper::expand( fn_file ).c_str() , std::ios::in );
+  std::ifstream FN = LunaIO::open_ifstream( Helper::expand( fn_file ) , std::ios::in );
   while ( true )
     {
       std::string line;

@@ -205,7 +205,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
       if ( ! Helper::fileExists( infile ) ) 
 	Helper::halt( "could not find " + infile );
 
-      std::ifstream IN1( infile.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( infile , std::ios::in );
 
       // header row
 
@@ -621,7 +621,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
       // CH1 CH2 F VAR W
       //  also enter CH2.CH1
 
-      std::ifstream SIN1 ( scaling_file.c_str() , std::ios::in );
+      std::ifstream SIN1 = LunaIO::open_ifstream( scaling_file , std::ios::in );
       while ( 1 )
 	{
 	  std::string line;
@@ -1381,7 +1381,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
       
       logger << "  dumping V and meta-information to file: " << vdump << ".vars \n";
 
-      std::ofstream V1( (vdump+".vars").c_str() , std::ios::out );
+      std::ofstream V1 = LunaIO::open_ofstream( (vdump+".vars") , std::ios::out );
       
       // V : first nc component
       
@@ -1453,7 +1453,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
       
       logger << "  dumping U and PSCs to file: " << vdump << ".data\n";
       
-      std::ofstream V2( (vdump+".data").c_str() , std::ios::out );
+      std::ofstream V2 = LunaIO::open_ofstream( (vdump+".data") , std::ios::out );
       
       V2 << "ID";
       
@@ -1557,7 +1557,7 @@ void psc_t::construct( param_t & param , const bool nmf_mode )
 
       logger << "  writing projection to " << projection << "\n";
       
-      std::ofstream OUT1( projection.c_str() , std::ios::out );
+      std::ofstream OUT1 = LunaIO::open_ofstream( projection , std::ios::out );
 
       // file format marker
       OUT1 << "__PSC_PROJ_V1\n";
@@ -1613,7 +1613,7 @@ void psc_t::attach( param_t & param )
   
   logger << "  reading projection from " << infile << "\n";
   
-  std::ifstream IN1( infile.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( infile , std::ios::in );
 
 
   

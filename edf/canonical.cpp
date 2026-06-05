@@ -456,7 +456,7 @@ std::vector<std::string> canonical_t::preprocess( const std::string & filename )
   if ( ! Helper::fileExists( filename ) )
     Helper::halt( "could not open " + filename );
   
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
 
   std::vector<std::string> lines;
 

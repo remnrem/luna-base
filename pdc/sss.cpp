@@ -139,7 +139,7 @@ void pdc_t::simple_sleep_scorer( edf_t & edf , param_t & param )
     {
       std::string filename = param.requires( "grouping" ) + "-" + edf.id + ".txt";
       if ( ! Helper::fileExists( filename ) ) Helper::halt( "cannot find " + filename );
-      std::ifstream IN1( filename.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
       while ( ! IN1.eof() )
 	{
 	  std::string id;
@@ -181,7 +181,7 @@ void pdc_t::simple_sleep_scorer( edf_t & edf , param_t & param )
       if ( out_pdfile != "." )
 	{
 	  out_pdfile += "-" + edf.id;
-	  OUT1.open( out_pdfile.c_str() , std::ios::out );
+	  OUT1 = LunaIO::open_ofstream( out_pdfile , std::ios::out );
 	}
       else out_pd = false;
     }
@@ -563,7 +563,7 @@ void pdc_t::simple_sleep_scorer( edf_t & edf , param_t & param )
 void pdc_t::write_xml( const std::string & filename , const std::vector<std::string> & stages )
 {
 
-  std::ofstream XML( filename.c_str() , std::ios::out );
+  std::ofstream XML = LunaIO::open_ofstream( filename , std::ios::out );
 
   XML << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n";
   XML << "<PSGAnnotation>"

@@ -568,7 +568,7 @@ bool lgbm_t::load_weights( DatasetHandle d , std::vector<float> * w , const std:
     Helper::halt( "could not attach weight file " + filename );
   
   w->clear();
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   while ( 1 )
     {
       float x;
@@ -786,7 +786,7 @@ std::string lgbm_t::parse_config( const std::string & f )
   if ( ! Helper::fileExists( filename ) )
     Helper::halt( "could not open " + filename );
   
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   
   while ( 1 )
     {

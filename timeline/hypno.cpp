@@ -3637,20 +3637,20 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
   annot_t * a0 = timeline->annotations->add( prefix + "t0_start" );
   a0->add( "." , interval_t( tp_0_start , tp_0_start ) , "." );
 
-  // std::cout << " tp_0_start = " << tp_0_start << "\n"
-  // 	    << " t1_lights_out = " << tp_1_lights_out << "\n"
-  // 	    << " t2_sleep_onset = " << tp_2_sleep_onset << "\n"
-  // 	    << " t3_sleep_midpoint = " << tp_3_sleep_midpoint << "\n"
-  // 	    << " t4_final_wake = " << tp_4_final_wake << "\n"
-  // 	    << " t5_lights_on = " << tp_5_lights_on << "\n"
-  // 	    << " t6_stop = " << tp_6_stop << "\n";
+   // std::cout << " tp_0_start = " << tp_0_start << "\n"
+   // 	    << " t1_lights_out = " << tp_1_lights_out << "\n"
+   // 	    << " t2_sleep_onset = " << tp_2_sleep_onset << "\n"
+   // 	    << " t3_sleep_midpoint = " << tp_3_sleep_midpoint << "\n"
+   // 	    << " t4_final_wake = " << tp_4_final_wake << "\n"
+   // 	    << " t5_lights_on = " << tp_5_lights_on << "\n"
+   // 	    << " t6_stop = " << tp_6_stop << "\n";
   
   annot_t * a1 = timeline->annotations->add( prefix + "t1_lights_out" );
   a1->add( "." , interval_t( tp_1_lights_out , tp_1_lights_out ) , "." );
   
   
   //   hyp_t3_sleep_midpoint, hyp_t4_final_wake, hyp_t5_lights_on, hyp_t6_stop                                                                 
-  
+  // i.e. "if any sleep"
   if ( tp_2_sleep_onset != tp_4_final_wake ) 
     {
 
@@ -3857,26 +3857,40 @@ void hypnogram_t::output( const bool verbose ,
 	{
 	  
 	  double t0 = clock_start.hours();
+	  double t1 = clock_lights_out.hours();
+	  double t2 = any_sleep ? clock_sleep_onset.hours() : t1 ;
+	  double t3 = any_sleep ? clock_sleep_midpoint.hours() : t1;
+	  double t4 = any_sleep ? clock_wake_time.hours() : t1;
+	  double t5 = clock_lights_on.hours();
+	  double t6 = clock_stop.hours();
+
+	  // if ! any sleep, set all "sleep" to t1 ( lights out ) 
+	  
+	  std::cout << " t0 " << t0 << "\n"
+		    << " t1 " << t1 << "\n"
+		    << " t2 " << t2 << "\n"
+		    << " t3 " << t3 << "\n"
+		    << " t4 " << t4 << "\n"
+		    << " t5 " << t5 << "\n"
+		    << " t6 " << t6 << "\n";
+
 	  
 	  // ensure all are yoked to the same midnight as T0	  
-	  double t1 = clock_lights_out.hours();
-	  if ( t1 < t0 ) t1 += 24.0;
-
-	  double t2 = any_sleep ? clock_sleep_onset.hours() : 0 ;
-	  if ( t2 < t0 ) t2 += 24.0;
+	  while ( t1 < t0 ) t1 += 24.0;
+	  while ( t2 < t1 ) t2 += 24.0;	  
+	  while ( t3 < t2 ) t3 += 24.0;
+	  while ( t4 < t3 ) t4 += 24.0;
+	  while ( t5 < t4 ) t5 += 24.0;
+	  while ( t6 < t5 ) t6 += 24.0;
 	  
-	  double t3 = any_sleep ? clock_sleep_midpoint.hours() : 0;
-	  if ( t3 < t0 ) t3 += 24.0;
+	  std::cout << " S2 \n" << " t0 " << t0 << "\n"
+		    << " t1 " << t1 << "\n"
+		    << " t2 " << t2 << "\n"
+		    << " t3 " << t3 << "\n"
+		    << " t4 " << t4 << "\n"
+		    << " t5 " << t5 << "\n"
+		    << " t6 " << t6 << "\n";
 
-	  double t4 = any_sleep ? clock_wake_time.hours() : 0;
-	  if ( t4 < t0 ) t4 += 24.0;
-
-	  double t5 = clock_lights_on.hours();
-	  if ( t5 < t0 ) t5 += 24.0;
-
-	  double t6 = clock_stop.hours();
-	  if ( t6 < t0 ) t6 += 24.0;
-	  		  
 	  // finally, if t0 is at mignight, or just after, we need to
 	  // make it align to the *previous* midnight. 
 	  // i.e. if t0 < 12pm, then shift everything by 24 hours
@@ -3892,6 +3906,13 @@ void hypnogram_t::output( const bool verbose ,
 	      t6 += 24.0;	      
 	    }
 	  
+	  std::cout << " S3 \n" << " t0 " << t0 << "\n"
+		    << " t1 " << t1 << "\n"
+		    << " t2 " << t2 << "\n"
+		    << " t3 " << t3 << "\n"
+		    << " t4 " << t4 << "\n"
+		    << " t5 " << t5 << "\n"
+		    << " t6 " << t6 << "\n";
 
 	  // for annots
 	  tp_0_start = 0LLU;
@@ -4479,7 +4500,7 @@ void hypnogram_t::output( const bool verbose ,
       else if ( eannot != "" )
 	{
 	  logger << "  writing epoch-level sleep stages to " << eannot << "\n";
-	  std::ofstream EOUT( Helper::expand( eannot ).c_str() , std::ios::out );
+	  std::ofstream EOUT = LunaIO::open_ofstream( Helper::expand( eannot ) , std::ios::out );
 	  for (int e=0;e<ne_gaps;e++)
 	    if ( ! epoch_gap[e] )		      
 	      EOUT << globals::stage( stages[ e ] ) << "\n";

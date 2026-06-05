@@ -390,7 +390,7 @@ void dsptools::microstates( edf_t & edf , param_t & param )
 	{
 
 	  logger << "  dumping GFP and states to " << dump_file << "\n";
-	  std::ofstream O1( Helper::expand( dump_file ).c_str() , std::ios::out );
+	  std::ofstream O1 = LunaIO::open_ofstream( Helper::expand( dump_file ) , std::ios::out );
 	  
            
 	  // get TP...
@@ -1071,7 +1071,7 @@ ms_prototypes_t microstates_t::segment( const Data::Matrix<double> & X ,
   if ( 0 || dump_file != "" )
     {
       logger << "  dumping raw matrix to " << dump_file << "\n";
-      std::ofstream O1( dump_file.c_str() , std::ios::out );      
+      std::ofstream O1 = LunaIO::open_ofstream( dump_file , std::ios::out );      
       O1 << Z.dump();       
       O1.close();      
     }
@@ -1788,7 +1788,7 @@ ms_stats_t microstates_t::stats( const Data::Matrix<double> & X_ ,
       // as we are splicing out ambiguous segments, we need to manually check 
       // that we do not have a duplicate sequence here...
       // U/l mapping: this is implicitly based on L[], not L2[]
-      std::ofstream OUT1( Helper::expand( statesfile ).c_str() , std::ios::out );
+      std::ofstream OUT1 = LunaIO::open_ofstream( Helper::expand( statesfile ) , std::ios::out );
       OUT1 << subj_id << "\t";
 
       char last = '?';
@@ -2517,7 +2517,7 @@ void ms_prototypes_t::write( const std::string & filename )
   logger << "  writing " << K << "-class prototypes to " << filename << "\n";
 
   // now have a header
-  std::ofstream O1( filename.c_str() , std::ios::out );
+  std::ofstream O1 = LunaIO::open_ofstream( filename , std::ios::out );
   O1 << "CH";
   for (int k=0;k<K;k++) O1 << "\t" << ms_labels[k];
   O1 << "\n";
@@ -2549,7 +2549,7 @@ void ms_prototypes_t::read( const std::string & f )
 
   std::vector<double> t;
   
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   
   // get header row
   std::string line;
@@ -3119,7 +3119,7 @@ void ms_prototypes_t::map_to_canonicals( const std::string & filename )
   // get header
   //
 
-  std::ifstream IN1( filename2.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename2 , std::ios::in );
 
   std::string line;
   Helper::safe_getline( IN1 , line );
@@ -4115,7 +4115,7 @@ void dsptools::ms_kmer_wrapper( param_t & param )
   std::map<std::string,std::string> data0;
   std::vector<std::string> ids;
   if ( ! Helper::fileExists( infile ) ) Helper::problem( "could not open " + infile );
-  std::ifstream IN1( infile.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( infile , std::ios::in );
   int rejected = 0; 
   while ( ! IN1.eof() )
     {
@@ -4485,7 +4485,7 @@ void dsptools::ms_cmp_maps( param_t & param )
   
   std::map<std::string,std::map<std::string,std::map<std::string,double> > > data;
   if ( ! Helper::fileExists( infile ) ) Helper::halt( "could not open " + infile );
-  std::ifstream IN1( infile.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( infile , std::ios::in );
   // header...
   std::string id, ch, k, dummy;
   IN1 >> id >> ch >> k >> dummy;

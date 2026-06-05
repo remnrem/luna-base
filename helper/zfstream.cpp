@@ -8,6 +8,13 @@
  */
 
 #include "helper/zfstream.h"
+
+#if defined(WINDOWS) || defined(_WIN32)
+#include <windows.h>
+#include <io.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#endif
 #include <cstring>          // for strcpy, strcat, strlen (mode strings)
 #include <cstdio>           // for BUFSIZ
 
@@ -63,9 +70,24 @@ gzfilebuf::open(const char *name,
   if (!this->open_mode(mode, char_mode))
     return NULL;
 
-  // Attempt to open file
+  // Attempt to open file — on Windows use _wopen()+gzdopen() so UTF-8 paths work
+#if defined(WINDOWS) || defined(_WIN32)
+  {
+    const int wlen = MultiByteToWideChar(CP_UTF8, 0, name, -1, nullptr, 0);
+    if (wlen <= 0) return NULL;
+    std::wstring wname(wlen, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, name, -1, wname.data(), wlen);
+    const int oflags = (mode & std::ios_base::out)
+      ? (_O_WRONLY | _O_CREAT | _O_TRUNC | _O_BINARY)
+      : (_O_RDONLY | _O_BINARY);
+    const int fd = _wopen(wname.c_str(), oflags, _S_IREAD | _S_IWRITE);
+    if (fd == -1) return NULL;
+    if ((file = gzdopen(fd, char_mode)) == NULL) { _close(fd); return NULL; }
+  }
+#else
   if ((file = gzopen(name, char_mode)) == NULL)
     return NULL;
+#endif
 
   // On success, allocate internal buffer and set flags
   this->enable_buffer();

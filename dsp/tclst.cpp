@@ -767,7 +767,7 @@ void dsptools::tclst( edf_t & edf , param_t & param )
 	    Helper::halt( "no distance=filename given" );
 	  
 	  const std::string filename = Helper::expand( param.value( "distance" ) );
-	  std::ofstream O1( filename.c_str() , std::ios::out );
+	  std::ofstream O1 = LunaIO::open_ofstream( filename , std::ios::out );
 	  for (int i=0;i<ni; i++)
 	    {
 	      for (int j=0; j<ni; j++)

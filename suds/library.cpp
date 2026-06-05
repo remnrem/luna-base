@@ -103,7 +103,7 @@ void suds_indiv_t::write( edf_t & edf , param_t & param ) const
   const bool output_lda = param.yesno( "output-LDA" ) && lda_model.valid ;
   const bool output_qda = param.yesno( "output-QDA" ) && qda_model.valid ;
   
-  std::ofstream OUT1( filename.c_str() , std::ios::out );
+  std::ofstream OUT1 = LunaIO::open_ofstream( filename , std::ios::out );
   
   // file version code
   OUT1 << suds_t::suds_lib_version << "\n";
@@ -331,10 +331,10 @@ void suds_t::text2binary( const std::string & texfile ,
     Helper::halt( "could not open " + Helper::expand( texfile ) );
   
   // read text from here...
-  std::ifstream IN1( Helper::expand( texfile ).c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( texfile ) , std::ios::in );
   
   // and write out binary to here.
-  std::ofstream OUT1( Helper::expand( binfile ).c_str() , std::ios::binary | std::ios::out );
+  std::ofstream OUT1 = LunaIO::open_ofstream( Helper::expand( binfile ) , std::ios::binary | std::ios::out );
   
   logger << "  copying from " << texfile << " to " << binfile << " (text2binary conversion)\n";
     
@@ -774,7 +774,7 @@ std::vector<suds_indiv_t*> suds_t::binary_reload( const std::string & filename ,
   if ( ! Helper::fileExists( Helper::expand( filename ) ) )
     Helper::halt( "cannot open " + filename );
   
-  std::ifstream IN1( Helper::expand( filename ).c_str() , std::ios::binary | std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( filename ) , std::ios::binary | std::ios::in );
 
   std::vector<suds_indiv_t*> bank;
 
@@ -1244,7 +1244,7 @@ void suds_t::attach_db_prefit( const std::string & infile )
   if ( ! Helper::fileExists( svdfile ) )
     Helper::halt( "could not find " + svdfile );
   
-  std::ifstream I1( svdfile.c_str() , std::ios::in );
+  std::ifstream I1 = LunaIO::open_ifstream( svdfile , std::ios::in );
 
   int vw;
   I1 >> vw;
@@ -1277,7 +1277,7 @@ void suds_t::attach_hjorth_limits( const std::string & hjorthfile )
   if ( ! Helper::fileExists( Helper::expand( hjorthfile ) ) )
     Helper::halt( "could not open " + hjorthfile );
 
-  std::ifstream I1( Helper::expand( hjorthfile ).c_str() , std::ios::in ) ;
+  std::ifstream I1 = LunaIO::open_ifstream( Helper::expand( hjorthfile ) , std::ios::in );
   
   int ns0;
   I1 >> ns0;
@@ -1342,7 +1342,7 @@ void suds_t::combine_trainers( param_t & param )
     Helper::halt( "could not open " + Helper::expand( infile ) );
   
   // read binary file here (w/ multiple indivs)
-  std::ifstream IN1( Helper::expand( infile ).c_str() , std::ios::binary | std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( infile ) , std::ios::binary | std::ios::in );
 
 
   // only take first n individuals
@@ -1746,7 +1746,7 @@ void suds_t::combine_trainers( param_t & param )
 
   logger << "  writing Hjorth outlier values to " << outfile << ".hjorth\n";
 
-  std::ofstream H1( ( outfile + ".hjorth" ).c_str() , std::ios::out );
+  std::ofstream H1 = LunaIO::open_ofstream( ( outfile + ".hjorth" ) , std::ios::out );
 
   H1 << first_ns << "\n"; 
   
@@ -1775,7 +1775,7 @@ void suds_t::combine_trainers( param_t & param )
 
   logger << "  writing SVD V and W matrices to " << outfile << ".svd\n";
 
-  std::ofstream SVD1( ( outfile + ".svd" ).c_str() , std::ios::out );
+  std::ofstream SVD1 = LunaIO::open_ofstream( ( outfile + ".svd" ) , std::ios::out );
 
   SVD1 << mega.W.size() << "\n"
        << mega.W << "\n"

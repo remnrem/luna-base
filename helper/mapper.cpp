@@ -101,7 +101,7 @@ void Helper::channel_annot_mapper( const std::vector<std::string> & tok , bool h
 
   if ( do_amap && anns.size() > 0 ) 
     {
-      std::ifstream INC( amap.c_str() , std::ios::in );
+      std::ifstream INC = LunaIO::open_ifstream( amap , std::ios::in );
       if ( INC.bad() ) Helper::halt( "could not open file: " + amap );
       
       while ( ! INC.eof() )
@@ -134,7 +134,7 @@ void Helper::channel_annot_mapper( const std::vector<std::string> & tok , bool h
   
   if ( do_cmap && nonuniq_chs.size() > 0 )
     {
-      std::ifstream INC( cmap.c_str() , std::ios::in );
+      std::ifstream INC = LunaIO::open_ifstream( cmap , std::ios::in );
       if ( INC.bad() ) Helper::halt( "could not open file: " + cmap );
       
       while ( ! INC.eof() )

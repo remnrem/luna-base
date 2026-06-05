@@ -93,7 +93,7 @@ annotate_t::annotate_t( param_t & param )
     Helper::halt( "could not open " + alist );
 
   // read each 
-  std::ifstream IN1( alist.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( alist , std::ios::in );
   int acnt = 0;
   while ( 1 )
     {
@@ -127,7 +127,7 @@ annotate_t::annotate_t( param_t & param )
   // build up a new annotation file, and re-read
   const std::string aggregated = param.requires( "merged" ) + ".annot";
 
-  std::ofstream OUT1( aggregated.c_str() , std::ios::out );
+  std::ofstream OUT1 = LunaIO::open_ofstream( aggregated , std::ios::out );
   
   // get size of each 
   std::map<std::string,double> ind2dur;

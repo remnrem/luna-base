@@ -242,7 +242,7 @@ sedf_t::sedf_t( edf_t & edf , param_t & param )
     {	  
       std::string file = param.value("sample-list");
       logger << " appending " << filename << " to sample-list " << file << "\n";      
-      std::ofstream FL( file.c_str() , std::ios_base::app );
+      std::ofstream FL = LunaIO::open_ofstream( file , std::ios_base::app );
       FL << edf.id << "\t" << filename << "\n";
       FL.close();
     }

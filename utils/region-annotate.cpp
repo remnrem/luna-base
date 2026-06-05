@@ -94,7 +94,7 @@ int main(int argc , char ** argv )
 
   std::set<reg_t> regions;
 
-  std::ifstream IN( region_file.c_str() , std::ios::in );
+  std::ifstream IN = LunaIO::open_ifstream( region_file , std::ios::in );
   while ( 1 )
     {
       double x,y;

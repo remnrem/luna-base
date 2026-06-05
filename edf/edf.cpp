@@ -1469,15 +1469,15 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
     Helper::vmode_halt( "could not read " + filename );
   
   bool compressed = Helper::file_extension( filename , "gz" );
-  
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
 
   gzifstream ZIN1;
   
   if ( compressed  ) 
-    ZIN1.open( filename.c_str() );
+    ZIN1.open( filename );
   else
-    IN1.open( filename.c_str() , std::ios::in );    
+    IN1.open( filename , std::ios::in );    
   
   std::string line;
 
@@ -1576,9 +1576,9 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
       gzifstream zin3;
 
       if ( compressed )
-	zin3.open( filename.c_str() );
+	zin3.open( filename );
       else
-	in3.open( filename.c_str() , std::ios::in );
+	in3.open( filename , std::ios::in );
 
       if ( has_header_labels )
 	{
@@ -1703,9 +1703,9 @@ bool edf_t::read_from_ascii( const std::string & f , // filename
   gzifstream ZIN2;
   
   if ( compressed ) 
-    ZIN2.open( filename.c_str() );
+    ZIN2.open( filename );
   else
-    IN2.open( filename.c_str() , std::ios::in );
+    IN2.open( filename , std::ios::in );
 
   // skip header?
   if ( has_header_labels ) 
@@ -1942,8 +1942,8 @@ bool edf_t::attach( const std::string & f ,
   
   if ( ! edfz_mode ) 
     {
-      if ( ( file = fopen( filename.c_str() , "rb" ) ) == NULL )
-	{      
+      if ( ( file = LunaIO::fopen_utf8( filename , "rb" ) ) == NULL )
+	{
 	  file = NULL;
 	  return Helper::vmode_halt( "could not open specified EDF: " + filename );
 	}
@@ -2912,7 +2912,7 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
 
       FILE * outfile = NULL;
       
-      if ( ( outfile = fopen( filename.c_str() , "wb" ) ) == NULL )      
+      if ( ( outfile = LunaIO::fopen_utf8( filename , "wb" ) ) == NULL )
 	{
 	  logger << " ** could not open " << filename << " for writing **\n";
 	  return false;
@@ -6499,7 +6499,7 @@ bool edf_t::append( const std::string & filename ,
 
   FILE * mergefile = NULL;
     
-  if ( ( mergefile = fopen( filename.c_str() , "rb+" ) ) == NULL )
+  if ( ( mergefile = LunaIO::fopen_utf8( filename , "rb+" ) ) == NULL )
     Helper::halt( "problem opening " + filename + " to edit header" );
 
   //
@@ -6637,14 +6637,18 @@ void edf_t::set_headers( param_t & param )
       logger << "  set 'id' to " << header.patient_id << "\n";
       if ( header.patient_id.size() > 80 )
 	logger << "  *** warning - 'id' will be truncated to 80 characters if saved as EDF\n";
+      if ( ! Helper::is_ascii( header.patient_id ) )
+	logger << "  *** warning - 'id' contains non-ASCII characters which are not valid in EDF headers\n";
     }
-  
+
   if ( param.has( "recording-info" ) )
     {
       header.recording_info = param.value( "recording-info" ) ;
       logger << "  set 'recording-info' to " << header.recording_info << "\n";
       if ( header.recording_info.size() > 80 )
         logger << "  *** warning - 'recording-info' will be truncated to 80 characters if saved as EDF\n";
+      if ( ! Helper::is_ascii( header.recording_info ) )
+        logger << "  *** warning - 'recording-info' contains non-ASCII characters which are not valid in EDF headers\n";
     }
   
   if ( param.has( "start-date" ) )

@@ -712,7 +712,7 @@ void edf_t::epoch_matrix_dumper( param_t & param )
   
   std::string filename = param.requires( "file" );
   
-  std::ofstream OUT( filename.c_str() , std::ios::out );
+  std::ofstream OUT = LunaIO::open_ofstream( filename , std::ios::out );
   
   OUT.precision(12);
 

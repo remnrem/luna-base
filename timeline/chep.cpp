@@ -489,8 +489,8 @@ void timeline_t::read_chep_file( const std::string & f , bool reset )
   
   if ( ! Helper::fileExists( f ) ) Helper::halt( f + " does not exist" );
 
-  std::ifstream FIN( f.c_str() , std::ios::in );
-  
+  std::ifstream FIN = LunaIO::open_ifstream( f , std::ios::in );
+
   // **assumes** same epoch count, channel names
   // user's responsibility to keep that as it should be
 
@@ -512,7 +512,7 @@ void timeline_t::read_chep_file( const std::string & f , bool reset )
 
 void timeline_t::write_chep_file( const std::string & f ) const
 {
-  std::ofstream FOUT( f.c_str() , std::ios::out );
+  std::ofstream FOUT = LunaIO::open_ofstream( f , std::ios::out );
   if ( FOUT.bad() ) Helper::halt( "could not open " + f );
   std::map<int,std::set<std::string> >::const_iterator ee = chep.begin();
   while ( ee != chep.end() )

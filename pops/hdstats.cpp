@@ -1458,7 +1458,7 @@ static std::vector<bool> make_stage_mask(
 // Write HDSTATS rows for one context (global or per-stratum).
 // Emits REGION strata: ALL, STABLE, TRANS.
 // Emits STATE stratum only when do_3state is true.
-// Emits STAGE stratum for primary summary metrics only, based on argmax stage.
+// Emits SS stratum for primary summary metrics only, based on argmax stage.
 static void write_hdstats(
     const hd_derived_t & der,
     const hd_trans_t & tr,
@@ -1708,7 +1708,7 @@ static void write_hdstats(
     emit_context( rmask, true, true );
 
     // Stage-conditioned output is REGION-only; do not emit separate top-level
-    // transition or ratio summaries under STAGE.
+    // transition or ratio summaries under SS.
     for ( int st = 0; st < K; st++ )
       {
 	const std::vector<bool> stage_mask = make_stage_mask( rmask, argmax, st );
@@ -1716,9 +1716,9 @@ static void write_hdstats(
 	for ( int i = 0; i < (int)stage_mask.size(); i++ )
 	  if ( stage_mask[i] ) { any = true; break; }
 	if ( ! any ) continue;
-	writer.level( hd_state_label( threestate, st ), "STAGE" );
+	writer.level( hd_state_label( threestate, st ), "SS" );
 	emit_context( stage_mask, false, false );
-	writer.unlevel( "STAGE" );
+	writer.unlevel( "SS" );
       }
   };
 

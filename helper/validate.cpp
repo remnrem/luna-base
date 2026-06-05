@@ -53,7 +53,7 @@ void Helper::validate_slist( param_t & param )
 
   if ( ! Helper::fileExists( slist ) ) Helper::halt( "could not open sample-list " + slist );
 
-  std::ifstream IN1( slist.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( slist , std::ios::in );
 
 
   //
@@ -486,7 +486,7 @@ void Helper::validate_slist( param_t & param )
   if ( param.has( "exclude-list" ) && exclude.size() != 0 )
     {
       logger << "  writing exclude list (based on either EDF or annotation issues) to " << param.value( "exclude-list" ) << "\n";
-      std::ofstream O1( Helper::expand( param.requires( "exclude-list" ) ).c_str() , std::ios::out );
+      std::ofstream O1 = LunaIO::open_ofstream( Helper::expand( param.requires( "exclude-list" ) ) , std::ios::out );
       std::set<std::string>::const_iterator ii = exclude.begin();
       while ( ii != exclude.end() )
 	{
@@ -500,7 +500,7 @@ void Helper::validate_slist( param_t & param )
   if ( param.has( "edf-exclude-list" ) && exclude_edf.size() != 0 )
     {
       logger << "  writing exclude list (based on EDF issues only) to " << param.value( "edf-exclude-list" ) << "\n";
-      std::ofstream O1( Helper::expand( param.requires( "edf-exclude-list" ) ).c_str() , std::ios::out );      
+      std::ofstream O1 = LunaIO::open_ofstream( Helper::expand( param.requires( "edf-exclude-list" ) ) , std::ios::out );
       std::set<std::string>::const_iterator ii = exclude_edf.begin();
       while ( ii != exclude_edf.end() )
 	{
@@ -514,7 +514,7 @@ void Helper::validate_slist( param_t & param )
   if ( param.has( "annot-exclude-list" ) && exclude_annots.size() != 0 )
     {
       logger << "  writing exclude list (based on annotation EDF issues only) to " << param.value( "edf-exclude-list" ) << "\n";
-      std::ofstream O1( Helper::expand( param.requires( "annot-exclude-list" ) ).c_str() , std::ios::out );
+      std::ofstream O1 = LunaIO::open_ofstream( Helper::expand( param.requires( "annot-exclude-list" ) ) , std::ios::out );
       std::map<std::string,std::set<std::string>>::const_iterator ii = exclude_annots.begin();
       while ( ii != exclude_annots.end() )
         {

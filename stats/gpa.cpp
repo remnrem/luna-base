@@ -182,7 +182,7 @@ gpa_t::gpa_t( param_t & param , const bool prep_mode )
 	  if ( ! Helper::fileExists( ff->first ) )
 	    Helper::halt( "could not open " + ff->first );
 	  
-	  std::ifstream IN1( ff->first.c_str() , std::ios::in );
+	  std::ifstream IN1 = LunaIO::open_ifstream( ff->first , std::ios::in );
 	  std::string hdr;
 	  Helper::safe_getline( IN1 , hdr );
 
@@ -1137,7 +1137,7 @@ void gpa_t::prep()
 	}
       
       
-      std::ifstream IN1( Helper::expand( ff->first ).c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( ff->first ) , std::ios::in );
 
       //
       // get header
@@ -2150,7 +2150,7 @@ bool bfile_t::write( const std::vector<std::string> & ids ,
   const int nf = facs.size();
   
   // ID, ne, nf { features , row-major }   
-  std::ofstream OUT1( Helper::expand( name ).c_str() , std::ios::binary | std::ios::out );
+  std::ofstream OUT1 = LunaIO::open_ofstream( Helper::expand( name ) , std::ios::binary | std::ios::out );
 
   // N's
   bwrite( OUT1, ni ) ;
@@ -2250,7 +2250,7 @@ bool bfile_t::read( const std::set<std::string> & incvars ,
   if ( ! Helper::fileExists( Helper::expand( name ) ) )
     Helper::halt( "could not open " + name );
       
-  std::ifstream IN1( Helper::expand( name ).c_str() , std::ios::binary | std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( name ) , std::ios::binary | std::ios::in );
   
   // size of data (in file) 
   const int ni = bread_int( IN1 );
@@ -3372,7 +3372,7 @@ void gpa_t::write_na_file( const std::string & fname, const std::vector<int> & r
     }
   const std::vector<std::string> fac_names( all_factors_set.begin(), all_factors_set.end() );
 
-  std::ofstream dna( fname.c_str() );
+  std::ofstream dna = LunaIO::open_ofstream( fname );
   if ( ! dna.good() )
     { logger << "  ** could not write file: " << fname << "\n"; return; }
 
@@ -3753,10 +3753,10 @@ void gpa_t::qc( const double winsor , const bool stats_mode )
   // swap X and Z values back
   for (int j=0; j<v1.size(); j++)
     X.col( v1[j] ) = XZ.col(j);
-  
 
   // remove any dead cols
-  if ( zeros.size() && ! retain_rows )
+  //  WUXI: if ( zeros.size() && ! retain_rows )
+  if ( zeros.size()  ) // WUXI
     {
       std::set<int> z = Helper::vec2set( zeros );
       std::vector<int> nonzeros;
@@ -4166,7 +4166,7 @@ void gpa_t::parse( const std::string & pfile )
 
   if ( ! Helper::fileExists( pfile1 ) ) Helper::halt( "could not open " + pfile );
   
-  std::ifstream IN1( pfile1.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( pfile1 , std::ios::in );
     
   //json doc{json::parse(IN1)};
 
@@ -4898,7 +4898,7 @@ void linmod_comps_t::load( const std::string & file )
   if ( ! Helper::fileExists( filename ) )
     Helper::halt( "could not load " + filename );
 
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
 
   int t = 0;
   

@@ -502,7 +502,7 @@ static template_t build_template( const std::vector<resp_evt_t> & events ,
     }
 
   tpl.n_used = windows.size();
-  logger << "    template rejects   : no-seg=" << reject_no_segment
+  logger << "    template rejects              : no-seg=" << reject_no_segment
          << " edge=" << reject_window_edge
          << " post-valid=" << reject_post_valid
          << " baseline=" << reject_baseline << "\n";
@@ -634,28 +634,30 @@ resp_desat_link_t::resp_desat_link_t( edf_t & edf , param_t & param )
   const int gap_tol_s = param.has( "gap-tol" ) ? param.requires_int( "gap-tol" ) : 2;    // Raichel spirit
   double min_post_valid_frac = param.has( "min-post-valid" ) ? param.requires_dbl( "min-post-valid" ) : 0.70;
 
-  logger << "\n  RESP-LINK : respiratory-event response linker\n";
-  logger << "    signal             : " << sig_label << "\n";
-  logger << "    respiratory tokens : ";
+  logger << "\n  [Inputs]\n";
+  logger << "    signal (sig)               : " << sig_label << "\n";
+  logger << "    respiratory labels (resp)  : ";
   for ( int i = 0 ; i < resp_tokens.size() ; ++i )
     logger << ( i ? "," : "" ) << resp_tokens[i];
   logger << "\n";
-  logger << "    arousal tokens     : ";
+  logger << "    arousal labels (arousal)   : ";
   for ( int i = 0 ; i < arousal_tokens.size() ; ++i )
     logger << ( i ? "," : "" ) << arousal_tokens[i];
   logger << "\n";
-  logger << "    arousal rule       : onset >= resp_start and onset < resp_stop + "
+  logger << "    arousal link rule          : onset >= resp_start and onset < resp_stop + "
          << arousal_post_sec << " sec\n";
-  logger << "    sleep-only         : " << ( sleep_only ? "yes" : "no" ) << "\n";
-  logger << "    low artifact       : " << low_art << " %\n";
-  logger << "    spike threshold    : " << spike_th << " SpO2 units\n";
-  logger << "    artifact expand    : +/-" << neighbor_s << " sec\n";
-  logger << "    low-pass           : " << lp_cutoff << " Hz (order " << lp_order << ")\n";
-  logger << "    rounded            : " << ( do_round ? "yes" : "no" ) << "\n";
-  logger << "    template window    : [" << -template_pre_s << "," << template_post_s << "] sec around event end\n";
-  logger << "    hard nadir window  : [" << hard_nadir_min_s << "," << hard_nadir_max_s << "] sec after event end\n";
-  logger << "    hard recovery stop : +" << hard_recovery_max_s << " sec\n";
-  logger << "    min template N     : " << min_template_events << "\n";
+  logger << "    sleep-only (sleep)         : " << ( sleep_only ? "yes" : "no" ) << "\n";
+  logger << "\n  [Preprocessing]\n";
+  logger << "    low artifact (low)         : " << low_art << " %\n";
+  logger << "    spike threshold (spike)    : " << spike_th << " SpO2 units\n";
+  logger << "    artifact expand (neighbor) : +/-" << neighbor_s << " sec\n";
+  logger << "    low-pass (lp/lp-order)     : " << lp_cutoff << " Hz (order " << lp_order << ")\n";
+  logger << "    rounding (no-round)        : " << ( do_round ? "yes" : "no" ) << "\n";
+  logger << "\n  [Search]\n";
+  logger << "    template window (template-pre/template-post) : [" << -template_pre_s << "," << template_post_s << "] sec around event end\n";
+  logger << "    hard nadir window (nadir-min/nadir-max)      : [" << hard_nadir_min_s << "," << hard_nadir_max_s << "] sec after event end\n";
+  logger << "    hard recovery stop (recovery-max)            : +" << hard_recovery_max_s << " sec\n";
+  logger << "    min template N (min-template)                : " << min_template_events << "\n";
   int sig_n = edf.header.signal( sig_label );
   if ( sig_n == -1 )
     {
@@ -680,13 +682,13 @@ resp_desat_link_t::resp_desat_link_t( edf_t & edf , param_t & param )
 
   if ( auto_low_sr )
     {
-      logger << "    effective expand   : +/-" << neighbor_s << " sec\n";
-      logger << "    effective low-pass : " << lp_cutoff << " Hz\n";
+      logger << "    effective expand (neighbor)                  : +/-" << neighbor_s << " sec\n";
+      logger << "    effective low-pass (lp)                      : " << lp_cutoff << " Hz\n";
     }
 
-  logger << "    linked drop >=     : " << drop_th << " %\n";
-  logger << "    min post-valid     : " << min_post_valid_frac << "\n";
-  logger << "    link annotation    : existing respiratory events\n";
+  logger << "    linked drop >= (drop)                        : " << drop_th << " %\n";
+  logger << "    min post-valid (min-post-valid)              : " << min_post_valid_frac << "\n";
+  logger << "    annotation target                            : existing respiratory events\n";
 
   std::vector<double> x = filtered_signal( edf , sig_n , fs , lp_cutoff , lp_order , do_round );
   if ( x.empty() )
@@ -717,20 +719,21 @@ resp_desat_link_t::resp_desat_link_t( edf_t & edf , param_t & param )
 
   std::vector<std::string> arousal_labels = resolve_resp_labels( edf.annotations , arousal_tokens );
 
-  logger << "    matched labels     : ";
+  logger << "\n  [Selection]\n";
+  logger << "    matched respiratory labels    : ";
   for ( int i = 0 ; i < event_labels.size() ; ++i )
     logger << ( i ? "," : "" ) << event_labels[i];
   logger << "\n";
-  logger << "    matched arousals   : ";
+  logger << "    matched arousal labels        : ";
   if ( arousal_labels.empty() )
     logger << "(none)";
   else
     for ( int i = 0 ; i < arousal_labels.size() ; ++i )
       logger << ( i ? "," : "" ) << arousal_labels[i];
   logger << "\n";
-  logger << "    staging            : " << ( has_staging ? "found" : "not found" ) << "\n";
+  logger << "    staging                       : " << ( has_staging ? "found" : "not found" ) << "\n";
   if ( auto_low_sr )
-    logger << "    low-SR mode        : adaptive defaults enabled\n";
+    logger << "    low-SR mode                   : adaptive defaults enabled\n";
 
   std::map<instance_idx_t,instance_t*> events_map;
   for ( int e = 0 ; e < event_labels.size() ; ++e )
@@ -788,8 +791,8 @@ resp_desat_link_t::resp_desat_link_t( edf_t & edf , param_t & param )
       return;
     }
 
-  logger << "    selected events    : " << events.size() << "\n";
-  logger << "    arousal events     : " << arousals.size() << "\n";
+  logger << "    selected respiratory events   : " << events.size() << "\n";
+  logger << "    arousal events available      : " << arousals.size() << "\n";
 
   const template_t tpl = build_template( events , x , bad , mapper , fs ,
                                          template_pre_s , template_post_s ,
@@ -805,13 +808,14 @@ resp_desat_link_t::resp_desat_link_t( edf_t & edf , param_t & param )
     ? tpl.mean_resp_dur
     : 0.0;
 
-  logger << "    template mode      : " << ( use_learned ? "learned" : "fallback" ) << "\n";
-  logger << "    template N         : " << tpl.n_used << "\n";
-  logger << "    template baseline  : " << tpl.baseline_t << " sec\n";
-  logger << "    template nadir     : " << tpl.nadir_t << " sec\n";
-  logger << "    template recovery  : " << tpl.recovery_t << " sec\n";
+  logger << "\n  [Template]\n";
+  logger << "    template mode                : " << ( use_learned ? "learned" : "fallback" ) << "\n";
+  logger << "    template N                   : " << tpl.n_used << "\n";
+  logger << "    template baseline            : " << tpl.baseline_t << " sec\n";
+  logger << "    template nadir               : " << tpl.nadir_t << " sec\n";
+  logger << "    template recovery            : " << tpl.recovery_t << " sec\n";
   if ( ! std::isnan( tpl.drop ) )
-    logger << "    template drop      : " << tpl.drop << " %\n";
+    logger << "    template drop                : " << tpl.drop << " %\n";
 
   int n_linked = 0;
   double sum_drop = 0.0;
@@ -878,8 +882,6 @@ resp_desat_link_t::resp_desat_link_t( edf_t & edf , param_t & param )
             {
               events[e].inst->set( "arousal_type" , row.arousal_type );
               events[e].inst->set( "arousal_start_t" , row.arousal_start_sec - row.resp_stop_sec );
-              events[e].inst->set( "arousal_start" , row.arousal_start_sec );
-              events[e].inst->set( "arousal_stop" , row.arousal_stop_sec );
               events[e].inst->set( "arousal_dur" , row.arousal_dur_sec );
               events[e].inst->set( "arousal_onset_from_start" , row.arousal_onset_rel_start_sec );
             }
@@ -1022,9 +1024,9 @@ resp_desat_link_t::resp_desat_link_t( edf_t & edf , param_t & param )
 
       int rec_i = first_recovery_idx( x_search , rec_a , rec_b , x_search[base_i] , x_search[nad_i] , recovery_frac );
       if ( rec_i == -1 )
-        rec_i = argmax_range( x_search , rec_a , rec_b );
+        rec_i = argmax_range( x_search , rec_a + 1 , rec_b );
 
-      if ( rec_i == -1 )
+      if ( rec_i == -1 || rec_i <= nad_i )
         {
           row.reject_reason = "NO_RECOVERY";
           ++reject_counts[ row.reject_reason ];

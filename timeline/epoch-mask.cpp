@@ -2074,7 +2074,7 @@ void timeline_t::load_mask( const std::string & f , bool exclude )
 
   
   // load
-  std::ifstream FIN( f.c_str() , std::ios::in );
+  std::ifstream FIN = LunaIO::open_ifstream( f , std::ios::in );
 
   int cnt_total = num_total_epochs();
   int cnt_mask0 = 0;
@@ -2148,8 +2148,8 @@ void timeline_t::load_interval_list_mask( const std::string & f , bool exclude )
   else if ( mm == 2 ) logger << " force\n";
   
   // load
-  std::ifstream FIN( f.c_str() , std::ios::in );
-  
+  std::ifstream FIN = LunaIO::open_ifstream( f , std::ios::in );
+
   std::vector<interval_t> intervals;
   int cnt = 0;
   while ( ! FIN.eof() )

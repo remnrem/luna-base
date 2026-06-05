@@ -276,7 +276,7 @@ int lunapi_t::includefile( const std::string & f )
   bool parse_line = true;
   std::string last_grp = "";
 
-  std::ifstream INC( filename.c_str() , std::ios::in );
+  std::ifstream INC = LunaIO::open_ifstream( filename , std::ios::in );
   if ( INC.bad() ) Helper::halt("could not open file: " + filename );
   while ( ! INC.eof() )
     {
@@ -366,7 +366,7 @@ std::string lunapi_t::cmdfile( const std::string & f )
 
   std::string cmdstr; 
 
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   while ( ! IN1.eof() )
     {
       std::string line;
@@ -501,12 +501,12 @@ int lunapi_t::read_sample_list( const std::string & file )
   if ( has_project_path ) 
     globals::project_path = globals::param.value( "path" ) ;
   
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   while ( ! IN1.eof() )
     {
       std::string line;
       Helper::safe_getline( IN1 , line );
-      
+
       if ( IN1.eof() || line == "" ) continue;
 
       std::vector<std::string> tok = Helper::parse( line , "\t" );

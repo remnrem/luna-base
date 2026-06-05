@@ -65,7 +65,7 @@ pops_indiv_t::pops_indiv_t( param_t & param ,
     Helper::halt( "cannot open " + file2 );
   
   std::vector<std::string> exss;
-  std::ifstream IN1( file1.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( file1 , std::ios::in );
   while ( 1 ) 
     {
       std::string ss;
@@ -84,7 +84,7 @@ pops_indiv_t::pops_indiv_t( param_t & param ,
   //
   
   std::vector<std::string> exss2;
-  std::ifstream IN2( file2.c_str() , std::ios::in );
+  std::ifstream IN2 = LunaIO::open_ifstream( file2 , std::ios::in );
   while ( 1 ) 
     {
       std::string ss;
@@ -169,7 +169,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
     Helper::halt( "cannot open " + file1 );
 
   std::vector<std::string> exss;
-  std::ifstream IN1( file1.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( file1 , std::ios::in );
   while ( 1 ) 
     {
       std::string ss;

@@ -220,7 +220,7 @@ void assoc_t::import_training( param_t & param )
 
       logger << "  initial scan of " << files[f] << "\n";
       
-      std::ifstream IN1( files[f].c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( files[f] , std::ios::in );
 
       //
       // process header
@@ -384,7 +384,7 @@ void assoc_t::import_training( param_t & param )
 
       logger << "  importing values from " << files[f] << "\n";
       
-      std::ifstream IN1( files[f].c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( files[f] , std::ios::in );
 
       // header
       
@@ -479,7 +479,7 @@ void assoc_t::attach_ids( param_t & param )
       const std::string filename = Helper::expand( param.value( "validation" ) );
       if ( ! Helper::fileExists( filename ) )
 	Helper::halt( "could not find " + filename );
-      std::ifstream IN1( filename.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
       while ( 1 )
 	{
 	  std::string id;
@@ -546,7 +546,7 @@ void assoc_t::save_varlist( const std::string & var_file )
   //
   
 
-  std::ofstream O1( var_file.c_str() , std::ios::out );
+  std::ofstream O1 = LunaIO::open_ofstream( var_file , std::ios::out );
 
   O1 << model_vars.size() << "\n";
   std::set<std::string>::const_iterator ii = model_vars.begin();
@@ -582,7 +582,7 @@ void assoc_t::save_varlist( const std::string & var_file )
 void assoc_t::load_varlist( const std::string & var_file )
 {
   
-  std::ifstream I1( var_file.c_str() , std::ios::out );
+  std::ifstream I1 = LunaIO::open_ifstream( var_file , std::ios::out );
 
   model_vars.clear();
   model_strats.clear();
@@ -631,7 +631,7 @@ void assoc_t::save( param_t & param )
   save_varlist( filename + ".vars" );
 
   // save data  
-  std::ofstream OUT1( Helper::expand( filename ).c_str() , std::ios::binary | std::ios::out );
+  std::ofstream OUT1 = LunaIO::open_ofstream( Helper::expand( filename ) , std::ios::binary | std::ios::out );
 
   const int nv = varlist.size();
   const int ntrain = train_ids.size();
@@ -682,7 +682,7 @@ void assoc_t::load( param_t & param )
   load_varlist( filename + ".vars" );
 
   // save data  
-  std::ifstream IN1( Helper::expand( filename ).c_str() , std::ios::binary | std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( filename ) , std::ios::binary | std::ios::in );
 
   const int nv = Helper::bread_int( IN1 );
   const int ntrain = Helper::bread_int( IN1 );
@@ -730,7 +730,7 @@ void assoc_t::load_testdata( param_t & param )
   
   // nb. the varlist will already have been populated from the training / load model
 
-  std::ifstream IN1( Helper::expand( filename ).c_str() , std::ios::binary | std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( filename ) , std::ios::binary | std::ios::in );
 
   const int nv = Helper::bread_int( IN1 );
   const int ni = Helper::bread_int( IN1 );     // i.e. if import/save used on TEST samples only, 
@@ -949,7 +949,7 @@ void assoc_t::import_testdata( param_t & param )
 
       logger << "  scanning " << files[f] << "\n";
       
-      std::ifstream IN1( files[f].c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( files[f] , std::ios::in );
 
       // process header
       
@@ -1035,7 +1035,7 @@ void assoc_t::import_testdata( param_t & param )
 
       logger << "  importing values from " << files[f] << "\n";
       
-      std::ifstream IN1( files[f].c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( files[f] , std::ios::in );
 
       // header
       

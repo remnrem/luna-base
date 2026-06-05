@@ -52,12 +52,19 @@ int parse_ascii_fs_arg( const std::string & raw );
 
 int main(int argc , char ** argv )
 {
-   
+
+#if defined(WINDOWS) || defined(_WIN32)
+  // Allow Chinese (and other non-ASCII) characters to display correctly
+  // in the Windows console by switching both input and output to UTF-8.
+  SetConsoleOutputCP(CP_UTF8);
+  SetConsoleCP(CP_UTF8);
+#endif
+
   //
-  // initial check for display of all commands 
+  // initial check for display of all commands
   // and save, if writing to log=luna.log
   //
-  
+
   std::string cmd_dump = log_commands( argc , argv );
     
   //
@@ -514,9 +521,9 @@ void process_edfs( cmd_t & cmd )
   if ( empty_edf ) single_edf = true;
     
   std::ifstream EDFLIST;
-  
-  if ( ! single_edf ) 
-    EDFLIST.open( cmd.data().c_str() , std::ios::in );
+
+  if ( ! single_edf )
+    EDFLIST = LunaIO::open_ifstream( cmd.data() , std::ios::in );
   
   //
   // Do we have a search path for EDFs and ANNOTs?
@@ -971,7 +978,7 @@ void process_edfs( cmd_t & cmd )
 	  if ( globals::write_naughty_list )
 	    {
 	      logger << "**writing ID " << edf.id << " to " <<  globals::naughty_list << "\n";
-	      std::ofstream PROBLEMS( globals::naughty_list.c_str() , std::ios_base::app );
+	      std::ofstream PROBLEMS = LunaIO::open_ofstream( globals::naughty_list , std::ios_base::app );
 	      PROBLEMS << edf.id << "\n";
 	      PROBLEMS.close();
 	    }
@@ -1785,7 +1792,7 @@ void include_param_file( const std::string & paramfile )
       const std::string filename = Helper::expand( paramfile.substr(1).c_str() );
       if ( ! Helper::fileExists( filename ) ) Helper::halt( "could not open " + filename );
 		  
-      std::ifstream INC( filename.c_str() , std::ios::in );
+      std::ifstream INC = LunaIO::open_ifstream( filename , std::ios::in );
       if ( INC.bad() ) Helper::halt("could not open file: " + filename );
       while ( ! INC.eof() )
 	{

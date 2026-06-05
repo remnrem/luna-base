@@ -189,7 +189,7 @@ cansigs_t edf_t::make_canonicals( const std::vector<std::string> & files,
       if ( ! Helper::fileExists( file ) )
 	Helper::halt( "could not find " + file );
       
-      std::ifstream IN1( file.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( file , std::ios::in );
       while ( ! IN1.eof() )
 	{
 	  std::string line = "";

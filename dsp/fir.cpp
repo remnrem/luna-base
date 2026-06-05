@@ -92,7 +92,7 @@ void dsptools::design_fir( param_t & param )
       std::vector<double> fc;
       std::string fir_file = param.value( "file" );
       if ( ! Helper::fileExists( fir_file ) ) Helper::halt( "could not find " + fir_file );
-      std::ifstream IN1( fir_file.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( fir_file , std::ios::in );
       while ( ! IN1.eof() )
 	{
 	  double c;
@@ -530,7 +530,7 @@ std::vector<double> dsptools::apply_fir( const std::vector<double> & x ,
   if ( ftype == fir_t::EXTERNAL )
     {
       if ( ! Helper::fileExists( fir_file ) ) Helper::halt( "could not find " + fir_file );
-      std::ifstream IN1( fir_file.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( fir_file , std::ios::in );
       while ( ! IN1.eof() )
 	{
 	  double c;

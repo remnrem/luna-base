@@ -73,7 +73,7 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
   const bool three_class = param.has( "3-class" ) || param.has( "nr" );
   if ( three_class ) logger << "  pooling all NREM stages to a single class\n";
     
-  std::ifstream IN1( Helper::expand( stagefile ).c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( stagefile ) , std::ios::in );
 
   std::vector<std::string> allstages_orig; // keeps original NR staging (for annot output)
   std::vector<std::string> allstages_proc; // pools NR
@@ -705,7 +705,7 @@ void suds_indiv_t::place( edf_t & edf , param_t & param , const std::string & st
        	}
 
       logger << "  writing aligned stage file (.eannot) to " << ostages << "\n";
-      std::ofstream OUT1( Helper::expand( ostages ).c_str() , std::ios::out );
+      std::ofstream OUT1 = LunaIO::open_ofstream( Helper::expand( ostages ) , std::ios::out );
       for (int i=0; i<trial.size(); i++)
 	OUT1 << trial[i] << "\n";      
       OUT1.close();

@@ -669,7 +669,7 @@ void pops_t::level2( const bool training , const bool quiet )
 	      if ( ! quiet ) 
 		logger << "   - writing SVD W and V to " << wvfile << "\n";
 	      
-	      std::ofstream OUT1( wvfile.c_str() , std::ios::out );
+	      std::ofstream OUT1 = LunaIO::open_ofstream( wvfile , std::ios::out );
 	      OUT1 << V1.rows() << " " << nc << "\n";
 	      for (int i=0;i<V1.rows(); i++)
 		for (int j=0;j<nc; j++)
@@ -693,7 +693,7 @@ void pops_t::level2( const bool training , const bool quiet )
 		  
 		  if ( ! Helper::fileExists( wvfile ) )
 		    Helper::halt( "cannot find " + wvfile + "\n (hint: add a 'path' arg to point to the .svd file" );
-		  std::ifstream IN1( wvfile.c_str() , std::ios::in );
+		  std::ifstream IN1 = LunaIO::open_ifstream( wvfile , std::ios::in );
 		  int nrow, ncol;
 		  IN1 >> nrow >> ncol;
 		  
@@ -1180,7 +1180,7 @@ void pops_t::load_validation_ids( const std::string & f )
   if ( ! Helper::fileExists( Helper::expand( f ) ) )
     Helper::halt( "could not open " + f );
   
-  std::ifstream IN1( Helper::expand( f ).c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( f ) , std::ios::in );
   while ( ! IN1.eof() ) 
     {
       std::string id;
@@ -1234,7 +1234,7 @@ void pops_t::dump_matrix( const std::string & f )
   std::string dfile = Helper::expand( f );
   logger << "  dumping feature matrix to " << dfile << "\n";
   
-  gzofstream Z1( dfile.c_str() , std::ios_base::out );
+  gzofstream Z1( dfile , std::ios_base::out );
   
   Z1 << "SS";
   std::vector<std::string> labels = pops_t::specs.select_labels();
@@ -1266,7 +1266,7 @@ void pops_t::read_ranges( const std::string & f )
   // but we do not test this explicitly - - i.e. as we might read
   // this prior to building the feature set
   
-  std::ifstream IN1( f.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( f , std::ios::in );
   // header
   std::string str0, str1, str2, str3;
   IN1 >> str0 >> str1 >> str2 >> str3;
@@ -1318,7 +1318,7 @@ void pops_t::dump_ranges( const std::string & f )
   
   logger << "  dumping ranges to " << rfile << "\n";
   
-  std::ofstream O1( rfile.c_str() , std::ios_base::out );
+  std::ofstream O1 = LunaIO::open_ofstream( rfile , std::ios_base::out );
   
   O1 << "ID\tVAR\tMEAN\tSD\n";
 
@@ -1648,7 +1648,7 @@ bool pops_t::dump_weights()
 {
   std::string f = Helper::expand( pops_opt_t::model_weights_file );
 
-  std::ofstream O1( f.c_str() , std::ios::out );
+  std::ofstream O1 = LunaIO::open_ofstream( f , std::ios::out );
 
   logger << "  dumping weights to " << f << "\n";
   

@@ -58,7 +58,7 @@ void model_knn_t::load( const std::string & f ,
 
   int nrow = 0 , ncol = 0;
 
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   std::string comm;
 
   // first row:

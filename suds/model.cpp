@@ -120,7 +120,7 @@ bool suds_model_t::read( const std::string & modelfile ,
 	Helper::halt( "could not open " + modelfile );
       
       // read from a file
-      std::ifstream IN1( modelfile.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( modelfile , std::ios::in );
       while ( ! IN1.eof() )
 	{
 	  std::string line;
@@ -321,7 +321,7 @@ void suds_model_t::default_model()
   // // clear any current specifications
   // specs.clear();
   
-  // std::ifstream IN1( modelfile.c_str() , std::ios::in );
+  // std::ifstream IN1 = LunaIO::open_ifstream( modelfile , std::ios::in );
   // while ( ! IN1.eof() )
   //   {
   //     std::string line;
@@ -457,7 +457,7 @@ void suds_model_t::default_model()
 
 bool suds_model_t::write( const std::string & modelfile )
 {
-  std::ofstream OUT1( modelfile.c_str() , std::ios::out );
+  std::ofstream OUT1 = LunaIO::open_ofstream( modelfile , std::ios::out );
   for (int i=0; i<specs.size(); i++)
     {
       // class
@@ -698,7 +698,7 @@ void suds_model_t::write_weights( const std::string & weightfile )
   if (l.size() != W.size() )
     Helper::halt( "internal error in suds_model_t::write_weights()" );
 
-  std::ofstream W1( weightfile.c_str() , std::ios::out );
+  std::ofstream W1 = LunaIO::open_ofstream( weightfile , std::ios::out );
   for (int i=0; i<l.size(); i++)
     W1 << l[i] << "\t" << W[i] << "\n";
   W1.close();  
@@ -719,7 +719,7 @@ void suds_model_t::read_weights( const std::string & weightfile )
     Helper::halt( "could not open " + weightfile );
 
   std::vector<double> wt;
-  std::ifstream W1( weightfile.c_str() , std::ios::in );
+  std::ifstream W1 = LunaIO::open_ifstream( weightfile , std::ios::in );
   while ( ! W1.eof() )
     {      
       std::string dummyvar;

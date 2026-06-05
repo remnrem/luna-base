@@ -1130,7 +1130,7 @@ bool cmd_t::eval( edf_t & edf )
 	  if ( globals::write_naughty_list )
 	    {
 	      logger << "**writing ID " << edf.id << " to " <<  globals::naughty_list << "\n";
-	      std::ofstream PROBLEMS( globals::naughty_list.c_str() , std::ios_base::app );
+	      std::ofstream PROBLEMS = LunaIO::open_ofstream( globals::naughty_list , std::ios_base::app );
 	      PROBLEMS << edf.id << "\n";
 	      PROBLEMS.close();
 	    }
@@ -3286,7 +3286,7 @@ void proc_write( edf_t & edf , param_t & param )
 	     << " to sample-list " << file
 	     << ( append_annots ? " (with annotations)" : " (dropping any annotations)" ) << "\n";
       
-      std::ofstream FL( file.c_str() , std::ios_base::app );
+      std::ofstream FL = LunaIO::open_ofstream( file , std::ios_base::app );
       FL << edf.id << "\t"
 	 << filename;
       if ( append_annots )
@@ -3810,7 +3810,7 @@ void proc_file_annot( edf_t & edf , param_t & param )
   
   std::set<std::string> amap;
 
-  std::ifstream IN1( f.c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( f , std::ios::in );
   while ( ! IN1.eof() )
     {
       std::string x;
@@ -4677,7 +4677,7 @@ void proc_rename( edf_t & edf , param_t & param )
       if ( ! Helper::fileExists( fname ) )
 	Helper::halt( "could not open " + fname );
       
-      std::ifstream I1( fname.c_str() , std::ios::in );
+      std::ifstream I1 = LunaIO::open_ifstream( fname , std::ios::in );
       while ( ! I1.eof() )
 	{
 	  std::string line;
@@ -4927,7 +4927,7 @@ void proc_slice( edf_t & edf , param_t & param , int extract )
   if ( ! Helper::fileExists( filename ) ) Helper::halt( "could not find " + filename );
 
 
-  std::ifstream IN1( filename.c_str() , std::ios::in );  
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   while ( ! IN1.eof() )
     {
       interval_t interval;
@@ -5876,7 +5876,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       globals::write_naughty_list = true;
       globals::naughty_list = tok1;
       // create an empty file (i.e. as we append things to this subsequently
-      std::ofstream P( globals::naughty_list.c_str() , std::ios::out );
+      std::ofstream P = LunaIO::open_ofstream( globals::naughty_list , std::ios::out );
       P.close();
       return;
     }
@@ -6357,7 +6357,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       
       if ( Helper::fileExists( xfile ) ) 
 	{
-	  std::ifstream XIN( xfile.c_str() , std::ios::in );
+	  std::ifstream XIN = LunaIO::open_ifstream( xfile , std::ios::in );
 	  while ( !XIN.eof() ) 
 	    {
 	      // format: ID {white-space} any notes (ignored)
@@ -6393,7 +6393,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       
       if ( Helper::fileExists( xfile ) ) 
 	{
-	  std::ifstream XIN( xfile.c_str() , std::ios::in );
+	  std::ifstream XIN = LunaIO::open_ifstream( xfile , std::ios::in );
 	  while ( !XIN.eof() ) 
 	    {
 	      // format: ID {white-space} any notes (ignored)
@@ -6555,8 +6555,8 @@ void cmd_t::attach_ivars( const std::string & file )
 	Helper::halt( "could not find " + filename );
       
       //      logger << "reading from " << filename << "\n";
-      
-      std::ifstream IN1( filename.c_str() , std::ios::in );
+
+      std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
       bool header = true ; 
       int idcol = -1;
       int ncols = 0;
@@ -6629,8 +6629,8 @@ void cmd_t::attach_idmapper( const std::string & file )
 
   if ( ! Helper::fileExists( filename ) )
     Helper::halt( "could not find " + filename );
-      
-  std::ifstream IN1( filename.c_str() , std::ios::in );
+
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
   while ( ! IN1.eof() ) 
     {
       std::string s;

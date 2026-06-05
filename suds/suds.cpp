@@ -656,42 +656,42 @@ posteriors_t suds_indiv_t::predict( const suds_indiv_t & trainer , const bool us
       // Target U
       std::string filename = Helper::expand( suds_t::mat_dump_file ) + ".target.U";
       logger << "  writing target's U matrix to " << filename << "\n";      
-      std::ofstream OUT4( filename.c_str() , std::ios::out );      
+      std::ofstream OUT4 = LunaIO::open_ofstream( filename , std::ios::out );      
       OUT4 << U << "\n";
       OUT4.close();
 
       // Projected U
       filename = Helper::expand( suds_t::mat_dump_file ) + ".projected.U";
       logger << "  writing target's projected U matrix to " << filename << "\n";      
-      std::ofstream OUT1( filename.c_str() , std::ios::out );      
+      std::ofstream OUT1 = LunaIO::open_ofstream( filename , std::ios::out );      
       OUT1 << U_projected << "\n";
       OUT1.close();
       
       // Target V
       filename = Helper::expand( suds_t::mat_dump_file ) + ".target.V";
       logger << "  writing target's V matrix to " << filename << "\n";      
-      std::ofstream OUT2( filename.c_str() , std::ios::out );      
+      std::ofstream OUT2 = LunaIO::open_ofstream( filename , std::ios::out );      
       OUT2 << V << "\n";
       OUT2.close();
 
       // Trainer V
       filename = Helper::expand( suds_t::mat_dump_file ) + ".trainer.V";
       logger << "  writing trainer's V matrix to " << filename << "\n";      
-      std::ofstream OUT3( filename.c_str() , std::ios::out );      
+      std::ofstream OUT3 = LunaIO::open_ofstream( filename , std::ios::out );      
       OUT3 << trainer.V << "\n";
       OUT3.close();
 
       // Trainer U
       filename = Helper::expand( suds_t::mat_dump_file ) + ".trainer.U";
       logger << "  writing trainer's U matrix to " << filename << "\n";      
-      std::ofstream OUT5( filename.c_str() , std::ios::out );      
+      std::ofstream OUT5 = LunaIO::open_ofstream( filename , std::ios::out );      
       OUT5 << trainer.U << "\n";
       OUT5.close();
 
       // Trainer sleep stages
       filename = Helper::expand( suds_t::mat_dump_file ) + ".trainer.S";
       logger << "  writing trainer's sleep stages " << filename << "\n";
-      std::ofstream OUT6( filename.c_str() , std::ios::out );
+      std::ofstream OUT6 = LunaIO::open_ofstream( filename , std::ios::out );
       for (int i=0;i<trainer.obs_stage.size();i++)
 	OUT6 << suds_t::str( trainer.obs_stage[i] ) << "\n"; 
       OUT6.close();
@@ -1125,7 +1125,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		  
 		  std::string filename = Helper::expand( suds_t::mat_dump_file ) + ".wtrainer.pp";
 		  logger << "  writing wtrainer's PP | target matrix to " << filename << "\n";
-		  std::ofstream OUT1( filename.c_str() , std::ios::out );
+		  std::ofstream OUT1 = LunaIO::open_ofstream( filename , std::ios::out );
 
 		  // header
 		  std::vector<std::string> labels = target.qda_model.labels;
@@ -1145,7 +1145,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 		  if ( weight_trainer->epochs.size() != reprediction.cl.size() ) 
 		    Helper::halt( "internal error" );
 
-		  std::ofstream OUT2( filename.c_str() , std::ios::out );
+		  std::ofstream OUT2 = LunaIO::open_ofstream( filename , std::ios::out );
 		  for (int i=0; i<reprediction.cl.size(); i++) OUT2 << weight_trainer->epochs[i] << "\t" << reprediction.cl[i] << "\n";
 		  OUT2.close();
 
@@ -1817,7 +1817,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	mat_dump_file = mat_dump_file.substr( 0 , mat_dump_file.size() - 7 );
       
       std::string filename = Helper::expand( mat_dump_file ) ;
-      std::ofstream OUT1( filename.c_str() , std::ios::out );
+      std::ofstream OUT1 = LunaIO::open_ofstream( filename , std::ios::out );
       
       logger << "  writing target epoch-wise matrix to " << filename << "\n";
       OUT1 << "ID\tE";
@@ -1937,7 +1937,7 @@ void suds_t::score( edf_t & edf , param_t & param ) {
 	     << ( suds_t::eannot_ints ? "(as integeres) " : "" )
 	     << " to " << filename << "\n";
 
-      std::ofstream OUT1( filename.c_str() , std::ios::out );
+      std::ofstream OUT1 = LunaIO::open_ofstream( filename , std::ios::out );
 
 
       // make sure we output all epochs

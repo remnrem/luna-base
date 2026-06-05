@@ -86,11 +86,10 @@ void ctest2( edf_t & edf )
 void caches_t::load( const std::string & filename )
 {
   
-  std::ifstream IN1( filename.c_str() , std::ios::in );
-  
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
 
-  // 
-  // format : 
+  //
+  // format :
   //
   // cache: peaks[int]
   // strata: fac=lvl
@@ -212,8 +211,8 @@ void caches_t::import( const std::string & filename ,
   // we assume all values are NUMERIC   
   cache_t<double> * num_cache = find_num( cache_name );
   
-  std::ifstream IN1( filename.c_str() , std::ios::in );
-  
+  std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
+
   // process headers
   std::map<std::string,int> fslot, vslot;
   

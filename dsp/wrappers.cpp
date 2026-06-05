@@ -731,7 +731,7 @@ void dsptools::qdynam( edf_t & edf , param_t & param )
       std::map<std::string,int> var2slot;
       std::map<std::string,int> fac2slot;
       
-      std::ifstream IN1( filename.c_str() , std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
 
       //
       // header 

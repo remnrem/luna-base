@@ -231,7 +231,7 @@ massoc_t::massoc_t( param_t & param )
 
       std::string ofile = Helper::expand( param.requires( "dump-training" ) );
 
-      std::ofstream O1( ofile.c_str() , std::ios::out );
+      std::ofstream O1 = LunaIO::open_ofstream( ofile , std::ios::out );
 
       logger << "  dumping training matrix to " << ofile << "\n";
 
@@ -308,7 +308,7 @@ void massoc_t::load( const std::string & filename , const int force_destin )
   if ( ! Helper::fileExists( Helper::expand( filename ) ) )
     Helper::halt( "could not open " + filename );
 
-  std::ifstream IN1( Helper::expand( filename ).c_str() , std::ios::binary | std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( filename ) , std::ios::binary | std::ios::in );
   
   // track # of IIDs actually used
   std::set<std::string> cnt_train, cnt_valid, cnt_test;
@@ -486,7 +486,7 @@ void massoc_t::load( const std::string & filename , const int force_destin )
   // re-read
   //
 
-  std::ifstream IN2( Helper::expand( filename ).c_str() , std::ios::binary | std::ios::in );
+  std::ifstream IN2 = LunaIO::open_ifstream( Helper::expand( filename ) , std::ios::binary | std::ios::in );
 
   // reset counters
   obs_train = obs_valid = obs_test = 0;
@@ -638,7 +638,7 @@ void massoc_t::split( const std::string & id_file1, const std::string & id_file2
   if ( ! Helper::fileExists( Helper::expand( id_file2 ) ) )
     Helper::halt( "could not open " + id_file2 );
 
-  std::ifstream IN1( Helper::expand( id_file1 ).c_str() , std::ios::in );
+  std::ifstream IN1 = LunaIO::open_ifstream( Helper::expand( id_file1 ) , std::ios::in );
   while ( 1 )
     {
       std::string l;
@@ -649,7 +649,7 @@ void massoc_t::split( const std::string & id_file1, const std::string & id_file2
     }
   IN1.close();
 
-  std::ifstream IN2( Helper::expand( id_file2 ).c_str() , std::ios::in );
+  std::ifstream IN2 = LunaIO::open_ifstream( Helper::expand( id_file2 ) , std::ios::in );
   while	( 1 )
     {
       std::string l;
@@ -811,7 +811,7 @@ void massoc_t::save( const std::vector<std::string> & iids,
   
   // save data
 
-  std::ofstream OUT1( Helper::expand( filename ).c_str() , std::ios::binary | std::ios::out );
+  std::ofstream OUT1 = LunaIO::open_ofstream( Helper::expand( filename ) , std::ios::binary | std::ios::out );
   
   logger << "  writing binary data matrix, " << ncol << " features, " << nrow << " observations\n";
   
@@ -1030,7 +1030,7 @@ void massoc_t::attach_ids( param_t & param )
       if ( ! Helper::fileExists( filename ) )
 	Helper::halt( "could not open " + filename );
       
-      std::ifstream IN1( filename.c_str(), std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
       while ( 1 )
 	{
 	  std::string l;
@@ -1054,7 +1054,7 @@ void massoc_t::attach_ids( param_t & param )
       if ( ! Helper::fileExists( filename ) )
 	Helper::halt( "could not open " + filename );
       
-      std::ifstream IN1( filename.c_str(), std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
       while ( 1 )
 	{
 	  std::string l;
@@ -1078,7 +1078,7 @@ void massoc_t::attach_ids( param_t & param )
       if ( ! Helper::fileExists( filename ) )
 	Helper::halt( "could not open " + filename );
       
-      std::ifstream IN1( filename.c_str(), std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
       while ( 1 )
 	{
 	  std::string l;
@@ -1102,7 +1102,7 @@ void massoc_t::attach_ids( param_t & param )
       if ( ! Helper::fileExists( filename ) )
 	Helper::halt( "could not open " + filename );
       
-      std::ifstream IN1( filename.c_str(), std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
       while ( 1 )
 	{
 	  std::string l;
@@ -1126,7 +1126,7 @@ void massoc_t::attach_ids( param_t & param )
       if ( ! Helper::fileExists( filename ) )
         Helper::halt( "could not open " + filename );
       
-      std::ifstream IN1( filename.c_str(), std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
       while ( 1 )
         {
           std::string l;
@@ -1150,7 +1150,7 @@ void massoc_t::attach_ids( param_t & param )
       if ( ! Helper::fileExists( filename ) )
         Helper::halt( "could not open " + filename );
       
-      std::ifstream IN1( filename.c_str(), std::ios::in );
+      std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
       while ( 1 )
         {
           std::string l;

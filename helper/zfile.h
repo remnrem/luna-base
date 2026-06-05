@@ -51,10 +51,10 @@ struct zfile_t {
  : parent(p) , indiv(indiv) , cmd(cmd) , table(table), compressed(compressed) 
   { 
     
-    if ( compressed ) 
-       zout.open( n.c_str() , std::ios_base::out );
-     else
-       out.open( n.c_str() );
+    if ( compressed )
+      zout.open( n , std::ios_base::out );
+    else
+      out = LunaIO::open_ofstream( n );
      
      // this (via the tfac_t() conversion) purposefully ignores any
      // TAG-defined factors... i.e. get straight to core variables

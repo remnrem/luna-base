@@ -47,7 +47,7 @@ bool fileExists( const std::string & f )
   
   std::ifstream inp;
   
-  inp.open(f.c_str(), std::ifstream::in);
+  inp = LunaIO::open_ifstream( f , std::ifstream::in );
   
   if( inp.fail() )
     {

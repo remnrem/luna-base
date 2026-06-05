@@ -252,7 +252,7 @@ struct lgbm_label_t {
     std::string filename = Helper::expand( f ) ;
     if ( ! Helper::fileExists( filename ) )
       Helper::halt( "could not open " + filename );
-    std::ifstream IN1( filename.c_str() , std::ios::in );
+    std::ifstream IN1 = LunaIO::open_ifstream( filename , std::ios::in );
     n = 0;
     label.clear();
     weight.clear();
