@@ -128,6 +128,8 @@ namespace dsptools
   
   void design_fir( param_t & param );
 
+  void design_ngaus( const double fs , const double f , const double fwhm , const int n );
+
   
   std::vector<double> design_bandpass_fir( double ripple , double tw , double fs , double f1 , double f2 , bool eval = false );
   std::vector<double> design_bandstop_fir( double ripple , double tw , double fs , double f1 , double f2 , bool eval = false );
@@ -181,4 +183,3 @@ namespace dsptools
 
 
 #endif
-

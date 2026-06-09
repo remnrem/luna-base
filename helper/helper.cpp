@@ -945,24 +945,27 @@ std::istream& Helper::safe_getline(std::istream& is, std::string& t)
       
       int c = sb->sbumpc();
       
-      switch (c) 
+      switch (c)
 	{
 	case '\n':
+	  Helper::strip_bom(t);
 	  return is;
-	  
+
 	case '\r':
 	  if (sb->sgetc() == '\n')
 	    sb->sbumpc();
+	  Helper::strip_bom(t);
 	  return is;
 
-	  // replace w/ macro EOF to compile	  
+	  // replace w/ macro EOF to compile
 // 	case std::streambuf::traits_type::eof() :
  	case EOF :
  	  // Also handle the case when the last line has no line ending
  	  if(t.empty())
  	    is.setstate(std::ios::eofbit);
+	  Helper::strip_bom(t);
  	  return is;
-	  
+
 	default:
 	  t += (char)c;
 	}
@@ -990,29 +993,29 @@ gzifstream & Helper::zsafe_getline( gzifstream & is , std::string& t)
 
       //      std::cout << "c [" << c << "]\n";
 
-      switch (c) 
+      switch (c)
 	{
 	case '\n':
+	  Helper::strip_bom(t);
 	  return is;
-	  
+
 	case '\r':
 	  if (sb->sgetc() == '\n')
 	    sb->sbumpc();
+	  Helper::strip_bom(t);
 	  return is;
 
-
  	case std::streambuf::traits_type::eof() :
-	  // replace w/ macro EOF to compile	  
+	  // replace w/ macro EOF to compile
 	  // 	case EOF :
  	  // Also handle the case when the last line has no line ending
  	  if(t.empty())
  	    is.setstate(std::ios::eofbit);
+	  Helper::strip_bom(t);
  	  return is;
-	  
+
 	default:
 	  t += (char)c;
-
-	  //	  std::cout << " t [" << t << "]\n";
 	}
     }
 }

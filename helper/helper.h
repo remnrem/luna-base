@@ -97,6 +97,18 @@ namespace Helper
     return true;
   }
 
+  // strip UTF-8 BOM (0xEF 0xBB 0xBF) from the start of a string if present.
+  // Windows tools commonly prepend this to UTF-8 files; calling this on every
+  // line is safe and cheap — it is a no-op on all but the first line of a
+  // BOM-marked file.
+  static inline void strip_bom( std::string & s ) {
+    if ( s.size() >= 3 &&
+         (unsigned char)s[0] == 0xEFu &&
+         (unsigned char)s[1] == 0xBBu &&
+         (unsigned char)s[2] == 0xBFu )
+      s.erase( 0 , 3 );
+  }
+
   static inline std::string unquote(const std::string &s , const char q2 = '"' ) {
     if ( s.size() == 0 ) return s;
     int a = ( s[0] == '"' || s[0] == q2 ) ? 1 : 0;

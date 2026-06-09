@@ -1023,6 +1023,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "RESPBREATH" ) )  { fnd = true; proc_respbreath( edf, param(c) ); }
       if ( (!fnd) && is( c, "FILTER" ) )       { fnd = true; proc_filter( edf, param(c) ); }
       if ( (!fnd) && is( c, "FILTER-DESIGN" )) { fnd = true; proc_filter_design( edf, param(c) ); }
+      if ( (!fnd) && is( c, "FIR-DESIGN" ))    { fnd = true; proc_filter_design( edf, param(c) ); }
       if ( (!fnd) && is( c, "MEDIAN-FILTER" ) ) { fnd = true; proc_median_filter( edf , param(c) ) ; } 
       if ( (!fnd) && is( c, "MOVING-AVERAGE" )) { fnd = true; proc_moving_average( edf, param(c) ); }
       if ( (!fnd) && is( c, "CWT-DESIGN" ) )   { fnd = true; proc_cwt_design( edf , param(c) ); }

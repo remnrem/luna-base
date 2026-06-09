@@ -1484,6 +1484,7 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
   clmap[ "--cwt-design" ]   = PROC_CWT_DESIGN ;
   clmap[ "--cwt" ]          = PROC_CWT_DESIGN ;
   clmap[ "--fir-design" ]   = PROC_FIR_DESIGN ;
+  clmap[ "--filter-design" ]= PROC_FILTER_DESIGN ;
 
   // linear models / analysis
   clmap[ "--gpa-prep" ]     = PROC_GPA_PREP ;
@@ -2302,18 +2303,20 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
   // FIR design
   //
 
-  if ( cmdline == PROC_FIR_DESIGN )
+  if ( cmdline == PROC_FIR_DESIGN || cmdline == PROC_FILTER_DESIGN )
     {
+
+      const std::string design_label = cmdline == PROC_FILTER_DESIGN ? "FILTER-DESIGN" : "FIR-DESIGN";
 
       writer.begin();      
       writer.id( "." , "." );      
-      writer.cmd( "FIR-DESIGN" , 1 , "" );
-      writer.level( "FIR-DESIGN", "_FIR-DESIGN" );
+      writer.cmd( design_label , 1 , "" );
+      writer.level( design_label , "_" + design_label );
       
       // expects input from std::cin
       proc_filter_design_cmdline();
       
-      writer.unlevel( "_FIR-DESIGN" );
+      writer.unlevel( "_" + design_label );
       writer.commit();
       std::exit(0);
     }

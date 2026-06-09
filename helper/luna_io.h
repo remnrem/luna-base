@@ -48,6 +48,12 @@
 
 #if defined(WINDOWS) || defined(_WIN32)
 #include <windows.h>
+#ifdef IN
+#undef IN
+#endif
+#ifdef OUT
+#undef OUT
+#endif
 #endif
 
 namespace LunaIO {

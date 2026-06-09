@@ -65,6 +65,8 @@ void dsptools::design_fir( param_t & param )
   // assume this is called only by --fir option, and so we need to set this
   
   int fs = param.requires_int( "fs" );
+
+  const bool use_ngaus = param.has( "ngaus" );
   
   bool use_kaiser = param.has( "tw" ) && param.has( "ripple" );
 
@@ -82,6 +84,31 @@ void dsptools::design_fir( param_t & param )
   const double nyquist = fs / (double)2.0;
 
   if ( nyquist_fix > nyquist ) Helper::halt( "fix-nyquist cannot be greater than actual Nyquist" );
+
+  if ( use_ngaus )
+    {
+      std::vector<double> npar = param.dblvector( "ngaus" );
+      if ( npar.size() != 2 ) Helper::halt( "expecting ngaus=<freq>,<fwhm>" );
+
+      int n = param.has( "n" ) ? param.requires_int( "n" ) : 0;
+      if ( n <= 0 )
+	{
+	  if ( param.has( "dur" ) )
+	    {
+	      const double dur = param.requires_dbl( "dur" );
+	      if ( dur <= 0 ) Helper::halt( "expecting dur > 0" );
+	      n = (int)std::llround( dur * (double)fs );
+	    }
+	  else
+	    n = 2048;
+	}
+      if ( n < 2 ) Helper::halt( "expecting n >= 2" );
+
+      logger << " designing narrow Gaussian filter, f=" << npar[0] << "Hz, fwhm=" << npar[1]
+	     << "Hz, fs=" << fs << ", n=" << n << "\n";
+      design_ngaus( fs , npar[0] , npar[1] , n );
+      return;
+    }
   
   //
   // read filter coefficients from a file, and analyse
@@ -247,7 +274,114 @@ void dsptools::design_fir( param_t & param )
     }
      
 }
-  
+	  
+
+void dsptools::design_ngaus( const double fs , const double f , const double fwhm , const int n )
+{
+  if ( fs <= 0 ) Helper::halt( "expecting fs > 0" );
+  if ( fwhm <= 0 ) Helper::halt( "expecting ngaus FWHM > 0" );
+  if ( f < 0 || f > fs / 2.0 ) Helper::halt( "expecting ngaus frequency between 0 and Nyquist" );
+  if ( n < 2 ) Helper::halt( "expecting n >= 2" );
+
+  const std::string label = "ngaus_" + Helper::dbl2str( f ) + "_" + Helper::dbl2str( fwhm ) + "_" + Helper::int2str( n );
+
+  writer.level( label , "FIR" );
+  writer.value( "TYPE" , "NGAUS" );
+  writer.value( "FS" , fs );
+  writer.value( "N" , n );
+  writer.value( "FC" , f );
+  writer.value( "FWHM" , fwhm );
+
+  const int idx0 = n / 2;
+
+  std::vector<double> xx0( n , 0.0 );
+  xx0[ idx0 ] = 1.0;
+  std::vector<double> xx = narrow_gaussian_t::filter( xx0 , fs , f , fwhm );
+
+  std::vector<double> xx1( n , 0.0 );
+  for (int i = idx0; i < n; ++i) xx1[i] = 1.0;
+  std::vector<double> ss = narrow_gaussian_t::filter( xx1 , fs , f , fwhm );
+
+  const double p = 0.9999;
+  const double aFrac = 0.005;
+  const double minSec = 2.0;
+  const double maxSec = 180.0;
+
+  int minHalfWin = (int)std::llround( minSec * fs );
+  int maxHalfWin = (int)std::llround( maxSec * fs );
+
+  double Etot = 0.0;
+  for (double v : xx) Etot += v * v;
+  const double target = p * Etot;
+
+  double Eacc = xx[ idx0 ] * xx[ idx0 ];
+  int w_energy = 0;
+  while ( Eacc < target &&
+	  w_energy < maxHalfWin &&
+	  (idx0 - (w_energy+1)) >= 0 &&
+	  (idx0 + (w_energy+1)) < n )
+    {
+      ++w_energy;
+      const double a = xx[ idx0 - w_energy ];
+      const double b = xx[ idx0 + w_energy ];
+      Eacc += a*a + b*b;
+    }
+
+  double peak = 0.0;
+  for (double v : xx)
+    {
+      const double av = std::fabs( v );
+      if ( av > peak ) peak = av;
+    }
+  const double thr = aFrac * peak;
+
+  int w_amp = 0;
+  for (int i = 0; i < n; ++i)
+    if ( std::fabs( xx[i] ) >= thr )
+      {
+	const int d = std::abs( i - idx0 );
+	if ( d > w_amp ) w_amp = d;
+      }
+
+  int w = std::max( w_energy , w_amp );
+  if ( w < minHalfWin ) w = minHalfWin;
+  if ( w > maxHalfWin ) w = maxHalfWin;
+
+  int left = idx0 - w;
+  int right = idx0 + w;
+  if ( left < 0 ) left = 0;
+  if ( right >= n ) right = n - 1;
+
+  if ( xx.size() != ss.size() )
+    Helper::halt( "SR/IR not aligned, internal error" );
+
+  for (int xi = left; xi <= right; ++xi)
+    {
+      const double tp = ( xi - idx0 ) / fs;
+      writer.level( Helper::dbl2str( tp ) , "SEC" );
+      writer.value( "IR" , xx[xi] );
+      writer.value( "SR" , ss[xi] );
+    }
+  writer.unlevel( "SEC" );
+
+  real_FFT fft;
+  fft.init( n , n , fs );
+  fft.apply( xx );
+  const std::vector<dcomp> X = fft.transform();
+
+  for (int i = 0; i < fft.cutoff; ++i)
+    {
+      const double mag = fft.mag[i];
+      const double magdB = mag > 0 ? 20 * log10( mag ) : -INFINITY;
+      writer.level( fft.frq[i] , globals::freq_strat );
+      writer.value( "MAG" , mag );
+      writer.value( "MAG_DB" , magdB );
+      writer.value( "PHASE" , atan2( std::imag( X[i] ) , std::real( X[i] ) ) );
+    }
+  writer.unlevel( globals::freq_strat );
+
+  writer.unlevel( "FIR" );
+}
 
 
 //
@@ -658,7 +792,7 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
   // transistition frequencues
   //
   
-  double f1 , f2 ;
+  double f1 = 0 , f2 = 0 ;
 
   
   //
@@ -742,6 +876,12 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
 
       if ( ! silent ) 
 	logger << " " << signals.label(s);
+
+      if ( ngaus )
+	{
+	  apply_ngaus( edf, signals(s) , ngaus_f, ngaus_fwhm );
+	  continue;
+	}
       
       // clamp frequencies at/under Nyquist?
       double af1 = f1;
@@ -763,14 +903,11 @@ void dsptools::apply_fir( edf_t & edf , param_t & param )
 	  af2 = nyquist - nyquist_fix;
 	}
 
-      if ( ngaus )
-	apply_ngaus( edf, signals(s) , ngaus_f, ngaus_fwhm );
-      else	
-	apply_fir( edf , signals(s) , ftype , use_kaiser ? 1 : 2 ,
-		   ripple, tw ,
-		   af1 , af2 ,
-		   order , window , 
-		   use_fft , fir_file );
+      apply_fir( edf , signals(s) , ftype , use_kaiser ? 1 : 2 ,
+		 ripple, tw ,
+		 af1 , af2 ,
+		 order , window , 
+		 use_fft , fir_file );
       
     }
 

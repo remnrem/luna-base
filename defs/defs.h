@@ -115,6 +115,7 @@ enum cmdline_proc_t
     PROC_EVAL,
     PROC_EVAL_VERBOSE,
     PROC_FIR_DESIGN,
+    PROC_FILTER_DESIGN,
     PROC_CWT_DESIGN,   
     PROC_PDLIB,         
     PROC_PDC,

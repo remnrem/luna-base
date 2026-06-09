@@ -3038,6 +3038,7 @@ void cmddefs_t::init()
   //
 
   add_cmd( "helpers" , "--fir" , "Design FIR (--fir-design)" );
+  add_cmd( "helpers" , "--filter-design" , "Design and summarize filters (--filter-design; same as --fir-design)" );
   add_param( "--fir" , "fs" , "fs=256" , "Sampling rate" );
   add_param( "--fir" , "bandpass", "bandpass=0.3,35", "Band-pass filter between 0.3 and 35 Hz" );
   add_param( "--fir" , "lowpass" , "lowpass=35", "Low-pass filter with cutoff of 35 Hz" );
@@ -3107,46 +3108,59 @@ void cmddefs_t::init()
   // FILTER-DESIGN
   //
 
-  add_cmd( "filter" , "FILTER-DESIGN" , "Design and summarize a FIR filter" );
-  add_url( "FILTER-DESIGN" , "fir-filters/#filter-design" );
-  add_verb( "FILTER-DESIGN" ,
-            "Design one FIR filter and emit its impulse and frequency response summaries.\n"
-            "FILTER-DESIGN only covers FIR modes: either a Kaiser-window design "
-            "(fs + ripple + tw + one band specification), a fixed-order windowed design "
-            "(fs + order + optional window + one band specification), or summarizing an "
-            "external coefficient file (fs + file). It does not run the IIR or narrow-Gaussian "
-            "modes that FILTER supports." );
-  add_param( "FILTER-DESIGN" , "fs" , "200" , "Sampling rate used to design and evaluate the filter [required]" );
-  add_param( "FILTER-DESIGN" , "bandpass" , "0.3,35" , "Band-pass filter with lower and upper cutoff frequencies" );
-  add_param( "FILTER-DESIGN" , "lowpass"  , "35" , "Low-pass filter cutoff frequency" );
-  add_param( "FILTER-DESIGN" , "highpass" , "0.3" , "High-pass filter cutoff frequency" );
-  add_param( "FILTER-DESIGN" , "bandstop" , "55,65" , "Band-stop filter with lower and upper cutoff frequencies" );
-  add_param( "FILTER-DESIGN" , "ripple" , "0.02" , "Kaiser-window ripple specification" );
-  add_param( "FILTER-DESIGN" , "tw" , "1" , "Kaiser-window transition width (Hz)" );
-  add_param( "FILTER-DESIGN" , "order" , "100" , "Fixed FIR order when not using Kaiser-window design" );
-  add_param( "FILTER-DESIGN" , "file" , "coef.txt" , "Read FIR coefficients from this external file and summarize them" );
-  add_param( "FILTER-DESIGN" , "rectangular" , "" , "Use a rectangular FIR window" );
-  add_param( "FILTER-DESIGN" , "bartlett" , "" , "Use a Bartlett FIR window" );
-  add_param( "FILTER-DESIGN" , "hann" , "" , "Use a Hann FIR window" );
-  add_param( "FILTER-DESIGN" , "blackman" , "" , "Use a Blackman FIR window" );
-  add_param( "FILTER-DESIGN" , "fix-nyquist" , "0.5" , "Clamp upper transition frequencies below Nyquist by this amount (Hz)" );
+  const std::vector<std::string> filter_design_cmds = { "FILTER-DESIGN" , "FIR-DESIGN" };
+  for ( const std::string & cmd : filter_design_cmds )
+    {
+      add_cmd( "filter" , cmd , "Design and summarize a filter" );
+      add_url( cmd , "fir-filters/#filter-design" );
+      add_verb( cmd ,
+		"Design one filter and emit its impulse and frequency response summaries.\n"
+		"Supported modes are: a Kaiser-window FIR design "
+		"(fs + ripple + tw + one band specification), a fixed-order windowed FIR design "
+		"(fs + order + optional window + one band specification), summarizing an "
+		"external FIR coefficient file (fs + file), or a narrow Gaussian frequency-domain "
+		"filter (fs + ngaus, with optional dur or n). IIR Butterworth/Chebyshev filters "
+		"are not summarized by this command." );
+      add_param( cmd , "fs" , "200" , "Sampling rate used to design and evaluate the filter [required]" );
+      add_param( cmd , "bandpass" , "0.3,35" , "Band-pass filter with lower and upper cutoff frequencies" );
+      add_param( cmd , "lowpass"  , "35" , "Low-pass filter cutoff frequency" );
+      add_param( cmd , "highpass" , "0.3" , "High-pass filter cutoff frequency" );
+      add_param( cmd , "bandstop" , "55,65" , "Band-stop filter with lower and upper cutoff frequencies" );
+      add_param( cmd , "ripple" , "0.02" , "Kaiser-window ripple specification" );
+      add_param( cmd , "tw" , "1" , "Kaiser-window transition width (Hz)" );
+      add_param( cmd , "order" , "100" , "Fixed FIR order when not using Kaiser-window design" );
+      add_param( cmd , "file" , "coef.txt" , "Read FIR coefficients from this external file and summarize them" );
+      add_param( cmd , "rectangular" , "" , "Use a rectangular FIR window" );
+      add_param( cmd , "bartlett" , "" , "Use a Bartlett FIR window" );
+      add_param( cmd , "hann" , "" , "Use a Hann FIR window" );
+      add_param( cmd , "blackman" , "" , "Use a Blackman FIR window" );
+      add_param( cmd , "fix-nyquist" , "0.5" , "Clamp upper transition frequencies below Nyquist by this amount (Hz)" );
+      add_param( cmd , "ngaus" , "13,2" , "Summarize a narrow Gaussian frequency-domain filter centered at freq with this FWHM" );
+      add_param( cmd , "dur" , "300" , "Optional duration in seconds used to set N for ngaus summaries when n is not specified" );
+      add_param( cmd , "n" , "2048" , "Number of samples used for ngaus summaries; overrides dur; defaults to 2048 if neither n nor dur is specified" );
 
-  add_table( "FILTER-DESIGN" , "" , "FIR design parameters" );
-  add_var( "FILTER-DESIGN" , "" , "FIR" , "Filter label constructed from input parameters" );
-  add_var( "FILTER-DESIGN" , "" , "FS" , "Sampling rate used to evaluate the filter" );
-  add_var( "FILTER-DESIGN" , "" , "NTAPS" , "Number of FIR taps" );
+      add_table( cmd , "" , "Filter design parameters" );
+      add_var( cmd , "" , "FIR" , "Filter label constructed from input parameters" );
+      add_var( cmd , "" , "TYPE" , "Filter type" );
+      add_var( cmd , "" , "FS" , "Sampling rate used to evaluate the filter" );
+      add_var( cmd , "" , "NTAPS" , "Number of FIR taps for FIR filters" );
+      add_var( cmd , "" , "N" , "Number of samples used for narrow Gaussian summaries" );
+      add_var( cmd , "" , "FC" , "Center frequency for narrow Gaussian summaries" );
+      add_var( cmd , "" , "FWHM" , "Full-width at half maximum for narrow Gaussian summaries" );
 
-  add_table( "FILTER-DESIGN" , "F,FIR" , "Frequency-response characteristics" );
-  add_var( "FILTER-DESIGN" , "F,FIR" , "F" , "Frequency (Hz)" );
-  add_var( "FILTER-DESIGN" , "F,FIR" , "FIR" , "Filter label" );
-  add_var( "FILTER-DESIGN" , "F,FIR" , "MAG" , "Magnitude response" );
-  add_var( "FILTER-DESIGN" , "F,FIR" , "MAG_DB" , "Magnitude response (dB)" );
-  add_var( "FILTER-DESIGN" , "F,FIR" , "PHASE" , "Phase response" );
+      add_table( cmd , "F,FIR" , "Frequency-response characteristics" );
+      add_var( cmd , "F,FIR" , "F" , "Frequency (Hz)" );
+      add_var( cmd , "F,FIR" , "FIR" , "Filter label" );
+      add_var( cmd , "F,FIR" , "MAG" , "Magnitude response" );
+      add_var( cmd , "F,FIR" , "MAG_DB" , "Magnitude response (dB)" );
+      add_var( cmd , "F,FIR" , "PHASE" , "Phase response" );
 
-  add_table( "FILTER-DESIGN" , "FIR,SEC" , "Impulse response" );
-  add_var( "FILTER-DESIGN" , "FIR,SEC" , "SEC" , "Time (seconds)" );
-  add_var( "FILTER-DESIGN" , "FIR,SEC" , "FIR" , "Filter label" );
-  add_var( "FILTER-DESIGN" , "FIR,SEC" , "IR" , "Impulse-response coefficient" );
+      add_table( cmd , "FIR,SEC" , "Impulse and step response" );
+      add_var( cmd , "FIR,SEC" , "SEC" , "Time (seconds)" );
+      add_var( cmd , "FIR,SEC" , "FIR" , "Filter label" );
+      add_var( cmd , "FIR,SEC" , "IR" , "Impulse-response coefficient" );
+      add_var( cmd , "FIR,SEC" , "SR" , "Step response" );
+    }
 
   /////////////////////////////////////////////////////////////////////////////////
   //

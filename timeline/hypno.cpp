@@ -3866,15 +3866,6 @@ void hypnogram_t::output( const bool verbose ,
 
 	  // if ! any sleep, set all "sleep" to t1 ( lights out ) 
 	  
-	  std::cout << " t0 " << t0 << "\n"
-		    << " t1 " << t1 << "\n"
-		    << " t2 " << t2 << "\n"
-		    << " t3 " << t3 << "\n"
-		    << " t4 " << t4 << "\n"
-		    << " t5 " << t5 << "\n"
-		    << " t6 " << t6 << "\n";
-
-	  
 	  // ensure all are yoked to the same midnight as T0	  
 	  while ( t1 < t0 ) t1 += 24.0;
 	  while ( t2 < t1 ) t2 += 24.0;	  
@@ -3883,13 +3874,6 @@ void hypnogram_t::output( const bool verbose ,
 	  while ( t5 < t4 ) t5 += 24.0;
 	  while ( t6 < t5 ) t6 += 24.0;
 	  
-	  std::cout << " S2 \n" << " t0 " << t0 << "\n"
-		    << " t1 " << t1 << "\n"
-		    << " t2 " << t2 << "\n"
-		    << " t3 " << t3 << "\n"
-		    << " t4 " << t4 << "\n"
-		    << " t5 " << t5 << "\n"
-		    << " t6 " << t6 << "\n";
 
 	  // finally, if t0 is at mignight, or just after, we need to
 	  // make it align to the *previous* midnight. 
@@ -3906,14 +3890,6 @@ void hypnogram_t::output( const bool verbose ,
 	      t6 += 24.0;	      
 	    }
 	  
-	  std::cout << " S3 \n" << " t0 " << t0 << "\n"
-		    << " t1 " << t1 << "\n"
-		    << " t2 " << t2 << "\n"
-		    << " t3 " << t3 << "\n"
-		    << " t4 " << t4 << "\n"
-		    << " t5 " << t5 << "\n"
-		    << " t6 " << t6 << "\n";
-
 	  // for annots
 	  tp_0_start = 0LLU;
 	  tp_1_lights_out = ( t1 - t0 ) * 60.0 * 60.0 * (double)globals::tp_1sec ; 
