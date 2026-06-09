@@ -47,12 +47,27 @@
 #include <filesystem>
 
 #if defined(WINDOWS) || defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #ifdef IN
 #undef IN
 #endif
 #ifdef OUT
 #undef OUT
+#endif
+#ifdef small
+#undef small
+#endif
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
 #endif
 #endif
 

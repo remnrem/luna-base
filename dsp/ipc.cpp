@@ -709,7 +709,9 @@ ipc_lag_output_t ipc_t::compute_ipc_lagged(const ipc_phaseamp_t & seed,
 
 // ------------------------------ Batch: seeds vs targets ------------------------------
 
-
+// GCC 13 false positive: sized-delete range analysis misidentifies N*sizeof(double) as a pointer offset
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfree-nonheap-object"
 ipc_batch_result_t ipc_t::compute_ipc_seed_to_set(const std::vector<ipc_phaseamp_t>& signals,
 						  const std::vector<int>& s1,
 						  const std::vector<int>& s2,
@@ -774,6 +776,7 @@ ipc_batch_result_t ipc_t::compute_ipc_seed_to_set(const std::vector<ipc_phaseamp
 
   return out;
 }
+#pragma GCC diagnostic pop
 
 
 
