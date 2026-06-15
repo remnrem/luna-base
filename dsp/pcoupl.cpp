@@ -63,7 +63,7 @@ void dsptools::phase_coupling( edf_t & edf , param_t & param )
   double epoch_sec = 0;
   if ( epoch_perm )
     {
-      // if epoch-based permutation w/ generic epochs, we need to define a fixed epoch length      
+      // if epoch-based permutation w/ generic epochs, we need to define a fixed epoch length 
       if ( edf.timeline.generic_epochs() )
 	{
 	  if ( param.has( "fixed-epoch-dur" ) )

@@ -4661,6 +4661,145 @@ void proc_enforce_signals( edf_t & edf , param_t & param )
 }
 
 
+namespace
+{
+
+bool rename_has_transform( param_t & param )
+{
+  return param.has( "add-leading" )
+    || param.has( "add-trailing" )
+    || param.has( "remove-leading" )
+    || param.has( "remove-trailing" )
+    || param.has( "prepend" )
+    || param.has( "append" )
+    || param.has( "drop-leading" )
+    || param.has( "drop-trailing" );
+}
+
+std::string rename_param_value( param_t & param ,
+				const std::string & primary ,
+				const std::string & alias )
+{
+  if ( param.has( primary ) && param.has( alias ) )
+    Helper::halt( "cannot specify both " + primary + " and " + alias );
+  if ( param.has( primary ) ) return param.value( primary );
+  if ( param.has( alias ) ) return param.value( alias );
+  return "";
+}
+
+bool starts_with( const std::string & s , const std::string & prefix )
+{
+  return s.size() >= prefix.size() && s.substr( 0 , prefix.size() ) == prefix;
+}
+
+bool ends_with( const std::string & s , const std::string & suffix )
+{
+  return s.size() >= suffix.size()
+    && s.substr( s.size() - suffix.size() , suffix.size() ) == suffix;
+}
+
+bool has_comma( const std::string & s )
+{
+  return s.find( ',' ) != std::string::npos;
+}
+
+std::vector<std::string> rename_parse_remove_terms( const std::string & value ,
+						    const std::string & option )
+{
+  std::vector<std::string> terms;
+  std::set<std::string> seen;
+
+  int p = 0;
+  for (int j=0; j<=value.size(); j++)
+    {
+      if ( j == value.size() || value[j] == ',' )
+	{
+	  const std::string term = value.substr( p , j - p );
+	  if ( term == "" )
+	    Helper::halt( option + " requires non-empty comma-delimited values" );
+	  if ( seen.find( term ) != seen.end() )
+	    Helper::halt( option + " contains a duplicate value: " + term );
+	  terms.push_back( term );
+	  seen.insert( term );
+	  p = j + 1;
+	}
+    }
+
+  return terms;
+}
+
+std::string rename_remove_match( const std::string & label ,
+				 const std::vector<std::string> & terms ,
+				 const bool leading ,
+				 const std::string & option )
+{
+  std::string match;
+  int nmatches = 0;
+
+  for (int t=0; t<terms.size(); t++)
+    {
+      const bool matched = leading ? starts_with( label , terms[t] )
+	: ends_with( label , terms[t] );
+
+      if ( matched )
+	{
+	  match = terms[t];
+	  ++nmatches;
+	}
+    }
+
+  if ( nmatches > 1 )
+    Helper::halt( option + " matches multiple values for channel label: " + label );
+
+  if ( nmatches == 0 )
+    return label;
+
+  return leading ? label.substr( match.size() )
+    : label.substr( 0 , label.size() - match.size() );
+}
+
+std::string rename_transform_label( const std::string & label ,
+				    const std::string & add_leading ,
+				    const std::string & add_trailing ,
+				    const std::vector<std::string> & remove_leading ,
+				    const std::vector<std::string> & remove_trailing )
+{
+  std::string out = label;
+
+  if ( remove_leading.size() )
+    out = rename_remove_match( out , remove_leading , true , "remove-leading" );
+
+  if ( remove_trailing.size() )
+    out = rename_remove_match( out , remove_trailing , false , "remove-trailing" );
+
+  if ( add_leading != "" )
+    out = add_leading + out;
+
+  if ( add_trailing != "" )
+    out += add_trailing;
+
+  return out;
+}
+
+void rename_check_unique_nonempty( const std::vector<std::string> & labels )
+{
+  std::set<std::string> seen;
+
+  for (int s=0; s<labels.size(); s++)
+    {
+      if ( labels[s] == "" )
+	Helper::halt( "RENAME would create an empty channel label" );
+
+      const std::string uc = Helper::toupper( labels[s] );
+      if ( seen.find( uc ) != seen.end() )
+	Helper::halt( "RENAME would create non-unique channel label: " + labels[s] );
+
+      seen.insert( uc );
+    }
+}
+
+}
+
 // RENAME : rename signals
 void proc_rename( edf_t & edf , param_t & param )
 {
@@ -4670,6 +4809,8 @@ void proc_rename( edf_t & edf , param_t & param )
     {
       if ( param.has( "new" ) ) 
 	Helper::halt( "cannot specify both file and sig/new" );
+      if ( rename_has_transform( param ) )
+	Helper::halt( "cannot specify both file and RENAME add/remove options" );
       
       std::vector<std::string> old_signals, new_signals;
       std::set<std::string> newset;
@@ -4726,6 +4867,75 @@ void proc_rename( edf_t & edf , param_t & param )
   //
 
   signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
+
+  if ( rename_has_transform( param ) )
+    {
+      if ( param.has( "new" ) )
+	Helper::halt( "cannot specify both new and RENAME add/remove options" );
+
+      const std::string add_leading =
+	rename_param_value( param , "add-leading" , "prepend" );
+      const std::string add_trailing =
+	rename_param_value( param , "add-trailing" , "append" );
+      const std::string remove_leading =
+	rename_param_value( param , "remove-leading" , "drop-leading" );
+      const std::string remove_trailing =
+	rename_param_value( param , "remove-trailing" , "drop-trailing" );
+
+      if ( param.has( "add-leading" ) && add_leading == "" )
+	Helper::halt( "add-leading requires a non-empty value" );
+      if ( param.has( "prepend" ) && add_leading == "" )
+	Helper::halt( "prepend requires a non-empty value" );
+      if ( param.has( "add-trailing" ) && add_trailing == "" )
+	Helper::halt( "add-trailing requires a non-empty value" );
+      if ( param.has( "append" ) && add_trailing == "" )
+	Helper::halt( "append requires a non-empty value" );
+      if ( has_comma( add_leading ) )
+	Helper::halt( "add-leading/prepend requires a single value; comma-delimited lists are only supported for remove-leading/remove-trailing" );
+      if ( has_comma( add_trailing ) )
+	Helper::halt( "add-trailing/append requires a single value; comma-delimited lists are only supported for remove-leading/remove-trailing" );
+      if ( param.has( "remove-leading" ) && remove_leading == "" )
+	Helper::halt( "remove-leading requires a non-empty value" );
+      if ( param.has( "drop-leading" ) && remove_leading == "" )
+	Helper::halt( "drop-leading requires a non-empty value" );
+      if ( param.has( "remove-trailing" ) && remove_trailing == "" )
+	Helper::halt( "remove-trailing requires a non-empty value" );
+      if ( param.has( "drop-trailing" ) && remove_trailing == "" )
+	Helper::halt( "drop-trailing requires a non-empty value" );
+
+      const std::vector<std::string> remove_leading_terms =
+	remove_leading == "" ? std::vector<std::string>()
+	: rename_parse_remove_terms( remove_leading , "remove-leading" );
+      const std::vector<std::string> remove_trailing_terms =
+	remove_trailing == "" ? std::vector<std::string>()
+	: rename_parse_remove_terms( remove_trailing , "remove-trailing" );
+
+      std::vector<std::string> new_signals( signals.size() );
+      std::vector<std::string> post_labels = edf.header.label;
+
+      for (int s=0; s<signals.size(); s++)
+	{
+	  const std::string old_label = signals.label(s);
+	  const std::string new_label =
+	    rename_transform_label( old_label , add_leading , add_trailing ,
+				    remove_leading_terms , remove_trailing_terms );
+
+	  new_signals[s] = new_label;
+	  post_labels[ signals(s) ] = new_label;
+	}
+
+      rename_check_unique_nonempty( post_labels );
+
+      for (int s=0; s<signals.size(); s++)
+	{
+	  if ( signals.label(s) == new_signals[s] ) continue;
+	  logger << "  renaming [" << signals.label(s) << "] as [" << new_signals[s]  << "]\n";
+	  edf.header.rename_channel( signals.label(s) , new_signals[s] );
+	}
+
+      return;
+    }
+
   std::vector<std::string> new_signals = param.strvector( "new" );
   
   if ( signals.size() != new_signals.size() )

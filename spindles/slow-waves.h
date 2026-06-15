@@ -385,7 +385,7 @@ private:
   
   // dynamics (optional)
   qdynam_t qd;
-  bool calc_dynamics;
+  bool calc_dynamics = false;
   
   
   // helper function

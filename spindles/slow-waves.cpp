@@ -1149,9 +1149,13 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
       if ( ! ( using_pct_neg || using_pct_pos ) )
 	{
 	  th_pct_x = MiscMath::percentile( tmp_x , par.pct ) ;
-	  th_pct_yminusx = MiscMath::percentile( tmp_yminusx , 1.0 - par.pct ) ;	  
-	  logger << "  thresholding negative and peak-to-peak amplitudes at the "
-		 << 100* par.pct << " percentile ( " << th_pct_x << " and " << th_pct_yminusx << " )\n";
+	  th_pct_yminusx = MiscMath::percentile( tmp_yminusx , 1.0 - par.pct ) ;
+	  if ( par.ignore_neg_peak )
+	    logger << "  thresholding peak-to-peak amplitude at the "
+		   << 100* par.pct << " percentile ( " << th_pct_yminusx << " )\n";
+	  else
+	    logger << "  thresholding negative and peak-to-peak amplitudes at the "
+		   << 100* par.pct << " percentile ( " << th_pct_x << " and " << th_pct_yminusx << " )\n";
 	  
 	}
       else
@@ -1224,7 +1228,7 @@ int slow_waves_t::detect_slow_waves( const std::vector<double> & unfiltered ,
 
 	  if ( ! ( using_pct_pos || using_pct_neg ) ) // combined percentiles
 	    {
-	      if ( w.down_amplitude > th_pct_x ) accepted = false;
+	      if ( ( !par.ignore_neg_peak ) && w.down_amplitude > th_pct_x ) accepted = false;
 	      if ( w.up_amplitude - w.down_amplitude < th_pct_yminusx ) accepted = false;
 	    }
 	  else

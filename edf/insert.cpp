@@ -41,12 +41,14 @@ extern logger_t logger;
 
 namespace {
 
-int two_pass_trim_outliers( const std::vector<double> & x ,
-			    const std::vector<double> & y ,
-			    std::vector<bool> * keep )
+int trim_fit_outliers( const std::vector<double> & x ,
+		       const std::vector<double> & y ,
+		       std::vector<bool> * keep ,
+		       const double outlier_sd ,
+		       const int outlier_passes )
 {
   const int n = x.size();
-  if ( y.size() != n || n < 3 ) return 0;
+  if ( y.size() != n || n < 3 || outlier_passes <= 0 || outlier_sd <= 0 ) return 0;
 
   std::vector<bool> local_keep( n , true );
   std::vector<bool> * k = keep ? keep : &local_keep;
@@ -76,7 +78,7 @@ int two_pass_trim_outliers( const std::vector<double> & x ,
       return nn;
     };
 
-  for (int pass=0; pass<2; pass++)
+  for (int pass=0; pass<outlier_passes; pass++)
     {
       double slope = 0 , intercept = 0;
       const int nn = fit_ols( *k , &slope , &intercept );
@@ -92,7 +94,7 @@ int two_pass_trim_outliers( const std::vector<double> & x ,
       for (int i=0; i<n; i++) if ( (*k)[i] )
 	{
 	  const double resid = y[i] - ( intercept + slope * x[i] );
-	  if ( std::fabs( resid ) > 3.0 * resid_sd )
+	  if ( std::fabs( resid ) > outlier_sd * resid_sd )
 	    {
 	      (*k)[i] = false;
 	      ++removed;
@@ -233,6 +235,12 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
   const double warn_r2 = param.has( "warn-r2" ) ? param.requires_dbl( "warn-r2" ) : 0.5;
   const double warn_p_ok = param.has( "warn-p-ok" ) ? param.requires_dbl( "warn-p-ok" ) : 0.5;
   const double warn_peak = param.has( "warn-peak" ) ? param.requires_dbl( "warn-peak" ) : std::max( 0.35 , min_peak );
+  const double fit_outlier_sd = param.has( "fit-outlier-sd" ) ? param.requires_dbl( "fit-outlier-sd" ) : 3.0;
+  const int fit_outlier_passes = param.has( "fit-outlier-passes" ) ? param.requires_int( "fit-outlier-passes" ) : 2;
+  if ( fit_outlier_sd <= 0 )
+    Helper::halt( "fit-outlier-sd must be > 0" );
+  if ( fit_outlier_passes < 0 )
+    Helper::halt( "fit-outlier-passes must be >= 0" );
   const bool auto_try_mode = param.has( "auto-try" );
   const bool manual_try_windows = param.has( "try-start" ) || param.has( "try-len" ) || param.has( "try-inc" );
   const bool try_windows = auto_try_mode || manual_try_windows;
@@ -271,6 +279,11 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
       offsets = param.dblvector( "offset-range" );
       if ( offsets.size() != 2 || offsets[1] <= offsets[0] )
 	Helper::halt( "expecting offset-range=min,max" );
+      logger << "  using absolute user offset-range: " << offsets[0] << " to " << offsets[1] << " seconds\n";
+      if ( header_offset_valid )
+	logger << "  note: user offset-range is absolute; header-derived offset "
+	       << header_offset << " seconds is not used to center this range"
+	       << " (use offset-margin to search around the header offset)\n";
     }
   else if ( param.has( "offset-margin" ) )
     {
@@ -336,7 +349,7 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 
   std::vector<std::vector<double>> dX_prefix_sum;
   std::vector<std::vector<double>> dX_prefix_sq;
-  if ( full_search && ! euclidean )
+  if ( ! euclidean )
     {
       dX_prefix_sum.resize( np );
       dX_prefix_sq.resize( np );
@@ -352,17 +365,26 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	}
     }
 
-  auto full_search_best_index = [&]( int p ,
-				     const Eigen::VectorXd & y_seg_z ) -> int
+  auto bounded_search_best_index = [&]( int p ,
+					const Eigen::VectorXd & y_seg_z ,
+					int mina ,
+					int maxa ) -> int
     {
       const int xlen = dX[p].size();
       const int yseg_len = y_seg_z.size();
       const int max_start = xlen - yseg_len;
       if ( max_start < 0 )
 	return -1;
+      if ( mina < 0 ) mina = 0;
+      if ( maxa < 0 ) maxa = 0;
+      if ( mina > max_start + 1 ) mina = max_start + 1;
+      if ( maxa > max_start + 1 ) maxa = max_start + 1;
+      if ( mina >= maxa )
+	return -1;
 
-      std::vector<double> seg_a( xlen ) , seg_b( yseg_len );
-      for (int i=0; i<xlen; i++) seg_a[i] = dX[p][i];
+      const int search_len = ( maxa - mina ) + yseg_len - 1;
+      std::vector<double> seg_a( search_len ) , seg_b( yseg_len );
+      for (int i=0; i<search_len; i++) seg_a[i] = dX[p][mina+i];
       for (int i=0; i<yseg_len; i++) seg_b[i] = y_seg_z[i];
 
       xcorr_t xc( seg_a , seg_b , 0 , 0 );
@@ -378,10 +400,11 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
       for (int i=0; i<(int)xc.lags.size(); i++)
 	{
 	  const int lag = xc.lags[i];
-	  if ( lag < 0 || lag > max_start )
+	  if ( lag < 0 || lag >= maxa - mina )
 	    continue;
-	  const double sx = dX_prefix_sum[p][lag + yseg_len] - dX_prefix_sum[p][lag];
-	  const double sx2 = dX_prefix_sq[p][lag + yseg_len] - dX_prefix_sq[p][lag];
+	  const int start = mina + lag;
+	  const double sx = dX_prefix_sum[p][start + yseg_len] - dX_prefix_sum[p][start];
+	  const double sx2 = dX_prefix_sq[p][start + yseg_len] - dX_prefix_sq[p][start];
 	  const double x_ss = sx2 - ( sx * sx ) / yseg_len;
 	  if ( x_ss <= 0 )
 	    continue;
@@ -389,7 +412,7 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	  if ( score > best_score )
 	    {
 	      best_score = score;
-	      best_idx = lag;
+	      best_idx = start;
 	    }
 	}
 
@@ -503,41 +526,22 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 		  if ( maxa < 0 )    maxa = 0;
 		  if ( mina >= na_try )  mina = na_try;
 		  if ( maxa >= na_try )  maxa = na_try;
-		  if ( mina >= maxa ) break;
+		  if ( mina >= maxa )
+		    {
+		      if ( maxa <= 0 ) { ystart_try += yinc_try; continue; }
+		      break;
+		    }
 		}
 
 	      std::vector<double> pair_peaks( np, 0 );
-	      std::vector<int> pair_lags( np, 0 );
+	      std::vector<int> pair_starts( np, 0 );
 	      std::vector<bool> pair_valid( np, false );
 	      int n_valid = 0;
 
-	  for (int p=0; p<np; p++)
+	      for (int p=0; p<np; p++)
 		{
 		  const Eigen::VectorXd eb = zscore( dY[p].segment( ystart_try , ylen_try ) );
-		  int p_minidx = -1;
-
-		  if ( full_search )
-		    p_minidx = full_search_best_index( p , eb );
-		  else
-		    {
-		      const int pcenter   = ( mina + maxa ) / 2;
-		      const int margin_sp = ( maxa - mina ) / 2;
-		      const int pstart = std::max( 0, pcenter );
-		      const int pend   = std::min( nx, pcenter + ylen_try );
-		      if ( pend - pstart < ylen_try / 2 ) continue;
-
-		      Eigen::VectorXd ea = Eigen::VectorXd::Zero( ylen_try );
-		      for (int i=0; i<pend-pstart; i++) ea[i] = dX[p][pcenter+i];
-		      ea = zscore( ea );
-
-		      std::vector<double> seg_a( ylen_try ) , seg_b( ylen_try );
-		      for (int i=0; i<ylen_try; i++) { seg_a[i] = ea[i]; seg_b[i] = eb[i]; }
-
-		      xcorr_t xc( seg_a , seg_b , margin_sp , 0 );
-		      pair_lags[p] = xc.lags[xc.mx];
-		      p_minidx = std::max( mina, std::min( maxa-1, pcenter + xc.lags[xc.mx] ) );
-		    }
-
+		  int p_minidx = bounded_search_best_index( p , eb , mina , maxa );
 		  if ( p_minidx < 0 ) continue;
 		  Eigen::VectorXd ax = dX[p].segment( p_minidx , ylen_try );
 		  Eigen::VectorXd by = dY[p].segment( ystart_try , ylen_try );
@@ -550,7 +554,7 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 		  by = by.array() - by_m;
 		  if ( by_s > 0 ) by /= by_s;
 		  pair_peaks[p] = std::fabs( ( ax.array() * by.array() ).mean() );
-		  if ( full_search ) pair_lags[p] = p_minidx;
+		  pair_starts[p] = p_minidx;
 		  pair_valid[p] = true;
 		  ++n_valid;
 		}
@@ -558,12 +562,12 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	      if ( n_valid == 0 ) { ystart_try += yinc_try; continue; }
 
 	      std::vector<double> valid_peaks;
-	      std::vector<int> valid_lags;
+	      std::vector<int> valid_starts;
 	      for (int p=0; p<np; p++)
 		if ( pair_valid[p] )
 		  {
 		    valid_peaks.push_back( pair_peaks[p] );
-		    valid_lags.push_back( pair_lags[p] );
+		    valid_starts.push_back( pair_starts[p] );
 		  }
 
 	      std::sort( valid_peaks.begin() , valid_peaks.end() );
@@ -571,16 +575,8 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	      peaks.push_back( median_peak );
 	      if ( median_peak >= min_peak )
 		{
-		  std::sort( valid_lags.begin() , valid_lags.end() );
-		  int minidx = full_search ? valid_lags[ valid_lags.size() / 2 ] : 0;
-		  if ( ! full_search )
-		    {
-		      const int pcenter = ( mina + maxa ) / 2;
-		      const int median_lag = valid_lags[ valid_lags.size() / 2 ];
-		      minidx = pcenter + median_lag;
-		      if ( minidx < mina ) minidx = mina;
-		      if ( minidx >= maxa ) minidx = maxa - 1;
-		    }
+		  std::sort( valid_starts.begin() , valid_starts.end() );
+		  int minidx = valid_starts[ valid_starts.size() / 2 ];
 		  sec.push_back( ( ystart_try - minidx ) / (double)sr );
 		  win.push_back( ystart_try / (double)sr );
 		  ++tr.accepted_windows;
@@ -607,7 +603,7 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	  const double slope0 = sxx > 0 ? sxy / sxx : 0;
 	  const double intercept0 = sy - slope0 * sx;
 	  std::vector<bool> keep( nw, true );
-	  two_pass_trim_outliers( win , sec , &keep );
+	  trim_fit_outliers( win , sec , &keep , fit_outlier_sd , fit_outlier_passes );
 
 	  double sx2=0, sy2=0; int n2=0;
 	  for (int i=0;i<nw;i++) if ( keep[i] ) { sx2 += win[i]; sy2 += sec[i]; ++n2; }
@@ -707,10 +703,6 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
   int ystart = run_start_sec * sr;
   int steps = 0;
 
-  // running offset tracker for full-search xcorr: seed from header, then updated
-  // each window so accumulated drift (which can far exceed ±ylen) is tracked
-  int running_offset_sp = header_offset_valid ? (int)( header_offset * sr ) : 0;
-
   std::vector<double> all_sec, all_win;       // combined per-window estimates
   std::vector<std::vector<double>> pair_sec( np ), pair_win( np );  // per-pair per-window
   std::vector<double> peak_win;
@@ -734,9 +726,6 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 
       ++steps;
       if ( steps > ysteps ) break;
-      ++total_windows;
-
-      writer.level( ystart / (double)sr , "WIN" );
 
       // search bounds in primary (offset = ystart - a, so a = ystart - offset)
       int mina = 0, maxa = na;
@@ -752,8 +741,14 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	  if ( mina >= na )  mina = na;
 	  if ( maxa >= na )  maxa = na;
 	  if ( mina >= maxa )
-	    Helper::halt( "offset-range results in an empty search space after clamping to signal bounds" );
+	    {
+	      if ( maxa <= 0 ) { ystart += yinc; continue; }
+	      break;
+	    }
 	}
+
+      ++total_windows;
+      writer.level( ystart / (double)sr , "WIN" );
 
       int minidx = mina;
       bool win_ok = true;  // set false by xcorr quality gate if peak too low
@@ -794,54 +789,18 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	}
       else
 	{
-	  // xcorr: if full-search is requested, do an actual global lag search
-	  // over the full valid primary trace. Otherwise, search within the
-	  // constrained local interval around the expected alignment.
-	  const bool xcorr_full = full_search;
-	  const int pcenter_full = std::min( std::max( ystart - running_offset_sp, 0 ), na - 1 );
-	  const int pcenter   = xcorr_full ? pcenter_full : ( mina + maxa ) / 2;
-	  const int margin_sp = xcorr_full ? ylen : ( maxa - mina ) / 2;
-
-	  std::vector<int> pair_lags( np, 0 );
+	  // xcorr: search every candidate primary start in the current bounds.
+	  // full-search is the same operation with bounds spanning the trace.
+	  std::vector<int> pair_starts( np, 0 );
 	  std::vector<double> pair_peaks( np, 0 );
 	  std::vector<double> pair_offset_sec_tmp( np, 0 );
 	  std::vector<bool> pair_valid( np, false );
 	  for (int p=0; p<np; p++)
 	    {
 	      Eigen::VectorXd eb = zscore( dY[p].segment( ystart, ylen ) );
-	      int p_minidx = -1;
-
-	      if ( xcorr_full )
-		{
-		  p_minidx = full_search_best_index( p , eb );
-		  if ( p_minidx < 0 )
-		    continue;
-		  pair_lags[p] = p_minidx;
-		}
-	      else
-		{
-		  // clamp primary segment to signal bounds
-		  const int pstart = std::max( 0, pcenter );
-		  const int pend   = std::min( nx, pcenter + ylen );
-		  if ( pend - pstart < ylen / 2 )
-		    {
-		      logger << "  warning: insufficient primary data at window " << ystart/(double)sr << "s for pair "
-			     << slab1[p] << "/" << slab2[p] << ", skipping\n";
-		      continue;
-		    }
-
-		  Eigen::VectorXd ea = Eigen::VectorXd::Zero( ylen );
-		  for (int i=0; i<pend-pstart; i++) ea[i] = dX[p][pcenter+i];
-		  ea = zscore( ea );
-
-		  std::vector<double> seg_a( ylen ), seg_b( ylen );
-		  for (int i=0; i<ylen; i++) { seg_a[i] = ea[i]; seg_b[i] = eb[i]; }
-
-		  xcorr_t xc( seg_a, seg_b, margin_sp, 0 );
-		  pair_lags[p]  = xc.lags[xc.mx];
-		  p_minidx = std::max( mina, std::min( maxa-1, pcenter + xc.lags[xc.mx] ) );
-
-		}
+	      int p_minidx = bounded_search_best_index( p , eb , mina , maxa );
+	      if ( p_minidx < 0 )
+		continue;
 
 	      Eigen::VectorXd ax = dX[p].segment( p_minidx , ylen );
 	      Eigen::VectorXd by = dY[p].segment( ystart , ylen );
@@ -855,6 +814,7 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	      if ( by_s > 0 ) by /= by_s;
 	      pair_peaks[p] = std::fabs( ( ax.array() * by.array() ).mean() );
 	      pair_offset_sec_tmp[p] = ( ystart - p_minidx ) / (double)sr;
+	      pair_starts[p] = p_minidx;
 	      pair_valid[p] = true;
 
 	      if ( verbose )
@@ -864,12 +824,12 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 
 	  // median peak across pairs — gate window quality
 	  std::vector<double> sorted_peaks;
-	  std::vector<int> sorted_lags;
+	  std::vector<int> sorted_starts;
 	  for (int p=0; p<np; p++)
 	    if ( pair_valid[p] )
 	      {
 		sorted_peaks.push_back( pair_peaks[p] );
-		sorted_lags.push_back( pair_lags[p] );
+		sorted_starts.push_back( pair_starts[p] );
 	      }
 	  if ( sorted_peaks.empty() )
 	    {
@@ -887,28 +847,9 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	      if ( ! win_ok && verbose )
 		logger << "  window " << ystart/(double)sr << "s: skipped (peak=" << median_peak << " < " << min_peak << ")\n";
 
-	      // median lag across pairs
-	      std::sort( sorted_lags.begin(), sorted_lags.end() );
-	      if ( xcorr_full )
-		minidx = sorted_lags[ sorted_lags.size() / 2 ];
-	      else
-		{
-		  const int median_lag = sorted_lags[ sorted_lags.size() / 2 ];
-		  minidx = pcenter + median_lag;
-		  if ( minidx < mina ) minidx = mina;
-		  if ( minidx >= maxa ) minidx = maxa - 1;
-		}
-
-	      // update running offset tracker so next window is centered correctly;
-	      // update even for low-quality windows as long as the implied offset shift
-	      // is plausible (< half a window length) — prevents tracker from going stale
-	      // when few windows pass the quality gate
-	      if ( xcorr_full )
-		{
-		  const int new_offset = ystart - minidx;
-		  if ( std::abs( new_offset - running_offset_sp ) <= ylen / 2 )
-		    running_offset_sp = new_offset;
-		}
+	      // median primary start across pairs
+	      std::sort( sorted_starts.begin(), sorted_starts.end() );
+	      minidx = sorted_starts[ sorted_starts.size() / 2 ];
 
 	      // Keep per-pair regression on the exact same accepted windows used by
 	      // the global summary, so one-pair runs remain internally consistent.
@@ -989,6 +930,44 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
   writer.value( "AUTO_TUNED", auto_tuned ? 1 : 0 );
   writer.value( "HDR_OFFSET", header_offset_valid ? header_offset : 0.0 );
   writer.value( "HDR_OFFSET_VALID", header_offset_valid ? 1 : 0 );
+  writer.value( "FIT_OUTLIER_SD", fit_outlier_sd );
+  writer.value( "FIT_OUTLIER_PASSES", fit_outlier_passes );
+
+  auto log_hints = [&]( bool include_min_peak_hint , double suggested_min_peak ) {
+    logger << "  hints:\n";
+    if ( include_min_peak_hint )
+      logger << "    - try min-peak=" << Helper::dbl2str_fixed( suggested_min_peak , 2 )
+	     << " (current min-peak=" << min_peak << ")\n";
+    logger << "    - try a smaller len window (current len=" << ylen_sec << "s)\n";
+
+    logger << "    - use offset-margin to search around the header-derived offset";
+    if ( param.has( "offset-margin" ) && offsets.size() == 2 )
+      logger << " (current offset-margin=" << ( offsets[1] - offsets[0] ) / 2.0
+	     << "s; effective range=" << offsets[0] << " to " << offsets[1] << "s)\n";
+    else if ( header_offset_valid && ! full_search && ! param.has( "offset-range" ) && offsets.size() == 2 )
+      logger << " (current default margin=60s; effective range=" << offsets[0]
+	     << " to " << offsets[1] << "s)\n";
+    else if ( ! header_offset_valid )
+      logger << " (currently unavailable: no valid EDF header offset)\n";
+    else if ( full_search )
+      logger << " (currently inactive: full-search is set)\n";
+    else
+      logger << " (current offset-margin=unset)\n";
+
+    logger << "    - set an absolute offset-range around the expected shift";
+    if ( param.has( "offset-range" ) && offsets.size() == 2 )
+      logger << " (current offset-range=" << offsets[0] << " to " << offsets[1] << "s)\n";
+    else if ( constrained_offset && offsets.size() == 2 )
+      logger << " (current offset-range=unset; effective range=" << offsets[0]
+	     << " to " << offsets[1] << "s)\n";
+    else
+      logger << " (current offset-range=unset)\n";
+
+    logger << "    - use full-search when EDF start times are missing or not trusted"
+	   << " (current full-search=" << ( full_search ? "yes" : "no" ) << ")\n";
+    logger << "    - add verbose=1 to diagnose per-window results"
+	   << " (current verbose=" << ( verbose ? "yes" : "no" ) << ")\n";
+  };
 
   // summary statistics across all windows
   if ( ! all_sec.empty() )
@@ -1014,8 +993,9 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
       std::vector<bool> keep( nw, true );
       auto [slope0, intercept0] = ols( keep );
 
-	      // two-pass flagging of outliers: |residual| > 3 * SD
-	      const int n_outlier = two_pass_trim_outliers( all_win , all_sec , &keep );
+	      // Residual-based fit outlier removal.
+	      const int n_outlier = trim_fit_outliers( all_win , all_sec , &keep ,
+						       fit_outlier_sd , fit_outlier_passes );
 
       for (int w=0; w<total_windows; w++)
 	{
@@ -1039,14 +1019,50 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
       const double r2 = ss_tot > 0 ? 1.0 - ss_res/ss_tot : 1.0;
 
       // raw distribution stats (all windows, before outlier removal)
+      auto quantile_sorted = []( const std::vector<double> & v , double p ) -> double {
+	if ( v.empty() ) return 0;
+	if ( v.size() == 1 ) return v[0];
+	if ( p <= 0 ) return v.front();
+	if ( p >= 1 ) return v.back();
+	const double x = p * ( v.size() - 1 );
+	const int lo = std::floor( x );
+	const int hi = std::ceil( x );
+	const double f = x - lo;
+	return v[lo] * ( 1.0 - f ) + v[hi] * f;
+      };
+
       std::vector<double> sorted_sec = all_sec;
       std::sort( sorted_sec.begin(), sorted_sec.end() );
       const double min_sec    = sorted_sec.front();
       const double max_sec    = sorted_sec.back();
       const double median_sec = sorted_sec[ nw / 2 ];
+      const double p10_sec    = quantile_sorted( sorted_sec , 0.10 );
+      const double p25_sec    = quantile_sorted( sorted_sec , 0.25 );
+      const double p75_sec    = quantile_sorted( sorted_sec , 0.75 );
+      const double p90_sec    = quantile_sorted( sorted_sec , 0.90 );
       double mean_sec = 0;
       for (int i=0;i<nw;i++) mean_sec += all_sec[i];
       mean_sec /= nw;
+
+      std::vector<double> fit_sec;
+      double fit_mean_sec = 0;
+      for (int i=0;i<nw;i++)
+	if ( keep[i] )
+	  {
+	    fit_sec.push_back( all_sec[i] );
+	    fit_mean_sec += all_sec[i];
+	  }
+      const int n_fit = fit_sec.size();
+      if ( n_fit > 0 ) fit_mean_sec /= n_fit;
+      std::sort( fit_sec.begin(), fit_sec.end() );
+      const double fit_min_sec    = n_fit ? fit_sec.front() : 0;
+      const double fit_max_sec    = n_fit ? fit_sec.back() : 0;
+      const double fit_median_sec = n_fit ? fit_sec[ n_fit / 2 ] : 0;
+      const double fit_p10_sec    = quantile_sorted( fit_sec , 0.10 );
+      const double fit_p25_sec    = quantile_sorted( fit_sec , 0.25 );
+      const double fit_p75_sec    = quantile_sorted( fit_sec , 0.75 );
+      const double fit_p90_sec    = quantile_sorted( fit_sec , 0.90 );
+
       const double p_ok = total_windows > 0 ? nw / (double)total_windows : 0;
       double median_peak = 0, mean_peak = 0, min_peak_obs = 0, max_peak_obs = 0;
       if ( ! peak_win.empty() )
@@ -1073,7 +1089,13 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 		     << "%)  peak median=" << median_peak << "  mean=" << mean_peak
 		     << "  min=" << min_peak_obs << "  max=" << max_peak_obs << "\n"
 		     << "    waveform_shift   median=" << median_sec << "s  mean=" << mean_sec
+		     << "s  p10=" << p10_sec << "s  p90=" << p90_sec
 		     << "s  min=" << min_sec << "s  max=" << max_sec << "s  range=" << max_sec-min_sec << "s\n"
+		     << "    fit_shift        used=" << n_fit << "/" << nw
+		     << "  median=" << fit_median_sec << "s  mean=" << fit_mean_sec
+		     << "s  p10=" << fit_p10_sec << "s  p90=" << fit_p90_sec
+		     << "s  min=" << fit_min_sec << "s  max=" << fit_max_sec
+		     << "s  range=" << fit_max_sec-fit_min_sec << "s\n"
 		     << "    offset           " << total_offset << "s"
 		     << " (start_shift=" << intercept << "s, header_offset="
 		     << ( header_offset_valid ? header_offset : 0.0 ) << "s)\n"
@@ -1084,12 +1106,26 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 
       writer.value( "N_WIN",       nw );
       writer.value( "N_OUTLIER",   n_outlier );
+      writer.value( "N_FIT",       n_fit );
       writer.value( "P_OK",        p_ok );
       writer.value( "MEDIAN_SEC",  median_sec );
       writer.value( "MEAN_SEC",    mean_sec );
       writer.value( "MIN_SEC",     min_sec );
       writer.value( "MAX_SEC",     max_sec );
       writer.value( "RANGE_SEC",   max_sec - min_sec );
+      writer.value( "P10_SEC",     p10_sec );
+      writer.value( "P25_SEC",     p25_sec );
+      writer.value( "P75_SEC",     p75_sec );
+      writer.value( "P90_SEC",     p90_sec );
+      writer.value( "FIT_MEDIAN_SEC", fit_median_sec );
+      writer.value( "FIT_MEAN_SEC",   fit_mean_sec );
+      writer.value( "FIT_MIN_SEC",    fit_min_sec );
+      writer.value( "FIT_MAX_SEC",    fit_max_sec );
+      writer.value( "FIT_RANGE_SEC",  fit_max_sec - fit_min_sec );
+      writer.value( "FIT_P10_SEC",    fit_p10_sec );
+      writer.value( "FIT_P25_SEC",    fit_p25_sec );
+      writer.value( "FIT_P75_SEC",    fit_p75_sec );
+      writer.value( "FIT_P90_SEC",    fit_p90_sec );
       writer.value( "MEDIAN_PEAK", median_peak );
       writer.value( "MEAN_PEAK",   mean_peak );
       writer.value( "MIN_PEAK",    min_peak_obs );
@@ -1118,9 +1154,8 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	      if ( i ) logger << "; ";
 	      logger << warn_reasons[i];
 	    }
-	  logger << "\n"
-		 << "  hint: try a smaller len window; also try a wider offset-range"
-		 << " (e.g. offset-range=-360,360) or full-search\n";
+	  logger << "\n";
+	  log_hints( false , 0 );
 	}
 
       // per-pair slope fitting (same OLS + outlier removal)
@@ -1143,8 +1178,9 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	  double pb0 = psxx>0 ? psxy/psxx : 0;
 	  double pa0 = psy - pb0*psx;
 
-	      // two-pass outlier removal
-	      const int pnout = two_pass_trim_outliers( pair_win[p] , pair_sec[p] , &pk );
+	      // Residual-based fit outlier removal.
+	      const int pnout = trim_fit_outliers( pair_win[p] , pair_sec[p] , &pk ,
+						   fit_outlier_sd , fit_outlier_passes );
 
 	  // refit on clean set
 	  double psx2=0,psy2=0; int pnc=0;
@@ -1199,17 +1235,14 @@ edf_inserter_t::edf_inserter_t( edf_t & edf , param_t & param )
 	  logger << "  warning: 0/" << total_windows << " windows passed quality gate"
 		 << " (min-peak=" << min_peak << ");"
 		 << " observed peaks: median=" << med << " mean=" << mn
-		 << " min=" << sp.front() << " max=" << sp.back() << "\n"
-		 << "  hint: try min-peak=" << Helper::dbl2str_fixed(sp.back()*0.9,2)
-		 << ", a smaller len window, a wider offset-range"
-		 << " (e.g. offset-range=-360,360), or full-search;"
-		 << " add verbose=1 to diagnose per-window results\n";
+		 << " min=" << sp.front() << " max=" << sp.back() << "\n";
+	  log_hints( true , sp.back() * 0.9 );
 	}
       else
-	logger << "  warning: 0/" << total_windows << " windows passed quality gate (no peak data)\n"
-	       << "  hint: try a smaller len window, a wider offset-range"
-	       << " (e.g. offset-range=-360,360), or full-search;"
-	       << " add verbose=1 to diagnose per-window results\n";
+	{
+	  logger << "  warning: 0/" << total_windows << " windows passed quality gate (no peak data)\n";
+	  log_hints( false , 0 );
+	}
     }
 
   // Add per-window drift-fit flags after computing final outlier mask.

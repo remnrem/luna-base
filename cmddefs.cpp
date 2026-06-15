@@ -2510,10 +2510,19 @@ void cmddefs_t::init()
   add_verb( "RENAME" ,
 	    "RENAME changes one or more signal labels.\n"
 	    "\n"
-	    "Mappings can come from sig/new on the command line or from a two-column tab-delimited file." );
+	    "Mappings can come from sig/new on the command line or from a two-column tab-delimited file.\n"
+	    "Alternatively, selected signals can be renamed by adding or removing leading/trailing text." );
   add_param( "RENAME" , "sig" , "C3,C4" , "Signals to rename" );
   add_param( "RENAME" , "new" , "EEG1,EEG2" , "New labels corresponding to sig" );
   add_param( "RENAME" , "file" , "rename.tsv" , "Two-column tab-delimited old/new rename file" );
+  add_param( "RENAME" , "add-leading" , "_" , "Single text value to prepend to each selected signal label" );
+  add_param( "RENAME" , "add-trailing" , "_ref" , "Single text value to append to each selected signal label" );
+  add_param( "RENAME" , "remove-leading" , "_" , "Leading text, or comma-delimited alternatives, to remove when present" );
+  add_param( "RENAME" , "remove-trailing" , "_ref" , "Trailing text, or comma-delimited alternatives, to remove when present" );
+  add_param( "RENAME" , "prepend" , "_" , "Alias for add-leading" );
+  add_param( "RENAME" , "append" , "_ref" , "Alias for add-trailing" );
+  add_param( "RENAME" , "drop-leading" , "_" , "Alias for remove-leading" );
+  add_param( "RENAME" , "drop-trailing" , "_ref" , "Alias for remove-trailing" );
 
   //
   // ENFORCE-SR
@@ -2640,7 +2649,7 @@ void cmddefs_t::init()
             "using one or more similar signal pairs. It reports quality metrics first, then the waveform\n"
             "shift, header-derived offset, and final net offset correction, and can optionally splice the\n"
             "secondary signals into the primary timeline. For a longer worked example, see the INSERT\n"
-            "vignette in artifacts/insert_vignette/insert.md." );
+            "vignette in the Luna documentation." );
   add_param( "INSERT" , "edf" , "other.edf" ,
              "Secondary EDF to align against the current EDF" );
   add_param( "INSERT" , "pairs" , "C3,C3" ,
@@ -2668,7 +2677,7 @@ void cmddefs_t::init()
   add_param( "INSERT" , "full-search" , "" ,
              "Mutually exclusive with offset-range/offset-margin: search the full valid per-window lag space" );
   add_param( "INSERT" , "offset-range" , "-120,120" ,
-             "Explicit absolute search interval in seconds for the secondary-vs-primary offset" );
+             "Explicit absolute search interval in seconds for the secondary-vs-primary offset; does not use EDF header start times as the center" );
   add_param( "INSERT" , "offset-margin" , "120" ,
              "Mutually exclusive with offset-range: use EDF header start times to estimate the expected offset, then search +/- this many seconds around that value" );
   add_param( "INSERT" , "auto-try" , "" ,
@@ -2699,6 +2708,10 @@ void cmddefs_t::init()
              "Emit a warning if the median per-window matched-window correlation falls below this value" );
   add_param( "INSERT" , "no-warn" , "" ,
              "Suppress summary alignment-quality warnings" );
+  add_param( "INSERT" , "fit-outlier-sd" , "3" ,
+             "Residual SD threshold for removing drift-fit outlier windows" );
+  add_param( "INSERT" , "fit-outlier-passes" , "2" ,
+             "Number of residual outlier-removal passes for drift fitting; use 0 to disable" );
   add_table( "INSERT" , "" ,
              "Summary alignment fit across all accepted windows" );
   add_var( "INSERT" , "" , "OKAY" ,
@@ -2709,6 +2722,8 @@ void cmddefs_t::init()
            "Number of accepted windows used in the summary fit" );
   add_var( "INSERT" , "" , "N_OUTLIER" ,
            "Number of windows removed as regression outliers" );
+  add_var( "INSERT" , "" , "N_FIT" ,
+           "Number of accepted windows retained for the final drift fit after outlier removal" );
   add_var( "INSERT" , "" , "P_OK" ,
            "Proportion of evaluated windows that passed the alignment-quality threshold" );
   add_var( "INSERT" , "" , "MEDIAN_SEC" ,
@@ -2721,6 +2736,32 @@ void cmddefs_t::init()
            "Maximum waveform shift in seconds across accepted windows" );
   add_var( "INSERT" , "" , "RANGE_SEC" ,
            "Range of waveform shifts in seconds across accepted windows" );
+  add_var( "INSERT" , "" , "P10_SEC" ,
+           "10th percentile waveform shift in seconds across accepted windows" );
+  add_var( "INSERT" , "" , "P25_SEC" ,
+           "25th percentile waveform shift in seconds across accepted windows" );
+  add_var( "INSERT" , "" , "P75_SEC" ,
+           "75th percentile waveform shift in seconds across accepted windows" );
+  add_var( "INSERT" , "" , "P90_SEC" ,
+           "90th percentile waveform shift in seconds across accepted windows" );
+  add_var( "INSERT" , "" , "FIT_MEDIAN_SEC" ,
+           "Median waveform shift in seconds across windows retained for the final drift fit" );
+  add_var( "INSERT" , "" , "FIT_MEAN_SEC" ,
+           "Mean waveform shift in seconds across windows retained for the final drift fit" );
+  add_var( "INSERT" , "" , "FIT_MIN_SEC" ,
+           "Minimum waveform shift in seconds across windows retained for the final drift fit" );
+  add_var( "INSERT" , "" , "FIT_MAX_SEC" ,
+           "Maximum waveform shift in seconds across windows retained for the final drift fit" );
+  add_var( "INSERT" , "" , "FIT_RANGE_SEC" ,
+           "Range of waveform shifts in seconds across windows retained for the final drift fit" );
+  add_var( "INSERT" , "" , "FIT_P10_SEC" ,
+           "10th percentile waveform shift in seconds across windows retained for the final drift fit" );
+  add_var( "INSERT" , "" , "FIT_P25_SEC" ,
+           "25th percentile waveform shift in seconds across windows retained for the final drift fit" );
+  add_var( "INSERT" , "" , "FIT_P75_SEC" ,
+           "75th percentile waveform shift in seconds across windows retained for the final drift fit" );
+  add_var( "INSERT" , "" , "FIT_P90_SEC" ,
+           "90th percentile waveform shift in seconds across windows retained for the final drift fit" );
   add_var( "INSERT" , "" , "MEDIAN_PEAK" ,
            "Median per-window matched-window correlation magnitude across all evaluated windows" );
   add_var( "INSERT" , "" , "MEAN_PEAK" ,
@@ -2753,6 +2794,10 @@ void cmddefs_t::init()
            "Window increment in seconds used for the selected fit" );
   add_var( "INSERT" , "" , "AUTO_TUNED" ,
            "1 if auto-try or try-start/try-len/try-inc selected the final window settings, else 0" );
+  add_var( "INSERT" , "" , "FIT_OUTLIER_SD" ,
+           "Residual SD threshold used for drift-fit outlier removal" );
+  add_var( "INSERT" , "" , "FIT_OUTLIER_PASSES" ,
+           "Number of residual outlier-removal passes used for drift fitting" );
 
   add_table( "INSERT" , "WIN" ,
              "Per-window offset estimates and quality flags" );
