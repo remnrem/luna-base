@@ -2582,7 +2582,8 @@ void annot_t::dumpxml( const std::string & filename , bool basic_dumper )
 
 	  element_t * e = scored[i];
 
-	  if ( e->name != "SleepStage" ) continue;
+	  // if ( e->name != "SleepStage" ) continue;
+	  if ( ! Helper::iequals( e->name , "SleepStage" ) ) continue;
 	  
 	  std::string stg = "?";
 	  if      ( e->value == "0" ) stg = "W";
@@ -2747,9 +2748,10 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	{
 	  element_t * e = scored[i];
 
-	  if ( e->name != "SleepStage" ) continue;
+	  //if ( e->name != "SleepStage" ) continue;
+	  if ( ! Helper::iequals( e->name , "SleepStage" ) ) continue;
 	  
-	  std::string ss = "Unscored";
+	  std::string ss = "?";
 	  if      ( e->value == "0" ) ss = "wake";
 	  else if ( e->value == "1" ) ss = "NREM1";
 	  else if ( e->value == "2" ) ss = "NREM2";
@@ -2901,9 +2903,10 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	{
 	  element_t * e = scored[i];
 
-	  if ( e->name != "SleepStage" ) continue;
+	  //if ( e->name != "SleepStage" ) continue;
+	  if ( ! Helper::iequals( e->name , "SleepStage" ) ) continue;
 	  
-	  std::string ss = "Unscored";
+	  std::string ss = "?";
 	  if      ( e->value == "0" ) ss = "wake";
 	  else if ( e->value == "1" ) ss = "NREM1";
 	  else if ( e->value == "2" ) ss = "NREM2";

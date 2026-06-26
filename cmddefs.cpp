@@ -3955,6 +3955,50 @@ void cmddefs_t::init()
   add_param( "DYNAM" , "facs" , "CH,B" , "Factor columns that define separate dynamics profiles" );
   add_param( "DYNAM" , "no-id" , "T" , "Ignore the ID column when matching rows to the current EDF" );
 
+  //
+  // EVTDYN
+  //
+
+  add_cmd( "trans" , "EVTDYN" , "Summarize event timing and event-level properties" );
+  add_verb( "EVTDYN" ,
+	    "Run event-level dynamics summaries for one or more annotation classes. "
+	    "EVTDYN summarizes event density, overnight timing, recurrence, clustered "
+	    "and train-like expression, and optional numeric annotation properties. "
+	    "If HYPNO has already been run, sleep-stage and NREM-cycle annotations are "
+	    "used for stage ratios and cycle trends; EVTDYN does not construct a "
+	    "hypnogram itself." );
+  add_param( "EVTDYN" , "annot" , "SP" , "Annotation class or classes containing events" );
+  add_param( "EVTDYN" , "vars" , "AMP,FFT,DUR" , "Numeric annotation properties to summarize" );
+  add_param( "EVTDYN" , "bg" , "N2,N3" , "Annotation classes defining eligible background time" );
+  add_param( "EVTDYN" , "bg-none" , "T" , "Ignore background masks and use the whole timeline" );
+  add_param( "EVTDYN" , "hypno" , "F" , "Do not use existing sleep-stage/cycle annotations" );
+  add_param( "EVTDYN" , "winsor" , "0.01" , "Winsorize event-level properties before property summaries" );
+  add_param( "EVTDYN" , "z" , "" , "Z-score event-level properties before property summaries" );
+  add_param( "EVTDYN" , "log" , "" , "Log-transform event-level properties before property summaries" );
+  add_param( "EVTDYN" , "rank" , "" , "Rank-transform event-level properties before property summaries" );
+  add_param( "EVTDYN" , "cluster" , "10" , "Maximum lag in seconds for clustered-event summaries" );
+  add_param( "EVTDYN" , "train-gap" , "10" , "Maximum within-train gap in seconds" );
+  add_param( "EVTDYN" , "train-min" , "3" , "Minimum number of events in a train" );
+  add_param( "EVTDYN" , "short-lag" , "3,6" , "Lag window in seconds for short-lag probability" );
+  add_param( "EVTDYN" , "refractory" , "0,2" , "Lag window in seconds for refractory-window log2 observed/expected ratio" );
+  add_param( "EVTDYN" , "excitatory" , "3,8" , "Lag window in seconds for excitatory-window log2 observed/expected ratio" );
+  add_param( "EVTDYN" , "ac-max" , "60" , "Maximum lag in seconds for autocorrelogram summaries" );
+  add_param( "EVTDYN" , "ac-bin" , "1" , "Autocorrelogram bin size in seconds" );
+  add_table( "EVTDYN" , "DYN,ANNOT,CH" , "Event-level dynamics summaries" );
+  add_table( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "Event-level property dynamics summaries" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "DENS" , "Event density per minute of eligible background" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TB" , "Median event timing within eligible background" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TA" , "Median event timing versus all elapsed sleep-period time" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TS" , "Median event timing versus elapsed sleep time" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "ISI_MD" , "Median within-background inter-event interval" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "CLST_FRAC" , "Proportion of events near another event" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TRAIN_DENS" , "Event-train density per minute of eligible background" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N2_ASC_DSC_R" , "Log2 ascending/descending N2 event-density ratio" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N2_ASC_DSC_DIFF" , "Ascending minus descending N2 event-density difference" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "TIME_R" , "Correlation between event timing and event-level property" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "N2_ASC_DSC_R" , "Log2 ascending/descending N2 mean property ratio" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "N2_ASC_DSC_DIFF" , "Ascending minus descending N2 mean property difference" );
+
   /////////////////////////////////////////////////////////////////////////////////
   //
   // STAGING
@@ -5490,6 +5534,11 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "per-so" , "" , "When using so, show per-SO output from the embedded SO detector" );
   add_param( "SPINDLES" , "so-verbose" , "" , "When using so, show verbose per-SO/epoch output from the embedded SO detector" );
   add_param( "SPINDLES" , "dynam" , "" , "Add per-epoch summaries suitable for ultradian dynamics analyses" );
+  add_param( "SPINDLES" , "evtdyn" , "" , "Add event-level dynamics summaries under DYN=EVTDYN" );
+  add_param( "SPINDLES" , "evtdyn-vars" , "AMP,FFT,DUR" , "Spindle properties to summarize with evtdyn" );
+  add_param( "SPINDLES" , "evtdyn-bg" , "N2,N3" , "Annotation classes defining eligible evtdyn background time" );
+  add_param( "SPINDLES" , "evtdyn-bg-none" , "T" , "Ignore evtdyn background masks and use the whole timeline" );
+  add_param( "SPINDLES" , "evtdyn-hypno" , "F" , "Do not use existing sleep-stage/cycle annotations for evtdyn" );
   
   add_param( "SPINDLES" , "empirical" , "" , "Empirically determine thresholds" );
   hidden_param( "SPINDLES" , "set-empirical" , "" , "Use empirically determined thresholds for spindle detection" );
@@ -5888,6 +5937,11 @@ void cmddefs_t::init()
   add_param( "SO" , "cache-pos" , "so-pos" , "Cache positive-peak sample-points" );
   add_param( "SO" , "cache-neg" , "so-neg" , "Cache negative-peak sample-points" );
   add_param( "SO" , "dynam" , "" , "Emit per-event features suitable for downstream dynamics analyses" );
+  add_param( "SO" , "evtdyn" , "" , "Add event-level dynamics summaries under DYN=EVTDYN" );
+  add_param( "SO" , "evtdyn-vars" , "AMP_P2P,SLOPE,DUR" , "SO properties to summarize with evtdyn" );
+  add_param( "SO" , "evtdyn-bg" , "N2,N3" , "Annotation classes defining eligible evtdyn background time" );
+  add_param( "SO" , "evtdyn-bg-none" , "T" , "Ignore evtdyn background masks and use the whole timeline" );
+  add_param( "SO" , "evtdyn-hypno" , "F" , "Do not use existing sleep-stage/cycle annotations for evtdyn" );
   
   add_param( "SO" , "tl" , "C3" , "Output signal time-locked to detected SOs" );
   add_param( "SO" , "onset" , "" , "Sync to SO onset for tl option" );

@@ -42,6 +42,11 @@ struct spindle_t
     include = true;
     max_p2p_trough_sp = -1;
     max_p2p_peak_sp = -1;
+    anchor_sec = -9;
+    so_phase_anchor = -9;
+    so_nearest = -9;
+    so_nearest_num = 0;
+    if_spindle = 0;
   } 
 
   // have start and stop in sample-points as well as time-points

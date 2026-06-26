@@ -114,10 +114,16 @@ public:
 
   std::vector<std::string> variables( const std::string & cmd , const std::string & faclvl ) const;
   
-  rtable_return_t results( const std::string & cmd , const std::string & faclvl ) const; 
+  rtable_return_t results( const std::string & cmd , const std::string & faclvl ) const;
 
   rtables_return_t results() const;
 
+  void inject_table( const std::string & cmd , const std::string & strata , const rtable_t & t )
+  { rtables.tables[cmd][strata] = t; }
+
+  void output_attach( const std::string & path );
+  void output_plaintext( const std::string & path );
+  void output_close();
 
   //
   // Import/read helper functions
@@ -266,6 +272,10 @@ private:
   std::map<std::string,std::set<std::string> > annots;
   std::map<int,std::string> n2id;
   std::map<std::string,int> id2n;
+
+  // File-output mode state — persists across re_init() calls within a slice
+  std::string _file_output_path;
+  bool        _file_output_plaintext = false;
 
   // GPA matrix cache (populated after each non-prep run_gpa)
   bool                     _gpa_cache_valid = false;
@@ -432,10 +442,11 @@ public:
   //
   
   std::string eval_dummy( const std::string & ); // for debug only
-  
+
   std::string eval( const std::string & );
   std::string eval_project( const std::string & , retval_t * accumulator );
   std::string eval1( const std::string & , retval_t * accumulator );
+  std::string eval_file( const std::string & );
   
   std::tuple<std::string,rtables_return_t > eval_return_data( const std::string & );
   

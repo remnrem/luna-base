@@ -1041,6 +1041,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "IRASA" ) )        { fnd = true; proc_irasa( edf, param(c) ); }
       if ( (!fnd) && is( c, "1FNORM" ) )       { fnd = true; proc_1overf_norm( edf, param(c) ); }
       if ( (!fnd) && is( c, "DYNAM" ) )        { fnd = true; proc_qdynam( edf , param(c) ); }
+      if ( (!fnd) && is( c, "EVTDYN" ) )       { fnd = true; proc_evtdyn( edf , param(c) ); }
       if ( (!fnd) && is( c, "PSC" ) )          { fnd = true; proc_psc( edf , param(c) ); }
       if ( (!fnd) && is( c, "MS" ) )           { fnd = true; proc_microstates( edf , param(c) ); }
       if ( (!fnd) && is( c, "ASYMM" ) )        { fnd = true; proc_asymm( edf , param(c) ); }
@@ -2790,6 +2791,12 @@ void proc_qdynam( edf_t & edf , param_t & param )
   
   dsptools::qdynam( edf , param );
   
+}
+
+// EVTDYN : event-level dynamics from annotations
+void proc_evtdyn( edf_t & edf , param_t & param )
+{
+  dsptools::evtdyn( edf , param );
 }
 
 
@@ -7115,15 +7122,17 @@ void proc_requires( edf_t & edf , param_t & param )
       if ( has3 && ! Helper::str2int( tok[2] , &n3 ) )
 	Helper::halt( "invalid version code" );
 
-      // std::cout << " n1 " << n1 << " " << globals::major_version_number << "\n"
-      // 		<< " n2 " << n2 << " " << globals::minor_version_number << "\n"
-      // 		<< " n3 " << n3 << " " << globals::patch_version_number << "\n";
-
       bool okay = true;
-      
+
       if ( n1 > globals::major_version_number ) okay = false;
-      else if ( has2 && n2 > globals::minor_version_number ) okay = false;
-      else if ( has3 && n3 > globals::patch_version_number ) okay = false;
+      else if ( n1 == globals::major_version_number )
+	{
+	  if ( has2 && n2 > globals::minor_version_number ) okay = false;
+	  else if ( has2 && n2 == globals::minor_version_number )
+	    {
+	      if ( has3 && n3 > globals::patch_version_number ) okay = false;
+	    }
+	}
 
       if ( ! okay ) 
 	Helper::halt( "required version " + v + " but current Luna is " + globals::version );

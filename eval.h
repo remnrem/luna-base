@@ -424,6 +424,7 @@ void proc_fft( edf_t & , param_t & );
 void proc_mtm( edf_t & , param_t & );
 void proc_irasa( edf_t & , param_t & );
 void proc_1overf_norm( edf_t & , param_t & );
+void proc_evtdyn( edf_t & , param_t & );
 void proc_tv_denoise( edf_t & , param_t & );
 void proc_otsu( edf_t & , param_t & );
 void proc_cwt( edf_t & , param_t & );

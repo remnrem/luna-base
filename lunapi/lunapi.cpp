@@ -238,20 +238,32 @@ void lunapi_t::re_init()
   
   globals::bail_on_fail = false;
 
-  // but need to re-indicate that we are running inside API
-  global.R( 1 ); // 1 means to cache
-      
   reset();
-  
-  writer.nodb();
-  
-  // logger << "** luna " 
-  // 	     << globals::version 
+
+  if ( _file_output_path.empty() )
+    {
+      // Normal API/memory mode: global.R(1) sets cache_log/api_mode/silent
+      // AND calls writer.nodb() to reset the writer for a fresh API call.
+      global.R( 1 );
+    }
+  else
+    {
+      // File-output mode: set the same API flags manually WITHOUT calling
+      // writer.nodb().  global.R() → globals::api() unconditionally calls
+      // nodb(), which would set dbless=true and break file output.
+      globals::cache_log = true;
+      globals::api_mode  = true;
+      globals::silent    = true;
+      // writer stays configured for file output across all records in the slice.
+    }
+
+  // logger << "** luna "
+  // 	     << globals::version
   // 	     << " " << globals::date
   // 	     << "\n";
-  
+
   // logger.print_buffer();
-  
+
 }
 
 // read a Luna @include file and set variables
@@ -822,6 +834,31 @@ rtables_return_t lunapi_t::eval( const std::string & cmdstr )
   
 }
 
+
+void lunapi_t::output_attach( const std::string & path )
+{
+  _file_output_path = path;
+  _file_output_plaintext = false;
+  if ( !path.empty() ) Helper::deleteFile( path );
+  // clear stale in-memory idmaps from the prior nodb()/attach(":memory:") call so that
+  // set_types() re-inserts all standard factors into the file DB rather than skipping them
+  writer.clear();
+  writer.attach( path );
+}
+
+void lunapi_t::output_plaintext( const std::string & path )
+{
+  _file_output_path = path;
+  _file_output_plaintext = true;
+  writer.use_plaintext( path );
+}
+
+void lunapi_t::output_close()
+{
+  _file_output_path = "";
+  _file_output_plaintext = false;
+  writer.close();
+}
 
 rtable_t lunapi_t::table( const std::string & cmd , const std::string & faclvl ) const
 {
@@ -1439,7 +1476,30 @@ std::string lunapi_inst_t::eval1( const std::string & cmdstr , retval_t * accumu
   if ( accumulator ) return "";
 
   return logger.print_buffer();
-  
+
+}
+
+
+std::string lunapi_inst_t::eval_file( const std::string & cmdstr )
+{
+  // Writer must already be configured for file output by the caller
+  // (lunapi_t::output_attach() or output_plaintext() called first).
+  // We do NOT call writer.clear()/use_retval() — that would reset the DB
+  // connection. Mirror the main.cpp per-individual DB loop: id/begin/eval/commit.
+
+  writer.id( id , edf_filename );
+
+  cmd_t cmd( cmdstr );
+  cmd.replace_wildcards( id );
+
+  writer.begin();
+  cmd.eval( edf );
+  writer.commit();
+
+  if ( globals::problem )
+    Helper::halt( "problem flag set: likely no unmasked records left?" );
+
+  return logger.print_buffer();
 }
 
 

@@ -29,6 +29,7 @@
 #include "dsp/hilbert.h"
 #include "fftw/fftwrap.h"
 #include "dynamics/qdynam.h"
+#include "dynamics/evtdyn.h"
 #include "defs/defs.h"
 
 #include "db/db.h"
@@ -840,6 +841,12 @@ void dsptools::qdynam( edf_t & edf , param_t & param )
     }
   
 
+}
+
+
+void dsptools::evtdyn( edf_t & edf , param_t & param )
+{
+  evtdyn_t::from_annots( edf , param );
 }
 
 

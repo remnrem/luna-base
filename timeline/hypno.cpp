@@ -3817,6 +3817,19 @@ void hypnogram_t::output( const bool verbose ,
 	timeline->annotate_epoch( cycle , e );	
       }
 
+  // Internal epoch annotations for ascending/descending N2, parallel
+  // to the legacy _NREMC_* cycle tags used by dynamics modules.
+  for (int e=0;e<timeline->num_epochs() ;e++)
+    {
+      if ( stages[e] != NREM2 ) continue;
+      if ( n2_ascdesc[e] >= n2_asc_desc_th )
+	timeline->annotate_epoch( "_N2_ASC" , e );
+      else if ( n2_ascdesc[e] <= -n2_asc_desc_th )
+	timeline->annotate_epoch( "_N2_DSC" , e );
+      else
+	timeline->annotate_epoch( "_N2_FLT" , e );
+    }
+
   
   
   //

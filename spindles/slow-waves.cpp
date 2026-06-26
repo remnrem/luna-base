@@ -32,6 +32,7 @@
 #include "miscmath/crandom.h"
 #include "param.h"
 #include "dynamics/qdynam.h"
+#include "dynamics/evtdyn.h"
 
 #include "helper/helper.h"
 #include "helper/logger.h"
@@ -238,11 +239,11 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
   
   // do dynamics?
   calc_dynamics = param.has( "dynam" );
+  const bool calc_evtdyn = param.has( "evtdyn" );
 
   if ( calc_dynamics )
     qd.init( edf , param );
 
-  
   //
   // iterate over signals
   //
@@ -266,6 +267,22 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
       writer.level( signals.label(s) , globals::signal_strat );
 
       par.ch = signals.label(s);
+
+	      evtdyn_t evtdyn;
+	      if ( calc_evtdyn )
+		{
+		  evtdyn.init( edf , param , "evtdyn-" );
+		  std::set<std::string> exclude;
+		  exclude.insert( "SO" );
+		  exclude.insert( "DELTA" );
+		  exclude.insert( "DUR1" );
+		  exclude.insert( "DUR2" );
+		  exclude.insert( "SLOPE_POS1" );
+		  exclude.insert( "SLOPE_POS2" );
+		  exclude.insert( "SLOPE_NEG1" );
+		  exclude.insert( "SLOPE_NEG2" );
+		  evtdyn.exclude_default_vars( exclude );
+		}
 
       
       //
@@ -302,12 +319,41 @@ slow_waves_t::slow_waves_t( edf_t & edf , const param_t & param )
       
       display_slow_waves( per_event , &edf );
 
+      if ( calc_evtdyn )
+	{
+	  for (int si=0; si<sw.size(); si++)
+	    {
+		      const slow_wave_t & s1 = sw[si];
+		      std::map<std::string,double> values;
+		      values[ "AMP" ] = s1.amplitude();
+		      values[ "AMP_P2P" ] = s1.amplitude();
+		      values[ "AMP_POS" ] = s1.pos_amplitude();
+		      values[ "AMP_NEG" ] = s1.neg_amplitude();
+		      values[ "DUR" ] = s1.dur();
+		      values[ "DUR1" ] = s1.dur1();
+		      values[ "DUR2" ] = s1.dur2();
+		      values[ "TRANS" ] = s1.trans();
+		      values[ "TRANS_FREQ" ] = s1.trans_freq();
+		      values[ "SLOPE" ] = s1.slope_n2();
+		      values[ "SLOPE_POS1" ] = s1.slope_p1();
+		      values[ "SLOPE_POS2" ] = s1.slope_p2();
+		      values[ "SLOPE_NEG1" ] = s1.slope_n1();
+		      values[ "SLOPE_NEG2" ] = s1.slope_n2();
+	      values[ "SO" ] = s1.is_SO() ? 1 : 0;
+	      values[ "DELTA" ] = s1.is_delta() ? 1 : 0;
+	      evtdyn.add_event( writer.faclvl_notime() , s1.interval_tp , signals.label(s) , values );
+	    }
+	}
+
       //
       // report dynamics for this signal
       //
       
       if ( calc_dynamics ) 	
 	qd.proc_all();
+
+      if ( calc_evtdyn )
+	evtdyn.proc_all();
       
       
       //

@@ -34,6 +34,7 @@ int  prune_n;
 #include "plot-spindles.h"
 #include "propag.h"
 #include "dynamics/qdynam.h"
+#include "dynamics/evtdyn.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"
@@ -279,6 +280,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
   //
   
   const bool calc_dynamics = param.has( "dynam" );
+  const bool calc_evtdyn = param.has( "evtdyn" );
   
   //
   // Analysis/output parameters
@@ -640,6 +642,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       qdynam_t qd;
       if ( calc_dynamics )
 	qd.init( edf , param );
+
+	      evtdyn_t evtdyn;
+	      if ( calc_evtdyn )
+		evtdyn.init( edf , param , "evtdyn-" );
 
       //
       // Pull all data
@@ -1387,9 +1393,8 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	  if ( characterize ) 
 	    spindle_stats( spindles , means );
 
-		  
-	  //
-	  // Verbose signal display with thresholds
+		  //
+		  // Verbose signal display with thresholds
 	  //
 
 	  if ( show_cwt_coeff )
@@ -2201,6 +2206,52 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 
 	      
 	      
+	      if ( calc_evtdyn )
+		{
+		  for (int si=0; si<spindles.size(); si++)
+		    {
+		      const spindle_t & sp = spindles[si];
+		      if ( ! sp.include ) continue;
+		      std::map<std::string,double> values;
+		      values[ "AMP" ] = sp.amp;
+		      values[ "ACT_MX" ] = sp.norm_amp_max;
+		      values[ "ACT_MN" ] = sp.norm_amp_mean;
+		      values[ "DUR" ] = sp.dur;
+		      values[ "FWHM" ] = sp.fwhm;
+		      values[ "NOSC" ] = sp.nosc;
+		      values[ "FRQ" ] = sp.frq;
+		      values[ "FFT" ] = sp.fft;
+		      values[ "ISA" ] = sp.isa;
+		      values[ "SYMM" ] = sp.symm;
+		      values[ "SYMM2" ] = sp.symm2;
+		      values[ "CHIRP" ] = sp.chirp;
+		      values[ "FRQ1" ] = sp.frq_h1;
+		      values[ "FRQ2" ] = sp.frq_h2;
+		      values[ "Q" ] = sp.qual;
+		      if ( sp.c22_raw.size() == 22 && sp.c22_flt.size() == 22 )
+			{
+			  for (int ci=0; ci<22; ci++)
+			    {
+			      values[ "C22_" + catch22_t::short_name( ci ) ] = sp.c22_raw[ci];
+			      values[ "C22_" + catch22_t::short_name( ci ) + "_FLT" ] = sp.c22_flt[ci];
+			    }
+			}
+		      if ( sw_coupling || phase_coupling )
+			{
+			  if ( sp.so_phase_anchor >= 0 ) values[ "SO_PHASE_ANCHOR" ] = sp.so_phase_anchor;
+			  if ( sw_coupling )
+			    {
+			      if ( sp.so_nearest_num != 0 )
+				values[ "SO_NEAREST" ] = sp.so_nearest;
+			      values[ "SO_OVERLAP" ] = sp.so_nearest_num != 0 && fabs( sp.so_nearest ) <= 1e-8 ? 1 : 0;
+			    }
+			}
+		      if ( param.has( "if" ) )
+			values[ "IF" ] = sp.if_spindle;
+		      evtdyn.add_event( writer.faclvl_notime() , sp.tp , signals.label(s) , values );
+		    }
+		}
+	      
 	      //
 	      // Optional, consideration of spindle chirp as a function of SO phase
 	      //
@@ -2597,7 +2648,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      avg.norm_amp_mean += spindles[i].norm_amp_mean;
 
 		      if ( has_coupling )
-			avg.so_nearest += spindles[i].so_nearest <= 1e-6; // i.e. PROP SO OVERLAP
+			avg.so_nearest += fabs( spindles[i].so_nearest ) <= 1e-6; // i.e. PROP SO OVERLAP
 					      
 		    }
 		  else if ( spstart.is_after( interval ) )
@@ -2971,7 +3022,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		  instance->set( "dur" , spindle.dur );
 
 		  if ( param.has( "so" ) )
-		    instance->set( "soc" , (int)( fabs( spindle.so_nearest < 1e-8 ) ) );
+		    instance->set( "soc" , (int)( fabs( spindle.so_nearest ) <= 1e-8 ) );
 		  
 		  // index tp
 		  //instance->set( "mid", "tp:" + Helper::int2str( spindle.tp_mid ) );
@@ -3038,6 +3089,9 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       
       if ( calc_dynamics )
 	qd.proc_all();
+
+      if ( calc_evtdyn )
+	evtdyn.proc_all();
 
       
       //
