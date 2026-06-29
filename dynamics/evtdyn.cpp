@@ -46,7 +46,7 @@ extern logger_t logger;
 
 namespace {
 
-bool finite( const double x )
+bool is_finite( const double x )
 {
   return std::isfinite( x );
 }
@@ -110,7 +110,7 @@ double slope( const std::vector<double> & x , const std::vector<double> & y )
 
 std::string fmt_num( const double x )
 {
-  if ( ! finite( x ) ) return "NA";
+  if ( ! is_finite( x ) ) return "NA";
   const double r = std::round( x );
   if ( std::fabs( x - r ) < 1e-9 )
     {
@@ -129,13 +129,13 @@ std::string fmt_num( const double x )
 
 double log2_ratio( const double num , const double denom )
 {
-  if ( ! finite( num ) || ! finite( denom ) || num <= 0 || denom <= 0 ) return 0;
+  if ( ! is_finite( num ) || ! is_finite( denom ) || num <= 0 || denom <= 0 ) return 0;
   return log( num / denom ) / log( 2.0 );
 }
 
 void write_log2_ratio( const std::string & name , const double num , const double denom )
 {
-  if ( finite( num ) && finite( denom ) && num > 0 && denom > 0 )
+  if ( is_finite( num ) && is_finite( denom ) && num > 0 && denom > 0 )
     writer.value( name , log2_ratio( num , denom ) );
 }
 
@@ -145,7 +145,7 @@ std::vector<double> clean_values( const std::vector<double> & x ,
 {
   std::vector<double> y;
   for (int i=0;i<x.size();i++)
-    if ( finite( x[i] ) ) y.push_back( x[i] );
+    if ( is_finite( x[i] ) ) y.push_back( x[i] );
 
   if ( y.empty() ) return y;
 
@@ -168,7 +168,7 @@ std::vector<double> clean_values( const std::vector<double> & x ,
 	y[i] = y[i] > 0 ? log( y[i] ) : std::numeric_limits<double>::quiet_NaN();
       std::vector<double> yy;
       for (int i=0;i<y.size();i++)
-	if ( finite( y[i] ) ) yy.push_back( y[i] );
+	if ( is_finite( y[i] ) ) yy.push_back( y[i] );
       y = yy;
     }
 
@@ -176,7 +176,7 @@ std::vector<double> clean_values( const std::vector<double> & x ,
     {
       std::vector<std::pair<double,int> > r;
       for (int i=0;i<y.size();i++)
-	if ( finite( y[i] ) ) r.push_back( std::make_pair( y[i] , i ) );
+	if ( is_finite( y[i] ) ) r.push_back( std::make_pair( y[i] , i ) );
       std::sort( r.begin() , r.end() );
       std::vector<double> yy( y.size() , std::numeric_limits<double>::quiet_NaN() );
       for (int i=0;i<r.size();i++) yy[ r[i].second ] = i + 1;
@@ -201,7 +201,7 @@ std::vector<int> clean_keep_idx( const std::vector<double> & x ,
   std::vector<int> keep;
   for (int i=0;i<x.size();i++)
     {
-      if ( ! finite( x[i] ) ) continue;
+      if ( ! is_finite( x[i] ) ) continue;
       if ( do_log && x[i] <= 0 ) continue;
       keep.push_back( i );
     }
@@ -827,7 +827,7 @@ void evtdyn_t::output( const std::map<std::string,std::string> & faclvl ,
       for (int i=0;i<n;i++)
 	{
 	  std::map<std::string,double>::const_iterator ii = e[i].values.find( *vv );
-	  if ( ii == e[i].values.end() || ! finite( ii->second ) ) continue;
+	  if ( ii == e[i].values.end() || ! is_finite( ii->second ) ) continue;
 	  ++raw_n;
 	  raw_sum += ii->second;
 	  x.push_back( ii->second );
