@@ -1,4 +1,3 @@
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -19,7 +18,6 @@
 //    Please see LICENSE.txt for more details.
 //
 //    --------------------------------------------------------------------
-
 
 #ifndef __ICA_WRAPPER_H__
 #define __ICA_WRAPPER_H__

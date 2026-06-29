@@ -19,7 +19,6 @@
 //
 //    --------------------------------------------------------------------
 
-
 #include "spindles/spindles.h"
 
 #include "helper/logger.h"

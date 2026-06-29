@@ -1,4 +1,3 @@
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -19,7 +18,6 @@
 //    Please see LICENSE.txt for more details.
 //
 //    --------------------------------------------------------------------
-
 
 // EMD based on methods implemented in R 'EMD' package:
 // Notes: https://journal.r-project.org/archive/2009-1/RJournal_2009-1_Kim+Oh.pdf

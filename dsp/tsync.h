@@ -1,4 +1,3 @@
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -19,7 +18,6 @@
 //    Please see LICENSE.txt for more details.
 //
 //    --------------------------------------------------------------------
-
 
 #ifndef __LUNA_TSYNC_H__
 #define __LUNA_TSYNC_H__

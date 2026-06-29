@@ -1,4 +1,3 @@
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -19,7 +18,6 @@
 //    Please see LICENSE.txt for more details.
 //
 //    --------------------------------------------------------------------
-
 
 // internal tool: to simulate and assess association between spectra and quantitative
 // phenotypes using;  not supported or designed for external use otherwise

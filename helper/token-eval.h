@@ -1,4 +1,3 @@
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -19,7 +18,6 @@
 //    Please see LICENSE.txt for more details.
 //
 //    --------------------------------------------------------------------
-
 
 #ifndef __LUNA_TOKEN_EVAL_H__
 #define __LUNA_TOKEN_EVAL_H__

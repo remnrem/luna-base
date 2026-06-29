@@ -19,7 +19,6 @@
 //
 //    --------------------------------------------------------------------
 
-
 //
 // ALIGN-SCAN: scan for epoch/record/staging alignment edge cases
 //

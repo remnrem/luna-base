@@ -1,4 +1,3 @@
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -19,7 +18,6 @@
 //    Please see LICENSE.txt for more details.
 //
 //    --------------------------------------------------------------------
-
 
 // MTM functions are adapted code from: Lees, J. M. and J. Park
 // (1995): Multiple-taper spectral analysis: A stand-alone

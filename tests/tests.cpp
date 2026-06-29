@@ -1,4 +1,3 @@
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -8,7 +7,7 @@
 //    the Free Software Foundation, either version 3 of the License, or
 //    (at your option) any later version.
 //
-//    LUNA is distributed in the hope that it will be useful,
+//    Luna is distributed in the hope that it will be useful,
 //    but WITHOUT ANY WARRANTY; without even the implied warranty of
 //    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 //    GNU General Public License for more details.
@@ -35,6 +34,7 @@
 #include "lunapi/segsrv.h"
 #include "helper/token-eval.h"
 #include "miscmath/crandom.h"
+#include "miscmath/miscmath.h"
 #include "dsp/ipc.h"
 #include "dsp/ssa.h"
 #include "dsp/tsync.h"
@@ -990,6 +990,34 @@ static void test_psd( lunapi_t * eng,
 static void test_spindles( lunapi_t * eng,
 			   std::vector<test_result_t> & R, bool V )
 {
+  // G0 — empirical threshold uses a valid Otsu split and optional outputs
+  try {
+    const std::vector<double> x = { 1, 1, 1, 2, 8 };
+    double upper_f = 0;
+    std::map<double,double> tvals;
+    const double th = MiscMath::threshold( x, 0, 8, 1, &upper_f, &tvals );
+    double upper_f_no_trace = 0;
+    const double th_no_trace = MiscMath::threshold( x, 0, 8, 1,
+						    &upper_f_no_trace, NULL );
+    bool finite_trace = ! tvals.empty();
+    for (std::map<double,double>::const_iterator ii = tvals.begin();
+	 ii != tvals.end(); ++ii)
+      finite_trace = finite_trace && std::isfinite( ii->second )
+	&& ii->second >= 0 && ii->second <= 1;
+    const bool pass = approx_equal( th, 2, 1e-12 )
+      && approx_equal( upper_f, 0.2, 1e-12 )
+      && approx_equal( th_no_trace, th, 1e-12 )
+      && approx_equal( upper_f_no_trace, upper_f, 1e-12 )
+      && finite_trace
+      && approx_equal( tvals[th], 1, 1e-12 );
+    std::ostringstream m;
+    m << "threshold=" << th << " upper_fraction=" << upper_f
+      << " trace_n=" << tvals.size();
+    record(R,"spindles/empirical-threshold", pass, m.str(), V);
+  } catch(std::exception & e) {
+    record(R,"spindles/empirical-threshold",false,e.what(),V);
+  }
+
   // G1 — detect spindles from sigma-band bursts
   // Multiple 1s bursts at 13Hz across the night
   try {

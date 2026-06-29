@@ -1,4 +1,3 @@
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -19,7 +18,6 @@
 //    Please see LICENSE.txt for more details.
 //
 //    --------------------------------------------------------------------
-
 
 // tmp hack:
 bool  prune;
@@ -4662,7 +4660,7 @@ void spindle_qc_t::proc( param_t & param )
       std::vector<double> pp = param.dblvector( "q-frq" );
       if ( pp.size() % 2 != 0 )
 	Helper::halt( "expecting q-frq=fc,cycles(,fc,cycles,...}" );
-      for (int i=0; i<pp.size(); i++)
+      for (int i=0; i<pp.size(); i += 2)
 	{
 	  if ( pp[i] < 0 ) Helper::halt( "expecting q-frq F_cvalues above 0 Hz" );
 	  if ( pp[i+1] < 3 ) Helper::halt( "expecting q-frq cycles values 3+ " );

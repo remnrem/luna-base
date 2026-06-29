@@ -1,4 +1,3 @@
-
 //    --------------------------------------------------------------------
 //
 //    This file is part of Luna.
@@ -27,6 +26,7 @@
 #include "edf/edf.h"
 #include "stats/dcdflib.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 #include <deque>
@@ -1289,146 +1289,79 @@ void MiscMath::minmax( const std::vector<double> & x , double * mn , double * mx
 }
 
 
-double MiscMath::threshold( const std::vector<double> & x , double lwr, double upr, double inc , 
-			    double * w , 
-			    std::map<double,double> * tvals )
+double MiscMath::threshold( const std::vector<double> & x , double lwr, double upr, double inc ,
+				    double * w ,
+				    std::map<double,double> * tvals )
 {
 
   // Otsu (1979) A Threshold Selection Method from Gray-Level
   // Histograms
 
-  if ( tvals != NULL ) 
-    tvals->clear();  
-  
-  std::map<double,int> l;
+  if ( tvals != NULL ) tvals->clear();
+  if ( w != NULL ) *w = 0;
 
-  const int n = x.size();
+  if ( x.empty() )
+    Helper::halt( "cannot estimate threshold from an empty vector" );
+  if ( inc <= 0 || upr < lwr )
+    Helper::halt( "invalid empirical threshold range" );
 
-  double grand_mean = 0;
+  std::vector<double> sx = x;
+  std::sort( sx.begin() , sx.end() );
 
-  for (int i=0;i<n;i++) 
+  const int n = sx.size();
+  double total_sum = 0;
+  for (int i=0;i<n;i++)
     {
-      l[x[i]]++;
-      grand_mean += x[i];
+      if ( ! std::isfinite( sx[i] ) )
+	Helper::halt( "non-finite value in empirical threshold input" );
+      total_sum += sx[i];
     }
-  
-  grand_mean /= (double)n;
 
-  std::cout << "grand mean = " << grand_mean << "\n";
-  
-  double cum_sum = 0;
-  double cum_f = 0;
+  int lower_n = 0;
+  double lower_sum = 0;
   double max_sigma_b = 0;
-  double max_t = 0;  // here t implies up to and including 't'
-  double max_t2 = 0; // binned version
-  double best_f = 0;
+  double best_t = lwr;
+  double best_upper_f = 0;
 
-  double t = lwr;
-
-  // previous 't' (i.e. lowest possible value)
-  double last_t = l.begin()->first;
-  
-  std::cout << "starting t = " << t << "\n"
-   	    << "last (previous) t = " << last_t << "\n";
-
-
-  // iterate over all observed values
-  
-  std::map<double,int>::const_iterator ii = l.begin();
-  while ( ii != l.end() )
+  const int nt = (int)floor( ( upr - lwr ) / inc + 1e-12 ) + 1;
+  for (int ti=0; ti<nt; ti++)
     {
-      
-      const double this_t = ii->first;
-      
-      //std::cerr << "observed value " << this_t << "\n";
-      
-      // check we don't skip a category
-      if ( this_t > t + inc )
-	{
-	  std::cerr << "updating t... from " << t << "\n";
-	  while ( 1 ) 
-	    {
-	      t += inc;
-	      if ( this_t <= t ) break;
-	      
-	    }
-	  std::cerr << "t is now " << t << "\n";
-	}
-      
-      
-      //std::cout << "test threshold t = " << t << "\n";
-      
-      cum_f += ii->second;
-      cum_sum += this_t * ii->second;
+      const double t = lwr + ti * inc;
 
-      //std::cout << "updating cumulative sum = " << cum_sum << "\n";	    
-      
-      // a test-point?
-      // i.e. if we've gone one past (or equal to) the current threshold
-      
-      if ( this_t >= t && last_t < t )
+      while ( lower_n < n && sx[lower_n] <= t )
 	{
-	  
-	  std::cout << "  -- triggering evaluation\n";
-	  
-	  const double f = cum_f / (double)n;
-	  const double m = cum_sum / cum_f;
-	  
- 	  std::cerr << "w = " << f << "\n";
-	  std::cerr << "m = " << m << "\n";
-	  
-	  if ( f >= 0 || f <= 1 ) 
-	    {
-	      
-	      const double sigma_b = ( ( grand_mean * f - m ) * ( grand_mean * f - m ) ) / ( f * (1-f) );
-	      
-	      if ( sigma_b > max_sigma_b ) 
-		{
-		  max_sigma_b = sigma_b;
-		  max_t = this_t;
-		  max_t2 = t;
-		  best_f = f;
-		}
-	      
-	      if ( tvals != NULL ) (*tvals)[ t ] = sigma_b;
-	      
-	      std::cout << " sigma_B\t" << sigma_b << "\n";
-	      
-	      std::cout << "details " << t << "\t"
-	       		<< f << "\t"
-	       		<< ii->first << "\t"
- 	       		<< sigma_b << "\t"
- 	       		<< max_sigma_b << "\t"
- 	       		<< max_t << "\t" 
- 	       		<< max_t2 << "\n";
-	      
-	    }
-	  
-	  // go to the next t
-	  t += inc;	  	    
-	  
-	  if ( t > upr ) break;
+	  lower_sum += sx[lower_n];
+	  ++lower_n;
 	}
-      
-      last_t = this_t;
-      
-      ++ii;
+
+      double sigma_b = 0;
+      if ( lower_n > 0 && lower_n < n )
+	{
+	  const int upper_n = n - lower_n;
+	  const double lower_f = lower_n / (double)n;
+	  const double upper_f = upper_n / (double)n;
+	  const double lower_mean = lower_sum / lower_n;
+	  const double upper_mean = ( total_sum - lower_sum ) / upper_n;
+	  const double d = lower_mean - upper_mean;
+	  sigma_b = lower_f * upper_f * d * d;
+
+	  if ( sigma_b > max_sigma_b )
+	    {
+	      max_sigma_b = sigma_b;
+	      best_t = t;
+	      best_upper_f = upper_f;
+	    }
+	}
+
+      if ( tvals != NULL ) (*tvals)[ t ] = sigma_b;
     }
 
-  // normalize tvals
-  std::map<double,double>::iterator tt = tvals->begin();
-  while ( tt != tvals->end() )
-    {
+  if ( tvals != NULL && max_sigma_b > 0 )
+    for (std::map<double,double>::iterator tt = tvals->begin(); tt != tvals->end(); ++tt)
       tt->second /= max_sigma_b;
-      ++tt;
-    }
-  
-  // i.e. threshold is x > t 
-  //      rather than x >= t
 
-  std::cerr << "maximum threshold is " << max_t << " " << max_t2 << "\n";
-  if ( w != NULL ) *w = 1 - best_f;
-  return max_t2;
+  if ( w != NULL ) *w = best_upper_f;
+  return best_t;
    
 }
 
@@ -2926,7 +2859,5 @@ double MiscMath::running_stats_calc_t::sampleStdev() const {
 void MiscMath::running_stats_calc_t::validate() const {
   if ( count() == 0 ) Helper::halt( "mean if undefined" );
 }
-
-
 
 
