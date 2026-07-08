@@ -27,6 +27,7 @@
 #include "clip.h"
 #include "qc.h"
 #include "arousals.h"
+#include "combine_emg.h"
 #include "rai.h"
 #include "gft.h"
 #include "peri.h"

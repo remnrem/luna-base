@@ -63,17 +63,22 @@ struct evtdyn_opts_t
   double cluster_sec;
   double train_gap_sec;
   int train_min;
-  double lag_short_lwr;
-  double lag_short_upr;
   double refr_lwr;
   double refr_upr;
   double excit_lwr;
   double excit_upr;
-  double ac_max_sec;
-  double ac_bin_sec;
+  double lag_min_sec;
+  double lag_max_sec;
+  int lag_lin;
+  int lag_log;
+  bool lag_hist;
   double winsor_p;
   bool z;
   bool rank;
+  int min_n;
+  int min_seg_n;
+  double min_bg_min;
+  double min_seg_bg_min;
 
   evtdyn_opts_t();
 };

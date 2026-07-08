@@ -3963,14 +3963,20 @@ void cmddefs_t::init()
 	    "Run event-level dynamics summaries for one or more annotation classes. "
 	    "EVTDYN summarizes event density, overnight timing, recurrence, clustered "
 	    "and train-like expression, and optional numeric annotation properties. "
-	    "If HYPNO has already been run, sleep-stage and NREM-cycle annotations are "
-	    "used for stage ratios and cycle trends; EVTDYN does not construct a "
-	    "hypnogram itself." );
+	    "Background defaults to all masked (unmasked) epochs; use bg= to restrict "
+	    "to specific annotation intervals, or bg-none=T to ignore the mask entirely. "
+	    "If HYPNO has been run, stage-stratified metrics (N2/N3, ASC/DSC, cycles) "
+	    "are added when hypno=T (default); these are independent of the background." );
   add_param( "EVTDYN" , "annot" , "SP" , "Annotation class or classes containing events" );
   add_param( "EVTDYN" , "vars" , "AMP,FFT,DUR" , "Numeric annotation properties to summarize" );
-  add_param( "EVTDYN" , "bg" , "N2,N3" , "Annotation classes defining eligible background time" );
-  add_param( "EVTDYN" , "bg-none" , "T" , "Ignore background masks and use the whole timeline" );
-  add_param( "EVTDYN" , "hypno" , "F" , "Do not use existing sleep-stage/cycle annotations" );
+  add_param( "EVTDYN" , "bg" , "N2,N3" , "Restrict background to these annotation intervals (intersected with mask)" );
+  add_param( "EVTDYN" , "bg-none" , "T" , "Use all epochs as background, ignoring any mask" );
+  add_param( "EVTDYN" , "hypno" , "F" , "Disable stage-stratified metrics (N2/N3, ASC/DSC, cycles); does not affect background" );
+  add_param( "EVTDYN" , "anchor" , "MID" , "Event anchor for timing metrics: MID (default), START, or STOP" );
+  add_param( "EVTDYN" , "corr" , "AMP,FFT" , "Compute pairwise correlations within this set of vars" );
+  add_param( "EVTDYN" , "corr1" , "AMP" , "Left-side vars for cross-set pairwise correlations (paired with corr2)" );
+  add_param( "EVTDYN" , "corr2" , "FFT,DUR" , "Right-side vars for cross-set pairwise correlations (paired with corr1)" );
+  add_param( "EVTDYN" , "verbose" , "" , "Emit extra per-variable diagnostic output to the log" );
   add_param( "EVTDYN" , "winsor" , "0.01" , "Winsorize event-level properties before property summaries" );
   add_param( "EVTDYN" , "z" , "" , "Z-score event-level properties before property summaries" );
   add_param( "EVTDYN" , "log" , "" , "Log-transform event-level properties before property summaries" );
@@ -3978,25 +3984,60 @@ void cmddefs_t::init()
   add_param( "EVTDYN" , "cluster" , "10" , "Maximum lag in seconds for clustered-event summaries" );
   add_param( "EVTDYN" , "train-gap" , "10" , "Maximum within-train gap in seconds" );
   add_param( "EVTDYN" , "train-min" , "3" , "Minimum number of events in a train" );
-  add_param( "EVTDYN" , "short-lag" , "3,6" , "Lag window in seconds for short-lag probability" );
-  add_param( "EVTDYN" , "refractory" , "0,2" , "Lag window in seconds for refractory-window log2 observed/expected ratio" );
-  add_param( "EVTDYN" , "excitatory" , "3,8" , "Lag window in seconds for excitatory-window log2 observed/expected ratio" );
-  add_param( "EVTDYN" , "ac-max" , "60" , "Maximum lag in seconds for autocorrelogram summaries" );
-  add_param( "EVTDYN" , "ac-bin" , "1" , "Autocorrelogram bin size in seconds" );
+  add_param( "EVTDYN" , "refractory" , "0,3" , "Lag window in seconds for refractory-window log2 observed/expected ratio" );
+  add_param( "EVTDYN" , "excitatory" , "4,9" , "Lag window in seconds for excitatory-window log2 observed/expected ratio" );
+  add_param( "EVTDYN" , "lag-min" , "1" , "Lower bound in seconds for lag histogram window (default 1s; defines bin range and OE denominator)" );
+  add_param( "EVTDYN" , "lag-max" , "60" , "Upper bound in seconds for lag histogram window" );
+  add_param( "EVTDYN" , "lag-log" , "20" , "Number of log-spaced bins over [lag-min, lag-max] (default 20; set 0 to use lag-lin instead)" );
+  add_param( "EVTDYN" , "lag-lin" , "59" , "Number of linear bins over [lag-min, lag-max]; used only if lag-log=0 (default: lag-max - lag-min)" );
+  add_param( "EVTDYN" , "lag-hist" , "F" , "Set F to suppress per-bin lag histogram output (LAG stratum; on by default)" );
+  add_param( "EVTDYN" , "min-n" , "5" , "Minimum number of events required to compute any metrics (default 5)" );
+  add_param( "EVTDYN" , "min-seg-n" , "3" , "Minimum events per subgroup for group-comparison metrics (default 3)" );
+  add_param( "EVTDYN" , "min-bg-min" , "1" , "Minimum background duration in minutes required to compute metrics (default 1)" );
+  add_param( "EVTDYN" , "min-seg-bg-min" , "5" , "Minimum background per subgroup in minutes for density-ratio metrics (default 5)" );
   add_table( "EVTDYN" , "DYN,ANNOT,CH" , "Event-level dynamics summaries" );
+  add_table( "EVTDYN" , "DYN,ANNOT,CH,LAG" , "Per-bin consecutive-pair lag histogram" );
   add_table( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "Event-level property dynamics summaries" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N" , "Number of events in eligible background" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "MINS" , "Eligible background duration in minutes" );
   add_var( "EVTDYN" , "DYN,ANNOT,CH" , "DENS" , "Event density per minute of eligible background" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TB" , "Median event timing within eligible background" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TB" , "Median event timing within eligible background (0=start, 1=end)" );
   add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TA" , "Median event timing versus all elapsed sleep-period time" );
   add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TS" , "Median event timing versus elapsed sleep time" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "ISI_MD" , "Median within-background inter-event interval" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "CLST_FRAC" , "Proportion of events near another event" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "EARLY_LATE_LR" , "Log2 ratio of early- versus late-night event counts" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "ISI_MD" , "Median within-background inter-event interval in seconds" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "REFR_OBS_EXP" , "Log2 observed/expected ratio in refractory window" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "EXCIT_OBS_EXP" , "Log2 observed/expected ratio in excitatory window" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "LAG_PEAK_T" , "Lag at peak bin of consecutive-pair lag histogram in seconds" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "LAG_PEAK_H" , "Log2 height of lag histogram peak versus flat-baseline expectation" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,LAG" , "LAG_N" , "Number of consecutive pairs in this lag bin" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,LAG" , "LAG_OE" , "Log2 observed/expected count in this lag bin versus flat baseline" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "CLST_FRAC" , "Proportion of events near another event (clustered)" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TRAIN_FRAC" , "Proportion of events occurring within a train" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TRAIN_LEN_MN" , "Mean number of events per train" );
   add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TRAIN_DENS" , "Event-train density per minute of eligible background" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N2_ASC_DSC_R" , "Log2 ascending/descending N2 event-density ratio" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "CYCLE_SLOPE" , "Linear slope of event density across NREM cycles" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "WCYC_TB" , "Median within-cycle relative position of events (0=cycle start, 1=cycle end; background-restricted)" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "WCYC_EARLY_LATE_LR" , "Log2 ratio of early- versus late-half-cycle event density (pooled across cycles)" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N2_N3_LR" , "Log2 ratio of N2 versus N3 event density" );
   add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N2_ASC_DSC_DIFF" , "Ascending minus descending N2 event-density difference" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "TIME_R" , "Correlation between event timing and event-level property" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "N2_ASC_DSC_R" , "Log2 ascending/descending N2 mean property ratio" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N2_ASC_DSC_LR" , "Log2 ratio of ascending versus descending N2 event density" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "MEAN" , "Mean event-level property value" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "MEDIAN" , "Median event-level property value" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "SD" , "SD of event-level property values" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "TIME_CORR" , "Correlation between event timing and event-level property" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "TIME_BETA" , "Slope of event-level property regressed on event timing" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "EARLY_LATE_DIFF" , "Early- minus late-night mean property difference" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "N2_N3_DIFF" , "N2 minus N3 mean property difference" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "CYCLE_SLOPE" , "Linear slope of mean property across NREM cycles" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "WCYC_CORR" , "Correlation of property with within-cycle relative position (pooled across cycles)" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "WCYC_BETA" , "Slope of property regressed on within-cycle relative position (pooled across cycles)" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "WCYC_EARLY_LATE_DIFF" , "Early- minus late-half-cycle mean property difference (pooled across cycles)" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "CLST_SOL_DIFF" , "Clustered minus solitary mean property difference" );
   add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "N2_ASC_DSC_DIFF" , "Ascending minus descending N2 mean property difference" );
+  add_table( "EVTDYN" , "DYN,ANNOT,CH,VAR1,VAR2" , "Pairwise event-level property correlations (corr / corr1+corr2)" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR1,VAR2" , "CORR" , "Pearson correlation between two event-level properties (matched by event)" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR1,VAR2" , "N" , "Number of events with valid values for both properties" );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -7846,10 +7887,22 @@ void cmddefs_t::init()
             "derived spectral and complexity features.\n\n"
             "Luna first re-epochs the record into short overlapping windows, "
             "derives EEG and EMG feature summaries, and then classifies windows "
-            "into baseline, artifact, micro-arousal, and arousal-like patterns. "
-            "The command writes summary counts and feature means by class, adds "
-            "annotation tracks for detected events, and can optionally create "
-            "derived channels for the underlying features." );
+            "into baseline, artifact, micro-arousal, and arousal-like patterns, "
+            "separately for NREM and REM sleep (stratifier SS = NR/R). The core "
+            "detection criterion (an abrupt, sustained rise in relative EEG beta "
+            "power relative to background) is applied in both stages, following "
+            "AASM's cortical-arousal criterion. In REM, AASM additionally requires "
+            "a concurrent chin-EMG amplitude increase (>= emg-rise-min-dur, default "
+            "1s) within emg-rise-buffer seconds of the cortical-shift window; REM "
+            "candidates failing this check are not scored as arousals but are kept "
+            "as diagnostic 'rem_cortical_only' annotations. NREM/REM feature "
+            "normalization is computed separately per stage, since REM's baseline "
+            "EMG tone (atonia) differs systematically from NREM's. "
+            "The command writes summary counts and feature means by class and "
+            "stage, adds annotation tracks for detected events (arousal_nrem, "
+            "arousal_rem, micro_arousal_nrem, micro_arousal_rem, art_nrem, "
+            "art_rem, rem_cortical_only), and can optionally create derived "
+            "channels for the underlying features." );
   add_param( "AROUSALS" , "eeg" , "C3,C4" , "EEG channels used to derive arousal features" );
   add_param( "AROUSALS" , "emg" , "EMG" , "Optional EMG channels used to augment arousal detection" );
   add_param( "AROUSALS" , "win" , "1.0" , "Epoch window length in seconds for feature extraction" );
@@ -7857,28 +7910,123 @@ void cmddefs_t::init()
   add_param( "AROUSALS" , "winsor" , "0.005" , "Winsorization fraction for outlier handling" );
   add_param( "AROUSALS" , "no-winsor" , "" , "Disable winsorization of feature values" );
   add_param( "AROUSALS" , "annot" , "l" , "Prefix for added arousal annotations" );
-  add_param( "AROUSALS" , "add" , "a_" , "Add derived channels with this prefix" );
+  add_param( "AROUSALS" , "add" , "a_" , "Add derived channels with this prefix (channels are written separately per stage, suffixed nrem_/rem_)" );
   add_param( "AROUSALS" , "prefix" , "ar_" , "Prefix for newly derived feature channels" );
   add_param( "AROUSALS" , "per-channel" , "T" , "Retain channel-specific feature metrics when adding channels" );
 
-  add_table( "AROUSALS" , "" , "Overall arousal summary" );
-  add_var( "AROUSALS" , "" , "MINS" , "Total analyzed duration in minutes" );
-  add_var( "AROUSALS" , "" , "N" , "Number of detected arousals" );
-  add_var( "AROUSALS" , "" , "AI" , "Arousal index per hour" );
-  add_var( "AROUSALS" , "" , "DUR" , "Mean duration of detected arousals" );
-  add_var( "AROUSALS" , "" , "N_MICRO" , "Number of detected micro-arousals" );
-  add_var( "AROUSALS" , "" , "AI_MICRO" , "Micro-arousal index per hour" );
-  add_var( "AROUSALS" , "" , "DUR_MICRO" , "Mean duration of detected micro-arousals" );
-  add_var( "AROUSALS" , "" , "N_ART" , "Number of detected artifact events" );
-  add_var( "AROUSALS" , "" , "AI_ART" , "Artifact-event index per hour" );
+  add_param( "AROUSALS" , "nrem" , "T" , "Detect NREM arousals (default yes)" );
+  add_param( "AROUSALS" , "rem"  , "T" , "Detect REM arousals (default yes)" );
+  add_param( "AROUSALS" , "beta-peak" , "1.2" , "Relative-beta threshold to seed a candidate cortical-arousal peak (shared, both stages)" );
+  add_param( "AROUSALS" , "beta-hysteresis" , "0.6" , "Relative-beta threshold used when growing a candidate event outward from its peak (shared, both stages)" );
+  add_param( "AROUSALS" , "sigma-veto" , "0.8" , "NREM: veto a candidate peak if relative sigma-band power exceeds this (spindle-contamination guard)" );
+  add_param( "AROUSALS" , "sigma-veto2" , "0.4" , "NREM: sigma veto threshold used when growing a candidate event outward from its peak" );
+  add_param( "AROUSALS" , "sigma-veto-rem" , "100" , "REM equivalent of sigma-veto; defaults to an effectively-disabled value since spindles are a NREM phenomenon" );
+  add_param( "AROUSALS" , "sigma-veto2-rem" , "100" , "REM equivalent of sigma-veto2; defaults to an effectively-disabled value" );
+  add_param( "AROUSALS" , "th-emg-artifact" , "5" , "EMG feature threshold (combined with low beta) used to flag artifact windows (shared, both stages)" );
+  add_param( "AROUSALS" , "th-h3-artifact" , "4" , "Hjorth-complexity threshold used to flag artifact windows (shared, both stages)" );
+  add_param( "AROUSALS" , "th-pwr-artifact" , "4" , "Total-power threshold (combined with low beta) used to flag artifact windows (shared, both stages)" );
+  add_param( "AROUSALS" , "min-dur" , "2" , "Minimum candidate event duration in seconds (shared, both stages)" );
+  add_param( "AROUSALS" , "max-dur" , "15" , "Maximum candidate event duration in seconds (shared, both stages)" );
+  add_param( "AROUSALS" , "arousal-dur" , "3" , "Minimum duration in seconds for a candidate to be classed as an arousal rather than a micro-arousal (shared, both stages)" );
+  add_param( "AROUSALS" , "merge-gap" , "2.5" , "Merge candidate events separated by a gap of less than this many seconds (shared, both stages)" );
+  add_param( "AROUSALS" , "pre-sleep" , "10" , "Minimum seconds of stable prior sleep (from contig start) required before a candidate can be scored (shared, both stages; AASM's 10s stable-sleep precondition)" );
+  add_param( "AROUSALS" , "emg-rise-th" , "1.0" , "REM only: EMG feature threshold (z-score, relative to REM's own baseline) defining a chin-EMG 'rise'" );
+  add_param( "AROUSALS" , "emg-rise-min-dur" , "1.0" , "REM only: minimum duration in seconds of a qualifying chin-EMG rise (AASM's >=1s criterion)" );
+  add_param( "AROUSALS" , "emg-rise-buffer" , "2.0" , "REM only: temporal tolerance in seconds used when checking whether a chin-EMG rise overlaps a cortical-shift candidate" );
 
-  add_table( "AROUSALS" , "CLS" , "Class-specific feature summaries" );
-  add_var( "AROUSALS" , "CLS" , "NE" , "Number of windows assigned to this class" );
-  add_var( "AROUSALS" , "CLS" , "PWR" , "Mean total-power feature for this class" );
-  add_var( "AROUSALS" , "CLS" , "BETA" , "Mean relative beta feature for this class" );
-  add_var( "AROUSALS" , "CLS" , "EMG" , "Mean EMG feature for this class" );
-  add_var( "AROUSALS" , "CLS" , "SIGMA" , "Mean sigma-band feature for this class" );
-  add_var( "AROUSALS" , "CLS" , "CMPLX" , "Mean complexity feature for this class" );
+  add_table( "AROUSALS" , "SS" , "Per-stage (NREM/REM) overall arousal summary" );
+  add_var( "AROUSALS" , "SS" , "MINS" , "Total analyzed duration in minutes for this stage" );
+  add_var( "AROUSALS" , "SS" , "N" , "Number of detected arousals in this stage" );
+  add_var( "AROUSALS" , "SS" , "AI" , "Arousal index per hour for this stage" );
+  add_var( "AROUSALS" , "SS" , "DUR" , "Mean duration of detected arousals in this stage" );
+  add_var( "AROUSALS" , "SS" , "N_MICRO" , "Number of detected micro-arousals in this stage" );
+  add_var( "AROUSALS" , "SS" , "AI_MICRO" , "Micro-arousal index per hour for this stage" );
+  add_var( "AROUSALS" , "SS" , "DUR_MICRO" , "Mean duration of detected micro-arousals in this stage" );
+  add_var( "AROUSALS" , "SS" , "N_ART" , "Number of detected artifact events in this stage" );
+  add_var( "AROUSALS" , "SS" , "AI_ART" , "Artifact-event index per hour for this stage" );
+  add_var( "AROUSALS" , "SS" , "N_REM_CORTICAL_ONLY" , "REM only: number of cortical-shift candidates that failed EMG confirmation (not scored as arousals)" );
+  add_var( "AROUSALS" , "SS" , "PCT_REM_EMG_CONFIRMED" , "REM only: percentage of REM cortical-shift candidates confirmed by a concurrent chin-EMG rise" );
+
+  add_table( "AROUSALS" , "SS,CLS" , "Per-stage, class-specific feature summaries" );
+  add_var( "AROUSALS" , "SS,CLS" , "NE" , "Number of windows assigned to this class" );
+  add_var( "AROUSALS" , "SS,CLS" , "PWR" , "Mean total-power feature for this class" );
+  add_var( "AROUSALS" , "SS,CLS" , "BETA" , "Mean relative beta feature for this class" );
+  add_var( "AROUSALS" , "SS,CLS" , "EMG" , "Mean EMG feature for this class" );
+  add_var( "AROUSALS" , "SS,CLS" , "SIGMA" , "Mean sigma-band feature for this class" );
+  add_var( "AROUSALS" , "SS,CLS" , "CMPLX" , "Mean complexity feature for this class" );
+
+  //
+  // COMBINE-EMG
+  //
+
+  add_cmd( "physio" , "COMBINE-EMG" , "Build a single continuous EMG channel from 2+ candidate channels" );
+  add_verb( "COMBINE-EMG" ,
+            "COMBINE-EMG builds one continuous 'best available' EMG channel from 2 or more "
+            "candidate channels (raw electrodes or already bipolar-referenced derivations; "
+            "the command does not care which). Rather than fixing a single derivation for the "
+            "whole recording, it scores short, non-overlapping windows of each candidate for "
+            "artifact (flatline, clipping, excess RMS, line-noise, low-frequency drift) and "
+            "burstiness. Flatline/clipping/excess-RMS/line-noise are soft penalties on a "
+            "per-candidate z-scored composite score (each candidate's broadband power is scored "
+            "relative to its own distribution, not raw cross-channel amplitude), not hard "
+            "vetoes -- so a window is never left without an acceptable candidate; the least-bad "
+            "candidate is always chosen and stitched in. Switching away from the active "
+            "candidate requires an alternative to beat it by more than switch-margin, and at "
+            "least min-dwell seconds must have passed since the last switch; a short "
+            "majority-vote smoothing pass removes any residual single-window flicker. The final "
+            "channel is built by locally normalizing each window (median/MAD over a longer "
+            "rolling window) before stitching, blending across genuine switch points with a "
+            "raised-cosine crossfade, and clamping outliers, then rescaling back to approximate "
+            "physical (uV) units. If sleep-stage annotations already exist they are optionally "
+            "used as a soft figure-of-merit (rewarding the expected low-tonic/high-burst pattern "
+            "during REM), but staging is never required or auto-derived -- this can run before "
+            "any staging exists. A provenance annotation track records which candidate "
+            "contributed each stretch." );
+
+  add_param( "COMBINE-EMG" , "sig" , "EMG1,EMG2,EMG3" , "2+ candidate channels (required); raw electrodes if pairs=T, otherwise used as-is" );
+  add_param( "COMBINE-EMG" , "pairs" , "F" , "If T, treat sig= as raw electrodes and auto-derive all pairwise bipolar differences (via the same mechanism as REFERENCE) as the candidate pool" );
+  add_param( "COMBINE-EMG" , "new" , "cEMG" , "Label for the new combined output channel (default cEMG)" );
+  add_param( "COMBINE-EMG" , "annot" , "emg_src" , "Annotation class recording which candidate contributed each stretch" );
+  add_param( "COMBINE-EMG" , "win" , "5" , "Decision window length in seconds (switching granularity)" );
+  add_param( "COMBINE-EMG" , "flat-sd-th" , "0.5" , "Flatline: window SD below this (uV) flags flatline" );
+  add_param( "COMBINE-EMG" , "flat-deriv-prop" , "0.8" , "Flatline: proportion of near-zero sample-to-sample derivatives that flags flatline" );
+  add_param( "COMBINE-EMG" , "flat-deriv-eps" , "1e-4" , "Flatline: derivative magnitude below this counts as near-zero" );
+  add_param( "COMBINE-EMG" , "clip-prop" , "0.01" , "Clipping: proportion of samples at the ADC rails that flags clipping" );
+  add_param( "COMBINE-EMG" , "rms-th" , "150" , "Excess-noise: window RMS (uV) above this flags the window as too noisy" );
+  add_param( "COMBINE-EMG" , "line-bw" , "2" , "Line-noise: +/- Hz around 50/60 Hz used for the line-noise power estimate" );
+  add_param( "COMBINE-EMG" , "line-lo" , "10" , "Line-noise/broadband: lower edge (Hz) of the broadband reference power band" );
+  add_param( "COMBINE-EMG" , "line-hi" , "100" , "Line-noise/broadband: upper edge (Hz, Nyquist-capped) of the broadband reference power band" );
+  add_param( "COMBINE-EMG" , "line-th" , "0.3" , "Line-noise: P_line/P_broad ratio above this flags excess line-noise" );
+  add_param( "COMBINE-EMG" , "drift-hi" , "0.5" , "Low-frequency drift: upper edge (Hz) of the drift band (0 to this), scored (not hard-flagged) against broadband power" );
+  add_param( "COMBINE-EMG" , "flat-penalty" , "10" , "Score penalty (in z-score-equivalent units) applied to a window flagged flatline" );
+  add_param( "COMBINE-EMG" , "clip-penalty" , "10" , "Score penalty applied to a window flagged clipped" );
+  add_param( "COMBINE-EMG" , "rms-penalty" , "5" , "Score penalty applied to a window flagged as excess RMS" );
+  add_param( "COMBINE-EMG" , "ln-penalty" , "3" , "Score penalty applied to a window flagged as excess line-noise" );
+  add_param( "COMBINE-EMG" , "switch-margin" , "1.0" , "Minimum score advantage (z-score-equivalent units) an alternative candidate needs over the active one before switching is considered" );
+  add_param( "COMBINE-EMG" , "min-dwell" , "30" , "Minimum seconds the active candidate must remain active before a switch is allowed" );
+  add_param( "COMBINE-EMG" , "smooth-win" , "3" , "Width (in decision windows) of the majority-vote smoothing pass applied to the switch sequence" );
+  add_param( "COMBINE-EMG" , "xfade" , "1.0" , "Raised-cosine crossfade duration (seconds) applied at each genuine switch point" );
+  add_param( "COMBINE-EMG" , "norm" , "T" , "Locally normalize (median/MAD) each window before stitching, then rescale to approximate physical units (default yes)" );
+  add_param( "COMBINE-EMG" , "norm-win" , "60" , "Length (seconds) of the rolling window used to estimate each window's local normalization baseline/scale" );
+  add_param( "COMBINE-EMG" , "clamp" , "8" , "Clamp normalized output samples to +/- this many MAD-units (only applies when norm=T)" );
+  add_param( "COMBINE-EMG" , "use-staging" , "T" , "If sleep-stage annotations already exist, use REM as a soft scoring bonus (default yes-if-present; never required or auto-derived)" );
+  add_param( "COMBINE-EMG" , "stage-weight" , "0.5" , "Weight of the REM figure-of-merit bonus (only applied if use-staging=T and staging is present)" );
+
+  add_table( "COMBINE-EMG" , "CH" , "Per-candidate summary" );
+  add_var( "COMBINE-EMG" , "CH" , "NE" , "Total number of decision windows evaluated" );
+  add_var( "COMBINE-EMG" , "CH" , "PCT_USED" , "Percentage of windows in which this candidate was the active (selected) one" );
+  add_var( "COMBINE-EMG" , "CH" , "PCT_FLAT" , "Percentage of windows flagged flatline for this candidate" );
+  add_var( "COMBINE-EMG" , "CH" , "PCT_CLIP" , "Percentage of windows flagged clipped for this candidate" );
+  add_var( "COMBINE-EMG" , "CH" , "PCT_HI_RMS" , "Percentage of windows flagged as excess RMS for this candidate" );
+  add_var( "COMBINE-EMG" , "CH" , "PCT_HI_LN" , "Percentage of windows flagged as excess line-noise for this candidate" );
+  add_var( "COMBINE-EMG" , "CH" , "MEAN_SCORE" , "Mean composite (z-scored, penalized) quality score across all evaluated windows for this candidate" );
+
+  add_table( "COMBINE-EMG" , "" , "Overall summary" );
+  add_var( "COMBINE-EMG" , "" , "N_CAND" , "Number of candidate channels considered" );
+  add_var( "COMBINE-EMG" , "" , "N_SWITCH" , "Number of times the active candidate changed" );
+  add_var( "COMBINE-EMG" , "" , "SWITCH_RATE" , "Switches per hour" );
+  add_var( "COMBINE-EMG" , "" , "NEW" , "Label of the new combined output channel" );
+  add_var( "COMBINE-EMG" , "" , "NEW_SR" , "Sample rate (Hz) of the new combined output channel" );
 
   //
   // DESAT

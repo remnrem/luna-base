@@ -41,6 +41,8 @@ struct waveform_block_t {
   std::string unit;
   double sr = 0.0;
   uint64_t sample_step_tp = 0LLU;
+  double phys_min = 0.0;
+  double phys_max = 0.0;
   double data_start_sec = std::numeric_limits<double>::quiet_NaN();
   double data_stop_sec = std::numeric_limits<double>::quiet_NaN();
   std::vector<double> rel_time;
@@ -96,7 +98,7 @@ namespace waveform_core
     const double flank_right_secs ,
     const std::string & align = "mid" ,
     const std::string & require = "full" ,
-    const bool match_annot_channel = true );
+    const bool match_annot_channel = false );
 
   std::vector<std::string> feature_names(
     const waveform_feature_options_t & options = waveform_feature_options_t() );

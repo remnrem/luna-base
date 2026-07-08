@@ -62,6 +62,8 @@ struct channel_info_t {
   std::string label;
   std::string unit;
   double sr;
+  double phys_min;
+  double phys_max;
   uint64_t sample_step_tp;
   int min_samples;
   int max_samples;
@@ -141,6 +143,12 @@ int read_i32( std::ifstream & I )
 void write_f32( std::ofstream & O , const float x )
 {
   O.write( (char*)( &x ) , sizeof(float) );
+}
+
+
+void write_i16( std::ofstream & O , const int16_t x )
+{
+  O.write( (char*)( &x ) , sizeof(int16_t) );
 }
 
 
@@ -408,7 +416,7 @@ std::string get_require_mode( param_t & param )
 
 bool get_match_annot_channel( param_t & param )
 {
-  return param.yesno( "annot-ch-match" , true , true );
+  return param.has( "annot-ch-match" ) ? param.yesno( "annot-ch-match" ) : false;
 }
 
 
@@ -426,6 +434,8 @@ std::vector<channel_info_t> get_channels( edf_t & edf , param_t & param )
       ch.label = signals.label(s);
       ch.unit = edf.header.phys_dimension[ signals(s) ];
       ch.sr = edf.header.sampling_freq( signals(s) );
+      ch.phys_min = edf.header.physical_min[ signals(s) ];
+      ch.phys_max = edf.header.physical_max[ signals(s) ];
       ch.sample_step_tp = 0LLU;
       ch.min_samples = std::numeric_limits<int>::max();
       ch.max_samples = 0;
@@ -579,22 +589,16 @@ uint64_t string_storage_bytes( const std::string & s )
 uint64_t wave_payload_storage_bytes( const waveform_event_t & event , const std::vector<std::string> & feature_names )
 {
   uint64_t n = 0LLU;
-  n += string_storage_bytes( event.annot );
-  n += string_storage_bytes( event.instance );
-  n += string_storage_bytes( event.annot_ch );
   n += string_storage_bytes( event.meta );
-  n += 5LLU * (uint64_t)sizeof(double);
   n += (uint64_t)sizeof(int);
   for (int c=0; c<event.blocks.size(); c++)
     {
-      n += (uint64_t)sizeof(int);
-      n += 2LLU * (uint64_t)sizeof(double);
       if ( feature_names.size() )
         {
           n += (uint64_t)sizeof(int);
           n += (uint64_t)feature_names.size() * (uint64_t)sizeof(double);
         }
-      n += (uint64_t)event.blocks[c].values.size() * (uint64_t)sizeof(float);
+      n += (uint64_t)event.blocks[c].values.size() * (uint64_t)sizeof(int16_t);
     }
   return n;
 }
@@ -637,6 +641,7 @@ uint64_t header_storage_bytes( edf_t & edf , const std::string & outfile , const
       n += string_storage_bytes( channels[i].unit );
       n += (uint64_t)sizeof(uint64_t);
       n += (uint64_t)sizeof(double);
+      n += 2LLU * (uint64_t)sizeof(double);
     }
   n += (uint64_t)sizeof(int);
   for (int i=0; i<feature_names.size(); i++) n += string_storage_bytes( feature_names[i] );
@@ -669,6 +674,8 @@ void write_header( std::ofstream & O , edf_t & edf , const std::string & outfile
       write_string( O , channels[i].unit );
       write_u64( O , channels[i].sample_step_tp );
       write_f64( O , channels[i].sr );
+      write_f64( O , channels[i].phys_min );
+      write_f64( O , channels[i].phys_max );
     }
 
   write_i32( O , feature_names.size() );
@@ -701,22 +708,10 @@ void write_index_entry( std::ofstream & O , const wave_index_t & idx )
 
 void write_wave( std::ofstream & O , const waveform_event_t & event , const std::vector<std::string> & feature_names )
 {
-  write_string( O , event.annot );
-  write_string( O , event.instance );
-  write_string( O , event.annot_ch );
   write_string( O , event.meta );
-  write_f64( O , event.annot_start_sec );
-  write_f64( O , event.annot_stop_sec );
-  write_f64( O , event.anchor_sec );
-  write_f64( O , event.wave_start_sec );
-  write_f64( O , event.wave_stop_sec );
-
   write_i32( O , event.blocks.size() );
   for (int c=0; c<event.blocks.size(); c++)
     {
-      write_i32( O , event.blocks[c].values.size() );
-      write_f64( O , event.blocks[c].data_start_sec );
-      write_f64( O , event.blocks[c].data_stop_sec );
       if ( feature_names.size() )
         {
           write_i32( O , event.blocks[c].feature_qc );
@@ -727,8 +722,20 @@ void write_wave( std::ofstream & O , const waveform_event_t & event , const std:
               write_f64( O , value );
             }
         }
-      for (int i=0; i<event.blocks[c].values.size(); i++)
-        write_f32( O , (float)event.blocks[c].values[i] );
+      {
+        const double phys_min = event.blocks[c].phys_min;
+        const double phys_max = event.blocks[c].phys_max;
+        const double phys_range = phys_max - phys_min;
+        const double gain = phys_range > 0.0 ? 65535.0 / phys_range : 1.0;
+        const double offset = -32768.0 - gain * phys_min;
+        for (int i=0; i<(int)event.blocks[c].values.size(); i++)
+          {
+            double dv = gain * event.blocks[c].values[i] + offset;
+            if ( dv < -32768.0 ) dv = -32768.0;
+            if ( dv >  32767.0 ) dv =  32767.0;
+            write_i16( O , (int16_t)std::round( dv ) );
+          }
+      }
     }
 }
 
@@ -771,6 +778,8 @@ file_summary_t read_summary( const std::string & file )
       s.channels[c].unit = read_string( I );
       s.channels[c].sample_step_tp = read_u64( I );
       s.channels[c].sr = read_f64( I );
+      s.channels[c].phys_min = read_f64( I );
+      s.channels[c].phys_max = read_f64( I );
       s.channels[c].min_samples = std::numeric_limits<int>::max();
       s.channels[c].max_samples = 0;
     }
@@ -887,22 +896,32 @@ void dsptools::waveform( edf_t & edf , param_t & param )
   for (int e=0; e<extracted.events.size(); e++)
     {
       const waveform_event_t & wave = extracted.events[e];
-      for (int c=0; c<wave.blocks.size() && c<channels.size(); c++)
+      for (int b=0; b<(int)wave.blocks.size(); b++)
         {
-          if ( channels[c].sample_step_tp == 0LLU )
-            channels[c].sample_step_tp = wave.blocks[c].sample_step_tp;
-          else if ( wave.blocks[c].sample_step_tp != 0LLU
-                    && channels[c].sample_step_tp != wave.blocks[c].sample_step_tp )
-            Helper::halt( "inconsistent sample_step_tp for signal " + channels[c].label + " in WAVEFORM" );
-          const int n = wave.blocks[c].values.size();
-          if ( n < channels[c].min_samples ) channels[c].min_samples = n;
-          if ( n > channels[c].max_samples ) channels[c].max_samples = n;
+          for (int c=0; c<(int)channels.size(); c++)
+            {
+              if ( channels[c].label != wave.blocks[b].label ) continue;
+              if ( channels[c].sample_step_tp == 0LLU )
+                channels[c].sample_step_tp = wave.blocks[b].sample_step_tp;
+              else if ( wave.blocks[b].sample_step_tp != 0LLU
+                        && channels[c].sample_step_tp != wave.blocks[b].sample_step_tp )
+                Helper::halt( "inconsistent sample_step_tp for signal " + channels[c].label + " in WAVEFORM" );
+              const int n = wave.blocks[b].values.size();
+              if ( n < channels[c].min_samples ) channels[c].min_samples = n;
+              if ( n > channels[c].max_samples ) channels[c].max_samples = n;
+              break;
+            }
         }
     }
 
-  for (int c=0; c<channels.size(); c++)
-    if ( channels[c].sample_step_tp == 0LLU )
-      Helper::halt( "could not determine exact sample step for signal " + channels[c].label + " in WAVEFORM" );
+  {
+    std::vector<channel_info_t> seen;
+    for (int c=0; c<(int)channels.size(); c++)
+      if ( channels[c].sample_step_tp != 0LLU ) seen.push_back( channels[c] );
+    if ( seen.empty() )
+      Helper::halt( "could not determine exact sample step for any signal in WAVEFORM" );
+    channels = seen;
+  }
 
   if ( extracted.events.size() == 0 )
     Helper::halt( "no valid waveforms could be extracted for WAVEFORM" );
@@ -914,8 +933,11 @@ void dsptools::waveform( edf_t & edf , param_t & param )
 
   const std::string outfile = next_output_file( dir , edf.id , tag , overwrite );
 
-  logger << "  writing " << extracted.events.size() << " waveform(s) to " << outfile
-         << ( overwrite ? " [overwrite]" : "" ) << "\n";
+  logger << "  writing " << extracted.events.size() << " waveform(s)"
+         << " x " << ( match_annot_channel ? 1 : (int)channels.size() ) << " channel(s)"
+         << " to " << outfile << ( overwrite ? " [overwrite]" : "" ) << "\n";
+  if ( match_annot_channel )
+    logger << "  (" << channels.size() << " distinct channel(s) across file)\n";
 
   std::ofstream O = LunaIO::open_ofstream( outfile , std::ios::binary | std::ios::out );
   if ( ! O ) Helper::halt( "could not open output file " + outfile );

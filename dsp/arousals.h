@@ -33,6 +33,47 @@ struct param_t;
 struct signal_list_t;
 struct gaussian_hmm_t;
 
+// thresholds/toggles for the NREM/REM arousal heuristic detector;
+// defaults reproduce the original NREM-only behavior
+struct arousal_heuristic_params_t {
+
+  bool do_nrem = true;
+  bool do_rem  = true;
+
+  // seconds between consecutive feature-matrix rows (== epoch_inc)
+  double epoch_inc = 0.5;
+
+  // cortical (EEG) shift detection - shared across stages
+  double beta_peak        = 1.2;
+  double beta_hysteresis  = 0.6;
+
+  // spindle (sigma) veto - NREM guards against spindle contamination;
+  // REM defaults are permissive (effectively off) since spindles are
+  // a NREM phenomenon
+  double sigma_veto_nrem   = 0.8;
+  double sigma_veto2_nrem  = 0.4;
+  double sigma_veto_rem    = 100;
+  double sigma_veto2_rem   = 100;
+
+  // artifact rejection - shared across stages
+  double th_emg_artifact = 5;
+  double th_h3_artifact  = 4;
+  double th_pwr_artifact = 4;
+
+  // candidate event duration/merge/pre-sleep rules - shared across stages
+  double min_dur       = 2;    // seconds
+  double max_dur       = 15;   // seconds
+  double arousal_dur   = 3;    // seconds; major (arousal) vs micro-arousal cutoff
+  double merge_gap_sec = 2.5;  // seconds
+  double pre_sleep_sec = 10;   // seconds
+
+  // REM-only: chin-EMG rise required to confirm a cortical-shift candidate
+  // (AASM: REM arousals require a concurrent >=1s chin-EMG amplitude increase)
+  double emg_rise_th       = 1.0;
+  double emg_rise_min_dur  = 1.0;  // seconds
+  double emg_rise_buffer   = 2.0;  // seconds
+};
+
 struct arousals_t {
   
   arousals_t( edf_t & edf , param_t & param );
@@ -71,8 +112,8 @@ private:
   std::vector<std::vector<std::vector<Eigen::VectorXd> > >
   extract( const std::vector<std::vector<std::vector<Eigen::VectorXd> > > & X , const std::vector<int> & ex );
 
-  // helper
-  Eigen::VectorXd robust_mad_norm( const Eigen::VectorXd & x , const std::vector<int> & st );
+  // helper: median/MAD normalization restricted to epochs with state == target_state
+  Eigen::VectorXd robust_mad_norm( const Eigen::VectorXd & x , const std::vector<int> & st , const int target_state );
 
   std::vector<std::pair<int,int>>
   merge_events_with_gap_sorted(const std::vector<std::pair<int,int>> &events,
@@ -82,7 +123,8 @@ private:
   
   
   std::map<std::string,std::set<interval_t> > event_heuristic( const std::vector<std::vector<std::vector<Eigen::VectorXd> > > & X ,
-							       const std::vector<std::vector<std::vector<double> > > & tt );
+							       const std::vector<std::vector<std::vector<double> > > & tt ,
+							       const arousal_heuristic_params_t & p );
   
 
 

@@ -93,8 +93,31 @@ arousals_t::arousals_t( edf_t & edf , param_t & param )
 
   // add channels
   const bool add_chs = param.has( "add" );
-  const std::string ch_prefix = ! param.empty( "add" ) ? param.value( "add" ) : "a_" ; 
-  
+  const std::string ch_prefix = ! param.empty( "add" ) ? param.value( "add" ) : "a_" ;
+
+  // NREM/REM arousal heuristic detector thresholds & toggles
+  arousal_heuristic_params_t hp;
+  hp.epoch_inc = epoch_inc;
+  hp.do_nrem = param.yesno( "nrem" , true , true );
+  hp.do_rem  = param.yesno( "rem"  , true , true );
+  if ( param.has( "beta-peak" )       ) hp.beta_peak       = param.requires_dbl( "beta-peak" );
+  if ( param.has( "beta-hysteresis" ) ) hp.beta_hysteresis = param.requires_dbl( "beta-hysteresis" );
+  if ( param.has( "sigma-veto" )        ) hp.sigma_veto_nrem   = param.requires_dbl( "sigma-veto" );
+  if ( param.has( "sigma-veto2" )       ) hp.sigma_veto2_nrem  = param.requires_dbl( "sigma-veto2" );
+  if ( param.has( "sigma-veto-rem" )    ) hp.sigma_veto_rem    = param.requires_dbl( "sigma-veto-rem" );
+  if ( param.has( "sigma-veto2-rem" )   ) hp.sigma_veto2_rem   = param.requires_dbl( "sigma-veto2-rem" );
+  if ( param.has( "th-emg-artifact" ) ) hp.th_emg_artifact = param.requires_dbl( "th-emg-artifact" );
+  if ( param.has( "th-h3-artifact" )  ) hp.th_h3_artifact  = param.requires_dbl( "th-h3-artifact" );
+  if ( param.has( "th-pwr-artifact" ) ) hp.th_pwr_artifact = param.requires_dbl( "th-pwr-artifact" );
+  if ( param.has( "min-dur" )     ) hp.min_dur       = param.requires_dbl( "min-dur" );
+  if ( param.has( "max-dur" )     ) hp.max_dur       = param.requires_dbl( "max-dur" );
+  if ( param.has( "arousal-dur" ) ) hp.arousal_dur   = param.requires_dbl( "arousal-dur" );
+  if ( param.has( "merge-gap" )   ) hp.merge_gap_sec = param.requires_dbl( "merge-gap" );
+  if ( param.has( "pre-sleep" )   ) hp.pre_sleep_sec = param.requires_dbl( "pre-sleep" );
+  if ( param.has( "emg-rise-th" )      ) hp.emg_rise_th      = param.requires_dbl( "emg-rise-th" );
+  if ( param.has( "emg-rise-min-dur" ) ) hp.emg_rise_min_dur = param.requires_dbl( "emg-rise-min-dur" );
+  if ( param.has( "emg-rise-buffer" )  ) hp.emg_rise_buffer  = param.requires_dbl( "emg-rise-buffer" );
+
   //
   // Get signals
   //
@@ -193,7 +216,7 @@ arousals_t::arousals_t( edf_t & edf , param_t & param )
   // optionally,  dump to stdout
   // dump( X , tt );
 
-  std::map<std::string,std::set<interval_t> > anns = event_heuristic( X , tt );
+  std::map<std::string,std::set<interval_t> > anns = event_heuristic( X , tt , hp );
   
   std::map<std::string,std::set<interval_t> >::const_iterator aa = anns.begin();
   while ( aa != anns.end() )
@@ -212,62 +235,15 @@ arousals_t::arousals_t( edf_t & edf , param_t & param )
 
   
   //
-  // add channels0
+  // add channels
   //
-  
-  // NREM
-  if ( add_chs )
-    add_channels( X[0], tt[0] , ch_prefix ); 
 
+  if ( add_chs && hp.do_nrem )
+    add_channels( X[0], tt[0] , ch_prefix + "nrem_" );
 
-  // all done (skip HMM part)
+  if ( add_chs && hp.do_rem )
+    add_channels( X[1], tt[1] , ch_prefix + "rem_" );
 
-  return;
-
-  // --------------------------------------------------------------------------------
-
-
-  // not used
-  // hmm( # states , # ftrs ) 
-  gaussian_hmm_t nrem_hmm( 3, 2 );
-  init_kmeans_hmm( nrem_hmm , X[0] );
-  const int max_iters = 30;
-  const double tol = 1e-4;
-  nrem_hmm.train_multi( X[0], max_iters, tol);
-  // output
-  const int nrem_seq = X[0].size();
-  std::vector<std::vector<int> > nrem_paths( nrem_seq );
-  std::vector<double> nrem_loglik( nrem_seq );
-  std::vector<Eigen::MatrixXd> nrem_posteriors( nrem_seq );
-  
-  for (int i=0; i<nrem_seq; i++)
-    {
-      nrem_hmm.viterbi( X[0][i], nrem_paths[i]);
-      Eigen::MatrixXd gamma;
-      double ll_seq = 0.0;      
-      nrem_hmm.posteriors( X[0][i], gamma , &nrem_loglik[i] );     
-      for (int p=0;p<nrem_paths[i].size();p++)
-	{
-	   std::cout << i << "\t"
-	   	    << nrem_loglik[i] << "\t"
-	   	    << p << "\t"
-	   	    << nrem_paths[i][p] << "\t"
-	   	    << gamma(p,0) << "\t"
-	   	    << gamma(p,1) << "\t"
-	   	    << gamma(p,2) << "\n";
-	}
-      
-      
-      nrem_posteriors[i] = gamma;
-    }
-  
-  for (int k = 0; k < 3; ++k) {
-    std::cerr << "state " << k << " mu = " << nrem_hmm.mu().col(k).transpose() << "\n";
-    std::cerr << "state " << k << " cov:\n" << nrem_hmm.covariances()[k] << "\n";
-  }
-
-   
- 
 }
 
 int arousals_t::annotate( const int state ,
@@ -1061,9 +1037,19 @@ Eigen::MatrixXd arousals_t::process_ftr_matrix( Eigen::MatrixXd * Xeeg , Eigen::
   //  a single, averaged value per channel
 
 
-  // finally, sleep-specific robust norm
+  // finally, per-stage (NREM vs REM) robust norm: REM has systematically
+  // lower baseline EMG (atonia), so a single NREM+REM pooled median/MAD
+  // would under-represent REM's own variability and mute genuine REM EMG
+  // rises; normalize NREM and REM epochs against their own stage statistics
   for (int i=0; i<X.cols(); i++)
-    X.col(i) = robust_mad_norm( X.col(i) , st );
+    {
+      const Eigen::VectorXd z_nrem = robust_mad_norm( X.col(i) , st , 0 );
+      const Eigen::VectorXd z_rem  = robust_mad_norm( X.col(i) , st , 1 );
+      Eigen::VectorXd z( X.rows() );
+      for (int e=0; e<X.rows(); e++)
+	z(e) = ( st[e] == 1 ) ? z_rem(e) : z_nrem(e);
+      X.col(i) = z;
+    }
 
   // and clip
   const double zth = 6;
@@ -1082,29 +1068,35 @@ Eigen::MatrixXd arousals_t::process_ftr_matrix( Eigen::MatrixXd * Xeeg , Eigen::
 
 
 Eigen::VectorXd arousals_t::robust_mad_norm(const Eigen::VectorXd & x,
-                                            const std::vector<int> & st)
+                                            const std::vector<int> & st,
+                                            const int target_state)
 {
 
   const int n = x.size();
 
   if ((int)st.size() != n)
     Helper::halt( "robust_mad_norm: x and st must have same length" );
-  
-  // collect sleep-only values (e.g. st != 2)
+
+  // collect values for the target stage only (0=NREM, 1=REM), so that e.g.
+  // REM's own (typically lower) EMG baseline/variability is used to scale
+  // REM values, rather than a stage-pooled scale
   std::vector<double> vals;
   vals.reserve(n);
   for (int i = 0; i < n; ++i)
     {
-      if (st[i] != 2 && std::isfinite(x[i])) // sleep only, skip NaNs
+      if (st[i] == target_state && std::isfinite(x[i])) // this stage only, skip NaNs
 	vals.push_back(x[i]);
     }
-  
+
+  // this stage may simply be absent from the recording (e.g. no REM at
+  // all); the returned z-scores are unused for epochs outside this stage,
+  // so return neutral (all-zero) values rather than halting
   if (vals.empty())
-    Helper::halt( "robust_mad_norm: no sleep samples to estimate median/MAD");
-  
+    return Eigen::VectorXd::Zero(n);
+
   const double median = MiscMath::median(vals);
-  
-  // MAD over sleep-only
+
+  // MAD over this stage only
   std::vector<double> dev;
   dev.reserve(vals.size());
   for (double v : vals)
@@ -1115,18 +1107,19 @@ Eigen::VectorXd arousals_t::robust_mad_norm(const Eigen::VectorXd & x,
   double sigma = 1.4826 * MAD;
   if (sigma <= 0.0)
     sigma = 1.0;  // fallback: avoids division by zero
-  
-  // normalize all samples (wake + sleep) using sleep-based median/sigma
+
+  // normalize all samples (wake + sleep) using this stage's median/sigma
   Eigen::VectorXd z(n);
   for (int i = 0; i < n; ++i)
     z[i] = (x[i] - median) / sigma;
-  
+
   return z;
 }
 
 
 std::map<std::string,std::set<interval_t> > arousals_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::VectorXd> > > & X ,
-									 const std::vector<std::vector<std::vector<double> > > & tt )
+									 const std::vector<std::vector<std::vector<double> > > & tt ,
+									 const arousal_heuristic_params_t & p )
 {
   // metrics 0 tot-pwr
   //         1 beta
@@ -1135,358 +1128,426 @@ std::map<std::string,std::set<interval_t> > arousals_t::event_heuristic( const s
   //         4 H3
 
   std::map<std::string,std::set<interval_t> > ret;
-  
+
   const int idx_pwr = 0;
   const int idx_beta = 1;
   const int idx_emg = 2;
   const int idx_sigma = 3;
   const int idx_h3 = 4;
-    
-  // Only NREM for now
-  int st = 0;
 
-  std::string stg_lab = "nrem";
-  if ( st == 1 ) stg_lab = "rem";
-  
-  // check ftrs inside/outside of artifact regions
-  Eigen::VectorXd ftr_art( 5 ), ftr_nonart( 5 );
-  Eigen::VectorXd ftr_baseline( 5 ), ftr_arousal( 5 ), ftr_uarousal( 5 );
-  int n_art = 0 , n_nonart = 0, n_baseline = 0 , n_arousal = 0, n_uarousal = 0;
+  // gap-merge tolerance in samples, based on the actual epoch grid spacing
+  // (rather than assuming a fixed 2 Hz / 0.5s grid)
+  const int max_gap_samples = std::max( 1 , (int)std::lround( p.merge_gap_sec / p.epoch_inc ) );
 
-  // event counts
-  int cnt_evts = 0 , cnt_uevts = 0, cnt_arts = 0;
-
-  // mean event durations
-  double dur_major = 0 , dur_micro = 0;
-  
-  // within each contig
-  const int nc = X[st].size();
-
-  for (int c=0; c<nc; c++)
+  // NREM (st=0) and REM (st=1); each stage is independently toggled,
+  // thresholded and reported (writer stratifier SS = NR/R)
+  for (int st=0; st<2; st++)
     {
-      const std::vector<Eigen::VectorXd> & D = X[st][c];
-      const int ne = D.size();
+      if ( st == 0 && ! p.do_nrem ) continue;
+      if ( st == 1 && ! p.do_rem  ) continue;
 
-      // flag artifact
-      std::vector<bool> artifact( ne , false );
-      int cnt1 = 0, cnt2=0, cnt3=0;
-      for (int i=0; i<ne; i++)
+      const std::string stg_lab = st == 0 ? "nrem" : "rem";
+      const bool is_rem = st == 1;
+
+      // spindle (sigma) veto: NREM guards against spindle contamination;
+      // REM defaults are permissive (effectively disabled) since spindles
+      // are a NREM phenomenon
+      const double th_sigma_veto  = is_rem ? p.sigma_veto_rem  : p.sigma_veto_nrem;
+      const double th_sigma_veto2 = is_rem ? p.sigma_veto2_rem : p.sigma_veto2_nrem;
+
+      // check ftrs inside/outside of artifact regions
+      Eigen::VectorXd ftr_art( 5 ), ftr_nonart( 5 );
+      Eigen::VectorXd ftr_baseline( 5 ), ftr_arousal( 5 ), ftr_uarousal( 5 );
+      ftr_art.setZero(); ftr_nonart.setZero();
+      ftr_baseline.setZero(); ftr_arousal.setZero(); ftr_uarousal.setZero();
+      int n_art = 0 , n_nonart = 0, n_baseline = 0 , n_arousal = 0, n_uarousal = 0;
+
+      // event counts
+      int cnt_evts = 0 , cnt_uevts = 0, cnt_arts = 0;
+
+      // REM-only: cortical-shift candidates that failed EMG confirmation
+      int cnt_rem_cortical_only = 0;
+
+      // mean event durations
+      double dur_major = 0 , dur_micro = 0;
+
+      // within each contig
+      const int nc = X[st].size();
+
+      for (int c=0; c<nc; c++)
 	{
-	  const Eigen::VectorXd & ftr = D[i];
+	  const std::vector<Eigen::VectorXd> & D = X[st][c];
+	  const int ne = D.size();
 
-	  bool is_artifact = false;
-	  
-	  // Very high EMG
-	  if ( ftr(idx_emg) > 5 && ftr(idx_beta) < 0.5 )
-	    { is_artifact = true; ++cnt1; } 
-
-	  // High H3 (very noisy)
-	  if ( ftr(idx_h3) > 4 )
-	    { is_artifact = true; ++cnt2; } 
-
-	  // implausible broadband tot-pwr
-	  if ( ftr(idx_pwr) > 4 && ftr(idx_beta) < 0.5 )
-	    { is_artifact = true; ++cnt3; } 
-	  
-	  // set
-	  artifact[i] = is_artifact;
-	  
-	  // expand?
-	  // if ( is_artifact )
-	  //   {
-	  //     if ( i != 0 ) artifact[i-1] = true;
-	  //     if ( i != ne - 1 ) artifact[i+1] = true;	  
-	  //   }
-
-	}
-
-      std::cout << " art1,2,3 = "
-		<< cnt1 / (double)ne << " "
-		<< cnt2 / (double)ne << " "
-		<< cnt3 / (double)ne << "\n";
-      
-      //
-      // track means by art/not
-      //
-	
-      for (int i=0; i<ne; i++)
-	{
-	  if ( artifact[i] )
+	  // flag artifact
+	  std::vector<bool> artifact( ne , false );
+	  for (int i=0; i<ne; i++)
 	    {
-	      ftr_art += D[i];
-	      ++n_art;
+	      const Eigen::VectorXd & ftr = D[i];
+
+	      bool is_artifact = false;
+
+	      // Very high EMG
+	      if ( ftr(idx_emg) > p.th_emg_artifact && ftr(idx_beta) < 0.5 )
+		is_artifact = true;
+
+	      // High H3 (very noisy)
+	      if ( ftr(idx_h3) > p.th_h3_artifact )
+		is_artifact = true;
+
+	      // implausible broadband tot-pwr
+	      if ( ftr(idx_pwr) > p.th_pwr_artifact && ftr(idx_beta) < 0.5 )
+		is_artifact = true;
+
+	      artifact[i] = is_artifact;
 	    }
-	  else
+
+	  //
+	  // track means by art/not
+	  //
+
+	  for (int i=0; i<ne; i++)
 	    {
-	      ftr_nonart += D[i];
-	      ++n_nonart;
-	    }
-	}
-
-
-      const double th_beta_peak = 1.2;
-      const double th_beta_hysteresis = 0.6;
-      const double th_sigma_veto = 0.8;
-      const double th_sigma_veto2 = 0.4;
- 
-      // get peaks: high beta, peak, not artifact
-      // allow high sigma to veto
-
-      std::vector<int> pks;
-      for (int i=0; i<ne; i++)
-	{
-	  if ( artifact[i] ) continue;
-	  
-	  const Eigen::VectorXd & ftr = D[i];
-		    
-	  if ( ftr(idx_beta) < th_beta_peak ) continue;
-
-	  if ( ftr(idx_sigma) > th_sigma_veto ) continue;
-	  
-	  if ( i != 0 )
-	    if ( ftr(idx_beta) <= D[i-1](idx_beta) )
-	      continue;
-	  
-	  if ( i != ne-1 )
-	    if ( ftr(idx_beta ) < D[i+1](idx_beta) )
-	      continue;
-	  
-	  pks.push_back(i);
-	  
-	}
-
-      
-      // peaks -> events  
-      std::vector<std::pair<int,int> > evts;
-      for (int p=0; p<pks.size(); p++)
-	{
-	  // walk back
-	  int start = pks[p];
-	  while ( 1 ) {
-	    if ( start == 0 )
-	      break;	    
-	    if ( artifact[start-1] )
-	      break;
-	    if ( D[start-1](idx_beta) < th_beta_hysteresis )
-	      break;
-	    if ( D[start-1](idx_sigma) > th_sigma_veto2 )
-	      break;
-	    --start;
-	  }
-	  
-	  // walk forward
-	  int stop = pks[p];
-	  while ( 1 ) {
-            if ( stop == ne-1 )
-              break;
-            if ( artifact[stop+1] )
-              break;
-            if ( D[stop+1](idx_beta) < th_beta_hysteresis )
-              break;
-	    if ( D[stop+1](idx_sigma) > th_sigma_veto2 )
-	      break;
-            ++stop;
-          }
-
-	  evts.push_back( std::pair<int,int>(start,stop) );
-	  
-	}
-      
-      // prune/merge events
-      // we now have event from start -> stop
-      // assuming 2Hz signal, get duration
-      // const double duration_sec = (stop - start + 1) * 0.5;
-      
-      std::vector<std::pair<int,int> > evts2;
-      for (int e=0; e<evts.size(); e++)
-	{
-	  // ignore long events > 15, and v. short events (<2)
-	  const std::pair<int,int> & evt = evts[e];
-	  const double duration_sec = (evt.second - evt.first + 1) * 0.5;
-	  if ( duration_sec >= 2 && duration_sec <= 15 ) evts2.push_back( evt );
-	}
-      
-      // merge shorter events that are near
-      const int max_gap = 5;  // < 2.5 s gap at 2 Hz (0.5 s/epoch)
-      evts = merge_events_with_gap_sorted( evts2 , max_gap );
-      
-      
-      // final prunig
-      evts2.clear();
-      for (int e=0; e<evts.size(); e++)
-	{	  
-          const std::pair<int,int> & evt = evts[e];
-          const double duration_sec = (evt.second - evt.first + 1) * 0.5;	
-	  if ( duration_sec >= 2 && duration_sec <= 15 ) evts2.push_back( evt );
-        }
-
-      // require at least 10s of stable sleep (i.e. base just on the contig)
-      evts.clear();
-      for (int e=0; e<evts2.size(); e++)
-	{
-	  const std::pair<int,int> & evt = evts2[e];
-	  int start_idx = evt.first;
-	  double t_event_start = tt[st][c][start_idx];
-	  double t_contig_start = tt[st][c][0];
-	  double pre_sleep_sec = t_event_start - t_contig_start;
-	  if (pre_sleep_sec >= 10.0)
-	    evts.push_back(evt);
-	}
-      
-      //
-      // convert to intervals
-      //
-      std::vector<std::pair<int,int>> arr_major, arr_micro;
-      
-      for (int e=0; e<evts.size(); e++)
-	{
-	  const double t0 = tt[st][c][evts[e].first];
-	  const double t1 = tt[st][c][evts[e].second] + 0.5; // up to end
-
-	  // annotate arousal (3+) versus micro-arousal (1.5-2) 
-	  const double dur = t1 - t0;
-
-	  if ( dur >= 3 )
-	    {
-	      ret[ "arousal_" + stg_lab ].insert( interval_t( globals::tp_1sec * t0, globals::tp_1sec * t1 ) );	      
-	      arr_major.push_back( evts[e] );
-	      dur_major += dur;
-	      cnt_evts++;
-	    }
-	  else
-	    {
-	      ret[ "micro_arousal_" + stg_lab ].insert( interval_t( globals::tp_1sec * t0, globals::tp_1sec * t1 ) );
-	      arr_micro.push_back( evts[e] );
-	      dur_micro += dur;
-	      cnt_uevts++;
-	    }
-	}
-
-      // also track artifacts
-
-      std::vector<std::pair<int,int>> arts = mask_to_intervals( artifact );
-      for (int e=0; e<arts.size(); e++)
-        {
-          const double t0 = tt[st][c][arts[e].first];
-          const double t1 = tt[st][c][arts[e].second] + 0.5; // up to end
-          std::cout << " artifact = " << t0 << " " << t1 << " | " << t1 - t0 << "\n";
-          ret[ "art_nrem" ].insert( interval_t( globals::tp_1sec * t0, globals::tp_1sec * t1 ) );
-        }
-
-      cnt_arts += arts.size();
-      
-      //
-      // also track ftr means by non-art baseline vs non-art arousal
-      //
-
-      std::vector<int> arr( ne , 0 ); // 0 / 1 / 2 = baseline / micro-arousal / arousal 
-      for (int e=0; e<arr_micro.size(); e++)
-	for (int p=arr_micro[e].first; p<=arr_micro[e].second; p++)
-	  arr[p] = 1;
-      for (int e=0; e<arr_major.size(); e++)
-	for (int p=arr_major[e].first; p<=arr_major[e].second; p++)
-	  arr[p] = 2;
-	  
-      for (int i=0; i<ne; i++)
-        {
-          if ( ! artifact[i] )
-            {
-	      if ( arr[i] == 2 )
+	      if ( artifact[i] )
 		{
-		  ftr_arousal += D[i];
-		  ++n_arousal;
-		}
-	      if ( arr[i] == 1 )
-		{
-		  ftr_uarousal += D[i];
-		  ++n_uarousal;
+		  ftr_art += D[i];
+		  ++n_art;
 		}
 	      else
 		{
-		  ftr_baseline += D[i];
-		  ++n_baseline;
+		  ftr_nonart += D[i];
+		  ++n_nonart;
 		}
 	    }
-	}      
-      
-      // next contig
-    } 
 
-  //
-  // report beta per art/non-art
-  //
+	  // get peaks: high beta, peak, not artifact
+	  // allow high sigma to veto
 
+	  std::vector<int> pks;
+	  for (int i=0; i<ne; i++)
+	    {
+	      if ( artifact[i] ) continue;
 
-  writer.level( "artifact" , "CLS" );
-  writer.value( "NE", n_art );
-  writer.value( "PWR", ftr_art(0) / (double)n_art );
-  writer.value( "BETA", ftr_art(1) / (double)n_art );
-  writer.value( "EMG", ftr_art(2) / (double)n_art );
-  writer.value( "SIGMA", ftr_art(3) / (double)n_art );
-  writer.value( "CMPLX", ftr_art(4) / (double)n_art );
+	      const Eigen::VectorXd & ftr = D[i];
 
-  writer.level( "non_artifact" , "CLS" );
-  writer.value( "NE", n_nonart );  
-  writer.value( "PWR", ftr_nonart(0) / (double)n_nonart );
-  writer.value( "BETA", ftr_nonart(1) / (double)n_nonart );
-  writer.value( "EMG", ftr_nonart(2) / (double)n_nonart );
-  writer.value( "SIGMA", ftr_nonart(3) / (double)n_nonart );
-  writer.value( "CMPLX", ftr_nonart(4) / (double)n_nonart );
+	      if ( ftr(idx_beta) < p.beta_peak ) continue;
 
-  writer.level( "arousal" , "CLS" );
-  writer.value( "NE", n_arousal );
-  writer.value( "PWR", ftr_arousal(0) / (double)n_arousal );
-  writer.value( "BETA", ftr_arousal(1) / (double)n_arousal );
-  writer.value( "EMG", ftr_arousal(2) / (double)n_arousal );
-  writer.value( "SIGMA", ftr_arousal(3) / (double)n_arousal );
-  writer.value( "CMPLX", ftr_arousal(4) / (double)n_arousal );
+	      if ( ftr(idx_sigma) > th_sigma_veto ) continue;
 
-  writer.level( "micro_arousal" , "CLS" );
-  writer.value( "NE", n_uarousal );
-  writer.value( "PWR", ftr_uarousal(0) / (double)n_uarousal );
-  writer.value( "BETA", ftr_uarousal(1) / (double)n_uarousal );
-  writer.value( "EMG", ftr_uarousal(2) / (double)n_uarousal );
-  writer.value( "SIGMA", ftr_uarousal(3) / (double)n_uarousal );
-  writer.value( "CMPLX", ftr_uarousal(4) / (double)n_uarousal );
-  
-  writer.level( "baseline" , "CLS" );
-  writer.value( "NE", n_baseline );
-  writer.value( "PWR", ftr_baseline(0) / (double)n_baseline );
-  writer.value( "BETA", ftr_baseline(1) / (double)n_baseline );
-  writer.value( "EMG", ftr_baseline(2) / (double)n_baseline );
-  writer.value( "SIGMA", ftr_baseline(3) / (double)n_baseline );
-  writer.value( "CMPLX", ftr_baseline(4) / (double)n_baseline );
+	      if ( i != 0 )
+		if ( ftr(idx_beta) <= D[i-1](idx_beta) )
+		  continue;
 
-  writer.unlevel( "CLS" );
+	      if ( i != ne-1 )
+		if ( ftr(idx_beta ) < D[i+1](idx_beta) )
+		  continue;
+
+	      pks.push_back(i);
+
+	    }
 
 
-  // arousal rate
-  double tot_sec = 0;
-  for (int c=0; c<nc; c++)
-    {
-      const int ne = tt[st][c].size();
-      if ( ne == 0 ) continue;
-      double mint = tt[st][c][0];
-      double maxt = tt[st][c][ne-1];
-      tot_sec += maxt - mint + 0.5;      
+	  // peaks -> events
+	  std::vector<std::pair<int,int> > evts;
+	  for (int pki=0; pki<pks.size(); pki++)
+	    {
+	      // walk back
+	      int start = pks[pki];
+	      while ( 1 ) {
+		if ( start == 0 )
+		  break;
+		if ( artifact[start-1] )
+		  break;
+		if ( D[start-1](idx_beta) < p.beta_hysteresis )
+		  break;
+		if ( D[start-1](idx_sigma) > th_sigma_veto2 )
+		  break;
+		--start;
+	      }
+
+	      // walk forward
+	      int stop = pks[pki];
+	      while ( 1 ) {
+		if ( stop == ne-1 )
+		  break;
+		if ( artifact[stop+1] )
+		  break;
+		if ( D[stop+1](idx_beta) < p.beta_hysteresis )
+		  break;
+		if ( D[stop+1](idx_sigma) > th_sigma_veto2 )
+		  break;
+		++stop;
+	      }
+
+	      evts.push_back( std::pair<int,int>(start,stop) );
+
+	    }
+
+	  // prune/merge events (duration on the actual epoch grid, not
+	  // assuming a fixed 2 Hz grid)
+
+	  std::vector<std::pair<int,int> > evts2;
+	  for (int e=0; e<evts.size(); e++)
+	    {
+	      const std::pair<int,int> & evt = evts[e];
+	      const double duration_sec = (evt.second - evt.first + 1) * p.epoch_inc;
+	      if ( duration_sec >= p.min_dur && duration_sec <= p.max_dur ) evts2.push_back( evt );
+	    }
+
+	  // merge shorter events that are near
+	  evts = merge_events_with_gap_sorted( evts2 , max_gap_samples );
+
+
+	  // final pruning
+	  evts2.clear();
+	  for (int e=0; e<evts.size(); e++)
+	    {
+	      const std::pair<int,int> & evt = evts[e];
+	      const double duration_sec = (evt.second - evt.first + 1) * p.epoch_inc;
+	      if ( duration_sec >= p.min_dur && duration_sec <= p.max_dur ) evts2.push_back( evt );
+	    }
+
+	  // require at least 'pre-sleep' of stable sleep (i.e. base just on the contig)
+	  evts.clear();
+	  for (int e=0; e<evts2.size(); e++)
+	    {
+	      const std::pair<int,int> & evt = evts2[e];
+	      int start_idx = evt.first;
+	      double t_event_start = tt[st][c][start_idx];
+	      double t_contig_start = tt[st][c][0];
+	      double pre_sleep_sec = t_event_start - t_contig_start;
+	      if (pre_sleep_sec >= p.pre_sleep_sec)
+		evts.push_back(evt);
+	    }
+
+	  //
+	  // REM only: require a concurrent chin-EMG amplitude rise (AASM) to
+	  // confirm each cortical-shift candidate; candidates that fail this
+	  // are dropped (not scored) but kept as a diagnostic annotation
+	  //
+	  if ( is_rem )
+	    {
+	      std::vector<bool> emg_high( ne , false );
+	      for (int i=0; i<ne; i++)
+		emg_high[i] = D[i](idx_emg) > p.emg_rise_th;
+
+	      const std::vector<std::pair<int,int> > emg_runs = mask_to_intervals( emg_high );
+
+	      std::vector<std::pair<double,double> > emg_windows;
+	      for (int r=0; r<emg_runs.size(); r++)
+		{
+		  const double e0 = tt[st][c][ emg_runs[r].first ];
+		  const double e1 = tt[st][c][ emg_runs[r].second ] + p.epoch_inc;
+		  if ( e1 - e0 >= p.emg_rise_min_dur )
+		    emg_windows.push_back( std::make_pair( e0 , e1 ) );
+		}
+
+	      std::vector<std::pair<int,int> > evts_confirmed;
+	      for (int e=0; e<evts.size(); e++)
+		{
+		  const double t0 = tt[st][c][ evts[e].first ];
+		  const double t1 = tt[st][c][ evts[e].second ] + p.epoch_inc;
+
+		  bool confirmed = false;
+		  for (int w=0; w<emg_windows.size(); w++)
+		    if ( emg_windows[w].first <= t1 + p.emg_rise_buffer &&
+			 emg_windows[w].second >= t0 - p.emg_rise_buffer )
+		      { confirmed = true; break; }
+
+		  if ( confirmed )
+		    evts_confirmed.push_back( evts[e] );
+		  else
+		    {
+		      ret[ "rem_cortical_only" ].insert( interval_t( globals::tp_1sec * t0, globals::tp_1sec * t1 ) );
+		      ++cnt_rem_cortical_only;
+		    }
+		}
+	      evts = evts_confirmed;
+	    }
+
+	  //
+	  // convert to intervals
+	  //
+	  std::vector<std::pair<int,int>> arr_major, arr_micro;
+
+	  for (int e=0; e<evts.size(); e++)
+	    {
+	      const double t0 = tt[st][c][evts[e].first];
+	      const double t1 = tt[st][c][evts[e].second] + p.epoch_inc; // up to end
+
+	      // annotate arousal (>= arousal-dur) versus micro-arousal
+	      const double dur = t1 - t0;
+
+	      if ( dur >= p.arousal_dur )
+		{
+		  ret[ "arousal_" + stg_lab ].insert( interval_t( globals::tp_1sec * t0, globals::tp_1sec * t1 ) );
+		  arr_major.push_back( evts[e] );
+		  dur_major += dur;
+		  cnt_evts++;
+		}
+	      else
+		{
+		  ret[ "micro_arousal_" + stg_lab ].insert( interval_t( globals::tp_1sec * t0, globals::tp_1sec * t1 ) );
+		  arr_micro.push_back( evts[e] );
+		  dur_micro += dur;
+		  cnt_uevts++;
+		}
+	    }
+
+	  // also track artifacts
+
+	  std::vector<std::pair<int,int>> arts = mask_to_intervals( artifact );
+	  for (int e=0; e<arts.size(); e++)
+	    {
+	      const double t0 = tt[st][c][arts[e].first];
+	      const double t1 = tt[st][c][arts[e].second] + p.epoch_inc; // up to end
+	      ret[ "art_" + stg_lab ].insert( interval_t( globals::tp_1sec * t0, globals::tp_1sec * t1 ) );
+	    }
+
+	  cnt_arts += arts.size();
+
+	  //
+	  // also track ftr means by non-art baseline vs non-art arousal
+	  //
+
+	  std::vector<int> arr( ne , 0 ); // 0 / 1 / 2 = baseline / micro-arousal / arousal
+	  for (int e=0; e<arr_micro.size(); e++)
+	    for (int i=arr_micro[e].first; i<=arr_micro[e].second; i++)
+	      arr[i] = 1;
+	  for (int e=0; e<arr_major.size(); e++)
+	    for (int i=arr_major[e].first; i<=arr_major[e].second; i++)
+	      arr[i] = 2;
+
+	  for (int i=0; i<ne; i++)
+	    {
+	      if ( ! artifact[i] )
+		{
+		  if ( arr[i] == 2 )
+		    {
+		      ftr_arousal += D[i];
+		      ++n_arousal;
+		    }
+		  if ( arr[i] == 1 )
+		    {
+		      ftr_uarousal += D[i];
+		      ++n_uarousal;
+		    }
+		  else
+		    {
+		      ftr_baseline += D[i];
+		      ++n_baseline;
+		    }
+		}
+	    }
+
+	  // next contig
+	}
+
+      //
+      // per-stage output
+      //
+
+      writer.level( is_rem ? "R" : "NR" , "SS" );
+
+      writer.level( "artifact" , "CLS" );
+      writer.value( "NE", n_art );
+      if ( n_art > 0 )
+	{
+	  writer.value( "PWR", ftr_art(0) / (double)n_art );
+	  writer.value( "BETA", ftr_art(1) / (double)n_art );
+	  writer.value( "EMG", ftr_art(2) / (double)n_art );
+	  writer.value( "SIGMA", ftr_art(3) / (double)n_art );
+	  writer.value( "CMPLX", ftr_art(4) / (double)n_art );
+	}
+
+      writer.level( "non_artifact" , "CLS" );
+      writer.value( "NE", n_nonart );
+      if ( n_nonart > 0 )
+	{
+	  writer.value( "PWR", ftr_nonart(0) / (double)n_nonart );
+	  writer.value( "BETA", ftr_nonart(1) / (double)n_nonart );
+	  writer.value( "EMG", ftr_nonart(2) / (double)n_nonart );
+	  writer.value( "SIGMA", ftr_nonart(3) / (double)n_nonart );
+	  writer.value( "CMPLX", ftr_nonart(4) / (double)n_nonart );
+	}
+
+      writer.level( "arousal" , "CLS" );
+      writer.value( "NE", n_arousal );
+      if ( n_arousal > 0 )
+	{
+	  writer.value( "PWR", ftr_arousal(0) / (double)n_arousal );
+	  writer.value( "BETA", ftr_arousal(1) / (double)n_arousal );
+	  writer.value( "EMG", ftr_arousal(2) / (double)n_arousal );
+	  writer.value( "SIGMA", ftr_arousal(3) / (double)n_arousal );
+	  writer.value( "CMPLX", ftr_arousal(4) / (double)n_arousal );
+	}
+
+      writer.level( "micro_arousal" , "CLS" );
+      writer.value( "NE", n_uarousal );
+      if ( n_uarousal > 0 )
+	{
+	  writer.value( "PWR", ftr_uarousal(0) / (double)n_uarousal );
+	  writer.value( "BETA", ftr_uarousal(1) / (double)n_uarousal );
+	  writer.value( "EMG", ftr_uarousal(2) / (double)n_uarousal );
+	  writer.value( "SIGMA", ftr_uarousal(3) / (double)n_uarousal );
+	  writer.value( "CMPLX", ftr_uarousal(4) / (double)n_uarousal );
+	}
+
+      writer.level( "baseline" , "CLS" );
+      writer.value( "NE", n_baseline );
+      if ( n_baseline > 0 )
+	{
+	  writer.value( "PWR", ftr_baseline(0) / (double)n_baseline );
+	  writer.value( "BETA", ftr_baseline(1) / (double)n_baseline );
+	  writer.value( "EMG", ftr_baseline(2) / (double)n_baseline );
+	  writer.value( "SIGMA", ftr_baseline(3) / (double)n_baseline );
+	  writer.value( "CMPLX", ftr_baseline(4) / (double)n_baseline );
+	}
+
+      writer.unlevel( "CLS" );
+
+
+      // arousal rate
+      double tot_sec = 0;
+      const int nc2 = X[st].size();
+      for (int c=0; c<nc2; c++)
+	{
+	  const int ne = tt[st][c].size();
+	  if ( ne == 0 ) continue;
+	  double mint = tt[st][c][0];
+	  double maxt = tt[st][c][ne-1];
+	  tot_sec += maxt - mint + p.epoch_inc;
+	}
+
+      // total time
+      writer.value( "MINS" , tot_sec / 60.0 );
+
+      // report arousal counts
+      writer.value( "N" , cnt_evts );
+      writer.value( "AI" , tot_sec > 0 ? cnt_evts / ( tot_sec / 3600.0 ) : 0.0 );
+      if ( cnt_evts > 0 ) writer.value( "DUR" , dur_major / (double)cnt_evts );
+
+      // report micro-arousal counts
+      writer.value( "N_MICRO" , cnt_uevts );
+      writer.value( "AI_MICRO" , tot_sec > 0 ? cnt_uevts / ( tot_sec / 3600.0 ) : 0.0 );
+      if ( cnt_uevts > 0 ) writer.value( "DUR_MICRO" , dur_micro / (double)cnt_uevts );
+
+      // artifacts
+      writer.value( "N_ART" , cnt_arts );
+      writer.value( "AI_ART" , tot_sec > 0 ? cnt_arts / ( tot_sec / 3600.0 ) : 0.0 );
+
+      // REM-only: EMG-confirmation diagnostics
+      if ( is_rem )
+	{
+	  writer.value( "N_REM_CORTICAL_ONLY" , cnt_rem_cortical_only );
+	  const int denom = cnt_evts + cnt_rem_cortical_only;
+	  if ( denom > 0 ) writer.value( "PCT_REM_EMG_CONFIRMED" , 100.0 * cnt_evts / (double)denom );
+	}
+
+      writer.unlevel( "SS" );
+
+      // next stage
     }
-
-  // total time
-  writer.value( "MINS" , tot_sec / 60.0 );
-
-  // report arousal counts
-  writer.value( "N" , cnt_evts );
-  writer.value( "AI" , cnt_evts / ( tot_sec / 3600.0 ) );
-  writer.value( "DUR" , dur_major / (double)cnt_evts );
-  
-  // report arousal counts
-  writer.value( "N_MICRO" , cnt_uevts );
-  writer.value( "AI_MICRO" , cnt_uevts / ( tot_sec / 3600.0 ) );
-  writer.value( "DUR_MICRO" , dur_micro / (double)cnt_uevts );
-
-  // artifacts
-  writer.value( "N_ART" , cnt_arts );
-  writer.value( "AI_ART" , cnt_arts / ( tot_sec / 3600.0 ) );
 
   return ret;
 }

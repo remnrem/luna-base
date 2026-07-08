@@ -236,17 +236,22 @@ evtdyn_opts_t::evtdyn_opts_t()
   cluster_sec = 10;
   train_gap_sec = 10;
   train_min = 3;
-  lag_short_lwr = 3;
-  lag_short_upr = 6;
   refr_lwr = 0;
-  refr_upr = 2;
-  excit_lwr = 3;
-  excit_upr = 8;
-  ac_max_sec = 60;
-  ac_bin_sec = 1;
+  refr_upr = 3;
+  excit_lwr = 4;
+  excit_upr = 9;
+  lag_min_sec = 1.0;
+  lag_max_sec = 60;
+  lag_lin = 0;
+  lag_log = 20;
+  lag_hist = true;
   winsor_p = 0;
   z = false;
   rank = false;
+  min_n = 5;
+  min_seg_n = 3;
+  min_bg_min = 1.0;
+  min_seg_bg_min = 5.0;
 }
 
 void evtdyn_t::init( edf_t & edf0 , const param_t & param , const std::string & prefix )
@@ -269,11 +274,6 @@ void evtdyn_t::init( edf_t & edf0 , const param_t & param , const std::string & 
   if ( param.has( p + "cluster" ) ) opt.cluster_sec = param.requires_dbl( p + "cluster" );
   if ( param.has( p + "train-gap" ) ) opt.train_gap_sec = param.requires_dbl( p + "train-gap" );
   if ( param.has( p + "train-min" ) ) opt.train_min = param.requires_int( p + "train-min" );
-  if ( param.has( p + "short-lag" ) )
-    {
-      std::vector<double> w = param.dblvector( p + "short-lag" );
-      if ( w.size() == 2 ) { opt.lag_short_lwr = w[0]; opt.lag_short_upr = w[1]; }
-    }
   if ( param.has( p + "refractory" ) )
     {
       std::vector<double> w = param.dblvector( p + "refractory" );
@@ -284,11 +284,21 @@ void evtdyn_t::init( edf_t & edf0 , const param_t & param , const std::string & 
       std::vector<double> w = param.dblvector( p + "excitatory" );
       if ( w.size() == 2 ) { opt.excit_lwr = w[0]; opt.excit_upr = w[1]; }
     }
-  if ( param.has( p + "ac-max" ) ) opt.ac_max_sec = param.requires_dbl( p + "ac-max" );
-  if ( param.has( p + "ac-bin" ) ) opt.ac_bin_sec = param.requires_dbl( p + "ac-bin" );
+  if ( param.has( p + "lag-min" ) ) opt.lag_min_sec = param.requires_dbl( p + "lag-min" );
+  if ( param.has( p + "lag-max" ) ) opt.lag_max_sec = param.requires_dbl( p + "lag-max" );
+  if ( opt.lag_min_sec >= opt.lag_max_sec )
+    Helper::halt( "lag-min (" + Helper::dbl2str( opt.lag_min_sec )
+		  + ") must be less than lag-max (" + Helper::dbl2str( opt.lag_max_sec ) + ")" );
+  if ( param.has( p + "lag-log" ) ) opt.lag_log = param.requires_int( p + "lag-log" );
+  if ( param.has( p + "lag-lin" ) ) opt.lag_lin = param.requires_int( p + "lag-lin" );
+  if ( param.has( p + "lag-hist" ) ) opt.lag_hist = param.yesno( p + "lag-hist" );
   if ( param.has( p + "winsor" ) ) opt.winsor_p = param.requires_dbl( p + "winsor" );
   opt.z = param.has( p + "z" );
   opt.rank = param.has( p + "rank" );
+  if ( param.has( p + "min-n" ) ) opt.min_n = param.requires_int( p + "min-n" );
+  if ( param.has( p + "min-seg-n" ) ) opt.min_seg_n = param.requires_int( p + "min-seg-n" );
+  if ( param.has( p + "min-bg-min" ) ) opt.min_bg_min = param.requires_dbl( p + "min-bg-min" );
+  if ( param.has( p + "min-seg-bg-min" ) ) opt.min_seg_bg_min = param.requires_dbl( p + "min-seg-bg-min" );
 
   static bool logged_once = false;
   if ( ! logged_once )
@@ -341,7 +351,7 @@ void evtdyn_t::init( edf_t & edf0 , const param_t & param , const std::string & 
       logger << "\n";
       logger << "    background / scope\n";
       show_bool( "bg-none" , opt.bg_none , "ignore annotation background masks" );
-      show_bool( "hypno" , opt.hypno , "use hypnogram-derived background if present" );
+      show_bool( "hypno" , opt.hypno , "use hypnogram for stage-stratified metrics (N2/N3, ASC/DSC, cycles)" );
       show_bool( "verbose" , opt.verbose , "emit extra diagnostics" );
       show_list( "bg" , opt.bg , "background annotations to include" );
       logger << "    event selection / pairwise vars\n";
@@ -355,15 +365,24 @@ void evtdyn_t::init( edf_t & edf0 , const param_t & param , const std::string & 
       show_num( "cluster" , fmt_num( opt.cluster_sec ) , "cluster window in seconds" );
       show_num( "train-gap" , fmt_num( opt.train_gap_sec ) , "maximum gap within a train" );
       show_num( "train-min" , fmt_num( opt.train_min ) , "minimum events per train" );
-      show_num( "short-lag" , fmt_num( opt.lag_short_lwr ) + "," + fmt_num( opt.lag_short_upr ) , "short-lag recurrence window" );
       show_num( "refractory" , fmt_num( opt.refr_lwr ) + "," + fmt_num( opt.refr_upr ) , "refractory recurrence window" );
       show_num( "excitatory" , fmt_num( opt.excit_lwr ) + "," + fmt_num( opt.excit_upr ) , "excitatory recurrence window" );
-      show_num( "ac-max" , fmt_num( opt.ac_max_sec ) , "autocorrelogram max lag" );
-      show_num( "ac-bin" , fmt_num( opt.ac_bin_sec ) , "autocorrelogram bin width" );
+      show_num( "lag-min" , fmt_num( opt.lag_min_sec ) , "lag histogram lower bound (defines window denominator)" );
+      show_num( "lag-max" , fmt_num( opt.lag_max_sec ) , "consecutive-pair lag histogram max lag" );
+      if ( opt.lag_log > 0 )
+	show_num( "lag-log" , fmt_num( opt.lag_log ) , "log-spaced bins [0.5, lag-max]" );
+      else
+	show_num( "lag-lin" , fmt_num( opt.lag_lin > 0 ? opt.lag_lin : (int)opt.lag_max_sec ) , "linear bins [0, lag-max]" );
+      show_bool( "lag-hist" , opt.lag_hist , "output per-bin lag histogram (LAG stratum)" );
       logger << "    transforms\n";
       show_num( "winsor" , fmt_num( opt.winsor_p ) , "winsorization fraction" );
       show_bool( "z" , opt.z , "z-score values before summarizing" );
       show_bool( "rank" , opt.rank , "rank-transform values before summarizing" );
+      logger << "    minimum thresholds\n";
+      show_num( "min-n" , fmt_num( opt.min_n ) , "min events to compute any metrics" );
+      show_num( "min-seg-n" , fmt_num( opt.min_seg_n ) , "min events per subgroup for comparisons" );
+      show_num( "min-bg-min" , fmt_num( opt.min_bg_min ) , "min background duration (minutes)" );
+      show_num( "min-seg-bg-min" , fmt_num( opt.min_seg_bg_min ) , "min background per subgroup for density comparisons (minutes)" );
     }
 
   bg = compile_background();
@@ -543,16 +562,6 @@ evtdyn_bg_t evtdyn_t::compile_background()
     r.intervals = all;
   else if ( ! opt.bg.empty() )
     r.intervals = intersect( all , annotation_intervals( opt.bg ) );
-  else if ( opt.hypno )
-    {
-      std::set<std::string> nrem;
-      nrem.insert( "N1" );
-      nrem.insert( "N2" );
-      nrem.insert( "N3" );
-      nrem.insert( "NREM4" );
-      std::vector<interval_t> hx = stage_intervals( nrem );
-      r.intervals = hx.empty() ? all : intersect( all , hx );
-    }
   else
     r.intervals = all;
 
@@ -636,6 +645,16 @@ void evtdyn_t::output( const std::map<std::string,std::string> & faclvl ,
   writer.value( "MINS" , mins );
   writer.value( "DENS" , mins > 0 ? n / mins : 0 );
 
+  if ( n < opt.min_n || mins < opt.min_bg_min )
+    {
+      logger << "  EVTDYN: skipping metrics (n=" << n << " min_n=" << opt.min_n
+	     << ", mins=" << mins << " min_bg_min=" << opt.min_bg_min << ")\n";
+      for (std::map<std::string,std::string>::const_iterator ff = faclvl.begin(); ff != faclvl.end(); ++ff)
+	writer.unlevel( ff->first );
+      writer.unlevel( "DYN" );
+      return;
+    }
+
   std::vector<double> at;
   std::vector<int> seg;
   for (int i=0;i<n;i++)
@@ -671,51 +690,88 @@ void evtdyn_t::output( const std::map<std::string,std::string> & faclvl ,
   int early = 0, late = 0;
   for (int i=0;i<rel.size();i++)
     if ( rel[i] < 0.5 ) ++early; else ++late;
-  write_log2_ratio( "EARLY_LATE_R" , early , late );
+  if ( early >= opt.min_seg_n && late >= opt.min_seg_n )
+    write_log2_ratio( "EARLY_LATE_LR" , early , late );
 
   std::vector<double> isi;
-  int short_lag = 0, refr = 0, excit = 0;
+  int refr = 0, excit = 0;
   for (int i=1;i<n;i++)
     {
       if ( seg[i] == -1 || seg[i] != seg[i-1] ) continue;
       const double lag = at[i] - at[i-1];
       if ( lag < 0 ) continue;
       isi.push_back( lag );
-      if ( lag >= opt.lag_short_lwr && lag <= opt.lag_short_upr ) ++short_lag;
       if ( lag >= opt.refr_lwr && lag <= opt.refr_upr ) ++refr;
       if ( lag >= opt.excit_lwr && lag <= opt.excit_upr ) ++excit;
 	}
   if ( ! isi.empty() ) writer.value( "ISI_MD" , median( isi ) );
-  if ( n > 1 ) writer.value( "P_LAG_SHORT" , short_lag / (double)( n - 1 ) );
 
   const double rate = bg.total_sec > 0 ? n / bg.total_sec : 0;
-  const double refr_exp = rate * ( opt.refr_upr - opt.refr_lwr );
-  const double excit_exp = rate * ( opt.excit_upr - opt.excit_lwr );
+  const double refr_exp = rate > 0 ? std::exp( -rate * opt.refr_lwr ) - std::exp( -rate * opt.refr_upr ) : 0;
+  const double excit_exp = rate > 0 ? std::exp( -rate * opt.excit_lwr ) - std::exp( -rate * opt.excit_upr ) : 0;
   if ( n > 1 )
     {
       write_log2_ratio( "REFR_OBS_EXP" , refr / (double)( n - 1 ) , refr_exp );
       write_log2_ratio( "EXCIT_OBS_EXP" , excit / (double)( n - 1 ) , excit_exp );
     }
 
-  const int nb = opt.ac_bin_sec > 0 ? (int)ceil( opt.ac_max_sec / opt.ac_bin_sec ) : 0;
-  std::vector<int> ac( nb , 0 );
-  for (int i=0;i<n;i++)
-    for (int j=i+1;j<n;j++)
-      {
-	if ( seg[i] == -1 || seg[i] != seg[j] ) continue;
-	const double lag = at[j] - at[i];
-	if ( lag > opt.ac_max_sec ) break;
-	const int b = lag / opt.ac_bin_sec;
-	if ( b >= 0 && b < nb ) ++ac[b];
-      }
-  int pk = -1;
-  for (int i=0;i<ac.size();i++)
-    if ( pk == -1 || ac[i] > ac[pk] ) pk = i;
-  const double exp_bin = rate * opt.ac_bin_sec * n;
-  if ( pk >= 0 && ac[pk] > 0 )
+  const bool lag_log_mode = opt.lag_log > 0;
+  const int nb = lag_log_mode ? opt.lag_log
+                              : ( opt.lag_lin > 0 ? opt.lag_lin : (int)( opt.lag_max_sec - opt.lag_min_sec ) );
+
+  std::vector<double> lag_edges( nb + 1 ), lag_centers( nb );
+  if ( lag_log_mode )
     {
-      writer.value( "AC_PEAK_T" , ( pk + 0.5 ) * opt.ac_bin_sec );
-      write_log2_ratio( "AC_PEAK_H" , ac[pk] , exp_bin );
+      const double lmin = std::log( opt.lag_min_sec );
+      const double lmax = std::log( opt.lag_max_sec );
+      for (int k=0;k<=nb;k++)
+	lag_edges[k] = std::exp( lmin + (double)k / nb * ( lmax - lmin ) );
+      for (int k=0;k<nb;k++)
+	lag_centers[k] = std::sqrt( lag_edges[k] * lag_edges[k+1] );
+    }
+  else
+    {
+      for (int k=0;k<=nb;k++)
+	lag_edges[k] = opt.lag_min_sec + (double)k / nb * ( opt.lag_max_sec - opt.lag_min_sec );
+      for (int k=0;k<nb;k++)
+	lag_centers[k] = ( lag_edges[k] + lag_edges[k+1] ) / 2.0;
+    }
+
+  std::vector<int> lh( nb , 0 );
+  int n_lag_pairs = 0;
+  for (int i=1;i<n;i++)
+    {
+      if ( seg[i] == -1 || seg[i] != seg[i-1] ) continue;
+      const double lag = at[i] - at[i-1];
+      if ( lag < lag_edges[0] || lag > lag_edges[nb] ) continue;
+      ++n_lag_pairs;
+      const int b = (int)( std::upper_bound( lag_edges.begin() , lag_edges.end() , lag ) - lag_edges.begin() ) - 1;
+      if ( b >= 0 && b < nb ) ++lh[b];
+    }
+  // per-bin expected: uniform-in-lag-time null (proportional to bin width in seconds)
+  const double window_width = lag_edges[nb] - lag_edges[0];
+  std::vector<double> exp_bins( nb , 0 );
+  for (int k=0;k<nb;k++)
+    exp_bins[k] = window_width > 0 ? (double)n_lag_pairs * ( lag_edges[k+1] - lag_edges[k] ) / window_width : 0;
+
+  int pk = -1;
+  for (int i=0;i<nb;i++)
+    if ( pk == -1 || lh[i] > lh[pk] ) pk = i;
+  if ( pk >= 0 && lh[pk] > 0 && nb > 0 )
+    {
+      writer.value( "LAG_PEAK_T" , lag_centers[pk] );
+      write_log2_ratio( "LAG_PEAK_H" , lh[pk] , exp_bins[pk] );
+    }
+  if ( opt.lag_hist && nb > 0 )
+    {
+      for (int b=0;b<nb;b++)
+	{
+	  writer.level( lag_centers[b] , "LAG" );
+	  writer.value( "LAG_N" , lh[b] );
+	  if ( exp_bins[b] > 0 )
+	    writer.value( "LAG_OE" , log2_ratio( lh[b] + 0.5 , exp_bins[b] ) );
+	  writer.unlevel( "LAG" );
+	}
     }
 
   std::vector<int> clustered( n , 0 ), train_id( n , -1 );
@@ -730,7 +786,6 @@ void evtdyn_t::output( const std::map<std::string,std::string> & faclvl ,
 
   int cln = std::accumulate( clustered.begin() , clustered.end() , 0 );
   writer.value( "CLST_FRAC" , n ? cln / (double)n : 0 );
-  writer.value( "SOL_FRAC" , n ? ( n - cln ) / (double)n : 0 );
 
   std::vector<int> train_len;
   int i = 0;
@@ -764,9 +819,13 @@ void evtdyn_t::output( const std::map<std::string,std::string> & faclvl ,
 	  if ( segment( e[i].interval , b2 ) != -1 ) ++n2c;
 	  if ( segment( e[i].interval , b3 ) != -1 ) ++n3c;
 	}
-      const double d2 = duration_sec( b2 ) > 0 ? n2c / ( duration_sec( b2 ) / 60.0 ) : 0;
-      const double d3 = duration_sec( b3 ) > 0 ? n3c / ( duration_sec( b3 ) / 60.0 ) : 0;
-      write_log2_ratio( "N2_N3_R" , d2 , d3 );
+      const double dur2 = duration_sec( b2 ) / 60.0;
+      const double dur3 = duration_sec( b3 ) / 60.0;
+      const double d2 = dur2 > 0 ? n2c / dur2 : 0;
+      const double d3 = dur3 > 0 ? n3c / dur3 : 0;
+      if ( n2c >= opt.min_seg_n && n3c >= opt.min_seg_n
+	   && dur2 >= opt.min_seg_bg_min && dur3 >= opt.min_seg_bg_min )
+	write_log2_ratio( "N2_N3_LR" , d2 , d3 );
     }
 
   std::vector<interval_t> b_n2asc, b_n2dsc;
@@ -785,28 +844,63 @@ void evtdyn_t::output( const std::map<std::string,std::string> & faclvl ,
 	  if ( segment( e[i].interval , b_n2asc ) != -1 ) ++na;
 	  if ( segment( e[i].interval , b_n2dsc ) != -1 ) ++nd;
 	}
-      const double da = duration_sec( b_n2asc ) > 0 ? na / ( duration_sec( b_n2asc ) / 60.0 ) : 0;
-      const double dd = duration_sec( b_n2dsc ) > 0 ? nd / ( duration_sec( b_n2dsc ) / 60.0 ) : 0;
-      if ( da > 0 && dd > 0 )
+      const double dura = duration_sec( b_n2asc ) / 60.0;
+      const double durd = duration_sec( b_n2dsc ) / 60.0;
+      const double da = dura > 0 ? na / dura : 0;
+      const double dd = durd > 0 ? nd / durd : 0;
+      if ( na >= opt.min_seg_n && nd >= opt.min_seg_n
+	   && dura >= opt.min_seg_bg_min && durd >= opt.min_seg_bg_min )
 	{
 	  writer.value( "N2_ASC_DSC_DIFF" , da - dd );
-	  write_log2_ratio( "N2_ASC_DSC_R" , da , dd );
+	  write_log2_ratio( "N2_ASC_DSC_LR" , da , dd );
 	}
     }
 
+  // within-cycle relative position for each event (NaN if not in any cycle background)
+  std::vector<double> wcyc_rel( n , std::numeric_limits<double>::quiet_NaN() );
+  double wcyc_edur = 0 , wcyc_ldur = 0; // total early/late bg-half seconds across all cycles
   if ( bg.has_cycles )
     {
       std::vector<double> cx, cy;
-      for (int c=1;c<=8;c++)
+      for (int c=1;c<=4;c++)
 	{
 	  std::vector<interval_t> bc = intersect( bg.intervals , cycle_intervals( c ) );
 	  if ( bc.empty() ) continue;
+	  const double dur = duration_sec( bc );
+	  if ( dur <= 0 ) continue;
+	  wcyc_edur += dur / 2.0;
+	  wcyc_ldur += dur / 2.0;
 	  int nc = 0;
-	  for (int i=0;i<n;i++) if ( segment( e[i].interval , bc ) != -1 ) ++nc;
-	  cx.push_back( c > 4 ? 4 : c );
-	  cy.push_back( nc / ( duration_sec( bc ) / 60.0 ) );
+	  for (int i=0;i<n;i++)
+	    if ( segment( e[i].interval , bc ) != -1 )
+	      {
+		++nc;
+		wcyc_rel[i] = elapsed_in_bg( anchor( e[i].interval ) , bc ) / dur;
+	      }
+	  cx.push_back( c );
+	  cy.push_back( nc / ( dur / 60.0 ) );
 	}
       writer.value( "CYCLE_SLOPE" , cx.size() > 1 ? slope( cx , cy ) : 0 );
+
+      // within-cycle timing and density split
+      std::vector<double> wcyc_valid;
+      int wcyc_en = 0 , wcyc_ln = 0;
+      for (int i=0;i<n;i++)
+	{
+	  if ( ! is_finite( wcyc_rel[i] ) ) continue;
+	  wcyc_valid.push_back( wcyc_rel[i] );
+	  if ( wcyc_rel[i] < 0.5 ) ++wcyc_en; else ++wcyc_ln;
+	}
+      if ( ! wcyc_valid.empty() )
+	writer.value( "WCYC_TB" , median( wcyc_valid ) );
+      if ( wcyc_en >= opt.min_seg_n && wcyc_ln >= opt.min_seg_n
+	   && ( wcyc_edur / 60.0 ) >= opt.min_seg_bg_min
+	   && ( wcyc_ldur / 60.0 ) >= opt.min_seg_bg_min )
+	{
+	  const double de = wcyc_en / ( wcyc_edur / 60.0 );
+	  const double dl = wcyc_ln / ( wcyc_ldur / 60.0 );
+	  write_log2_ratio( "WCYC_EARLY_LATE_LR" , de , dl );
+	}
     }
 
   std::set<std::string> vars = opt.vars;
@@ -879,14 +973,14 @@ void evtdyn_t::output( const std::map<std::string,std::string> & faclvl ,
       writer.value( "SD" , x.empty() ? 0 : sd( x ) );
       if ( x.size() == t.size() && x.size() > 1 )
 	{
-	  writer.value( "TIME_R" , corr( t , x ) );
+	  writer.value( "TIME_CORR" , corr( t , x ) );
 	  writer.value( "TIME_BETA" , slope( t , x ) );
 	}
       std::vector<double> early_x, late_x;
       for (int j=0;j<x.size();j++)
 	if ( relv[j] < 0.5 ) early_x.push_back( x[j] ); else late_x.push_back( x[j] );
-      if ( ! early_x.empty() && ! late_x.empty() && mean( early_x ) > 0 && mean( late_x ) > 0 )
-	write_log2_ratio( "EARLY_LATE_R" , mean( early_x ) , mean( late_x ) );
+      if ( (int)early_x.size() >= opt.min_seg_n && (int)late_x.size() >= opt.min_seg_n )
+	writer.value( "EARLY_LATE_DIFF" , mean( early_x ) - mean( late_x ) );
       if ( bg.has_hypno )
 	{
 	  std::set<std::string> n2; n2.insert( "N2" );
@@ -900,13 +994,13 @@ void evtdyn_t::output( const std::map<std::string,std::string> & faclvl ,
 	      if ( segment( e[r].interval , b2 ) != -1 ) x2.push_back( x[j] );
 	      if ( segment( e[r].interval , b3 ) != -1 ) x3.push_back( x[j] );
 	    }
-	  if ( ! x2.empty() && ! x3.empty() && mean( x2 ) > 0 && mean( x3 ) > 0 )
-	    write_log2_ratio( "N2_N3_R" , mean( x2 ) , mean( x3 ) );
+	  if ( (int)x2.size() >= opt.min_seg_n && (int)x3.size() >= opt.min_seg_n )
+	    writer.value( "N2_N3_DIFF" , mean( x2 ) - mean( x3 ) );
 	}
       if ( bg.has_cycles )
 	{
 	  std::vector<double> cx, cy;
-	  for (int c=1;c<=8;c++)
+	  for (int c=1;c<=4;c++)
 	    {
 	      std::vector<interval_t> bc = intersect( bg.intervals , cycle_intervals( c ) );
 	      if ( bc.empty() ) continue;
@@ -914,21 +1008,36 @@ void evtdyn_t::output( const std::map<std::string,std::string> & faclvl ,
 	      for (int j=0;j<x.size();j++)
 		if ( segment( e[ rows[j] ].interval , bc ) != -1 ) cv.push_back( x[j] );
 	      if ( cv.empty() ) continue;
-	      cx.push_back( c > 4 ? 4 : c );
+	      cx.push_back( c );
 	      cy.push_back( mean( cv ) );
 	    }
 	  if ( cx.size() > 1 )
 	    writer.value( "CYCLE_SLOPE" , slope( cx , cy ) );
+
+	  // within-cycle property dynamics (pool across cycles)
+	  std::vector<double> wt, wx, wx_e, wx_l;
+	  for (int j=0;j<x.size();j++)
+	    {
+	      const double wr = wcyc_rel[ rows[j] ];
+	      if ( ! is_finite( wr ) ) continue;
+	      wt.push_back( wr );
+	      wx.push_back( x[j] );
+	      if ( wr < 0.5 ) wx_e.push_back( x[j] ); else wx_l.push_back( x[j] );
+	    }
+	  if ( wt.size() > 1 )
+	    {
+	      writer.value( "WCYC_CORR" , corr( wt , wx ) );
+	      writer.value( "WCYC_BETA" , slope( wt , wx ) );
+	    }
+	  if ( (int)wx_e.size() >= opt.min_seg_n && (int)wx_l.size() >= opt.min_seg_n )
+	    writer.value( "WCYC_EARLY_LATE_DIFF" , mean( wx_e ) - mean( wx_l ) );
 	}
-      if ( ! xc.empty() && ! xs.empty() )
+      if ( (int)xc.size() >= opt.min_seg_n && (int)xs.size() >= opt.min_seg_n )
 	writer.value( "CLST_SOL_DIFF" , mean( xc ) - mean( xs ) );
       if ( has_n2_asc_dsc )
 	{
-	  if ( ! xa.empty() && ! xd.empty() )
-	    {
-	      writer.value( "N2_ASC_DSC_DIFF" , mean( xa ) - mean( xd ) );
-	      write_log2_ratio( "N2_ASC_DSC_R" , mean( xa ) , mean( xd ) );
-	  }
+	  if ( (int)xa.size() >= opt.min_seg_n && (int)xd.size() >= opt.min_seg_n )
+	    writer.value( "N2_ASC_DSC_DIFF" , mean( xa ) - mean( xd ) );
 	}
       if ( ! opt.corr.empty() || ! opt.corr1.empty() || ! opt.corr2.empty() )
 	{
@@ -1017,7 +1126,7 @@ void evtdyn_t::from_annots( edf_t & edf , param_t & param )
 {
   evtdyn_t ev;
   ev.init( edf , param );
-  if ( ! param.has( "annot" ) ) Helper::halt( "EVTDYN requires annot" );
+  if ( ! param.has( "annot" ) ) Helper::halt( "requires annot parameter" );
   std::vector<std::string> anames = param.strvector( "annot" );
   std::set<std::string> vars = param.has( "vars" ) ? param.strset( "vars" ) : std::set<std::string>();
   for (int a=0;a<anames.size();a++)

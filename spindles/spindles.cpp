@@ -640,10 +640,10 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
       qdynam_t qd;
       if ( calc_dynamics )
 	qd.init( edf , param );
-
-	      evtdyn_t evtdyn;
-	      if ( calc_evtdyn )
-		evtdyn.init( edf , param , "evtdyn-" );
+      
+      evtdyn_t evtdyn;
+      if ( calc_evtdyn )
+	evtdyn.init( edf , param , "evtdyn-" );
 
       //
       // Pull all data
@@ -2202,8 +2202,6 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 	      // End of COUPL analyses
 	      //
 
-	      
-	      
 	      if ( calc_evtdyn )
 		{
 		  for (int si=0; si<spindles.size(); si++)
@@ -2226,6 +2224,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 		      values[ "FRQ1" ] = sp.frq_h1;
 		      values[ "FRQ2" ] = sp.frq_h2;
 		      values[ "Q" ] = sp.qual;
+		      
 		      if ( sp.c22_raw.size() == 22 && sp.c22_flt.size() == 22 )
 			{
 			  for (int ci=0; ci<22; ci++)
@@ -2234,6 +2233,7 @@ annot_t * spindle_wavelet( edf_t & edf , param_t & param )
 			      values[ "C22_" + catch22_t::short_name( ci ) + "_FLT" ] = sp.c22_flt[ci];
 			    }
 			}
+
 		      if ( sw_coupling || phase_coupling )
 			{
 			  if ( sp.so_phase_anchor >= 0 ) values[ "SO_PHASE_ANCHOR" ] = sp.so_phase_anchor;

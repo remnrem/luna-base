@@ -52,6 +52,8 @@ struct channel_cache_t {
   std::string unit;
   int slot = -1;
   double sr = 0.0;
+  double phys_min = 0.0;
+  double phys_max = 0.0;
   uint64_t sample_step_tp = 0LLU;
   std::vector<uint64_t> timepoints;
   std::vector<double> times;
@@ -133,6 +135,8 @@ std::vector<channel_cache_t> build_channel_caches(edf_t & edf, const std::vector
       ch.unit = edf.header.phys_dimension[ slot ];
       ch.slot = slot;
       ch.sr = edf.header.sampling_freq( slot );
+      ch.phys_min = edf.header.physical_min[ slot ];
+      ch.phys_max = edf.header.physical_max[ slot ];
       if ( ch.sr <= 0 ) continue;
 
       slice_t slice( edf , slot , edf.timeline.wholetrace() );
@@ -393,10 +397,14 @@ waveform_extract_result_t extract_annotation_window_waveforms(
 
   for (int e = 0; e < events.size(); ++e)
     {
-      if ( match_annot_channel && ! annotation_channel_matches( events[e].annot_ch , channels ) )
+      if ( match_annot_channel )
         {
-          ++out.dropped["annot_ch"];
-          continue;
+          if ( events[e].annot_ch == "" || events[e].annot_ch == "." ||
+               ! annotation_channel_matches( events[e].annot_ch , channels ) )
+            {
+              ++out.dropped["annot_ch"];
+              continue;
+            }
         }
 
       interval_t wave_iv = events[e].annot_interval;
@@ -426,6 +434,8 @@ waveform_extract_result_t extract_annotation_window_waveforms(
       for (int c = 0; c < caches.size(); ++c)
         {
           const channel_cache_t & ch = caches[c];
+          if ( match_annot_channel && ch.label != events[e].annot_ch )
+            continue;
           slice_t slice( edf , ch.slot , wave_iv );
           const std::vector<double> * data = slice.pdata();
           const std::vector<uint64_t> * tp = slice.ptimepoints();
@@ -440,6 +450,8 @@ waveform_extract_result_t extract_annotation_window_waveforms(
           block.unit = ch.unit;
           block.sr = ch.sr;
           block.sample_step_tp = ch.sample_step_tp;
+          block.phys_min = ch.phys_min;
+          block.phys_max = ch.phys_max;
           block.data_start_sec = (*tp)[0] * globals::tp_duration;
           block.data_stop_sec = (*tp)[ tp->size() - 1 ] * globals::tp_duration + ( (double)ch.sample_step_tp * globals::tp_duration );
           block.rel_time.resize( tp->size() );
@@ -453,7 +465,8 @@ waveform_extract_result_t extract_annotation_window_waveforms(
           wave.blocks.push_back( block );
         }
 
-      if ( ! okay || wave.blocks.size() != caches.size() )
+      const int expected_blocks = match_annot_channel ? 1 : (int)caches.size();
+      if ( ! okay || (int)wave.blocks.size() != expected_blocks )
         {
           ++out.dropped["empty"];
           continue;

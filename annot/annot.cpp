@@ -1358,13 +1358,14 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 		    return false;
 
 
-		  // Check for valid ordering: i.e. start of next cannot be before start of prior
+		  // Check for valid ordering: the next start can match
+		  // the prior start, defining a zero-duration marker.
 		  
-		  if ( interval.start >= ninterval.start )
+		  if ( interval.start > ninterval.start )
 		    return Helper::vmode_halt( "invalid '...' interval, next line starts too soon: \n" 
 					       + line + "\n"
 					       + buffer + "\n"
-					       + Helper::int2str( interval.start ) + " >= " 
+					       + Helper::int2str( interval.start ) + " > " 
 					       + Helper::int2str( ninterval.start ) );
 		  
 		  // update with start of next annotation
