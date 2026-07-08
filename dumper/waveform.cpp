@@ -103,12 +103,21 @@ struct file_summary_t {
   std::vector<channel_info_t> channels;
   int n_waves;
   std::map<std::string,int> annot_counts;
+  std::map<std::string,int> annot_ch_counts;
 };
 
 long long sr_summary_key( const double sr )
 {
   if ( sr <= 0 ) return 0;
   return std::llround( sr * 1000000.0 );
+}
+
+
+int channel_index( const std::vector<channel_info_t> & channels , const std::string & label )
+{
+  for (int c=0; c<channels.size(); c++)
+    if ( channels[c].label == label ) return c;
+  return -1;
 }
 
 
@@ -793,7 +802,7 @@ file_summary_t read_summary( const std::string & file )
       const std::string annot = read_string( I );
       ++s.annot_counts[ annot ];
       (void)read_string( I );
-      (void)read_string( I );
+      const std::string annot_ch = read_string( I );
       (void)read_f64( I );
       (void)read_f64( I );
       (void)read_f64( I );
@@ -802,7 +811,9 @@ file_summary_t read_summary( const std::string & file )
       (void)read_u64( I );
 
       const int nwc = read_i32( I );
-      if ( nwc != n_channels )
+      const bool all_channels = nwc == n_channels;
+      const int matched_channel = all_channels ? -1 : channel_index( s.channels , annot_ch );
+      if ( ! all_channels && ( nwc != 1 || matched_channel == -1 ) )
         Helper::halt( "malformed .lwf file (channel count mismatch): " + file );
 
       for (int c=0; c<nwc; c++)
@@ -810,8 +821,11 @@ file_summary_t read_summary( const std::string & file )
           const int n = read_i32( I );
           (void)read_f64( I );
           (void)read_f64( I );
-          if ( n < s.channels[c].min_samples ) s.channels[c].min_samples = n;
-          if ( n > s.channels[c].max_samples ) s.channels[c].max_samples = n;
+          const int ch_idx = all_channels ? c : matched_channel;
+          if ( n < s.channels[ch_idx].min_samples ) s.channels[ch_idx].min_samples = n;
+          if ( n > s.channels[ch_idx].max_samples ) s.channels[ch_idx].max_samples = n;
+          const std::string key = annot + "\t" + s.channels[ch_idx].label;
+          ++s.annot_ch_counts[ key ];
         }
     }
 
@@ -1005,12 +1019,13 @@ void dsptools::waveform_summary( param_t & param )
       if ( s.tag != "" ) tags.insert( s.tag );
       for (int a=0; a<s.def_annots.size(); a++) annots.insert( s.def_annots[a] );
       for (int c=0; c<s.channels.size(); c++) ch2sr[ s.channels[c].label ].insert( sr_summary_key( s.channels[c].sr ) );
-      std::map<std::string,int>::const_iterator aa = s.annot_counts.begin();
-      while ( aa != s.annot_counts.end() )
+      std::map<std::string,int>::const_iterator aa = s.annot_ch_counts.begin();
+      while ( aa != s.annot_ch_counts.end() )
         {
-          for (int c=0; c<s.channels.size(); c++)
+          std::vector<std::string> tok = Helper::parse( aa->first , "\t" );
+          if ( tok.size() == 2 )
             {
-              const std::string key = s.id + "\t" + s.channels[c].label + "\t" + ( s.tag == "" ? "." : s.tag ) + "\t" + aa->first;
+              const std::string key = s.id + "\t" + tok[1] + "\t" + ( s.tag == "" ? "." : s.tag ) + "\t" + tok[0];
               event_counts[ key ] += aa->second;
             }
           ++aa;
