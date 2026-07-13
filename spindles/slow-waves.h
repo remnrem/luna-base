@@ -53,7 +53,8 @@ struct slow_wave_param_t {
   // if using thr, then only base on P2P
   // i.e. if signal polarity is uncertain
   
-  bool ignore_neg_peak ; // = false , 
+  bool ignore_neg_peak ; // = false ,
+  bool ignore_p2p ; // = false , 
 
   // use mean versus median 
   bool   use_mean ; // = false , 
@@ -117,6 +118,7 @@ struct slow_wave_param_t {
   // output options
   bool out_idx;  // for SO-level outputs
   bool out_all_slopes;  // SLOPE -->  SLOPE_POS1  POS2 NEG1 NEG2 (def = NEG2)
+  bool pol; // paired t-test for DUR_NEG vs DUR_POS
 
   // skip SO detection per se
   bool skip;
@@ -374,6 +376,10 @@ private:
   double median_slope_p1; // up-going for pos peak     SW_SLOPE_POS1 
   double median_slope_p2; // down-going for pos peak   SW_SLOPE_POS2
   double median_trans, median_trans_frq; 
+
+  int dur_pol_n;
+  double dur_pol_diff;
+  double dur_pol_p;
 
   int Fs;
 

@@ -408,12 +408,15 @@ waveform_extract_result_t extract_annotation_window_waveforms(
         }
 
       interval_t wave_iv = events[e].annot_interval;
+      const uint64_t requested_tp = wave_iv.duration() + left_tp + right_tp;
       if ( left_tp ) wave_iv.expand_left( left_tp );
       if ( right_tp ) wave_iv.expand_right( right_tp );
 
-      const uint64_t requested_tp = wave_iv.duration();
       const uint64_t retained_tp = edf.timeline.valid_tps( wave_iv );
-      if ( requested_tp == 0 || ( require == "full" ? retained_tp != requested_tp : retained_tp == 0LLU ) )
+      if ( requested_tp == 0
+           || ( require == "full"
+                ? ( wave_iv.duration() != requested_tp || retained_tp != requested_tp )
+                : retained_tp == 0LLU ) )
         {
           ++out.dropped["retention"];
           continue;

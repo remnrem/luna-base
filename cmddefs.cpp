@@ -5796,6 +5796,7 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "mag" , "2" , "SO, relative mangitude threshold (times mean/median)" );
   add_param( "SPINDLES" , "uV-neg" , "-40" , "SO, absolute negative peak uV amplitude threshold" );
   add_param( "SPINDLES" , "uV-p2p" , "80" , "SO, absolute peak-to-peak uV amplitude threshold" );
+  add_param( "SPINDLES" , "ignore-p2p" , "F" , "SO, ignore peak-to-peak amplitude and use negative peak only for amplitude thresholding" );
     
   add_param( "SPINDLES" , "f-lwr" , "0.2" , "SO filter, lower transition frequency" );
   add_param( "SPINDLES" , "f-upr" , "4.5" , "SO filter, upper transition frequency" );
@@ -5965,7 +5966,9 @@ void cmddefs_t::init()
   add_param( "SO" , "pct" , "75" , "Percentile-based threshold for SO/delta classification" );
   add_param( "SO" , "pct-neg" , "75" , "Percentile threshold for negative peak amplitude" );
   add_param( "SO" , "pct-pos" , "75" , "Percentile threshold for positive peak amplitude" );
+  add_param( "SO" , "ignore-p2p" , "F" , "Ignore peak-to-peak amplitude and use negative peak only for amplitude thresholding" );
   add_param( "SO" , "neg2pos" , "" , "Use negative-to-positive zero crossings" );
+  add_param( "SO" , "pol" , "F" , "Run paired t-test comparing negative and positive SO half-wave durations" );
   add_param( "SO" , "th-mean" , "" , "Use mean not median" );
   add_param( "SO" , "stats-median" , "" , "Use median (not mean) when reporting stats over SOs" );  
   add_param( "SO" , "SO-only" , "" , "Restrict retained events to those classified as SOs" );
@@ -5997,6 +6000,8 @@ void cmddefs_t::init()
   add_var( "SO" , "CH" , "SO_DUR" , "SO duration (secs)" );      
   add_var( "SO" , "CH" , "SO_DUR_NEG" , "Negative peak duration (secs)" );
   add_var( "SO" , "CH" , "SO_DUR_POS", "Positive peak duration (secs)" );
+  add_var( "SO" , "CH" , "SO_DUR_POL_DIFF" , "Mean difference in negative minus positive SO half-wave duration (secs) [pol]" );
+  add_var( "SO" , "CH" , "SO_DUR_POL_P" , "Paired t-test p-value for negative versus positive SO half-wave duration [pol]" );
   add_var( "SO" , "CH" , "SO_TRANS" , "SO transition (secs)" );      
   add_var( "SO" , "CH" , "SO_TRANS_FREQ" , "SO transition freq (Hz)" );      
   add_var( "SO" , "CH" , "SO_SLOPE_POS1" , "Positive peak rising slope" );
