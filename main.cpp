@@ -2589,17 +2589,18 @@ void proc_eval_tester( const bool verbose )
 
   tok.bind( inputs , &out );
   
-  bool is_valid = tok.evaluate( verbose );
-  
+  const bool is_valid = tok.evaluate( verbose );
+
+  // bool-castability is reported for information only; it no longer gates
+  // validity, so float/decimal results (e.g. 1/2 -> 0.5) still count valid
   bool retval = false;
-  
-  if ( ! tok.value( retval ) ) is_valid = false;
+  const bool has_bool = tok.value( retval );
 
   std::cout << "parsed as a valid expression : " << ( is_valid ? "yes" : "no" ) << "\n";
   if ( tok.errmsg() != "" )
     std::cout << "error detail                : " << Helper::rtrim( tok.errmsg() ) << "\n";
   std::cout << "return value                 : " << tok.result() << "\n";
-  std::cout << "return value (as T/F)        : " << ( retval ? "true" : "false" ) << "\n";
+  std::cout << "return value (as T/F)        : " << ( has_bool ? ( retval ? "true" : "false" ) : "n/a (non-boolean)" ) << "\n";
   std::cout << "assigned meta-data           : " << out.print() << "\n";  
   std::exit(1);
 

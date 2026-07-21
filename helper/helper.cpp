@@ -1329,28 +1329,33 @@ void clocktime_t::parse_string( const std::string & t , const date_format_t form
   // but need to take care of AM/PM if they have a space beforehand
   std::string t1 = Helper::search_replace( Helper::search_replace(t , " AM" , "AM" ) , " PM" , "PM" ) ;
   
-  // dates? (sep = '/' or '-' only)
-  // also replace any spaces with '-' (i.e. for YYYY-MM-DD HH:MM:SS.SSSS format)
+  // Detect a date prefix by validating candidate prefixes, rather than by
+  // splitting all delimiters at once. This keeps date periods separate from
+  // dotted HMS periods (e.g. 02.02.25-20.00.00.1250).
+  const std::string normalized = Helper::search_replace(t1 , ' ', '-' );
+  bool has_date = false;
+  for ( size_t p = 0 ; p < normalized.size() ; ++p )
+    {
+      if ( normalized[p] != '-' ) continue;
+      const std::string date = normalized.substr( 0 , p );
+      const std::string tm = normalized.substr( p + 1 );
+      if ( ! date_t::is_valid( date , format ) ) continue;
 
-  std::vector<std::string> tok = Helper::parse( Helper::search_replace(t1 , ' ', '-' ) , "-/" );
-  if ( tok.size() == 1 )
+      date_t dt( date , format );
+      d = date_t::count( dt );
+      valid = Helper::timestring( tm , &h, &m, &s );
+      has_date = true;
+      break;
+    }
+
+  if ( ! has_date )
     {
       d=0;
       valid = Helper::timestring( t , &h, &m, &s );
-      if ( h < 0 || m < 0 || s < 0 ) valid = false;
-      if ( h > 23 || m > 59 || s > 60.0 ) valid = false;
     }
-  else if ( tok.size() == 4 )
-    {
-      // allow optional mdy or ymd date formats
-      date_t dt( tok[0] + "-" + tok[1] + "-" + tok[2] , format );
-      d = date_t::count( dt );
-      valid = Helper::timestring( tok[3] , &h, &m, &s );      
-      if ( h < 0 || m < 0 || s < 0 ) valid = false;
-      if ( h > 23 || m > 59 || s > 60.0 ) valid = false;
-    }
-  else
-    logger << "  *** bad format date/time string encountered: " << t << "\n";
+
+  if ( h < 0 || m < 0 || s < 0 ) valid = false;
+  if ( h > 23 || m > 59 || s > 60.0 ) valid = false;
   
 }
 
@@ -2063,6 +2068,49 @@ bool Helper::timestring( const std::string & t0, int * h, int *m , double *s )
 
 }
 
+bool Helper::is_hms( const std::string & t0, const date_format_t format )
+{
+  // Continuation markers are not time values.  In particular, "..." has
+  // three periods but means read through to the next annotation.
+  if ( t0 == "..." || t0 == "-" || t0.size() == 0 ) return false;
+
+  std::string t = t0;
+  if ( t.size() > 2 && t[0] == '0' && t[1] == '+' ) t = t.substr(2);
+
+  // Separate a date prefix before counting periods in the time component.
+  // This keeps 01.02.25-20.00.00.1234 valid: the date's periods do not
+  // participate in the hh.mm.ss[.ffff] rule.
+  const std::string normalized = Helper::search_replace(t, ' ', '-');
+  bool has_date = false;
+  for ( size_t p = 0 ; p < normalized.size() ; ++p )
+    {
+      if ( normalized[p] != '-' ) continue;
+      const std::string date = normalized.substr( 0 , p );
+      if ( ! date_t::is_valid( date , format ) ) continue;
+      t = normalized.substr( p + 1 );
+      has_date = true;
+      break;
+    }
+
+  if ( ! has_date && normalized.find( '-' ) != std::string::npos ) return false;
+
+  int nperiod = 0;
+  int ncolon = 0;
+  for ( size_t i = 0 ; i < t.size() ; ++i )
+    {
+      if ( t[i] == '.' ) ++nperiod;
+      else if ( t[i] == ':' ) ++ncolon;
+    }
+
+  if ( ncolon > 0 )
+    {
+      const std::vector<std::string> tok = Helper::parse( t , ":" );
+      return tok.size() == 2 || tok.size() == 3 || tok.size() == 4;
+    }
+
+  return nperiod == 2 || nperiod == 3;
+}
+
 
 std::string Helper::insert_indiv_id( const std::string & id , const std::string & str )
 {
@@ -2508,11 +2556,13 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 			  tok.bind( inputs , &out );
 
 			  const bool verbose = false;
-			  bool is_valid = tok.evaluate( verbose );  
-			  bool retval;  
-			  
-			  if ( ! tok.value( retval ) ) is_valid = false;
-			  
+			  // Assign whenever the expression evaluates successfully,
+			  // regardless of result type. Eval::value(bool&) only accepts
+			  // bool/int, so gating on it would silently drop float results
+			  // (e.g. ${x:=1/2} or ${x:=0.8*0.5}), leaving the literal string
+			  // in place; as_string() renders int/float/bool alike.
+			  const bool is_valid = tok.evaluate( verbose );
+
 			  // std::cout << "parsed as a valid expression : "
 			  // 	    << ( is_valid ? "yes" : "no" ) << "\n";
 			  // std::cout << "return value                 : "
@@ -3040,4 +3090,3 @@ bool Helper::sl_slicer( const std::string & f , int n , int m , int * s1 , int *
     
   return true;
 }
-

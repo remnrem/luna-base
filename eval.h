@@ -476,6 +476,7 @@ void proc_hrv( edf_t & , param_t & );
 
 void proc_arousals( edf_t & , param_t & );
 void proc_combine_emg( edf_t & , param_t & );
+void proc_leg_movements( edf_t & , param_t & );
 void proc_spindles( edf_t & , param_t & );
 void proc_coupling( edf_t & , param_t & );
 void proc_ripples( edf_t & , param_t & );

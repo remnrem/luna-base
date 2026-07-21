@@ -369,6 +369,10 @@ namespace Helper
   std::string timestring( const std::string & , const interval_t & , char delim = '.' , const std::string & delim2 = " - " );
 
   double position( uint64_t a , uint64_t tot , int * h , int * m , double *s);  
+  // Return true when a value has an explicit HMS clock-time shape.  A
+  // single-period numeric value remains elapsed seconds; period-delimited
+  // HMS requires two periods (or three for fractional seconds).
+  bool is_hms( const std::string & , const date_format_t format = DMY );
   bool timestring( const std::string & , int * h, int *m , double *s );
   bool add_clocktime( int *h , int *m , double *s , uint64_t a );
 
@@ -719,4 +723,3 @@ struct clocktime_t
 
 
 #endif
-

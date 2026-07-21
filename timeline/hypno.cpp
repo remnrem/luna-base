@@ -471,7 +471,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   if ( lights_off < 0 && param.has( "lights-off" ) && param.value( "lights-off" ) != "." && param.value( "lights-off" ) != "" )
     {
       const std::string loffstr = param.value( "lights-off" );
-      const bool hms_mode = loffstr.find( ":" ) != std::string::npos;
+      const bool hms_mode = Helper::is_hms( loffstr );
       
       // argument in seconds:
       double x;
@@ -527,7 +527,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
     {
       
       const std::string lonstr = param.value( "lights-on" );
-      const bool hms_mode = lonstr.find( ":" ) != std::string::npos;
+      const bool hms_mode = Helper::is_hms( lonstr );
       
       // argument in seconds:
       double x;

@@ -249,7 +249,17 @@ struct globals
   static date_format_t write_annot_date_format;
   static date_format_t read_edf_date_format;
   static bool check_annot_dates;
-  
+
+  // on load, drop (with a console warning) any annotation that starts
+  // at or after the end of the recording; default on (can be turned off
+  // via drop-annots-past-end=F)
+  static bool drop_annots_past_end;
+
+  // For undated annotation clock-times, retain the next-occurrence wrap by
+  // default; when false, only retain a wrapped time if it falls within the
+  // EDF duration.
+  static bool annot_time_wrap;
+
   static std::set<std::string> annot_alignment;
 
   static bool force_edf;

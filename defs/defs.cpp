@@ -143,6 +143,8 @@ date_format_t globals::read_annot_date_format;
 date_format_t globals::write_annot_date_format;
 date_format_t globals::read_edf_date_format;
 bool globals::check_annot_dates;
+bool globals::drop_annots_past_end;
+bool globals::annot_time_wrap;
 
 std::string globals::current_tag;
 std::string globals::indiv_wildcard;
@@ -625,9 +627,14 @@ void globals::init_defs()
   //  18:00 -> 18:00 (as is)
 
   // check that date in annot file is not > 1 year past EDF start (if defined)
-  // (turned off programmatically for empty EDF detect_times() ) 
+  // (turned off programmatically for empty EDF detect_times() )
   check_annot_dates = true;
-  
+
+  // drop annotations that start past the end of the recording (on by default;
+  // turned off programmatically for empty EDF detect_times() )
+  drop_annots_past_end = true;
+  annot_time_wrap = true;
+
   problem = false;
   empty = false;
   

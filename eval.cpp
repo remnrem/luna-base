@@ -1086,6 +1086,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "SPINDLES" ) )     { fnd = true; proc_spindles( edf, param(c) ); }
       if ( (!fnd) && is( c, "AROUSALS" ) )     { fnd = true; proc_arousals( edf, param(c) ); }
       if ( (!fnd) && is( c, "COMBINE-EMG" ) )  { fnd = true; proc_combine_emg( edf, param(c) ); }
+      if ( (!fnd) && is( c, "LM" ) )           { fnd = true; proc_leg_movements( edf, param(c) ); }
       if ( (!fnd) && is( c, "SO" ) )           { fnd = true; proc_slowwaves( edf, param(c) ); }
       if ( (!fnd) && is( c, "COUPL" ) )        { fnd = true; proc_coupling( edf , param(c) ); }
       if ( (!fnd) && is( c, "RIPPLES" ) )      { fnd = true; proc_ripples( edf , param(c) ); }
@@ -1196,20 +1197,15 @@ void proc_set_ivar( edf_t & edf , param_t & param )
 
   const bool verbose = false ;
   
-  bool is_valid = tok.evaluate( verbose );
-  
-  bool retval;
-  
-  if ( ! tok.value( retval ) ) is_valid = false;
+  // assign whenever the expression evaluates successfully, regardless of
+  // result type; Eval::value(bool&) rejects float results (see the ${x:=}
+  // handling in helper.cpp), which would otherwise silently drop numbers
+  const bool is_valid = tok.evaluate( verbose );
 
-  // std::cout << "parsed as a valid expression : " << ( is_valid ? "yes" : "no" ) << "\n";
-  // std::cout << "return value                 : " << tok.result() << "\n";
-  // std::cout << "return value (as T/F)        : " << ( retval ? "true" : "false" ) << "\n";
-  // std::cout << "assigned meta-data           : " << out.print() << "\n";  
-
-  // and set (as string value)
-  if ( is_valid ) 
-    cmd_t::ivars[ edf.id ][ var ] = tok.result();
+  // and set (as string value); as_string() renders int/float/bool without the
+  // type suffix that tok.result() appends (e.g. "5" not "5i", "0.4" not "0.4f")
+  if ( is_valid )
+    cmd_t::ivars[ edf.id ][ var ] = tok.value().as_string();
 }
 
 // SET-HEADERS : set EDF header fields
@@ -3049,16 +3045,22 @@ void proc_covar( edf_t & edf , param_t & param )
   edf.covar(signals1,signals2);
 }
 
-// AROUSALS : detect micro-arousals during sleep
+// AROUSALS : current local-rise sleep arousal detector
 void proc_arousals( edf_t & edf , param_t & param )
 {
-  arousals_t arousals( edf , param );
+  arousals2_t arousals2( edf , param );
 }
 
 // COMBINE-EMG : quality-driven multi-channel EMG stitching
 void proc_combine_emg( edf_t & edf , param_t & param )
 {
   combine_emg_t combine_emg( edf , param );
+}
+
+// LM : leg-movement / periodic-leg-movement detection (WASM 2016)
+void proc_leg_movements( edf_t & edf , param_t & param )
+{
+  leg_movements_t lm( edf , param );
 }
 
 // SPINDLES : spindle detection using CWT or bandpass/RMS
@@ -3578,11 +3580,10 @@ void proc_epoch( edf_t & edf , param_t & param )
   if ( param.has( "offset" ) )
     {
       std::string ostr = param.value( "offset" );
-      std::vector<std::string> tok = Helper::parse( ostr  , ":" );
-      
-      // hh:mm, hh:mm:ss or dd:hh:mm:ss
-      // (can be hh:mm:ss.ssss)                                         
-      bool is_hms = tok.size() == 2 || tok.size() == 3 || tok.size() == 4;
+      // hh:mm, hh:mm:ss, dd:hh:mm:ss, or period-delimited equivalents
+      // (fractional seconds are supported).  A single-period numeric value
+      // remains an elapsed-second offset.
+      bool is_hms = Helper::is_hms( ostr );
 
       if ( is_hms )
 	{
@@ -4975,19 +4976,116 @@ void proc_rename( edf_t & edf , param_t & param )
 
 }
 
-// DROP-ANNOTS : drop one or more annotations
+// DROP-ANNOTS : drop one or more annotations (whole classes); or, with
+// mask=T, drop only the individual instances that are masked (per the
+// same any/all/start overlap logic ANNOTS uses), leaving the class/
+// channel itself in place
 void proc_drop_annots( edf_t & edf , param_t & param )
 {
-  
+
+  //
+  // instance-level mode: drop masked instances, keep the annot class
+  //
+
+  if ( param.has( "mask" ) )
+    {
+
+      std::vector<std::string> anns;
+      if      ( param.has( "annot" ) )  anns = param.strvector( "annot" );
+      else if ( param.has( "annots" ) ) anns = param.strvector( "annots" );
+      else anns = edf.annotations->names();
+
+      // how to decide whether an instance overlaps a mask or not?
+      //  start  -- drop instances that start in a masked region
+      //  any    -- drop instances that have no overlap with an unmasked region (default)
+      //  all    -- drop instances that are not completely within an unmasked region
+
+      int keep_mode = 0;
+      if ( param.has( "any" ) ) keep_mode = 0;
+      if ( param.has( "all" ) ) keep_mode = 1;
+      if ( param.has( "start" ) ) keep_mode = 2;
+
+      logger << "  dropping annotation instances based on ";
+      if ( keep_mode == 0 )      logger << "any overlap with";
+      else if ( keep_mode == 1 ) logger << "complete (all) overlap with";
+      else if ( keep_mode == 2 ) logger << "starting in";
+      logger << " a masked region\n";
+
+      int tot_dropped = 0;
+
+      for (int a = 0 ; a < anns.size() ; a++ )
+	{
+	  annot_t * annot = edf.annotations->find( anns[a] );
+	  if ( annot == NULL ) continue;
+
+	  // collect the keys to drop first: we cannot safely erase
+	  // from interval_events while iterating over it
+	  std::vector<instance_idx_t> drop_list;
+
+	  annot_map_t::const_iterator ii = annot->interval_events.begin();
+	  while ( ii != annot->interval_events.end() )
+	    {
+	      const instance_idx_t & instance_idx = ii->first;
+
+	      // 0-duration annots: nudge by 1 time-unit, as the
+	      // mask-overlap tests expect a non-zero span (same
+	      // adjustment ANNOTS makes)
+	      interval_t search = instance_idx.interval;
+	      if ( search.duration() == 0LLU ) search.stop += 1LLU;
+
+	      bool is_masked = false;
+
+	      // With no explicit epoch mask, the normal mask predicates consider
+	      // every interval unmasked.  Treat the finite EDF time range as the
+	      // implicit available region for DROP-ANNOTS, so that mask=all can
+	      // also remove annotations extending beyond the recording.
+	      const bool no_epoch_mask = ! edf.timeline.is_epoch_mask_set();
+	      const uint64_t edf_end_tp = edf.timeline.last_time_point_tp + 1LLU;
+	      const bool starts_past_edf = search.start >= edf_end_tp;
+	      const bool extends_past_edf = search.stop > edf_end_tp;
+
+	      if ( no_epoch_mask && ( starts_past_edf || extends_past_edf ) )
+		{
+		  if      ( keep_mode == 0 ) is_masked = starts_past_edf;
+		  else if ( keep_mode == 1 ) is_masked = true;
+		  else if ( keep_mode == 2 ) is_masked = starts_past_edf;
+		}
+	      else if ( keep_mode == 0 ) is_masked = ! edf.timeline.interval_overlaps_unmasked_region( search );
+	      else if ( keep_mode == 1 ) is_masked = ! edf.timeline.interval_is_completely_unmasked( search );
+	      else if ( keep_mode == 2 ) is_masked = edf.timeline.interval_start_is_masked( search );
+
+	      if ( is_masked ) drop_list.push_back( instance_idx );
+
+	      ++ii;
+	    }
+
+	  // now safe to erase; annot_t::remove() also invalidates the
+	  // annot's interval-tree, so subsequent ANNOTS/MASK/etc queries
+	  // rebuild it rather than tripping over stale entries
+	  for (int d=0; d<drop_list.size(); d++)
+	    annot->remove( drop_list[d].id , drop_list[d].interval , drop_list[d].ch_str );
+
+	  tot_dropped += drop_list.size();
+	}
+
+      logger << "  dropped " << tot_dropped << " masked annotation instance(s)\n";
+
+      return;
+    }
+
+  //
+  // default: drop whole annotation classes
+  //
+
   std::vector<std::string> drops;
 
   if      ( param.has( "annot" ) ) drops = param.strvector( "annot" ) ;
   else if ( param.has( "annots" ) ) drops = param.strvector( "annots" ) ;
   else edf.annotations->drop();
-      
-  if ( drops.size() > 0 ) 
+
+  if ( drops.size() > 0 )
     edf.annotations->drop( &drops );
-  
+
 }
   
 
@@ -6452,6 +6550,25 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
 
 
 
+  // drop (with a console warning) annotations that start at or after
+  // the end of the recording; default is on
+  if ( Helper::iequals( tok0 , "drop-annots-past-end" ) )
+    {
+      globals::drop_annots_past_end = Helper::yesno( tok1 );
+      return;
+    }
+
+
+  // For undated annotation clock-times, allow next-occurrence wrapping by
+  // default.  If disabled, a wrapped value is retained only when it still
+  // falls within the EDF duration; otherwise it is treated as pre-start.
+  if ( Helper::iequals( tok0 , "annot-time-wrap" ) )
+    {
+      globals::annot_time_wrap = Helper::yesno( tok1 );
+      return;
+    }
+
+
   // do not load sample-list annotations
   if ( Helper::iequals( tok0 , "skip-sl-annots" ) )
     {
@@ -6923,6 +7040,8 @@ void cmd_t::register_specials()
   specials.insert( "skip-edf-annots" ) ;
   specials.insert( "skip-annots" ) ;
   specials.insert( "skip-all-annots" ) ;
+  specials.insert( "drop-annots-past-end" ) ;
+  specials.insert( "annot-time-wrap" ) ;
   specials.insert( "path" ) ;
   specials.insert( "tt-prepend" );
   specials.insert( "tt-prefix" ) ;

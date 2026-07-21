@@ -159,6 +159,13 @@ void annot_t::remove( const std::string & id , const interval_t & interval , con
   // clean up idx
   interval_events.erase( key );
 
+  // the interval-tree (if built) now has a stale entry for this
+  // instance and is out of sync with interval_events; invalidate it
+  // so the next extract()/extract_complete_overlap() call rebuilds it
+  // from scratch, rather than tripping the "annots added after
+  // querying" halt (which only expects growth, not removal)
+  interval_tree.clear();
+
 }
 
 
@@ -757,6 +764,12 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
   int line_count = 0;
 
+  // Count annotations skipped because they fall outside the EDF.  Keep the
+  // two counters so the final warning can account for every dropped row,
+  // including rows marked as preceding the EDF start by get_interval().
+  int n_dropped_past_end = 0;
+  int n_dropped_before_start = 0;
+
   std::map<std::string,annot_t*> annot_map;
   
   std::map<annot_t*,std::vector<std::string> > cols;
@@ -1273,14 +1286,28 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // of 
 	  //
 	  
-	  if ( interval.start == 1 && interval.stop == 0 ) 
+	  if ( interval.start == 1 && interval.stop == 0 )
 	    {
-	      //logger << "  *** warning, skipping annot\n";
-	      continue;	      
+	      ++n_dropped_before_start;
+	      continue;
 	    }
 
-	  
-	  	  
+	  //
+	  // Check this isn't past the end of the recording (default: drop
+	  // silently-loaded-but-out-of-range annotations, with a console
+	  // summary once the whole file has been processed; can be turned
+	  // off via drop-annots-past-end=F )
+	  //
+
+	  if ( globals::drop_annots_past_end
+	       && interval.start >= parent_edf.timeline.last_time_point_tp + 1LLU )
+	    {
+	      ++n_dropped_past_end;
+	      continue;
+	    }
+
+
+
 	  //
 	  // a single time-point
 	  //
@@ -1667,7 +1694,14 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 
   FIN.close();
 
-  
+  const int n_dropped = n_dropped_past_end + n_dropped_before_start;
+  if ( n_dropped > 0 )
+    logger << "  *** warning: dropped " << n_dropped
+	   << " annotation(s) from " << f
+	   << " outside the recording bounds"
+	   << " (" << n_dropped_past_end << " past end, "
+	   << n_dropped_before_start << " before start)\n";
+
   return true;
 }
 
@@ -1740,6 +1774,12 @@ interval_t annot_t::get_interval( const std::string & line ,
           
   bool before_edf_start = false;
 
+  // Preserve explicit dN syntax locally.  This is intentionally not folded
+  // into clocktime_t: 01.01.85 remains the EDF null date, while d1/d2/... is
+  // an explicit relative-day instruction in this .annot row.
+  int relative_day_start = 0;
+  int relative_day_stop = 0;
+
   //
   // special case: if find 'd1-', 'd2-' etc in a time file, replace with start-date (+1, +2) etc  
   //
@@ -1756,11 +1796,23 @@ interval_t annot_t::get_interval( const std::string & line ,
 	  Helper::halt( "bad format: " + tok[dd] );
 	if ( day < 1 || day > 100 )
 	  Helper::halt( "expecting d1, d2, ... (up to d100): " + tok[dd] + "\n" + line );      
-	clocktime_t edate = startdatetime;
-	edate.advance_days( day - 1 );
-	// reconstruct
-	//std::cout << " tok[x] " << tok[dd] << " --> " << edate.as_date_string( '/' ) + "-" + dtok[1] << "\n";
-	tok[dd] = edate.as_date_string( '/' ) + "-" + dtok[1];
+	if ( dd == 3 ) relative_day_start = day;
+	else relative_day_stop = day;
+
+	if ( startdatetime.d == 0 )
+	  {
+	    // Keep only the time component for anonymized EDFs; the relative day
+	    // is applied below using the EDF start clock time.
+	    tok[dd] = dtok[1];
+	  }
+	else
+	  {
+	    clocktime_t edate = startdatetime;
+	    edate.advance_days( day - 1 );
+	    // reconstruct
+	    //std::cout << " tok[x] " << tok[dd] << " --> " << edate.as_date_string( '/' ) + "-" + dtok[1] << "\n";
+	    tok[dd] = edate.as_date_string( '/' ) + "-" + dtok[1];
+	  }
       }
   
   //
@@ -1929,20 +1981,19 @@ interval_t annot_t::get_interval( const std::string & line ,
       std::string stop_str = is_elapsed_hhmmss_stop ? 
 	tok[4].substr(2) : tok[4] ;
       
-      // get :-delimited hh:mm:ss values ( potentially stripping [ and ] from start/end
-      std::vector<std::string> tok_start_hms = Helper::parse( start_str , ":" );
+      // Does this look like hh:mm:ss, hh.mm.ss, or a fractional equivalent?
+      // Helper::is_hms() deliberately treats one-period numeric values as
+      // elapsed seconds and excludes continuation markers such as "...".
+      const std::vector<std::string> tok_start_hms = Helper::parse( start_str , ":" );
+      const std::vector<std::string> tok_stop_hms = ( *readon || col2dur )
+	? std::vector<std::string>() : Helper::parse( stop_str , ":" );
 
-      std::vector<std::string> tok_stop_hms;
-      if ( ! ( *readon || col2dur ) ) 
-	tok_stop_hms = Helper::parse( stop_str  , ":" );
+      bool is_hms1 = Helper::is_hms( start_str , globals::read_annot_date_format );
+      bool is_hms2 = ( *readon || col2dur ) ? false
+	: Helper::is_hms( stop_str , globals::read_annot_date_format );
 
-      //      std::cout << " s [" << start_str << "] \n";
-      
-      // does this look like hh:mm:ss or dd:hh:mm:ss?   (nb can be hh:mm:ss.ssss) 
-      bool is_hms1 = tok_start_hms.size() == 3 || tok_start_hms.size() == 4; 
-      bool is_hms2 = ( *readon || col2dur ) ? false : ( tok_stop_hms.size() == 3 || tok_stop_hms.size() == 4 );
-
-      // check for invalid hh:mm or mm:ss forms
+      // Preserve the existing rejection of two-field colon times in .annot
+      // rows; period HMS is intentionally only hh.mm.ss[.fraction].
       if ( tok_start_hms.size() == 2 ) Helper::halt( "invalid time string: " + start_str  + "\n" + line);
       if ( tok_stop_hms.size() == 2 ) Helper::halt( "invalid time string: " + stop_str  + "\n" + line);
       
@@ -1964,6 +2015,25 @@ interval_t annot_t::get_interval( const std::string & line ,
       // convert to / read as seconds 
       
       double dbl_start = 0 , dbl_stop = 0;
+      bool undated_hms_start = false;
+      bool undated_hms_stop = false;
+
+      // Undated clock-times normally use the next-occurrence convention.
+      // With annot-time-wrap=F, keep that convention only if the wrapped
+      // value remains inside this EDF; otherwise use the signed same-day
+      // difference so the annotation follows the normal pre-start path.
+      const double annot_end_sec = ( parent_edf.timeline.last_time_point_tp + 1LLU )
+	/ (double)globals::tp_1sec;
+      auto annot_clock_difference = [&]( const clocktime_t & t , bool is_stop ) -> double
+	{
+	  const double wrapped = clocktime_t::ordered_difference_seconds( starttime , t );
+	  // EDF time is half-open for event starts: a point at duration is
+	  // outside the recording.  An interval stop may equal duration.
+	  const bool within_edf = wrapped < annot_end_sec
+	    || ( is_stop && wrapped <= annot_end_sec );
+	  if ( globals::annot_time_wrap || within_edf ) return wrapped;
+	  return clocktime_t::difference_seconds( starttime , t );
+	};
       
       // start time
       
@@ -2002,7 +2072,19 @@ interval_t annot_t::get_interval( const std::string & line ,
 	      
 	      // day information specified?
 	      
-	      if ( startdatetime.d != 0 && atime.d != 0 ) 
+	      if ( relative_day_start != 0 && startdatetime.d == 0 )
+		{
+		  // For an anonymized EDF, d1/d2/... supplies relative calendar-day
+		  // information even though the stored date is intentionally null.
+	  dbl_start = ( relative_day_start - 1 ) * 86400.0
+	    + atime.seconds() - starttime.seconds();
+	  if ( dbl_start < 0 )
+	    {
+	      before_edf_start = true;
+	      dbl_start = 0;
+	    }
+		}
+	      else if ( startdatetime.d != 0 && atime.d != 0 )
 		{
 		  
 		  // sanity check -- if annot is *years and years* past EDF start, will
@@ -2040,8 +2122,14 @@ interval_t annot_t::get_interval( const std::string & line ,
 		  // otherwise, no date information for the annotation, so
 		  //  a) ignore date of EDF start and
 		  //  b) assume that the time is the next to occur		   
-		  
-		  dbl_start = clocktime_t::ordered_difference_seconds( starttime , atime ) ;
+
+		  undated_hms_start = true;
+		  dbl_start = annot_clock_difference( atime , false );
+		  if ( dbl_start < 0 )
+		    {
+		      before_edf_start = true;
+		      dbl_start = 0;
+		    }
 		  
 		}
 	      	      
@@ -2068,7 +2156,7 @@ interval_t annot_t::get_interval( const std::string & line ,
 	  // allow reading mm-dd-yy etc
 	  clocktime_t btime( stop_str , globals::read_annot_date_format );
 	  
-	  if ( is_elapsed_hhmmss_stop )
+	      if ( is_elapsed_hhmmss_stop )
 	    {
 	      // was elapsed 0+hh:mm:ss
 	      
@@ -2084,7 +2172,17 @@ interval_t annot_t::get_interval( const std::string & line ,
 	    {
 	      // date-time available for stop and EDF start?
 
-              if ( startdatetime.d != 0 && btime.d != 0 )
+	      if ( relative_day_stop != 0 && startdatetime.d == 0 )
+		{
+		  dbl_stop = ( relative_day_stop - 1 ) * 86400.0
+		    + btime.seconds() - starttime.seconds();
+		  if ( dbl_stop < 0 )
+		    {
+		      before_edf_start = true;
+		      dbl_stop = 0;
+		    }
+		}
+	      else if ( startdatetime.d != 0 && btime.d != 0 )
                 {
 		  
                   int earlier = clocktime_t::earlier( startdatetime , btime );
@@ -2104,8 +2202,14 @@ interval_t annot_t::get_interval( const std::string & line ,
 		  // otherwise, no date information for the annotation, so
 		  //  a) ignore date of EDF start and
 		  //  b) assume that the time is the next to occur		   
-		  
-		  dbl_stop = clocktime_t::ordered_difference_seconds( starttime , btime ) ;
+
+		  undated_hms_stop = true;
+		  dbl_stop = annot_clock_difference( btime , true );
+		  if ( dbl_stop < 0 )
+		    {
+		      before_edf_start = true;
+		      dbl_stop = 0;
+		    }
 		  
 		}
 	      
@@ -2124,13 +2228,24 @@ interval_t annot_t::get_interval( const std::string & line ,
 	  dbl_stop = dbl_start + dur;
 	}
       else if ( ! *readon )
-	{	  
+	{
 	  if ( ! Helper::str2dbl( tok[4] , &dbl_stop ) )
 	    {
 	      Helper::vmode_halt( "invalid interval (stop): " + line );
 	      return interval_t( 123456789, 987654321 );
 	    }
 	}
+
+      // Both endpoints of an undated clock-time interval are normally
+      // resolved as the next occurrence after the EDF start.  If the start
+      // itself wrapped to the next day but the stop did not, make the stop
+      // the next occurrence after that resolved start as well.  This keeps
+      // intervals such as 20:33:30-20:33:32 in chronological order when the
+      // EDF starts at 20:33:32.
+      if ( globals::annot_time_wrap
+	   && undated_hms_start && undated_hms_stop
+	   && dbl_stop < dbl_start )
+	dbl_stop += 86400.0;
       
       if ( dbl_start < 0 )
 	{
@@ -3704,6 +3819,129 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
   //
   // process rest
   //
+
+  // grouped operations: use explicit parameters rather than expression
+  // delimiters, so comma-delimited annotation lists cannot be confused with
+  // the binary expr syntax below.
+  if ( param.has( "left" ) || param.has( "right" ) || param.has( "op" ) || param.has( "match" ) )
+    {
+      const std::string newannot = param.requires( "annot" );
+
+      if ( ! param.has( "left" ) || ! param.has( "right" ) || ! param.has( "op" ) )
+	Helper::halt( "grouped MAKE-ANNOTS requires left, right and op" );
+
+      const std::vector<std::string> left_names  = param.strvector_xsigs( "left" );
+      const std::vector<std::string> right_names = param.strvector_xsigs( "right" );
+      const std::string op = param.value( "op" , true );
+      const std::string match = param.has( "match" ) ? param.value( "match" , true ) : "ANY";
+
+      if ( left_names.size() == 0 || right_names.size() == 0 )
+	Helper::halt( "grouped MAKE-ANNOTS requires non-empty left and right lists" );
+
+      if ( op != "UNION" && op != "INTERSECTION" && op != "KEEP" && op != "DROP" )
+	Helper::halt( "grouped MAKE-ANNOTS op must be union, intersection, keep or drop" );
+
+      if ( match != "ANY" && match != "START" && match != "END" )
+	Helper::halt( "grouped MAKE-ANNOTS match must be any, start or end" );
+
+      if ( match != "ANY" && op != "KEEP" && op != "DROP" )
+	Helper::halt( "grouped MAKE-ANNOTS match applies only to keep and drop" );
+
+      const std::string ch_label = param.has( "ch" ) ? param.value( "ch" ) : ".";
+      annot_t * an = add( newannot );
+      std::set<interval_t> left, right, nevs;
+
+      const auto add_intervals = [&]( const std::vector<std::string> & names ,
+				      std::set<interval_t> & dest )
+	{
+	  for ( int n = 0 ; n < names.size() ; ++n )
+	    {
+	      annot_t * a = find( names[n] );
+	      if ( a == NULL )
+		{
+		  logger << "  *** warning, could not find any annotation " << names[n] << "\n";
+		  continue;
+		}
+	      const annot_map_t & events = a->interval_events;
+	      annot_map_t::const_iterator ii = events.begin();
+	      while ( ii != events.end() )
+		{
+		  dest.insert( ii->first.interval );
+		  ++ii;
+		}
+	    }
+	};
+
+      add_intervals( left_names , left );
+      add_intervals( right_names , right );
+
+      if ( op == "UNION" )
+	{
+	  nevs.insert( left.begin() , left.end() );
+	  nevs.insert( right.begin() , right.end() );
+	  nevs = annotate_t::flatten( nevs );
+	}
+      else if ( op == "INTERSECTION" )
+	{
+	  left  = annotate_t::flatten( left );
+	  right = annotate_t::flatten( right );
+	  std::set<interval_t>::const_iterator aa = left.begin();
+	  std::set<interval_t>::const_iterator bb;
+	  while ( aa != left.end() )
+	    {
+	      bb = right.begin();
+	      while ( bb != right.end() )
+		{
+		  if ( aa->overlaps( *bb ) )
+		    nevs.insert( aa->intersection_with_overlapping_interval( *bb ) );
+		  ++bb;
+		}
+	      ++aa;
+	    }
+	  nevs = annotate_t::flatten( nevs );
+	}
+      else
+	{
+	  right = annotate_t::flatten( right );
+	  const auto matches = [&]( const interval_t & a )
+	  {
+	    const auto point_in = [&]( const uint64_t p , const interval_t & b )
+	    { return b.start < b.stop ? ( p >= b.start && p < b.stop ) : p == b.start; };
+
+	    std::set<interval_t>::const_iterator bb = right.begin();
+	    while ( bb != right.end() )
+	      {
+		bool hit = false;
+		if ( match == "ANY" ) hit = a.overlaps( *bb );
+		else if ( a.start == a.stop ) hit = point_in( a.start , *bb );
+		else if ( match == "START" ) hit = point_in( a.start , *bb );
+		else hit = a.stop > bb->start && a.stop <= bb->stop;
+		if ( hit ) return true;
+		++bb;
+	      }
+	    return false;
+	  };
+
+	  std::set<interval_t>::const_iterator aa = left.begin();
+	  while ( aa != left.end() )
+	    {
+	      const bool hit = matches( *aa );
+	      if ( ( op == "KEEP" && hit ) || ( op == "DROP" && ! hit ) )
+		nevs.insert( *aa );
+	      ++aa;
+	    }
+	}
+
+      std::set<interval_t>::const_iterator nn = nevs.begin();
+      while ( nn != nevs.end() )
+	{
+	  an->add( "." , *nn , ch_label );
+	  ++nn;
+	}
+
+      logger << "  created " << nevs.size() << " grouped " << op << " annotations in " << newannot << "\n";
+      return;
+    }
   
   const std::string newannot = param.requires( "annot" );
   
@@ -6698,12 +6936,18 @@ bool annotation_set_t::detect_times( const std::vector<std::string> & afiles ,
   const bool okay = dummy.init_empty( _id , _nr , _rs , _startdate , _starttime , true ); // T -> silent
   
   // attach EDFs, but turn off date sanity checking (i.e. can be > 1 year past EDF start)
+  // and turn off the past-end drop check, as the whole point here is to scan
+  // annotations that may extend well beyond this placeholder 6-hr dummy EDF
+  const bool prior_check_annot_dates = globals::check_annot_dates;
+  const bool prior_drop_annots_past_end = globals::drop_annots_past_end;
   globals::check_annot_dates = false;
+  globals::drop_annots_past_end = false;
 
   for (int i=0;i<afiles.size();i++)
     dummy.load_annotations( afiles[i] );
-  
-  globals::check_annot_dates = true;
+
+  globals::check_annot_dates = prior_check_annot_dates;
+  globals::drop_annots_past_end = prior_drop_annots_past_end;
 
 
   // find min/max times from attached annotations
@@ -6772,14 +7016,27 @@ bool annotation_set_t::detect_times( const std::vector<std::string> & afiles ,
   else
     logger << "  annotations span " << dt0.as_datetime_string() << " to " << dt1.as_datetime_string() << " (assuming dates specified)\n";
 
-  *starttime = dt0.as_string();
-
   if ( has_dates )
-    *startdate = dt0.as_date_string();
+    {
+      // date-stamped annotations get rebased against the EDF start
+      // time when reloaded (their elapsed offset is computed as the
+      // difference from the EDF start), so shifting the start to the
+      // earliest annotation and sizing to the span (s1-s0) is correct
+      *starttime = dt0.as_string();
+      *startdate = dt0.as_date_string();
+      *seconds = s1 - s0;
+    }
   else
-    *startdate = "01.01.85"; // null
-  
-  *seconds = s1 - s0;
- 
+    {
+      // plain elapsed-second annotations are *not* rebased on reload
+      // (their values are taken as literal seconds from t=0), so the
+      // new EDF must span from 0 up to the latest annotation time,
+      // and the start time should stay at the (arbitrary) placeholder
+      // rather than being shifted forward by tp0
+      *starttime = dummy.header.starttime;
+      *startdate = "01.01.85"; // null
+      *seconds = s1;
+    }
+
   return true;
 }

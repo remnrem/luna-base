@@ -23,7 +23,7 @@
 // Invocation: luna __LUNA_TESTS__ [group] [verbose]
 //
 // Groups: all, signal, epoch, mask, filter, resample, psd, spindles,
-//         hypno, annot, write, script, eval, lunapi, segsrv
+//         hypno, annot, write, script, eval, lunapi, segsrv, plm
 //
 // All tests use fully synthetic in-memory data (no external files needed).
 // Exit code: 0 = all pass, 1 = any failure.
@@ -1234,6 +1234,220 @@ static void test_annot( lunapi_t * eng,
     std::remove( (tmp + ".annot").c_str() );
   } catch(std::exception & e) { record(R,"annot/fetch-full-add-keys",false,e.what(),V); }
 
+  // I4c — time-shape classification: period HMS is distinct from elapsed
+  // seconds, and continuation markers are never classified as HMS.
+  try {
+    const bool b1 = ! Helper::is_hms("20.330");
+    const bool b2 = Helper::is_hms("20.00.30");
+    const bool b3 = Helper::is_hms("20.00.30.1250");
+    const bool b4 = Helper::is_hms("0+00.00.30.1250");
+    const bool b5 = Helper::is_hms("20:00:30.1250");
+    const bool b6 = Helper::is_hms("02.02.25-20.00.30.1250");
+    const bool b7 = ! Helper::is_hms("20.00.30.1.2");
+    const bool b8 = ! Helper::is_hms("...");
+    const bool b9 = ! Helper::is_hms("-");
+    const bool pass = b1 && b2 && b3 && b4 && b5 && b6 && b7 && b8 && b9;
+    std::ostringstream m;
+    m << "elapsed=" << b1 << " dot-hms=" << b2 << " fractional=" << b3
+      << " elapsed-hms=" << b4 << " colon=" << b5 << " datetime=" << b6
+      << " invalid-extra-period=" << b7 << " ellipsis=" << b8 << " dash=" << b9;
+    record(R,"annot/time-shape-classification", pass, m.str(), V);
+  } catch(std::exception & e) { record(R,"annot/time-shape-classification",false,e.what(),V); }
+
+  // I4d — load all elapsed/clock/continuation forms through the real .annot
+  // reader, including the single-period ambiguity that motivated this fix.
+  try {
+    const std::string tmp = temp_base_path("test_annot_time_forms");
+    {
+      std::ofstream out(tmp + ".annot");
+      out << "class\tinstance\tchannel\tstart\tstop\tmeta\n";
+      out << "Elapsed\t.\t.\t20.330\t20.830\t.\n";
+      out << "ClockDot\t.\t.\t20.00.30\t20.00.31\t.\n";
+      out << "ClockFrac\t.\t.\t20.00.31.2500\t20.00.32.5000\t.\n";
+      out << "ElapsedHMS\t.\t.\t0+00.00.32.5000\t0+00.00.33.5000\t.\n";
+      out << "ClockColon\t.\t.\t20:00:34.1250\t20:00:35.2500\t.\n";
+      out << "Ellipsis\t.\t.\t40\t...\t.\n";
+      out << "AfterEllipsis\t.\t.\t50\t51\t.\n";
+    }
+
+    auto p = eng->inst("T_time_forms");
+    p->empty_edf("T_time_forms", 2000, 30, "01.02.25", "20.00.00");
+    const bool attached = p->attach_annot( tmp + ".annot" );
+
+    auto one = [&]( const std::string & label ) -> std::tuple<bool,double,double> {
+      const auto x = p->fetch_annots({label});
+      if ( x.size() != 1 ) return {false, -1, -1};
+      return {true, std::get<1>(x[0]), std::get<2>(x[0])};
+    };
+
+    const auto e = one("Elapsed");
+    const auto d = one("ClockDot");
+    const auto f = one("ClockFrac");
+    const auto eh = one("ElapsedHMS");
+    const auto c = one("ClockColon");
+    const auto ell = one("Ellipsis");
+
+    const bool pass = attached
+      && std::get<0>(e) && approx_equal(std::get<1>(e),20.330,0.001) && approx_equal(std::get<2>(e),20.830,0.001)
+      && std::get<0>(d) && approx_equal(std::get<1>(d),30.0,0.001) && approx_equal(std::get<2>(d),31.0,0.001)
+      && std::get<0>(f) && approx_equal(std::get<1>(f),31.25,0.001) && approx_equal(std::get<2>(f),32.5,0.001)
+      && std::get<0>(eh) && approx_equal(std::get<1>(eh),32.5,0.001) && approx_equal(std::get<2>(eh),33.5,0.001)
+      && std::get<0>(c) && approx_equal(std::get<1>(c),34.125,0.001) && approx_equal(std::get<2>(c),35.25,0.001)
+      && std::get<0>(ell) && approx_equal(std::get<1>(ell),40.0,0.001) && approx_equal(std::get<2>(ell),50.0,0.001);
+
+    std::ostringstream m;
+    m << "attached=" << attached << " elapsed=" << std::get<1>(e)
+      << " dot=" << std::get<1>(d) << " fraction=" << std::get<1>(f)
+      << " elapsed-hms=" << std::get<1>(eh) << " ellipsis-stop=" << std::get<2>(ell);
+    record(R,"annot/time-form-loading", pass, m.str(), V);
+    std::remove( (tmp + ".annot").c_str() );
+  } catch(std::exception & e) { record(R,"annot/time-form-loading",false,e.what(),V); }
+
+  // I4e — date-time parsing with all supported date-order settings and
+  // period-delimited fractional clock components.
+  try {
+    const std::string base = temp_base_path("test_annot_datetime");
+    const date_format_t prior = globals::read_annot_date_format;
+    const std::vector<std::tuple<date_format_t,std::string,std::string>> cases = {
+      { DMY, "02.02.25-20.00.00.1250", "02.02.25-20.00.01.1250" },
+      { MDY, "02/02/25-20.00.00.1250", "02/02/25-20.00.01.1250" },
+      { YMD, "2025-02-02-20.00.00.1250", "2025-02-02-20.00.01.1250" }
+    };
+    bool pass = true;
+    std::ostringstream detail;
+
+    for ( int k = 0 ; k < (int)cases.size() ; ++k )
+      {
+        const std::string file = base + "_" + std::to_string(k) + ".annot";
+        {
+          std::ofstream out(file);
+          out << "class\tinstance\tchannel\tstart\tstop\tmeta\n";
+          out << "DateEvt\t.\t.\t" << std::get<1>(cases[k]) << "\t"
+              << std::get<2>(cases[k]) << "\t.\n";
+        }
+
+        globals::read_annot_date_format = std::get<0>(cases[k]);
+        auto p = eng->inst("T_datetime_" + std::to_string(k));
+        p->empty_edf("T_datetime_" + std::to_string(k), 3000, 30, "01.02.25", "20.00.00");
+        const bool attached = p->attach_annot(file);
+        const auto x = p->fetch_annots({"DateEvt"});
+        const bool one_ok = attached && x.size() == 1
+          && approx_equal(std::get<1>(x[0]),86400.125,0.001)
+          && approx_equal(std::get<2>(x[0]),86401.125,0.001);
+        pass = pass && one_ok;
+        detail << " case" << k << "=" << one_ok;
+        if ( !one_ok ) detail << "/n=" << x.size() << (x.empty() ? "" : "/s=" + Helper::dbl2str(std::get<1>(x[0])));
+        std::remove(file.c_str());
+      }
+
+    globals::read_annot_date_format = prior;
+    record(R,"annot/datetime-format-loading", pass, detail.str(), V);
+  } catch(std::exception & e) { record(R,"annot/datetime-format-loading",false,e.what(),V); }
+
+  // I4f — explicit relative days remain local to .annot parsing and work
+  // with anonymized EDF dates: d1 may be before the EDF start, while d2 is
+  // the following calendar day.
+  try {
+    const std::string tmp = temp_base_path("test_annot_relative_days");
+    {
+      std::ofstream out(tmp + ".annot");
+      out << "class\tinstance\tchannel\tstart\tstop\tmeta\n";
+      out << "Before\t.\t.\td1-20.00.00\td1-20.00.15\t.\n";
+      out << "SameDay\t.\t.\td1-21.00.00\td1-21.00.15\t.\n";
+      out << "NextDay\t.\t.\td2-20.00.00\td2-20.00.15\t.\n";
+    }
+
+    auto p = eng->inst("T_relative_days");
+    p->empty_edf("T_relative_days", 4000, 30, "01.01.85", "20.30.00");
+    const bool attached = p->attach_annot(tmp + ".annot");
+    const auto same = p->fetch_annots({"SameDay"});
+    const auto next = p->fetch_annots({"NextDay"});
+    const auto before = p->fetch_annots({"Before"});
+    const bool pass = attached && before.empty()
+      && same.size() == 1 && next.size() == 1
+      && approx_equal(std::get<1>(same[0]),1800.0,0.001)
+      && approx_equal(std::get<2>(same[0]),1815.0,0.001)
+      && approx_equal(std::get<1>(next[0]),84600.0,0.001)
+      && approx_equal(std::get<2>(next[0]),84615.0,0.001);
+    std::ostringstream m;
+    m << "attached=" << attached << " before=" << before.size()
+      << " same=" << same.size() << " next=" << next.size();
+    record(R,"annot/relative-day-null-date", pass, m.str(), V);
+    std::remove((tmp + ".annot").c_str());
+  } catch(std::exception & e) { record(R,"annot/relative-day-null-date",false,e.what(),V); }
+
+  // I4g — annot-time-wrap=F suppresses a wrapped undated timestamp when the
+  // next occurrence is beyond a short EDF, but retains it in a multiday EDF.
+  try {
+    const std::string tmp = temp_base_path("test_annot_time_wrap");
+    {
+      std::ofstream out(tmp + ".annot");
+      out << "class\tinstance\tchannel\tstart\tstop\tmeta\n";
+      out << "WrapEvt\t.\t.\t20.00.00\t20.00.15\t.\n";
+      out << "WrapOrderEvt\t.\t.\t20.33.30\t20.33.32\t.\n";
+      out << "EndEvt\t.\t.\t08.00.00\t08.00.32\t.\n";
+      out << "PointEndEvt\t.\t.\t08.00.32\t08.00.32\t.\n";
+    }
+
+    const bool prior_wrap = globals::annot_time_wrap;
+    const bool prior_drop = globals::drop_annots_past_end;
+    globals::drop_annots_past_end = false;
+
+    auto short_edf = eng->inst("T_wrap_short");
+    short_edf->empty_edf("T_wrap_short", 1374, 30, "01.01.85", "20.33.32");
+    globals::annot_time_wrap = true;
+    const bool short_attached_t = short_edf->attach_annot(tmp + ".annot");
+    const auto short_t = short_edf->fetch_annots({"WrapEvt"});
+    const auto short_order_t = short_edf->fetch_annots({"WrapOrderEvt"});
+
+    auto short_no_wrap = eng->inst("T_wrap_short_no");
+    short_no_wrap->empty_edf("T_wrap_short_no", 1374, 30, "01.01.85", "20.33.32");
+    globals::annot_time_wrap = false;
+    const bool short_attached_f = short_no_wrap->attach_annot(tmp + ".annot");
+    const auto short_f = short_no_wrap->fetch_annots({"WrapEvt"});
+    const auto short_order_f = short_no_wrap->fetch_annots({"WrapOrderEvt"});
+    const auto short_end_f = short_no_wrap->fetch_annots({"EndEvt"});
+    const auto short_point_end_f = short_no_wrap->fetch_annots({"PointEndEvt"});
+
+    auto long_no_wrap = eng->inst("T_wrap_long_no");
+    long_no_wrap->empty_edf("T_wrap_long_no", 3334, 30, "01.01.85", "20.33.32");
+    const bool long_attached_f = long_no_wrap->attach_annot(tmp + ".annot");
+    const auto long_f = long_no_wrap->fetch_annots({"WrapEvt"});
+
+    auto short_drop_mask = eng->inst("T_drop_mask_default");
+    short_drop_mask->empty_edf("T_drop_mask_default", 1374, 30, "01.01.85", "20.33.32");
+    globals::annot_time_wrap = true;
+    const bool short_drop_attached = short_drop_mask->attach_annot(tmp + ".annot");
+    short_drop_mask->eval("DROP-ANNOTS annot=WrapEvt mask all");
+    const auto short_drop = short_drop_mask->fetch_annots({"WrapEvt"});
+
+    globals::annot_time_wrap = prior_wrap;
+    globals::drop_annots_past_end = prior_drop;
+
+    const bool pass = short_attached_t && short_t.size() == 1
+      && approx_equal(std::get<1>(short_t[0]),84388.0,0.001)
+      && short_order_t.size() == 1
+      && approx_equal(std::get<1>(short_order_t[0]),86398.0,0.001)
+      && approx_equal(std::get<2>(short_order_t[0]),86400.0,0.001)
+      && short_attached_f && short_f.empty()
+      && short_order_f.empty()
+      && short_end_f.size() == 1
+      && approx_equal(std::get<1>(short_end_f[0]),41188.0,0.001)
+      && approx_equal(std::get<2>(short_end_f[0]),41220.0,0.001)
+      && short_point_end_f.empty()
+      && long_attached_f && long_f.size() == 1
+      && approx_equal(std::get<1>(long_f[0]),84388.0,0.001)
+      && short_drop_attached && short_drop.empty();
+    std::ostringstream m;
+    m << "short-wrap=" << short_t.size() << " short-no-wrap=" << short_f.size()
+      << " order-wrap=" << short_order_t.size()
+      << " order-no-wrap=" << short_order_f.size()
+      << " endpoint=" << short_end_f.size() << " long-no-wrap=" << long_f.size()
+      << " default-mask-drop=" << short_drop.size();
+    record(R,"annot/time-wrap-option", pass, m.str(), V);
+    std::remove((tmp + ".annot").c_str());
+  } catch(std::exception & e) { record(R,"annot/time-wrap-option",false,e.what(),V); }
+
   // I5 — ANNOTS command output: COUNT matches inserted intervals
   try {
     auto p = make_sine_inst(eng);
@@ -1588,11 +1802,122 @@ static void test_eval( lunapi_t * eng,
   expect_eval_error( "eval/malformed-number", "1..2", "malformed numeric literal" );
   expect_eval_error( "eval/unterminated-quote", "'abc", "unterminated single-quoted string" );
   expect_eval_error( "eval/missing-bracket", "A[2", "missing closing ]" );
-  expect_eval_error( "eval/unary-minus-variable", "A=-B", "unary - before variables/functions is not supported" );
-  expect_eval_error( "eval/unary-minus-function", "A=-sqrt(2)", "unary - before variables/functions is not supported" );
   expect_eval_error( "eval/undefined-operand", "A=int(1,2,3); A[2] + B", "undefined operand for +" );
   expect_eval_success( "eval/tab-whitespace", "A=\t1;A", "1i" );
   expect_eval_throw( "eval/index-zero-rejected", "A=int(1,2,3); A[0]", "out of range for A" );
+
+  // --------------------------------------------------------------------
+  // Arithmetic operators adjacent to operands, i.e. WITHOUT surrounding
+  // whitespace.  Regression guard: the numeric-literal scanner used to
+  // greedily absorb a trailing +/- into the number (e.g. "2+1" -> the
+  // malformed literal "2+1"), so binary +/- only worked when spaced.  A
+  // +/- now only continues a number as a scientific-notation exponent
+  // sign; otherwise it terminates the literal and is tokenized as an
+  // operator.  These must parse like any normal language (cf. R).
+  expect_eval_success( "eval/add-nospace",        "2+1",          "3i" );
+  expect_eval_success( "eval/sub-nospace",        "2-1",          "1i" );
+  expect_eval_success( "eval/add-nospace-2",      "7+8",          "15i" );
+  expect_eval_success( "eval/sub-nospace-2",      "20-5",         "15i" );
+  expect_eval_success( "eval/sub-negative",       "3-5",          "-2i" );
+  expect_eval_success( "eval/mul-nospace",        "2*3",          "6i" );
+  expect_eval_success( "eval/mod-nospace",        "3%2",          "1i" );
+  expect_eval_success( "eval/mod-double",         "5%%2",         "1i" );
+
+  // operator precedence and associativity
+  expect_eval_success( "eval/prec-add-mul",       "2+3*4",        "14i" );
+  expect_eval_success( "eval/prec-mul-add",       "2*3+4",        "10i" );
+  expect_eval_success( "eval/paren-override",     "(2+3)*4",      "20i" );
+  expect_eval_success( "eval/left-assoc-sub",     "5-3-1",        "1i" );
+  expect_eval_success( "eval/left-assoc-sub-2",   "100-50-25",    "25i" );
+  expect_eval_success( "eval/chain-add",          "2+2+2+2",      "8i" );
+
+  // spacing must not change the result (equivalence with the above)
+  expect_eval_success( "eval/add-spaced",         "2 + 1",        "3i" );
+  expect_eval_success( "eval/add-multispace",     "2  +  3",      "5i" );
+  expect_eval_success( "eval/add-surround-ws",    "  2+2  ",      "4i" );
+
+  // division always yields a float
+  expect_eval_success( "eval/div-int-exact",      "6/2",          "3f" );
+  expect_eval_success( "eval/div-frac",           "10/4",         "2.5f" );
+  expect_eval_success( "eval/div-half",           "1/2",          "0.5f" );
+  expect_eval_success( "eval/div-then-sub",       "10/2-3",       "2f" );
+
+  // decimal (float) operands
+  expect_eval_success( "eval/float-mul",          "0.8*0.5",      "0.4f" );
+  expect_eval_success( "eval/float-add",          "1.5+1.5",      "3f" );
+  expect_eval_success( "eval/float-leading-dot",  ".5+.5",        "1f" );
+  expect_eval_success( "eval/float-negative",     "-0.5",         "-0.5f" );
+
+  // scientific notation must still parse (the exponent sign is retained)
+  expect_eval_success( "eval/sci-plainexp",       "1e3",          "1000f" );
+  expect_eval_success( "eval/sci-negexp",         "1e-3",         "0.001f" );
+  expect_eval_success( "eval/sci-posexp",         "1.5e+2",       "150f" );
+  expect_eval_success( "eval/sci-zeroexp-int",    "2e0",          "2i" );
+
+  // unary +/- before a NUMBER (leading, or following another operator/paren)
+  expect_eval_success( "eval/unary-plus",         "+2",           "2i" );
+  expect_eval_success( "eval/unary-minus",        "-2",           "-2i" );
+  expect_eval_success( "eval/unary-lead-add",     "-2+5",         "3i" );
+  expect_eval_success( "eval/unary-after-mul",    "2*-1",         "-2i" );
+  expect_eval_success( "eval/unary-both",         "-2*-3",        "6i" );
+  expect_eval_success( "eval/sub-then-unary",     "2--1",         "3i" );
+  expect_eval_success( "eval/mul-spaced-unary",   "2 * -3",       "-6i" );
+  expect_eval_success( "eval/unary-double-num",   "--5",          "5i" );
+  expect_eval_success( "eval/unary-plus-minus",   "-+3",          "-3i" );
+
+  // unary +/- before a VARIABLE, FUNCTION or '(' : rewritten as -1*... / 1*...
+  // (previously rejected; verify it now parses AND binds correctly).
+  expect_eval_success( "eval/unary-var",          "A=3 ; -A",     "-3i" );
+  expect_eval_success( "eval/unary-var-double",   "A=3 ; --A",    "3i" );
+  expect_eval_success( "eval/unary-var-mul",      "A=3 ; -A*2",   "-6i" );
+  expect_eval_success( "eval/unary-var-after-mul","A=3 ; 2*-A",   "-6i" );
+  expect_eval_success( "eval/unary-var-add",      "A=5;B=2; -A+B","-3i" );
+  expect_eval_success( "eval/unary-func",         "-sqrt(4)",     "-2f" );
+  expect_eval_success( "eval/unary-func-negarg",  "-abs(-3)",     "-3i" );
+  expect_eval_success( "eval/unary-func-after-mul","2*-sqrt(4)",  "-4f" );
+  expect_eval_success( "eval/unary-paren",        "-(2+3)",       "-5i" );
+  expect_eval_success( "eval/unary-add-neg",      "3+-2",         "1i" );
+
+  // comparison and logical operators adjacent to operands
+  expect_eval_success( "eval/gt",                 "2>1",          "true" );
+  expect_eval_success( "eval/gte",                "5>=5",         "true" );
+  expect_eval_success( "eval/lte-false",          "4<=3",         "false" );
+  expect_eval_success( "eval/eq-false",           "1==2",         "false" );
+  expect_eval_success( "eval/neq",                "1!=2",         "true" );
+  expect_eval_success( "eval/arith-before-cmp",   "2+3==5",       "true" );
+  expect_eval_success( "eval/logical-and",        "3>2 && 1<2",   "true" );
+  expect_eval_success( "eval/logical-or",         "2>3 || 5>1",   "true" );
+  expect_eval_success( "eval/logical-not",        "!(2>3)",       "true" );
+  expect_eval_success( "eval/bool-and-false",     "true && false","false" );
+
+  // functions (incl. unary-signed arguments)
+  expect_eval_success( "eval/fn-sqrt",            "sqrt(4)",      "2f" );
+  expect_eval_success( "eval/fn-pow",             "pow(2,3)",     "8i" );
+  expect_eval_success( "eval/fn-abs-neg-arg",     "abs(-5)",      "5i" );
+  expect_eval_success( "eval/fn-abs-then-add",    "abs(-5)+1",    "6i" );
+
+  // string literals and comparison
+  expect_eval_success( "eval/str-literal",        "'abc'",        "abc" );
+  expect_eval_success( "eval/str-eq-true",        "'a'=='a'",     "true" );
+  expect_eval_success( "eval/str-eq-false",       "'ab'=='cd'",   "false" );
+
+  // malformed numbers must be rejected, not silently mis-parsed
+  expect_eval_error( "eval/err-double-dot",       "2..3",         "malformed numeric literal" );
+  expect_eval_error( "eval/err-triple-dotnum",    "3.4.5",        "malformed numeric literal" );
+  expect_eval_error( "eval/err-exp-no-digit",     "1e",           "malformed numeric literal" );
+  expect_eval_error( "eval/err-exp-sign-only",    "1e+",          "malformed numeric literal" );
+  expect_eval_error( "eval/err-double-exp",       "1e3e4",        "malformed numeric literal" );
+
+  // incomplete / ambiguous expressions must error (not silently succeed)
+  expect_eval_error( "eval/err-trailing-op",      "2+",           "not enough arguments for +" );
+  expect_eval_error( "eval/err-leading-binop",    "*3",           "not enough arguments for *" );
+  expect_eval_error( "eval/err-no-pow-operator",  "2**3",         "not enough arguments for *" );
+  expect_eval_error( "eval/err-adjacent-values",  "2 3",          "badly formed eval expression" );
+
+  // malformed unary operators (sign with no valid operand)
+  expect_eval_error( "eval/err-unary-incomplete", "-",            "incomplete unary operator" );
+  expect_eval_error( "eval/err-unary-paren-close","-)",           "malformed unary - operator" );
+  expect_eval_error( "eval/err-unary-then-op",    "-*3",          "malformed unary - operator" );
 }
 
 // ============================================================
@@ -2493,6 +2818,278 @@ static void test_segsrv( lunapi_t * eng,
 }
 
 // ============================================================
+// Group P: LM / PLM (WASM 2016)
+// ============================================================
+
+static void test_plm( lunapi_t * eng,
+                      std::vector<test_result_t> & R, bool V )
+{
+  using namespace plm;
+  const double TP = (double)globals::tp_1sec;
+
+  // build one component (signal-domain event)
+  auto mkc = [&]( int id , side_t side , double onset , double dur ) -> lm_component_t {
+    lm_component_t c;
+    c.comp_id = id; c.side = side; c.sig = "X";
+    c.onset_tp  = (uint64_t)std::llround( onset * TP );
+    c.offset_tp = (uint64_t)std::llround( ( onset + dur ) * TP );
+    c.onset_sec = onset; c.dur = dur;
+    c.base_onset = 0; c.scale_onset = 1; c.on_thr = 0; c.off_thr = 0;
+    c.peak = 0; c.peak_exc = 0; c.peak_z = 0; c.morph_value = 0; c.morph_ok = true;
+    c.clm_component = ( dur >= 0.5 && dur <= 10.0 );
+    c.stage = "UNK"; c.state = "UNK"; c.qc_base_high = false;
+    return c;
+  };
+
+  // build one final event (for classify / sequence tests)
+  auto mke = [&]( int id , double onset , double dur , bool clm ,
+                  int n_comp = 1 , bool all_clm = true , side_t side = SIDE_LEG ) -> lm_event_t {
+    lm_event_t e;
+    e.evt_id = id; e.side = side;
+    e.onset_tp  = (uint64_t)std::llround( onset * TP );
+    e.offset_tp = (uint64_t)std::llround( ( onset + dur ) * TP );
+    e.onset_sec = onset; e.dur = dur;
+    e.n_comp = n_comp; e.n_l = 0; e.n_r = 0; e.all_comps_clm = all_clm;
+    e.clm = clm; e.plm = false; e.seq = 0; e.seq_pos = 0; e.seq_n = 0;
+    e.imi_prev = std::numeric_limits<double>::quiet_NaN();
+    e.imi_next = std::numeric_limits<double>::quiet_NaN();
+    e.stage = "UNK"; e.state = "UNK"; e.peak_exc_max = 0; e.peak_z_max = 0; e.qc_base_high = false;
+    return e;
+  };
+
+  plm_param_t P; // defaults
+
+  // ---- bilateral combination -------------------------------------------
+
+  try { // P6 overlapping L/R combine
+    std::vector<lm_component_t> cs = { mkc(1,SIDE_L,0,1.0), mkc(2,SIDE_R,0.5,1.0) };
+    auto ev = combine_bilateral( cs , P );
+    bool pass = ev.size()==1 && ev[0].n_comp==2 && ev[0].side==SIDE_B;
+    record(R,"plm/bilateral-overlap", pass, "n_ev="+std::to_string(ev.size()), V);
+  } catch(std::exception & e){ record(R,"plm/bilateral-overlap",false,e.what(),V); }
+
+  try { // P7 gap < 0.5 combine
+    std::vector<lm_component_t> cs = { mkc(1,SIDE_L,0,1.0), mkc(2,SIDE_R,1.3,0.7) };
+    auto ev = combine_bilateral( cs , P );
+    bool pass = ev.size()==1 && ev[0].n_comp==2;
+    record(R,"plm/bilateral-gap-lt", pass, "n_ev="+std::to_string(ev.size()), V);
+  } catch(std::exception & e){ record(R,"plm/bilateral-gap-lt",false,e.what(),V); }
+
+  try { // P8 gap == 0.5 does NOT combine (strict)
+    std::vector<lm_component_t> cs = { mkc(1,SIDE_L,0,1.0), mkc(2,SIDE_R,1.5,0.5) };
+    auto ev = combine_bilateral( cs , P );
+    bool pass = ev.size()==2;
+    record(R,"plm/bilateral-gap-eq", pass, "n_ev="+std::to_string(ev.size())+" (exp 2)", V);
+  } catch(std::exception & e){ record(R,"plm/bilateral-gap-eq",false,e.what(),V); }
+
+  try { // P9 transitive multi-component grouping
+    std::vector<lm_component_t> cs = { mkc(1,SIDE_L,0,1.0), mkc(2,SIDE_R,0.8,0.8), mkc(3,SIDE_L,1.5,0.7) };
+    auto ev = combine_bilateral( cs , P );
+    bool pass = ev.size()==1 && ev[0].n_comp==3 && ev[0].side==SIDE_B;
+    record(R,"plm/bilateral-transitive", pass, "n_ev="+std::to_string(ev.size()), V);
+  } catch(std::exception & e){ record(R,"plm/bilateral-transitive",false,e.what(),V); }
+
+  try { // P13 component LM > 10s makes bilateral non-CLM
+    std::vector<lm_component_t> cs = { mkc(1,SIDE_L,0,11.0), mkc(2,SIDE_R,0.5,0.6) };
+    auto ev = combine_bilateral( cs , P );
+    classify_clm( ev , P );
+    bool pass = ev.size()==1 && ev[0].n_comp==2 && ev[0].clm==false;
+    record(R,"plm/bilateral-long-component", pass, "clm="+std::to_string(ev.empty()?-1:ev[0].clm), V);
+  } catch(std::exception & e){ record(R,"plm/bilateral-long-component",false,e.what(),V); }
+
+  // ---- CLM classification boundaries -----------------------------------
+
+  try { // P: monolateral dur==10 is CLM; dur>10 is not
+    std::vector<lm_component_t> a = { mkc(1,SIDE_LEG,0,10.0) };
+    std::vector<lm_component_t> b = { mkc(1,SIDE_LEG,0,10.001) };
+    auto ea = combine_single(a,P); classify_clm(ea,P);
+    auto eb = combine_single(b,P); classify_clm(eb,P);
+    bool pass = ea[0].clm==true && eb[0].clm==false;
+    record(R,"plm/clm-10s-boundary", pass, "", V);
+  } catch(std::exception & e){ record(R,"plm/clm-10s-boundary",false,e.what(),V); }
+
+  try { // P12 bilateral dur==15 CLM; >15 not
+    std::vector<lm_event_t> e1 = { mke(1,0,15.0,false,2,true,SIDE_B) };
+    std::vector<lm_event_t> e2 = { mke(1,0,15.001,false,2,true,SIDE_B) };
+    classify_clm(e1,P); classify_clm(e2,P);
+    bool pass = e1[0].clm==true && e2[0].clm==false;
+    record(R,"plm/bilateral-15s-boundary", pass, "", V);
+  } catch(std::exception & e){ record(R,"plm/bilateral-15s-boundary",false,e.what(),V); }
+
+  try { // P10/P11 four bilateral components allowed, five not
+    std::vector<lm_event_t> e4 = { mke(1,0,5.0,false,4,true,SIDE_B) };
+    std::vector<lm_event_t> e5 = { mke(1,0,5.0,false,5,true,SIDE_B) };
+    classify_clm(e4,P); classify_clm(e5,P);
+    bool pass = e4[0].clm==true && e5[0].clm==false;
+    record(R,"plm/bilateral-max-components", pass, "", V);
+  } catch(std::exception & e){ record(R,"plm/bilateral-max-components",false,e.what(),V); }
+
+  // ---- PLM sequence detection ------------------------------------------
+
+  auto run_seq = [&]( std::vector<lm_event_t> ev ) {
+    return detect_sequences( ev , P );
+  };
+
+  try { // P14 four CLMs @20s -> one sequence, four PLMs
+    std::vector<lm_event_t> ev = { mke(1,0,1,true), mke(2,20,1,true), mke(3,40,1,true), mke(4,60,1,true) };
+    auto seqs = detect_sequences(ev,P);
+    int nplm=0; for(auto&e:ev) if(e.plm) nplm++;
+    bool pass = seqs.size()==1 && nplm==4 && seqs[0].n==4;
+    record(R,"plm/seq-4clm-20s", pass, "nseq="+std::to_string(seqs.size())+" nplm="+std::to_string(nplm), V);
+  } catch(std::exception & e){ record(R,"plm/seq-4clm-20s",false,e.what(),V); }
+
+  try { // P15 three CLMs -> no sequence
+    std::vector<lm_event_t> ev = { mke(1,0,1,true), mke(2,20,1,true), mke(3,40,1,true) };
+    auto seqs = detect_sequences(ev,P);
+    record(R,"plm/seq-3clm-none", seqs.empty(), "nseq="+std::to_string(seqs.size()), V);
+  } catch(std::exception & e){ record(R,"plm/seq-3clm-none",false,e.what(),V); }
+
+  try { // P16 IMI exactly 10 valid
+    std::vector<lm_event_t> ev = { mke(1,0,1,true), mke(2,10,1,true), mke(3,20,1,true), mke(4,30,1,true) };
+    auto seqs = detect_sequences(ev,P);
+    record(R,"plm/seq-imi-10-valid", seqs.size()==1, "nseq="+std::to_string(seqs.size()), V);
+  } catch(std::exception & e){ record(R,"plm/seq-imi-10-valid",false,e.what(),V); }
+
+  try { // P17 IMI exactly 90 valid
+    std::vector<lm_event_t> ev = { mke(1,0,1,true), mke(2,90,1,true), mke(3,180,1,true), mke(4,270,1,true) };
+    auto seqs = detect_sequences(ev,P);
+    record(R,"plm/seq-imi-90-valid", seqs.size()==1, "nseq="+std::to_string(seqs.size()), V);
+  } catch(std::exception & e){ record(R,"plm/seq-imi-90-valid",false,e.what(),V); }
+
+  try { // P18 IMI < 10 breaks
+    std::vector<lm_event_t> ev = { mke(1,0,1,true), mke(2,20,1,true), mke(3,40,1,true), mke(4,45,1,true) };
+    auto seqs = detect_sequences(ev,P);
+    record(R,"plm/seq-imi-short-breaks", seqs.empty(), "nseq="+std::to_string(seqs.size()), V);
+  } catch(std::exception & e){ record(R,"plm/seq-imi-short-breaks",false,e.what(),V); }
+
+  try { // P19 IMI > 90 breaks
+    std::vector<lm_event_t> ev = { mke(1,0,1,true), mke(2,20,1,true), mke(3,40,1,true), mke(4,140,1,true) };
+    auto seqs = detect_sequences(ev,P);
+    record(R,"plm/seq-imi-long-breaks", seqs.empty(), "nseq="+std::to_string(seqs.size()), V);
+  } catch(std::exception & e){ record(R,"plm/seq-imi-long-breaks",false,e.what(),V); }
+
+  try { // P20 non-CLM LM breaks; no IMI computed across it
+    std::vector<lm_event_t> ev = { mke(1,0,1,true), mke(2,20,1,true), mke(3,40,12,false),
+                                   mke(4,60,1,true), mke(5,80,1,true) };
+    auto seqs = detect_sequences(ev,P);
+    // ev is sorted by onset inside detect_sequences; index 3 == onset 60
+    bool no_imi = std::isnan( ev[3].imi_prev );
+    record(R,"plm/seq-nonclm-breaks", seqs.empty() && no_imi,
+           "nseq="+std::to_string(seqs.size())+" imi_across_nan="+std::to_string(no_imi), V);
+  } catch(std::exception & e){ record(R,"plm/seq-nonclm-breaks",false,e.what(),V); }
+
+  try { // P21 event after a break can begin a new sequence
+    std::vector<lm_event_t> ev = { mke(1,0,1,true), mke(2,20,1,true), mke(3,40,1,true),
+                                   mke(4,45,1,true), mke(5,65,1,true), mke(6,85,1,true),
+                                   mke(7,105,1,true), mke(8,125,1,true) };
+    auto seqs = detect_sequences(ev,P);
+    bool pass = seqs.size()==1 && seqs[0].n==5;
+    record(R,"plm/seq-restart-after-break", pass,
+           "nseq="+std::to_string(seqs.size())+(seqs.empty()?"":" n="+std::to_string(seqs[0].n)), V);
+  } catch(std::exception & e){ record(R,"plm/seq-restart-after-break",false,e.what(),V); }
+
+  // ---- end-to-end detection (adaptive; scale-relative) -----------------
+
+  // synthetic 1-channel EMG: low background + periodic 1s bursts @20s
+  const int fs = 100, nr = 40, rs = 30;         // 1200 s
+  const double dur = nr * rs;
+  auto make_emg = [&]( double amp , double scale , int seed ) {
+    auto s = make_noise( (int)(fs*dur), 1.0, seed );
+    for ( double t = 10.0 ; t + 1.0 < dur ; t += 20.0 )
+      {
+        int b = (int)(t*fs);
+        for ( int i = 0 ; i < fs ; i++ ) if ( b+i < (int)s.size() ) s[b+i] += amp;
+      }
+    for ( auto & v : s ) v *= scale;
+    return s;
+  };
+
+  try { // P22-24 single-channel adaptive: bursts -> CLMs -> PLM sequence
+    auto p = eng->inst("T_plm1");
+    p->empty_edf("T_plm1", nr, rs, "01.01.85","22.00.00");
+    p->insert_signal("LAT", make_emg(40,1.0,11), fs);
+    p->eval("LM sig=LAT method=adaptive");
+    double nlm = get_val(p,"LM","N_LM");
+    double nclm = get_val(p,"LM","N_CLM");
+    double nseq = get_val(p,"LM","N_PLM_SEQ");
+    bool pass = nlm>=40 && nclm>=40 && nseq>=1;
+    std::ostringstream m; m << "N_LM="<<nlm<<" N_CLM="<<nclm<<" N_PLM_SEQ="<<nseq;
+    record(R,"plm/e2e-adaptive-single", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"plm/e2e-adaptive-single",false,e.what(),V); }
+
+  try { // P25 adaptive detection invariant to multiplicative rescale
+    auto p1 = eng->inst("T_plm_s1");
+    p1->empty_edf("T_plm_s1", nr, rs, "01.01.85","22.00.00");
+    p1->insert_signal("LAT", make_emg(40,1.0,11), fs);
+    p1->eval("LM sig=LAT method=adaptive");
+    double n1 = get_val(p1,"LM","N_LM");
+
+    auto p2 = eng->inst("T_plm_s2");
+    p2->empty_edf("T_plm_s2", nr, rs, "01.01.85","22.00.00");
+    p2->insert_signal("LAT", make_emg(40,3.7,11), fs);   // same signal * 3.7
+    p2->eval("LM sig=LAT method=adaptive");
+    double n2 = get_val(p2,"LM","N_LM");
+
+    bool pass = n1>0 && n1==n2;
+    std::ostringstream m; m << "N_LM x1="<<n1<<" x3.7="<<n2;
+    record(R,"plm/adaptive-rescale-invariant", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"plm/adaptive-rescale-invariant",false,e.what(),V); }
+
+  try { // P28 raising k-on does not increase detections
+    auto p1 = eng->inst("T_plm_k1");
+    p1->empty_edf("T_plm_k1", nr, rs, "01.01.85","22.00.00");
+    p1->insert_signal("LAT", make_emg(40,1.0,11), fs);
+    p1->eval("LM sig=LAT method=adaptive k-on=6");
+    double n_lo = get_val(p1,"LM","N_LM");
+
+    auto p2 = eng->inst("T_plm_k2");
+    p2->empty_edf("T_plm_k2", nr, rs, "01.01.85","22.00.00");
+    p2->insert_signal("LAT", make_emg(40,1.0,11), fs);
+    p2->eval("LM sig=LAT method=adaptive k-on=12");
+    double n_hi = get_val(p2,"LM","N_LM");
+
+    bool pass = n_hi <= n_lo;
+    std::ostringstream m; m << "N_LM k-on6="<<n_lo<<" k-on12="<<n_hi;
+    record(R,"plm/adaptive-kon-monotone", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"plm/adaptive-kon-monotone",false,e.what(),V); }
+
+  try { // P26 fixed-uV WASM detection is NOT rescale-invariant
+    auto p1 = eng->inst("T_plm_w1");
+    p1->empty_edf("T_plm_w1", nr, rs, "01.01.85","22.00.00");
+    p1->insert_signal("LAT", make_emg(30,1.0,11), fs);   // ~30 uV bursts
+    p1->eval("SET-HEADERS sig=LAT physical-dimension=uV & LM sig=LAT method=wasm");
+    double n_big = get_val(p1,"LM","N_LM");
+
+    auto p2 = eng->inst("T_plm_w2");
+    p2->empty_edf("T_plm_w2", nr, rs, "01.01.85","22.00.00");
+    p2->insert_signal("LAT", make_emg(30,0.1,11), fs);   // scaled down 10x -> ~3 uV
+    p2->eval("SET-HEADERS sig=LAT physical-dimension=uV & LM sig=LAT method=wasm");
+    double n_small = get_val(p2,"LM","N_LM");
+
+    bool pass = n_big>=40 && n_small < n_big;
+    std::ostringstream m; m << "N_LM uV="<<n_big<<" 0.1*uV="<<n_small;
+    record(R,"plm/wasm-not-scale-invariant", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"plm/wasm-not-scale-invariant",false,e.what(),V); }
+
+  try { // P27 iterative baseline: a big movement does not inflate its own baseline
+    // one very large sustained burst region + normal periodic bursts; adaptive
+    // should still detect the periodic bursts near the large one
+    auto p = eng->inst("T_plm_bl");
+    p->empty_edf("T_plm_bl", nr, rs, "01.01.85","22.00.00");
+    auto s = make_noise((int)(fs*dur),1.0,7);
+    // large 8s excursion around t=300
+    for (int i=(int)(300*fs); i<(int)(308*fs) && i<(int)s.size(); i++) s[i]+=200;
+    // periodic 1s bursts @20s
+    for (double t=10.0; t+1.0<dur; t+=20.0){ int b=(int)(t*fs); for(int i=0;i<fs;i++) if(b+i<(int)s.size()) s[b+i]+=40; }
+    p->insert_signal("LAT", s, fs);
+    p->eval("LM sig=LAT method=adaptive");
+    double nclm = get_val(p,"LM","N_CLM");
+    bool pass = nclm >= 40;   // the huge event did not suppress nearby detections
+    record(R,"plm/adaptive-baseline-robust", pass, "N_CLM="+std::to_string(nclm), V);
+  } catch(std::exception & e){ record(R,"plm/adaptive-baseline-robust",false,e.what(),V); }
+}
+
+// ============================================================
 // Main entry point
 // ============================================================
 
@@ -2529,6 +3126,7 @@ void proc_tests( const std::string & group, const bool verbose )
   RUN("eval",     test_eval)
   RUN("lunapi",   test_lunapi)
   RUN("segsrv",   test_segsrv)
+  RUN("plm",      test_plm)
 
 #undef RUN
 

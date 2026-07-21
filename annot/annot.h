@@ -184,7 +184,12 @@ public:
   bool empty() const { return root_ < 0; }
 
   size_t size()  const { return nodes_.size(); }
-  
+
+  // invalidate the tree (e.g. after instances have been removed from
+  // the underlying annot_map_t); next query will trigger a fresh
+  // build_from_keys() rather than tripping the stale-size check
+  void clear() { nodes_.clear(); root_ = -1; }
+
 private:
 
   struct Node {

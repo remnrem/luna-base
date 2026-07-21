@@ -32,6 +32,7 @@ struct edf_t;
 struct param_t;
 struct signal_list_t;
 struct gaussian_hmm_t;
+class FFT;
 
 // thresholds/toggles for the NREM/REM arousal heuristic detector;
 // defaults reproduce the original NREM-only behavior
@@ -39,19 +40,21 @@ struct arousal_heuristic_params_t {
 
   bool do_nrem = true;
   bool do_rem  = true;
+  bool verbose = false;
+  bool emg_mode = false;
 
   // seconds between consecutive feature-matrix rows (== epoch_inc)
   double epoch_inc = 0.5;
 
   // cortical (EEG) shift detection - shared across stages
-  double beta_peak        = 1.2;
-  double beta_hysteresis  = 0.6;
+  double shift_peak        = 1.2;
+  double shift_hysteresis  = 0.5;
 
   // spindle (sigma) veto - NREM guards against spindle contamination;
   // REM defaults are permissive (effectively off) since spindles are
   // a NREM phenomenon
-  double sigma_veto_nrem   = 0.8;
-  double sigma_veto2_nrem  = 0.4;
+  double sigma_veto_nrem   = 1.0;
+  double sigma_veto2_nrem  = 0.6;
   double sigma_veto_rem    = 100;
   double sigma_veto2_rem   = 100;
 
@@ -60,9 +63,13 @@ struct arousal_heuristic_params_t {
   double th_h3_artifact  = 4;
   double th_pwr_artifact = 4;
 
+  // short median smoothing applied to the normalized EMG feature before clipping
+  double emg_median_sec  = 2.5;
+
   // candidate event duration/merge/pre-sleep rules - shared across stages
   double min_dur       = 2;    // seconds
   double max_dur       = 15;   // seconds
+  double long_dur      = 30;   // seconds; separate long-arousal reporting ceiling
   double arousal_dur   = 3;    // seconds; major (arousal) vs micro-arousal cutoff
   double merge_gap_sec = 2.5;  // seconds
   double pre_sleep_sec = 10;   // seconds
@@ -91,14 +98,16 @@ private:
 			 Eigen::MatrixXd & Xemg , 
 			 std::vector<int> * state ,
 			 std::vector<int> * sequence ,
-			 std::vector<double> * sec
+			 std::vector<double> * sec ,
+			 const int wake_bridge ,
+			 const double epoch_inc
 			 );
 
-  Eigen::VectorXd calc_eeg_ftrs( const Eigen::MatrixXd & X );
+	  Eigen::VectorXd calc_eeg_ftrs( const Eigen::MatrixXd & X , FFT & fftseg );
   
   Eigen::VectorXd calc_emg_ftrs( const Eigen::MatrixXd & X , const std::vector<double> &  );
 
-  Eigen::MatrixXd process_ftr_matrix( Eigen::MatrixXd * Xeeg , Eigen::MatrixXd * Xemg , const std::vector<int> & st );
+  Eigen::MatrixXd process_ftr_matrix( Eigen::MatrixXd * Xeeg , Eigen::MatrixXd * Xemg , const std::vector<int> & st , const std::vector<double> & sec , const double emg_median_sec , const double epoch_inc );
   
   void dump( const std::vector<std::vector<std::vector<Eigen::VectorXd> > > & X ,
 	     const std::vector<std::vector<std::vector<double> > > & tt ) const;

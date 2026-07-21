@@ -113,14 +113,28 @@ bool Eval::get_token( std::string & input ,  Token & tok )
 	return fail_parse( "incomplete unary operator" , &original_input , parse_position( original_input , input ) );
 
       const char d = input[p];
-      if ( ! ( ( d >= '0' && d <= '9' ) || d == '.' ) )
+      const bool numeric_operand = ( d >= '0' && d <= '9' ) || d == '.';
+      if ( ! numeric_operand )
 	{
-	  std::string repl = c == "-" ? "-1*" : "+1*";
-	  return fail_parse( std::string("unary ") + c
-			     + " before variables/functions is not supported; use "
-			     + repl + "..." ,
-			     &original_input ,
-			     parse_position( original_input , input ) );
+	  // a variable/function/'(' operand, or a further unary sign (e.g. --A)
+	  const bool symbolic_operand =
+	    ( d >= 'a' && d <= 'z' ) || ( d >= 'A' && d <= 'Z' ) ||
+	    d == '_' || d == '(' || d == '-' || d == '+' ;
+
+	  if ( ! symbolic_operand )
+	    return fail_parse( std::string("malformed unary ") + c + " operator" ,
+			       &original_input ,
+			       parse_position( original_input , input ) );
+
+	  // Unary +/- before a variable, function or parenthesized sub-expression:
+	  // rewrite "-X" as "-1 * X" (and "+X" as "1 * X") by emitting the numeric
+	  // literal now and pushing a '*' operator back onto the remaining input.
+	  // This gives standard unary semantics without a dedicated unary-operator
+	  // token, and binds correctly under precedence (e.g. 2*-A parses as 2*(-A)).
+	  tok.set( c == "-" ? -1 : 1 );
+	  previous_value = true;
+	  input = "*" + input.substr(1);
+	  return true;
 	}
     }
 
@@ -162,12 +176,15 @@ bool Eval::get_token( std::string & input ,  Token & tok )
 	      has_exp = true;
 	      digit_after_exp = false;
 	    }
-	  else if ( d == '+' || d == '-' ) {
-	    c += input.substr(p,1);
-	    // + and - okay, if previous char was 'e' or 'E'
-	    if ( ! ( input.substr(p-1,1) == "E" || input.substr(p-1,1) == "e" ) )
-	      invalid_numeric = true;
-	  }
+	  else if ( ( d == '+' || d == '-' ) &&
+		    ( input.substr(p-1,1) == "E" || input.substr(p-1,1) == "e" ) )
+	    {
+	      // a + or - here is only part of the number when it is the sign of a
+	      // scientific-notation exponent (e.g. 1e-3).  Otherwise it terminates
+	      // the numeric literal and is tokenized as a binary operator, so that
+	      // e.g. 2+1 parses as 2, +, 1 (rather than a malformed number "2+1").
+	      c += input.substr(p,1);
+	    }
 	  else break;
 	  ++p;
 	}
