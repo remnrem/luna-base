@@ -854,8 +854,13 @@ bool Eval::execute( const std::vector<Token> & input )
 		    std::cout << "  popping argument off stack: " << sc << "\n";
 		}
 
+	      // if()/ifnot() are definedness predicates: an undefined argument is
+	      // their expected input, not an evaluation error.  Keep the strict
+	      // undefined-argument check for all other functions, so arithmetic and
+	      // ordinary function calls continue to fail explicitly.
+	      const bool definedness_function = c.name() == "if" || c.name() == "ifnot";
 	      for (int a = 0; a < args.size(); a++)
-		if ( ! args[a].is_set() )
+		if ( ! definedness_function && ! args[a].is_set() )
 		  {
 		    errmsg( "undefined argument '" + token_label( args[a] )
 			    + "' passed to " + c.name() + "()" );

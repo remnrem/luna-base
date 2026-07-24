@@ -1806,6 +1806,48 @@ static void test_eval( lunapi_t * eng,
   expect_eval_success( "eval/tab-whitespace", "A=\t1;A", "1i" );
   expect_eval_throw( "eval/index-zero-rejected", "A=int(1,2,3); A[0]", "out of range for A" );
 
+  // Annotation-backed EVAL regression tests.  A is present for epochs 1--300
+  // and B for epochs 1--100; every epoch must remain valid, while the true
+  // intervals reflect the expression result.
+  try {
+    auto p = make_sine_inst( eng );
+    p->insert_annotation( "A", make_stage_annots( 300, 30.0 ) );
+    p->insert_annotation( "B", make_stage_annots( 100, 30.0 ) );
+    p->eval( "EPOCH len=30 & EVAL annot=E_IF expr=\"if(A)\"" );
+    const auto found = p->fetch_annots( { "E_IF" } );
+    const bool pass = found.size() == 300 &&
+                      approx_equal( std::get<1>( found[0] ), 0.0, 0.01 ) &&
+                      approx_equal( std::get<2>( found.back() ), 9000.0, 0.01 );
+    std::ostringstream m; m << "n=" << found.size() << " (exp=300, 0--9000s)";
+    record( R, "eval/annot-if", pass, m.str(), V );
+  } catch ( std::exception & e ) { record( R, "eval/annot-if", false, e.what(), V ); }
+
+  try {
+    auto p = make_sine_inst( eng );
+    p->insert_annotation( "A", make_stage_annots( 300, 30.0 ) );
+    p->insert_annotation( "B", make_stage_annots( 100, 30.0 ) );
+    p->eval( "EPOCH len=30 & EVAL annot=E_IFNOT expr=\"ifnot(B)\"" );
+    const auto found = p->fetch_annots( { "E_IFNOT" } );
+    const bool pass = found.size() == 620 &&
+                      approx_equal( std::get<1>( found[0] ), 3000.0, 0.01 ) &&
+                      approx_equal( std::get<2>( found.back() ), 21600.0, 0.01 );
+    std::ostringstream m; m << "n=" << found.size() << " (exp=620, 3000--21600s)";
+    record( R, "eval/annot-ifnot", pass, m.str(), V );
+  } catch ( std::exception & e ) { record( R, "eval/annot-ifnot", false, e.what(), V ); }
+
+  try {
+    auto p = make_sine_inst( eng );
+    p->insert_annotation( "A", make_stage_annots( 300, 30.0 ) );
+    p->insert_annotation( "B", make_stage_annots( 100, 30.0 ) );
+    p->eval( "EPOCH len=30 & EVAL annot=E_BOTH expr=\"if(A) && ifnot(B)\"" );
+    const auto found = p->fetch_annots( { "E_BOTH" } );
+    const bool pass = found.size() == 200 &&
+                      approx_equal( std::get<1>( found[0] ), 3000.0, 0.01 ) &&
+                      approx_equal( std::get<2>( found.back() ), 9000.0, 0.01 );
+    std::ostringstream m; m << "n=" << found.size() << " (exp=200, 3000--9000s)";
+    record( R, "eval/annot-if-and-ifnot", pass, m.str(), V );
+  } catch ( std::exception & e ) { record( R, "eval/annot-if-and-ifnot", false, e.what(), V ); }
+
   // --------------------------------------------------------------------
   // Arithmetic operators adjacent to operands, i.e. WITHOUT surrounding
   // whitespace.  Regression guard: the numeric-literal scanner used to

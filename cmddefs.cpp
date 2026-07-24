@@ -3812,13 +3812,6 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "" , "SINS" , "Indicator that the study starts in sleep" );
   add_var( "HYPNO" , "" , "EINS" , "Indicator that the study ends in sleep" );
 
-  add_var( "HYPNO" , "" , "MINS_ASC_N2" , "Ascending N2 duration (minutes)" );
-  add_var( "HYPNO" , "" , "MINS_DSC_N2" , "Descending N2 duration (minutes)" );
-  add_var( "HYPNO" , "" , "MINS_FLT_N2" , "Flat N2 duration (minutes)" );
-  add_var( "HYPNO" , "" , "PCT_ASC_N2" , "Proportion of N2 that is ascending" );
-  add_var( "HYPNO" , "" , "PCT_DSC_N2" , "Proportion of N2 that is descending" );
-  add_var( "HYPNO" , "" , "PCT_FLT_N2" , "Proportion of N2 that is flat" );
-
   add_var( "HYPNO" , "" , "T0_START" , "Recording start, hrs since prior midnight " );
   add_var( "HYPNO" , "" , "T1_LIGHTS_OFF" , "Lights off, hrs since prior midnight" );
   add_var( "HYPNO" , "" , "T2_SLEEP_ONSET" , "Sleep onset, hrs since prior midnight" );
