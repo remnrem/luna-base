@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 
 //
 // global resources
@@ -45,6 +46,138 @@ std::string lc( const std::string & s );
 bool contains_ci( const std::string & s , const std::string & q );
 int gcd_int( int a , int b );
 int parse_ascii_fs_arg( const std::string & raw );
+
+struct start_override_t
+{
+  bool has_date = false;
+  bool has_time = false;
+  std::string date;
+  std::string time;
+};
+
+typedef std::map<std::string,start_override_t> start_override_map_t;
+
+std::string normalize_start_file_id( const std::string & raw )
+{
+  std::string id = Helper::trim( raw );
+  while ( id.size() >= 6
+	  && Helper::iequals( id.substr( id.size() - 6 ) , ".annot" ) )
+    id.erase( id.size() - 6 );
+  return id;
+}
+
+bool is_missing_start_value( const std::string & raw )
+{
+  const std::string x = Helper::trim( Helper::unquote( raw ) );
+  return x == "" || x == "." || Helper::iequals( x , "NA" )
+    || Helper::iequals( x , "N/A" );
+}
+
+std::string parse_start_file_date( const std::string & raw ,
+				   const std::string & id ,
+				   const int line_n )
+{
+  const std::string x = Helper::trim( Helper::unquote( raw ) );
+  if ( ! date_t::is_valid( x , DMY ) )
+    Helper::halt( "invalid START_DATE in start-file for ID " + id
+		  + " (line " + Helper::int2str( line_n ) + "): " + x );
+  date_t d( x , DMY );
+  return d.as_string( '.' , 2 );
+}
+
+std::string parse_start_file_time( const std::string & raw ,
+				   const std::string & id ,
+				   const int line_n )
+{
+  const std::string x = Helper::trim( Helper::unquote( raw ) );
+  clocktime_t t( x );
+  if ( ! t.valid || t.s >= 60.0 || fabs( t.s - round( t.s ) ) > 1e-9 )
+    Helper::halt( "invalid START_TIME in start-file for ID " + id
+		  + " (line " + Helper::int2str( line_n )
+		  + "): expected hh:mm:ss or hh.mm.ss with whole seconds: " + x );
+  return t.as_string( '.' , false );
+}
+
+start_override_map_t read_start_file( const std::string & raw_filename )
+{
+  const std::string filename = Helper::expand( raw_filename );
+  std::ifstream IN = LunaIO::open_ifstream( filename , std::ios::in );
+  if ( ! IN.good() ) Helper::halt( "could not open start-file: " + filename );
+
+  std::string line;
+  Helper::safe_getline( IN , line );
+  if ( line == "" ) Helper::halt( "empty start-file: " + filename );
+  std::vector<std::string> header = Helper::parse( line , "\t" , true );
+  if ( header.size() < 2 )
+    Helper::halt( "start-file requires a tab-delimited header with ID and START_DATE/START_TIME: " + filename );
+
+  int date_col = -1 , time_col = -1;
+  for ( int c=0; c<header.size(); c++ )
+    {
+      const std::string h = Helper::toupper( Helper::trim( Helper::unquote( header[c] ) ) );
+      if ( c == 0 && h != "ID" )
+	Helper::halt( "first start-file column must be ID: " + filename );
+      if ( h == "START_DATE" ) date_col = c;
+      if ( h == "START_TIME" ) time_col = c;
+    }
+  if ( date_col < 0 && time_col < 0 )
+    Helper::halt( "start-file must contain START_DATE and/or START_TIME: " + filename );
+
+  start_override_map_t ret;
+  int line_n = 1;
+  while ( ! IN.eof() )
+    {
+      Helper::safe_getline( IN , line );
+      ++line_n;
+      if ( line == "" || line[0] == '#' ) continue;
+      std::vector<std::string> tok = Helper::parse( line , "\t" , true );
+      if ( tok.size() != header.size() )
+        Helper::halt( "start-file line " + Helper::int2str( line_n )
+                      + " has " + Helper::int2str( (int)tok.size() )
+                      + " columns; expected " + Helper::int2str( (int)header.size() ) );
+
+      const std::string raw_id = Helper::trim( Helper::unquote( tok[0] ) );
+      const std::string id = normalize_start_file_id( raw_id );
+      if ( id == "" ) Helper::halt( "blank ID in start-file line " + Helper::int2str( line_n ) );
+
+      start_override_t ov;
+      if ( date_col >= 0 && ! is_missing_start_value( tok[date_col] ) )
+	{
+	  ov.has_date = true;
+	  ov.date = parse_start_file_date( tok[date_col] , id , line_n );
+	}
+      if ( time_col >= 0 && ! is_missing_start_value( tok[time_col] ) )
+	{
+	  ov.has_time = true;
+	  ov.time = parse_start_file_time( tok[time_col] , id , line_n );
+	}
+      if ( ! ov.has_date && ! ov.has_time )
+	Helper::halt( "start-file line " + Helper::int2str( line_n )
+		      + " has neither a START_DATE nor START_TIME value" );
+      if ( ret.find( id ) != ret.end() )
+	Helper::halt( "duplicate ID in start-file: " + id );
+      ret[ id ] = ov;
+    }
+  IN.close();
+  logger << "  loaded " << ret.size() << " start-time overrides from " << filename << "\n";
+  return ret;
+}
+
+const start_override_t * find_start_override( const start_override_map_t & overrides ,
+					       const std::string & raw_id )
+{
+  std::string id = normalize_start_file_id( raw_id );
+  start_override_map_t::const_iterator i = overrides.find( id );
+  if ( i != overrides.end() ) return &i->second;
+
+  const size_t p = id.find_last_of( "/\\" );
+  if ( p != std::string::npos )
+    {
+      i = overrides.find( id.substr( p + 1 ) );
+      if ( i != overrides.end() ) return &i->second;
+    }
+  return NULL;
+}
 
 }
 
@@ -518,6 +651,20 @@ void process_edfs( cmd_t & cmd )
 
   bool empty_edf = f == "." ;
   if ( empty_edf ) single_edf = true;
+
+  // Read this once for the whole input, rather than once per EDF.  The
+  // override is applied below after an EDF has been created/attached and
+  // before annotations are initialized or loaded.
+  start_override_map_t start_overrides;
+  bool have_start_overrides = false;
+  std::map<std::string,std::string>::const_iterator sf = cmd_t::vars.find( "start-file" );
+  if ( sf == cmd_t::vars.end() ) sf = cmd_t::vars.find( "--start-file" );
+  if ( sf == cmd_t::vars.end() ) sf = cmd_t::vars.find( "-start-file" );
+  if ( sf != cmd_t::vars.end() )
+    {
+      start_overrides = read_start_file( sf->second );
+      have_start_overrides = true;
+    }
     
   std::ifstream EDFLIST;
 
@@ -921,13 +1068,43 @@ void process_edfs( cmd_t & cmd )
 	    || globals::param.has( "-time"  )
 	    || globals::param.has( "-rs"  ) 
 	    || globals::param.has( "-nr"  ) ;
+
+	  // An empty EDF with annotation files is an annotation-only input.  In
+	  // this case the EDF timeline is only a placeholder: annotation times
+	  // should not determine its size, nor should the placeholder truncate
+	  // annotations.  Explicit record settings and range filtering still
+	  // take precedence.
+	  const bool annot_only = ( empty_edf || edffile == "." )
+	    && afiles.size() > 0;
+
+	  // For annotation-only empty EDFs, detect the required start/time span
+	  // by default.  This can be disabled for cases such as large overlap
+	  // inputs, where the EDF duration is irrelevant and a pre-scan may be
+	  // unnecessarily expensive.
+	  bool detect_times_enabled = true;
+	  std::map<std::string,std::string>::const_iterator dt = cmd_t::vars.find( "detect-times" );
+	  if ( dt != cmd_t::vars.end() )
+	    detect_times_enabled = Helper::yesno( dt->second );
+
+	  if ( annot_only && ! detect_times_enabled
+	       && ! globals::param.has( "-nr" )
+	       && ! globals::param.has( "-rs" ) )
+	    {
+	      default_nr = 1;
+	      default_startdate = "01.01.85";
+	      default_starttime = "00.00.00";
+	    }
+
+	  if ( annot_only
+	       && cmd_t::vars.find( "drop-annots-past-end" ) == cmd_t::vars.end() )
+	    globals::drop_annots_past_end = false;
 	  
 
 	  //
 	  // Update start time/date from annots (if *no* parameters otherwise given)
 	  //
 	  
-	  if ( ! has_specifics )
+	  if ( detect_times_enabled && ! has_specifics )
 	    annotation_set_t::detect_times( afiles ,
 					    &default_starttime, &default_startdate, &default_nr );
 	  	  
@@ -985,6 +1162,34 @@ void process_edfs( cmd_t & cmd )
 	  writer.commit();
 
 	  continue;
+	}
+
+      if ( have_start_overrides )
+	{
+	  std::string start_lookup_id = rootname;
+	  // In `luna .` mode the input ID can be supplied separately.  Accept
+	  // both the normal special-variable spelling and the conventional
+	  // double-dash spelling for this lookup.
+	  if ( empty_edf )
+	    {
+	      std::map<std::string,std::string>::const_iterator iid = cmd_t::vars.find( "id" );
+	      if ( iid == cmd_t::vars.end() ) iid = cmd_t::vars.find( "--id" );
+	      if ( iid == cmd_t::vars.end() ) iid = cmd_t::vars.find( "-id" );
+	      if ( iid != cmd_t::vars.end() ) start_lookup_id = iid->second;
+	    }
+
+	  const start_override_t * ov = find_start_override( start_overrides , start_lookup_id );
+	  if ( ov != NULL )
+	    {
+	      if ( ov->has_date ) edf.header.startdate = ov->date;
+	      if ( ov->has_time ) edf.header.starttime = ov->time;
+	      logger << "  start-file: set";
+	      if ( ov->has_date ) logger << " START_DATE=" << ov->date;
+	      if ( ov->has_time ) logger << " START_TIME=" << ov->time;
+	      logger << " for " << start_lookup_id << "\n";
+	    }
+	  else
+	    logger << "  start-file: no matching ID for " << start_lookup_id << "\n";
 	}
       
 

@@ -6566,6 +6566,8 @@ void cmddefs_t::init()
   add_param( "OVERLAP" , "nreps" , "1000" , "Number of permutations" );
   add_param( "OVERLAP" , "w" , "10" , "Window in seconds for nearest-neighbour distance summaries" );
   add_param( "OVERLAP" , "mw" , "60" , "Window in seconds for marker-based distances" );
+  add_param( "OVERLAP" , "mw-left" , "" , "Forward/backward marker search limit on the left (seconds); defaults to mw" );
+  add_param( "OVERLAP" , "mw-right" , "" , "Forward/backward marker search limit on the right (seconds); defaults to mw" );
   add_param( "OVERLAP" , "overlap" , "0" , "Minimum proportional overlap required to count as a match" );
   add_param( "OVERLAP" , "offset" , "0.5,0.5,5" , "Offset-window grid as size,increment,max in seconds" );
   add_param( "OVERLAP" , "offset-seed" , "SP" , "Restrict offset analyses to these seed annotations" );
@@ -7910,30 +7912,37 @@ void cmddefs_t::init()
 	            "Large-delta-rise artifact mask runs are annotated as artifact_nrem/artifact_rem; "
 	            "artifact-suppressed candidate spans are annotated separately as "
 	            "suppressed_nrem/suppressed_rem. "
-	            "Standard events use arousal_nrem/arousal_rem, while class-specific "
-	            "events use arousal_micro_nrem/arousal_micro_rem and "
-	            "arousal_long_nrem/arousal_long_rem. Aggregate classes are arousal "
-            "(standard events across stages), arousal_all_nrem/arousal_all_rem "
-	            "(all classes within a stage), and arousal_all (all classes across stages)." );
+            "By default, only the aggregate arousal annotation is attached. With "
+            "verbose-annot, stage-specific and diagnostic classes are also attached. "
+            "Standard events use arousal_std_nrem/arousal_std_rem and arousal_std, while "
+            "long events use arousal_long_nrem/arousal_long_rem and arousal_long. "
+            "Aggregate stage classes are arousal_nrem/arousal_rem, and arousal is the "
+            "all-event class across stages. The optional annot=<root> parameter replaces "
+            "arousal with the supplied root for all event annotation classes." );
   add_param( "AROUSALS" , "eeg" , "" , "EEG channel(s) used to derive local delta/theta/alpha/beta rise features; required for arousal detection; 10-16 Hz is ignored" );
   add_param( "AROUSALS" , "emg" , "EMG" , "Optional EMG channels used to derive local EMG-rise features; required for REM detection" );
   add_param( "AROUSALS" , "win" , "4.0" , "Epoch window length in seconds for feature extraction and post-onset rise scoring" );
   add_param( "AROUSALS" , "inc" , "0.5" , "Epoch increment in seconds for feature extraction" );
   add_param( "AROUSALS" , "verbose" , "" , "Emit verbose candidate-pipeline counts and proportions with VCAND_* and VDIAG_* variables" );
-  add_param( "AROUSALS" , "verbose-annot" , "arv_" , "Emit diagnostic annotation tracks for intermediate masks/candidates; empty/T uses prefix arv_, otherwise value is used as prefix" );
+  add_param( "AROUSALS" , "verbose-annot" , "arv_" , "Emit numbered diagnostic annotation tracks for intermediate masks/candidates; NREM and REM share tracks in pipeline order (e.g. arv_00_eeg_fast_rise_pass, arv_01_eeg_tilt_rise_pass, arv_02_eeg_seed_supported, arv_14_candidate_level_refined, arv_15_candidate_final_duration_ok); empty/T uses prefix arv_, otherwise value is used as prefix" );
   add_param( "AROUSALS" , "verbose-annots" , "arv_" , "Alias for verbose-annot" );
-  add_param( "AROUSALS" , "add" , "a_" , "Add derived channels with this prefix (single channels span both NREM and REM)" );
-  add_param( "AROUSALS" , "broad" , "F" , "Use broader high-recall EEG thresholds (tilt=2.0, fast=2.0); empty or T enables them, F keeps the core defaults" );
+  add_param( "AROUSALS" , "add" , "a_" , "Add derived channels with this prefix, including activation (the pointwise maximum of theta/alpha/beta level) and the diagnostic eeg_artifact score; single channels span both NREM and REM" );
+  add_param( "AROUSALS" , "annot" , "arousal" , "Root for event annotations; e.g. annot=detector produces detector, detector_std, detector_long, and stage-specific variants" );
   add_param( "AROUSALS" , "nrem" , "T" , "Detect NREM arousals" );
   add_param( "AROUSALS" , "rem" , "T" , "Detect REM arousals; requires EMG" );
   add_param( "AROUSALS" , "nrem-emg-only" , "F" , "Allow EMG-only NREM candidates to score as arousals; default requires EEG-seeded NREM candidates" );
   add_param( "AROUSALS" , "manual" , "" , "Existing annotation class containing manual arousal events; summarizes it by stage and enables comparison with automated arousals" );
   add_param( "AROUSALS" , "manual-min-overlap" , "0" , "Minimum positive overlap in seconds for a manual/automated event match; matching is one-to-one" );
+  add_param( "AROUSALS" , "eval-by-bin" , "F" , "When enabled with manual=, also report 30-second stage-restricted bin-level precision, recall, F1, and Cohen kappa; original event-level metrics are always retained" );
   add_param( "AROUSALS" , "wake-bridge" , "1" , "Treat this many 30-second W epochs immediately after NREM/REM as the prior sleep stage for arousal detection only" );
   add_param( "AROUSALS" , "pre-local" , "10" , "Seconds before candidate time used for the local pre-onset reference window" );
   add_param( "AROUSALS" , "pre-gap" , "2" , "Seconds immediately before candidate time excluded from the local pre-onset reference" );
-  add_param( "AROUSALS" , "eeg-tilt-rise-th" , "4.0" , "Core default threshold for max(theta/delta, alpha/delta, beta/delta) local rise contrast; broad uses 2.0" );
+  add_param( "AROUSALS" , "eeg-tilt-rise-th" , "4.0" , "Default threshold for max(theta/delta, alpha/delta, beta/delta) local rise contrast" );
   add_param( "AROUSALS" , "eeg-fast-rise-th" , "2.5" , "Minimum local rise in theta, alpha or beta required for EEG candidate seeding" );
+  add_param( "AROUSALS" , "eeg-tilt-rise-th-nrem" , "" , "NREM-specific EEG tilt-rise seed threshold; overrides eeg-tilt-rise-th" );
+  add_param( "AROUSALS" , "eeg-tilt-rise-th-rem" , "" , "REM-specific EEG tilt-rise seed threshold; overrides eeg-tilt-rise-th" );
+  add_param( "AROUSALS" , "eeg-fast-rise-th-nrem" , "" , "NREM-specific EEG fast-rise seed threshold; overrides eeg-fast-rise-th" );
+  add_param( "AROUSALS" , "eeg-fast-rise-th-rem" , "" , "REM-specific EEG fast-rise seed threshold; overrides eeg-fast-rise-th" );
   add_param( "AROUSALS" , "eeg-active-th" , "0.20" , "Lower EEG fast-rise threshold used to grow EEG-seeded candidates" );
   add_param( "AROUSALS" , "emg-rise-th" , "1.0" , "Local EMG-rise threshold used for diagnostic EMG candidates, optional NREM EMG-only scoring and REM EEG-candidate confirmation" );
   add_param( "AROUSALS" , "emg-active-th" , "0.5" , "Lower local EMG-rise threshold used to grow diagnostic/optional NREM EMG candidates and REM confirmation windows" );
@@ -7944,7 +7953,8 @@ void cmddefs_t::init()
   add_param( "AROUSALS" , "min-dur" , "2" , "Minimum candidate event duration in seconds" );
   add_param( "AROUSALS" , "max-dur" , "15" , "Maximum standard arousal duration in seconds" );
   add_param( "AROUSALS" , "long-dur" , "30" , "Maximum duration in seconds for separately reported long arousal-like events" );
-  add_param( "AROUSALS" , "arousal-dur" , "3" , "Minimum duration in seconds for a candidate to be classed as an arousal rather than a micro-arousal" );
+  add_param( "AROUSALS" , "arousal-dur" , "3" , "Minimum duration in seconds for a candidate to be reported as a standard arousal" );
+  add_param( "AROUSALS" , "duration-level-frac" , "0.5" , "Fraction of each event's peak EEG activation used to refine event onset and offset; lower values extend events" );
   add_param( "AROUSALS" , "merge-gap" , "2.5" , "Merge candidate events separated by less than this many seconds" );
   add_param( "AROUSALS" , "pre-sleep" , "10" , "Minimum seconds of stable prior sleep required before a candidate can be scored" );
   add_param( "AROUSALS" , "emg-rise-min-dur" , "1.0" , "REM only: minimum duration in seconds of a qualifying chin-EMG rise" );
@@ -7952,29 +7962,28 @@ void cmddefs_t::init()
 
   add_table( "AROUSALS" , "SS" , "Per-stage (NREM/REM) overall arousal summary" );
   add_var( "AROUSALS" , "SS" , "MINS" , "Total analyzed duration in minutes for this stage" );
-  add_var( "AROUSALS" , "SS" , "N" , "Number of standard/default (3-15 second) detected arousals in this stage" );
-  add_var( "AROUSALS" , "SS" , "AI" , "Standard/default arousal index per hour for this stage" );
-  add_var( "AROUSALS" , "SS" , "DUR" , "Mean duration of standard/default detected arousals in this stage" );
-  add_var( "AROUSALS" , "SS" , "N_ALL" , "Number of all detected arousal classes in this stage, including standard, long, and micro events" );
-  add_var( "AROUSALS" , "SS" , "AI_ALL" , "All-event arousal index per hour, including standard, long, and micro events" );
-  add_var( "AROUSALS" , "SS" , "DUR_ALL" , "Mean duration of all detected arousal events, including standard, long, and micro events" );
-  add_var( "AROUSALS" , "SS" , "N_MICRO" , "Number of detected micro-arousals in this stage" );
-  add_var( "AROUSALS" , "SS" , "AI_MICRO" , "Micro-arousal index per hour for this stage" );
-  add_var( "AROUSALS" , "SS" , "DUR_MICRO" , "Mean duration of detected micro-arousals in this stage" );
-  add_var( "AROUSALS" , "SS" , "N_LONG" , "Number of separately reported long arousal-like events in this stage" );
-  add_var( "AROUSALS" , "SS" , "AI_LONG" , "Long arousal-like event index per hour" );
-  add_var( "AROUSALS" , "SS" , "DUR_LONG" , "Mean duration of long arousal-like events" );
+  add_var( "AROUSALS" , "SS" , "N" , "Number of all detected arousals in this stage" );
+  add_var( "AROUSALS" , "SS" , "AI" , "All-event arousal index per hour for this stage" );
+  add_var( "AROUSALS" , "SS" , "DUR" , "Mean duration of all detected arousals in this stage" );
+  add_var( "AROUSALS" , "SS" , "N_STD" , "Number of standard (<=15 second) detected arousals" );
+  add_var( "AROUSALS" , "SS" , "AI_STD" , "Standard-event arousal index per hour" );
+  add_var( "AROUSALS" , "SS" , "DUR_STD" , "Mean duration of standard detected arousals" );
+  add_var( "AROUSALS" , "SS" , "N_LONG" , "Number of long (>15 second) detected arousals" );
+  add_var( "AROUSALS" , "SS" , "AI_LONG" , "Long-event arousal index per hour" );
+  add_var( "AROUSALS" , "SS" , "DUR_LONG" , "Mean duration of long detected arousals" );
   add_var( "AROUSALS" , "SS" , "N_ART" , "Number of detected high-delta-rise artifact mask runs in this stage" );
   add_var( "AROUSALS" , "SS" , "AI_ART" , "Artifact-event index per hour" );
   add_var( "AROUSALS" , "SS" , "N_SUPPRESSED" , "Number of candidate arousal events suppressed by artifact or REM EMG-confirmation failure in this stage" );
   add_var( "AROUSALS" , "SS" , "AI_SUPPRESSED" , "Artifact-suppressed candidate event index per hour" );
-  add_var( "AROUSALS" , "SS" , "N_MAN" , "Manual annotation event count for this stage" );
-  add_var( "AROUSALS" , "SS" , "AI_MAN" , "Manual annotation event index per hour for this stage" );
-  add_var( "AROUSALS" , "SS" , "DUR_MAN" , "Mean duration of manual annotation events for this stage" );
-  add_var( "AROUSALS" , "SS" , "N_MICRO_MAN" , "Manual events shorter than 3 seconds" );
-  add_var( "AROUSALS" , "SS" , "AI_MICRO_MAN" , "Manual micro-event index per hour" );
-  add_var( "AROUSALS" , "SS" , "N_LONG_MAN" , "Manual events longer than 15 seconds" );
-  add_var( "AROUSALS" , "SS" , "AI_LONG_MAN" , "Manual long-event index per hour" );
+  add_var( "AROUSALS" , "SS" , "N_MAN" , "All manual annotation event count for this stage" );
+  add_var( "AROUSALS" , "SS" , "AI_MAN" , "All manual annotation event index per hour" );
+  add_var( "AROUSALS" , "SS" , "DUR_MAN" , "Mean duration of all manual annotation events" );
+  add_var( "AROUSALS" , "SS" , "N_MAN_STD" , "Manual standard (<=15 second) event count" );
+  add_var( "AROUSALS" , "SS" , "AI_MAN_STD" , "Manual standard-event index per hour" );
+  add_var( "AROUSALS" , "SS" , "DUR_MAN_STD" , "Mean duration of manual standard events" );
+  add_var( "AROUSALS" , "SS" , "N_MAN_LONG" , "Manual long (>15 second) event count" );
+  add_var( "AROUSALS" , "SS" , "AI_MAN_LONG" , "Manual long-event index per hour" );
+  add_var( "AROUSALS" , "SS" , "DUR_MAN_LONG" , "Mean duration of manual long events" );
   add_var( "AROUSALS" , "SS" , "VDIAG_N_WIN" , "Verbose: analyzed feature windows" );
   add_var( "AROUSALS" , "SS" , "VDIAG_N_EEG_TILT_SEED" , "Verbose: windows meeting EEG tilt-rise seed criteria" );
   add_var( "AROUSALS" , "SS" , "VDIAG_PROP_EEG_TILT_SEED" , "Verbose: proportion of windows meeting EEG tilt-rise seed criteria" );
@@ -8043,6 +8052,16 @@ void cmddefs_t::init()
   add_var( "AROUSALS" , "COMP,SS" , "START_D" , "Mean signed automated-minus-manual start difference in seconds; positive means automated starts later" );
   add_var( "AROUSALS" , "COMP,SS" , "START_DABS" , "Mean absolute automated/manual start difference in seconds" );
   add_var( "AROUSALS" , "COMP,SS" , "DUR_D" , "Mean signed automated-minus-manual duration difference in seconds" );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_SEC" , "Bin width in seconds for optional bin-level comparison" );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_N" , "Number of stage-restricted bins in optional bin-level comparison" );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_TP" , "Optional bin-level true-positive count" );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_FP" , "Optional bin-level automated-positive/manual-negative count" );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_TN" , "Optional bin-level true-negative count" );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_FN" , "Optional bin-level manual-positive/automated-negative count" );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_PRECISION" , "Optional 30-second bin-level precision" );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_RECALL" , "Optional 30-second bin-level recall" );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_F1" , "Optional 30-second bin-level F1 score" );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_KAPPA" , "Optional 30-second bin-level Cohen kappa" );
 
   //
   // COMBINE-EMG
@@ -8076,27 +8095,27 @@ void cmddefs_t::init()
   add_param( "COMBINE-EMG" , "pairs" , "F" , "If T, treat sig= as raw electrodes and auto-derive all pairwise bipolar differences (via the same mechanism as REFERENCE) as the candidate pool" );
   add_param( "COMBINE-EMG" , "new" , "cEMG" , "Label for the new combined output channel (default cEMG)" );
   add_param( "COMBINE-EMG" , "annot" , "emg_src" , "Annotation class recording which candidate contributed each stretch" );
-  add_param( "COMBINE-EMG" , "win" , "5" , "Decision window length in seconds (switching granularity)" );
+  add_param( "COMBINE-EMG" , "win" , "20" , "Decision window length in seconds (switching granularity); kept long relative to a typical arousal (~3-15s) so a transient burst cannot dominate a single window's score" );
   add_param( "COMBINE-EMG" , "flat-sd-th" , "0.5" , "Flatline: window SD below this (uV) flags flatline" );
   add_param( "COMBINE-EMG" , "flat-deriv-prop" , "0.8" , "Flatline: proportion of near-zero sample-to-sample derivatives that flags flatline" );
   add_param( "COMBINE-EMG" , "flat-deriv-eps" , "1e-4" , "Flatline: derivative magnitude below this counts as near-zero" );
   add_param( "COMBINE-EMG" , "clip-prop" , "0.01" , "Clipping: proportion of samples at the ADC rails that flags clipping" );
-  add_param( "COMBINE-EMG" , "rms-th" , "150" , "Excess-noise: window RMS (uV) above this flags the window as too noisy" );
+  add_param( "COMBINE-EMG" , "rms-th" , "300" , "Excess-noise: window RMS (uV) above this flags the window as too noisy; set well above expected genuine arousal-burst amplitude, since (unlike flatline/clipping) this metric can be tripped by real physiological bursts and is not a specific indicator of a dead/failed channel" );
   add_param( "COMBINE-EMG" , "line-bw" , "2" , "Line-noise: +/- Hz around 50/60 Hz used for the line-noise power estimate" );
   add_param( "COMBINE-EMG" , "line-lo" , "10" , "Line-noise/broadband: lower edge (Hz) of the broadband reference power band" );
   add_param( "COMBINE-EMG" , "line-hi" , "100" , "Line-noise/broadband: upper edge (Hz, Nyquist-capped) of the broadband reference power band" );
   add_param( "COMBINE-EMG" , "line-th" , "0.3" , "Line-noise: P_line/P_broad ratio above this flags excess line-noise" );
   add_param( "COMBINE-EMG" , "drift-hi" , "0.5" , "Low-frequency drift: upper edge (Hz) of the drift band (0 to this), scored (not hard-flagged) against broadband power" );
-  add_param( "COMBINE-EMG" , "flat-penalty" , "10" , "Score penalty (in z-score-equivalent units) applied to a window flagged flatline" );
-  add_param( "COMBINE-EMG" , "clip-penalty" , "10" , "Score penalty applied to a window flagged clipped" );
-  add_param( "COMBINE-EMG" , "rms-penalty" , "5" , "Score penalty applied to a window flagged as excess RMS" );
+  add_param( "COMBINE-EMG" , "flat-penalty" , "10" , "Score penalty (in z-score-equivalent units) applied to a window flagged flatline -- the primary signal of a chronically dead/disconnected channel, and not confounded by genuine arousal bursts" );
+  add_param( "COMBINE-EMG" , "clip-penalty" , "10" , "Score penalty applied to a window flagged clipped -- likewise a specific dead/saturated-channel signal, not confounded by arousal bursts" );
+  add_param( "COMBINE-EMG" , "rms-penalty" , "2" , "Score penalty applied to a window flagged as excess RMS; kept low relative to flat/clip-penalty since excess RMS can reflect a genuine arousal burst rather than chronic channel failure" );
   add_param( "COMBINE-EMG" , "ln-penalty" , "3" , "Score penalty applied to a window flagged as excess line-noise" );
-  add_param( "COMBINE-EMG" , "switch-margin" , "1.0" , "Minimum score advantage (z-score-equivalent units) an alternative candidate needs over the active one before switching is considered" );
-  add_param( "COMBINE-EMG" , "min-dwell" , "30" , "Minimum seconds the active candidate must remain active before a switch is allowed" );
-  add_param( "COMBINE-EMG" , "smooth-win" , "3" , "Width (in decision windows) of the majority-vote smoothing pass applied to the switch sequence" );
+  add_param( "COMBINE-EMG" , "switch-margin" , "2.5" , "Minimum score advantage (z-score-equivalent units) an alternative candidate needs over the active one before switching is considered; set comfortably above the score swing a single arousal-burst window can produce (via rms-penalty/kurtosis), but well below flat-penalty/clip-penalty, so chronic channel failure still triggers a switch while a transient burst does not" );
+  add_param( "COMBINE-EMG" , "min-dwell" , "180" , "Minimum seconds the active candidate must remain active before a switch is allowed; kept long relative to a typical arousal so an isolated burst cannot itself accumulate enough sustained advantage to trigger a switch" );
+  add_param( "COMBINE-EMG" , "smooth-win" , "5" , "Width (in decision windows) of the majority-vote smoothing pass applied to the switch sequence" );
   add_param( "COMBINE-EMG" , "xfade" , "1.0" , "Raised-cosine crossfade duration (seconds) applied at each genuine switch point" );
-  add_param( "COMBINE-EMG" , "norm" , "T" , "Locally normalize (median/MAD) each window before stitching, then rescale to approximate physical units (default yes)" );
-  add_param( "COMBINE-EMG" , "norm-win" , "60" , "Length (seconds) of the rolling window used to estimate each window's local normalization baseline/scale" );
+  add_param( "COMBINE-EMG" , "norm" , "T" , "Locally normalize (median/MAD over norm-win) each window before stitching, then rescale to approximate physical units (default yes). This is appropriate when the output feeds relative/local-burst detection (e.g. arousal scoring), since a genuine burst is short relative to norm-win and still stands out. Set norm=F to skip local re-baselining and preserve each candidate's raw relative amplitude (including any true sustained cross-stage tone difference, e.g. REM-related atonia) if the output will instead feed absolute-amplitude analyses (staging models, tonic-EMG/atonia metrics) -- the trade-off is that switches between candidates of differing gain/contact quality will then show as amplitude discontinuities rather than being smoothed out" );
+  add_param( "COMBINE-EMG" , "norm-win" , "60" , "Length (seconds) of the rolling window used to estimate each window's local normalization baseline/scale (only applies when norm=T)" );
   add_param( "COMBINE-EMG" , "clamp" , "8" , "Clamp normalized output samples to +/- this many MAD-units (only applies when norm=T)" );
   add_param( "COMBINE-EMG" , "use-staging" , "T" , "If sleep-stage annotations already exist, use REM as a soft scoring bonus (default yes-if-present; never required or auto-derived)" );
   add_param( "COMBINE-EMG" , "stage-weight" , "0.5" , "Weight of the REM figure-of-merit bonus (only applied if use-staging=T and staging is present)" );

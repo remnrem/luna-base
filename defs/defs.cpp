@@ -152,6 +152,7 @@ std::string globals::indiv_wildcard;
 int globals::anon_idroot_cnt;
 
 bool globals::force_edf;
+bool globals::clear_reserved;
 bool globals::skip_edf_annots;
 bool globals::skip_nonedf_annots;
 bool globals::set_annot_inst2hms;
@@ -567,6 +568,7 @@ void globals::init_defs()
   txt_table_append = "";
 
   force_edf = false;
+  clear_reserved = false;
   skip_edf_annots = false;
   skip_nonedf_annots = false;
   skip_sl_annots = false;

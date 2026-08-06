@@ -215,6 +215,15 @@ struct annotate_t {
   double window_sec;
 
   double marker_window_sec; // allowed to be different for seed-marker relations
+  double marker_window_left_sec;
+  double marker_window_right_sec;
+  bool marker_window_directional;
+
+  // Active search limits; normally inactive so that w/mw retain their
+  // historical symmetric truncation behavior.
+  bool directional_window;
+  double active_window_left_sec;
+  double active_window_right_sec;
   
   bool include_overlap_in_dist;
   
@@ -497,9 +506,9 @@ struct annotate_t {
   
   // seed-annot stats calc
   void seed_annot_stats( const std::set<interval_t> & a , const std::string & astr ,
-			 const std::set<interval_t> & b , const std::string & bstr ,
-			 uint64_t , 
-			 annotate_stats_t * r );
+				 const std::set<interval_t> & b , const std::string & bstr ,
+				 uint64_t , 
+				 annotate_stats_t * r );
 
   // add in contrasts effects
   void add_contrasts( annotate_stats_t * r );

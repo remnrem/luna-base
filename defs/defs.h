@@ -263,6 +263,7 @@ struct globals
   static std::set<std::string> annot_alignment;
 
   static bool force_edf;
+  static bool clear_reserved;
   static bool skip_edf_annots;
   static bool skip_nonedf_annots;
   static bool skip_sl_annots;

@@ -35,6 +35,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <numeric>
 
 extern logger_t logger;
 extern writer_t writer;
@@ -43,6 +44,45 @@ namespace {
 
 bool arousals2_verbose_annots = false;
 std::string arousals2_verbose_prefix = "arv_";
+
+std::string arousals2_verbose_label( const std::string & label )
+{
+  // Keep the diagnostic tracks in one shared NREM/REM order so that
+  // visual review does not interleave stage-specific copies of the same
+  // pipeline step.
+  static const std::vector<std::string> labels = {
+    "eeg_fast_rise_pass",
+    "eeg_tilt_rise_pass",
+    "eeg_seed_supported",
+    "eeg_fast_active",
+    "emg_rise_seed",
+    "delta_artifact",
+    "eeg_artifact",
+    "candidate_eeg_raw",
+    "candidate_emg_raw",
+    "candidate_raw",
+    "candidate_duration_ok",
+    "candidate_merged",
+    "candidate_duration_capped",
+    "candidate_presleep_ok",
+    "candidate_artifact_ok",
+    "candidate_level_refined",
+    "candidate_final_duration_ok",
+    "rem_emg_rise",
+    "rem_emg_rise_duration_ok",
+    "rem_emg_confirmed",
+    "rem_emg_rejected"
+  };
+
+  for ( size_t i = 0; i < labels.size(); ++i )
+    if ( labels[i] == label )
+      {
+        const std::string n = i < 10 ? "0" + std::to_string( i ) : std::to_string( i );
+        return arousals2_verbose_prefix + n + "_" + label;
+      }
+
+  return arousals2_verbose_prefix + "99_" + label;
+}
 
 bool arousals2_bool_token( const std::string & s )
 {
@@ -60,6 +100,7 @@ bool arousals2_true_token( const std::string & s )
 
 struct arousals2_manual_stage_t {
   std::set<interval_t> events;
+  std::vector<interval_t> stage_intervals;
   double stage_sec = 0;
 };
 
@@ -109,7 +150,10 @@ arousals2_collect_manual( edf_t & edf , const std::string & label )
     {
       std::string stage;
       if ( arousals2_stage_label( i->first.id , &stage ) )
-        out[ stage ].stage_sec += i->first.interval.duration_sec();
+        {
+          out[ stage ].stage_intervals.push_back( i->first.interval );
+          out[ stage ].stage_sec += i->first.interval.duration_sec();
+        }
     }
 
   for ( annot_map_t::const_iterator i = manual->interval_events.begin();
@@ -130,6 +174,79 @@ arousals2_collect_manual( edf_t & edf , const std::string & label )
   return out;
 }
 
+struct arousals2_bin_metrics_t {
+  uint64_t n = 0, tp = 0, fp = 0, tn = 0, fn = 0;
+  double precision = 0, recall = 0, f1 = 0, kappa = 0;
+};
+
+arousals2_bin_metrics_t arousals2_bin_compare(
+    const std::vector<interval_t> & stage_intervals,
+    const std::set<interval_t> & automated,
+    const std::set<interval_t> & manual )
+{
+  const uint64_t bin_tp = 30 * globals::tp_1sec;
+  std::set<uint64_t> valid_bins, auto_bins, manual_bins;
+
+  auto add_stage_bins = [ & ]( const interval_t & e )
+    {
+      if ( e.stop <= e.start ) return;
+      const uint64_t b0 = e.start / bin_tp;
+      const uint64_t b1 = ( e.stop - 1 ) / bin_tp;
+      for ( uint64_t b = b0; b <= b1; ++b ) valid_bins.insert( b );
+    };
+
+  auto add_event_bin = [ & ]( const interval_t & e , std::set<uint64_t> * bins )
+    {
+      if ( e.stop <= e.start ) return;
+      const uint64_t duration = e.stop - e.start;
+      if ( duration <= 2 * bin_tp )
+        {
+          // Match the reference 30-s evaluation: short events contribute
+          // only to the bin containing their midpoint.
+          const uint64_t middle = e.start + std::min( duration , 6 * globals::tp_1sec ) / 2;
+          bins->insert( middle / bin_tp );
+        }
+      else
+        {
+          // For unusually long events, mark only the interior bins, as in
+          // the reference event-to-time-array implementation.
+          const uint64_t b0 = e.start / bin_tp + 1;
+          const uint64_t b1 = e.stop / bin_tp;
+          for ( uint64_t b = b0; b < b1; ++b ) bins->insert( b );
+        }
+    };
+
+  for ( const interval_t & e : stage_intervals ) add_stage_bins( e );
+  for ( const interval_t & e : automated ) add_event_bin( e , &auto_bins );
+  for ( const interval_t & e : manual ) add_event_bin( e , &manual_bins );
+
+  arousals2_bin_metrics_t out;
+  for ( const uint64_t b : valid_bins )
+    {
+      const bool a = auto_bins.find( b ) != auto_bins.end();
+      const bool m = manual_bins.find( b ) != manual_bins.end();
+      if ( a && m ) ++out.tp;
+      else if ( a ) ++out.fp;
+      else if ( m ) ++out.fn;
+      else ++out.tn;
+    }
+  out.n = out.tp + out.fp + out.tn + out.fn;
+  out.precision = out.tp + out.fp > 0 ? out.tp / (double)( out.tp + out.fp ) : 0;
+  out.recall = out.tp + out.fn > 0 ? out.tp / (double)( out.tp + out.fn ) : 0;
+  out.f1 = out.precision + out.recall > 0 ?
+    2.0 * out.precision * out.recall / ( out.precision + out.recall ) : 0;
+  if ( out.n > 0 )
+    {
+      const double p0 = ( out.tp + out.tn ) / (double)out.n;
+      const double pe =
+        ( ( out.tp + out.fn ) * ( out.tp + out.fp ) +
+          ( out.fp + out.tn ) * ( out.fn + out.tn ) ) /
+        ( (double)out.n * out.n );
+      out.kappa = 1.0 - pe > 0 ? ( p0 - pe ) / ( 1.0 - pe ) : 0;
+    }
+  return out;
+}
+
 bool arousals2_manual_match( const interval_t & automated ,
                               const interval_t & manual ,
                               const uint64_t min_overlap_tp )
@@ -141,7 +258,8 @@ bool arousals2_manual_match( const interval_t & automated ,
 
 void arousals2_write_manual( const std::map<std::string,arousals2_manual_stage_t> & manual ,
                              const std::map<std::string,std::set<interval_t> > & automated ,
-                             const uint64_t min_overlap_tp )
+                             const uint64_t min_overlap_tp ,
+                             const bool eval_by_bin )
 {
   for ( const std::string stage : { std::string( "NR" ) , std::string( "R" ) } )
     {
@@ -149,25 +267,29 @@ void arousals2_write_manual( const std::map<std::string,arousals2_manual_stage_t
       const std::set<interval_t> empty;
       const std::set<interval_t> & me = m == manual.end() ? empty : m->second.events;
       const double stage_sec = m == manual.end() ? 0 : m->second.stage_sec;
-      double duration = 0;
-      int n_micro = 0, n_long = 0;
+      double duration = 0, duration_long = 0, duration_std = 0;
+      int n_long = 0, n_std = 0;
       for ( std::set<interval_t>::const_iterator e = me.begin(); e != me.end(); ++e )
         {
           const double d = e->duration_sec();
           duration += d;
-          if ( d < 3.0 ) ++n_micro;
-          else if ( d > 15.0 ) ++n_long;
+          if ( d > 15.0 ) { ++n_long; duration_long += d; }
+          else { ++n_std; duration_std += d; }
         }
 
       writer.level( stage , "SS" );
       writer.value( "MINS" , stage_sec / 60.0 );
+      // Canonical manual metrics: default = all events; explicit STD/LONG
+      // fields split the same events at the 15-second boundary.
       writer.value( "N_MAN" , (int)me.size() );
       writer.value( "AI_MAN" , stage_sec > 0 ? me.size() / ( stage_sec / 3600.0 ) : 0.0 );
       if ( ! me.empty() ) writer.value( "DUR_MAN" , duration / (double)me.size() );
-      writer.value( "N_MICRO_MAN" , n_micro );
-      writer.value( "AI_MICRO_MAN" , stage_sec > 0 ? n_micro / ( stage_sec / 3600.0 ) : 0.0 );
-      writer.value( "N_LONG_MAN" , n_long );
-      writer.value( "AI_LONG_MAN" , stage_sec > 0 ? n_long / ( stage_sec / 3600.0 ) : 0.0 );
+      writer.value( "N_MAN_STD" , n_std );
+      writer.value( "AI_MAN_STD" , stage_sec > 0 ? n_std / ( stage_sec / 3600.0 ) : 0.0 );
+      if ( n_std > 0 ) writer.value( "DUR_MAN_STD" , duration_std / (double)n_std );
+      writer.value( "N_MAN_LONG" , n_long );
+      writer.value( "AI_MAN_LONG" , stage_sec > 0 ? n_long / ( stage_sec / 3600.0 ) : 0.0 );
+      if ( n_long > 0 ) writer.value( "DUR_MAN_LONG" , duration_long / (double)n_long );
       writer.level( "manual" , "CLS" );
       writer.value( "NE" , (int)me.size() );
       writer.value( "AI" , stage_sec > 0 ? me.size() / ( stage_sec / 3600.0 ) : 0.0 );
@@ -175,7 +297,7 @@ void arousals2_write_manual( const std::map<std::string,arousals2_manual_stage_t
       writer.unlevel( "CLS" );
       writer.unlevel( "SS" );
 
-      const std::string auto_label = stage == "NR" ? "arousal_all_nrem" : "arousal_all_rem";
+      const std::string auto_label = stage == "NR" ? "arousal_nrem" : "arousal_rem";
       const std::map<std::string,std::set<interval_t> >::const_iterator a = automated.find( auto_label );
       const std::set<interval_t> & ae = a == automated.end() ? empty : a->second;
       struct candidate_t { uint64_t overlap; int ai; int mi; };
@@ -224,6 +346,22 @@ void arousals2_write_manual( const std::map<std::string,arousals2_manual_stage_t
       writer.value( "PRECISION" , precision );
       writer.value( "RECALL" , recall );
       writer.value( "F1" , f1 );
+      if ( eval_by_bin )
+        {
+          const arousals2_bin_metrics_t bm = arousals2_bin_compare(
+            m == manual.end() ? std::vector<interval_t>() : m->second.stage_intervals,
+            ae , me );
+          writer.value( "BIN_SEC" , 30 );
+          writer.value( "BIN_N" , (int)bm.n );
+          writer.value( "BIN_TP" , (int)bm.tp );
+          writer.value( "BIN_FP" , (int)bm.fp );
+          writer.value( "BIN_TN" , (int)bm.tn );
+          writer.value( "BIN_FN" , (int)bm.fn );
+          writer.value( "BIN_PRECISION" , bm.precision );
+          writer.value( "BIN_RECALL" , bm.recall );
+          writer.value( "BIN_F1" , bm.f1 );
+          writer.value( "BIN_KAPPA" , bm.kappa );
+        }
       writer.value( "OVERLAP_SEC" , overlap_tp / (double)globals::tp_1sec );
       std::set<interval_t> all_events = ae;
       all_events.insert( me.begin() , me.end() );
@@ -253,6 +391,8 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
 
   const bool have_manual = param.has( "manual" );
   const std::string manual_label = have_manual ? param.requires( "manual" ) : "";
+  const bool eval_by_bin = param.has( "eval-by-bin" ) &&
+    ( param.empty( "eval-by-bin" ) || param.yesno( "eval-by-bin" , true , true ) );
   const double manual_min_overlap = param.has( "manual-min-overlap" ) ?
     param.requires_dbl( "manual-min-overlap" ) : 0.0;
   if ( manual_min_overlap < 0 ) Helper::halt( "AROUSALS manual-min-overlap must be non-negative" );
@@ -269,7 +409,8 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   if ( have_manual && ns_eeg == 0 && ns_emg == 0 )
     {
       arousals2_write_manual( manual , std::map<std::string,std::set<interval_t> >() ,
-                              (uint64_t)std::llround( manual_min_overlap * globals::tp_1sec ) );
+                              (uint64_t)std::llround( manual_min_overlap * globals::tp_1sec ) ,
+                              eval_by_bin );
       logger << "  no valid EEG or EMG signals; summarized manual annotation " << manual_label << "\n";
       return;
     }
@@ -280,7 +421,7 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
     Helper::halt( "invalid epoch win/inc values" );
 
   int ne = edf.timeline.set_epoch( epoch_win , epoch_inc );
-  logger << "  deriving AROUSALS2 features for " << ne << " "
+  logger << "  deriving arousal features for " << ne << " "
          << epoch_win << "s epochs, w/ "
          << 100*( epoch_inc / epoch_win ) << "% overlap\n";
 
@@ -289,16 +430,14 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
     Helper::halt( "must have EDF records that are a multiple of 1 second (use RECORD-SIZE)" );
 
   if ( param.has( "winsor" ) || param.has( "no-winsor" ) )
-    Helper::halt( "AROUSALS2 winsor/no-winsor options are not supported" );
-  if ( param.has( "annot" ) )
-    Helper::halt( "AROUSALS2 annot option is not supported; annotation class names are fixed" );
+    Helper::halt( "winsor/no-winsor options are not supported for arousal detection" );
   if ( param.has( "prefix" ) )
-    Helper::halt( "AROUSALS2 prefix option is not supported; use add=<prefix> for derived channels" );
+    Helper::halt( "prefix option is not supported; use add=<prefix> for derived channels" );
   if ( param.has( "per-channel" ) )
-    Helper::halt( "AROUSALS2 per-channel option is not supported" );
+    Helper::halt( "per-channel option is not supported for arousal detection" );
   if ( param.has( "sigma-veto" ) || param.has( "sigma-veto2" ) ||
        param.has( "sigma-veto-rem" ) || param.has( "sigma-veto2-rem" ) )
-    Helper::halt( "AROUSALS2 does not use sigma veto options" );
+    Helper::halt( "sigma veto options are not used for arousal detection" );
 
   arousals2_verbose_annots = false;
   arousals2_verbose_prefix = "arv_";
@@ -323,17 +462,9 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
 
   const bool add_chs = param.has( "add" );
   const std::string ch_prefix = ! param.empty( "add" ) ? param.value( "add" ) : "a_";
+  const std::string event_root = ! param.empty( "annot" ) ? param.value( "annot" ) : "arousal";
 
   arousals2_params_t hp;
-  // The built-in configuration is the core operating point.  `broad` is a
-  // convenience switch for the wider-net EEG thresholds; explicit threshold
-  // arguments still take precedence over these defaults.
-  if ( param.has( "broad" ) &&
-       ( param.empty( "broad" ) || param.yesno( "broad" , true , true ) ) )
-    {
-      hp.eeg_tilt_rise_th = 2.0;
-      hp.eeg_fast_rise_th = 2.0;
-    }
   hp.epoch_inc = epoch_inc;
   hp.post_sec = epoch_win;
   hp.do_nrem = param.yesno( "nrem" , true , true );
@@ -342,12 +473,28 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   hp.nrem_emg_only = param.yesno( "nrem-emg-only" , false , true );
   if ( param.has( "eeg-tilt-rise-th" ) ) hp.eeg_tilt_rise_th = param.requires_dbl( "eeg-tilt-rise-th" );
   if ( param.has( "eeg-fast-rise-th" ) ) hp.eeg_fast_rise_th = param.requires_dbl( "eeg-fast-rise-th" );
+
+  // Global EEG thresholds apply to both stages; stage-specific options below
+  // can then override them independently.
+  hp.eeg_tilt_rise_th_nrem = hp.eeg_tilt_rise_th;
+  hp.eeg_tilt_rise_th_rem  = hp.eeg_tilt_rise_th;
+  hp.eeg_fast_rise_th_nrem = hp.eeg_fast_rise_th;
+  hp.eeg_fast_rise_th_rem  = hp.eeg_fast_rise_th;
+  if ( param.has( "eeg-tilt-rise-th-nrem" ) )
+    hp.eeg_tilt_rise_th_nrem = param.requires_dbl( "eeg-tilt-rise-th-nrem" );
+  if ( param.has( "eeg-tilt-rise-th-rem" ) )
+    hp.eeg_tilt_rise_th_rem = param.requires_dbl( "eeg-tilt-rise-th-rem" );
+  if ( param.has( "eeg-fast-rise-th-nrem" ) )
+    hp.eeg_fast_rise_th_nrem = param.requires_dbl( "eeg-fast-rise-th-nrem" );
+  if ( param.has( "eeg-fast-rise-th-rem" ) )
+    hp.eeg_fast_rise_th_rem = param.requires_dbl( "eeg-fast-rise-th-rem" );
   if ( param.has( "eeg-active-th" )    ) hp.eeg_active_th    = param.requires_dbl( "eeg-active-th" );
   if ( param.has( "emg-rise-th" )      ) hp.emg_rise_th      = param.requires_dbl( "emg-rise-th" );
   if ( param.has( "emg-active-th" )    ) hp.emg_active_th    = param.requires_dbl( "emg-active-th" );
   if ( param.has( "active-gap" )       ) hp.active_gap_sec   = param.requires_dbl( "active-gap" );
   if ( param.has( "delta-artifact-th" )) hp.delta_artifact_th = param.requires_dbl( "delta-artifact-th" );
   if ( param.has( "artifact-frac" )    ) hp.artifact_frac    = param.requires_dbl( "artifact-frac" );
+  if ( param.has( "eeg-artifact-th" )  ) hp.eeg_artifact_th  = param.requires_dbl( "eeg-artifact-th" );
   if ( param.has( "emg-median" )       ) hp.emg_median_sec   = param.requires_dbl( "emg-median" );
   if ( param.has( "pre-local" )        ) hp.pre_sec          = param.requires_dbl( "pre-local" );
   if ( param.has( "pre-gap" )          ) hp.pre_gap_sec      = param.requires_dbl( "pre-gap" );
@@ -355,33 +502,42 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   if ( param.has( "max-dur" )          ) hp.max_dur          = param.requires_dbl( "max-dur" );
   if ( param.has( "long-dur" )         ) hp.long_dur         = param.requires_dbl( "long-dur" );
   if ( param.has( "arousal-dur" )      ) hp.arousal_dur      = param.requires_dbl( "arousal-dur" );
+  if ( param.has( "duration-level-frac" ) ) hp.duration_level_frac = param.requires_dbl( "duration-level-frac" );
   if ( param.has( "merge-gap" )        ) hp.merge_gap_sec    = param.requires_dbl( "merge-gap" );
   if ( param.has( "pre-sleep" )        ) hp.pre_sleep_sec    = param.requires_dbl( "pre-sleep" );
   if ( param.has( "emg-rise-min-dur" ) ) hp.emg_rise_min_dur = param.requires_dbl( "emg-rise-min-dur" );
   if ( param.has( "emg-rise-buffer" )  ) hp.emg_rise_buffer  = param.requires_dbl( "emg-rise-buffer" );
 
   if ( ! std::isfinite( hp.eeg_tilt_rise_th ) || ! std::isfinite( hp.eeg_fast_rise_th ) ||
+       ! std::isfinite( hp.eeg_tilt_rise_th_nrem ) || ! std::isfinite( hp.eeg_tilt_rise_th_rem ) ||
+       ! std::isfinite( hp.eeg_fast_rise_th_nrem ) || ! std::isfinite( hp.eeg_fast_rise_th_rem ) ||
        ! std::isfinite( hp.eeg_active_th ) || ! std::isfinite( hp.emg_rise_th ) ||
        ! std::isfinite( hp.emg_active_th ) || ! std::isfinite( hp.active_gap_sec ) ||
        ! std::isfinite( hp.delta_artifact_th ) || ! std::isfinite( hp.artifact_frac ) ||
+       ! std::isfinite( hp.eeg_artifact_th ) ||
        ! std::isfinite( hp.emg_median_sec ) || ! std::isfinite( hp.pre_sec ) ||
        ! std::isfinite( hp.pre_gap_sec ) || ! std::isfinite( hp.min_dur ) ||
        ! std::isfinite( hp.max_dur ) || ! std::isfinite( hp.long_dur ) ||
-       ! std::isfinite( hp.arousal_dur ) || ! std::isfinite( hp.merge_gap_sec ) ||
+       ! std::isfinite( hp.arousal_dur ) || ! std::isfinite( hp.duration_level_frac ) ||
+       ! std::isfinite( hp.merge_gap_sec ) ||
        ! std::isfinite( hp.pre_sleep_sec ) || ! std::isfinite( hp.emg_rise_min_dur ) ||
        ! std::isfinite( hp.emg_rise_buffer ) )
-    Helper::halt( "invalid non-finite AROUSALS2 parameter" );
+    Helper::halt( "invalid non-finite arousal-detection parameter" );
   if ( hp.emg_median_sec < 0 || hp.pre_sec <= hp.pre_gap_sec ||
        hp.pre_gap_sec < 0 || hp.active_gap_sec < 0 )
-    Helper::halt( "invalid AROUSALS2 local window or smoothing parameter" );
+    Helper::halt( "invalid arousal-detection local window or smoothing parameter" );
   if ( hp.min_dur <= 0 || hp.arousal_dur < hp.min_dur ||
        hp.max_dur < hp.arousal_dur || hp.long_dur <= hp.max_dur )
-    Helper::halt( "invalid AROUSALS2 duration parameter ordering" );
+    Helper::halt( "invalid arousal-detection duration parameter ordering" );
+  if ( hp.duration_level_frac <= 0 || hp.duration_level_frac > 1 )
+    Helper::halt( "duration-level-frac must be > 0 and <= 1" );
   if ( hp.merge_gap_sec < 0 || hp.pre_sleep_sec < 0 ||
        hp.emg_rise_min_dur < 0 || hp.emg_rise_buffer < 0 )
-    Helper::halt( "invalid AROUSALS2 duration/gap parameter" );
+    Helper::halt( "invalid arousal-detection duration/gap parameter" );
   if ( hp.artifact_frac < 0 || hp.artifact_frac > 1 )
-    Helper::halt( "AROUSALS2 artifact-frac must be between 0 and 1" );
+    Helper::halt( "artifact-frac must be between 0 and 1" );
+  if ( hp.eeg_artifact_th < 0 || hp.eeg_artifact_th > 1 )
+    Helper::halt( "eeg-artifact-th must be between 0 and 1" );
 
   const int wake_bridge = param.has( "wake-bridge" ) ? param.requires_int( "wake-bridge" ) : 1;
   if ( wake_bridge < 0 )
@@ -389,13 +545,13 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
 
   if ( ns_eeg == 0 && ns_emg == 0 )
     {
-      logger << "  no valid EEG or EMG signals detected... leaving AROUSALS2\n";
+      logger << "  no valid EEG or EMG signals detected... leaving arousal detection\n";
       return;
     }
   if ( hp.do_rem && ns_emg == 0 )
-    Helper::halt( "AROUSALS2 REM detection requires an EMG channel; use rem=F to run NREM-only" );
+    Helper::halt( "REM arousal detection requires an EMG channel; use rem=F to run NREM-only" );
 
-  logger << "  running AROUSALS2 for " << ns_eeg << " EEG and " << ns_emg << " EMG signals\n";
+  logger << "  running arousal detection for " << ns_eeg << " EEG and " << ns_emg << " EMG signals\n";
 
   std::vector<double> Fs_eeg = edf.header.sampling_freq( eeg_signals );
   std::vector<double> Fs_emg = edf.header.sampling_freq( emg_signals );
@@ -409,7 +565,7 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
 
       const double sr_rounded = std::round( Fs0 );
       if ( fabs( Fs0 - sr_rounded ) > 1e-4 )
-        Helper::halt( "AROUSALS2 requires integer EEG sample rates" );
+        Helper::halt( "arousal detection requires integer EEG sample rates" );
       sr = (int)sr_rounded;
       if ( sr < 60 )
         Helper::halt( "EEG sample rate too low" );
@@ -433,13 +589,41 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   std::vector<std::vector<std::vector<double> > > tt;
   std::vector<std::vector<std::vector<Eigen::VectorXd> > > X = assemble( Xftr , state , seq , sec , &tt );
 
-  std::map<std::string,std::set<interval_t> > anns = event_heuristic( X , tt , hp );
+  std::vector<std::vector<std::vector<double> > > eeg_artifact;
+  // Compute the raw-EEG quality score before event scoring.  add_channels()
+  // also owns the diagnostic-channel emission, so it is reused here even
+  // when no derived channels were requested.
+  add_channels( X , tt , add_chs ? ch_prefix : "" , eeg_signals , epoch_win , &eeg_artifact );
+
+  std::map<std::string,std::set<interval_t> > anns = event_heuristic( X , tt , eeg_artifact , hp );
+  if ( event_root != "arousal" )
+    {
+      std::map<std::string,std::set<interval_t> > renamed;
+      for ( std::map<std::string,std::set<interval_t> >::const_iterator a = anns.begin(); a != anns.end(); ++a )
+        {
+          const std::string prefix = "arousal";
+          const std::string label = a->first.compare( 0 , prefix.size() , prefix ) == 0
+            ? event_root + a->first.substr( prefix.size() ) : a->first;
+          renamed[ label ].insert( a->second.begin() , a->second.end() );
+        }
+      anns.swap( renamed );
+    }
   if ( have_manual )
     arousals2_write_manual( manual , anns ,
-                            (uint64_t)std::llround( manual_min_overlap * globals::tp_1sec ) );
+                            (uint64_t)std::llround( manual_min_overlap * globals::tp_1sec ) ,
+                            eval_by_bin );
   std::map<std::string,std::set<interval_t> >::const_iterator aa = anns.begin();
   while ( aa != anns.end() )
     {
+      // Keep the ordinary output compact: arousal is the canonical
+      // all-stage, all-duration event class.  Attach the stage-specific,
+      // standard/long, artifact, and verbose pipeline classes only when
+      // diagnostic annotations have explicitly been requested.
+      if ( ! arousals2_verbose_annots && aa->first != event_root )
+        {
+          ++aa;
+          continue;
+        }
       annot_t * annot = parent->annotations->add( aa->first );
       const std::set<interval_t> & evts = aa->second;
       std::set<interval_t>::const_iterator ee = evts.begin();
@@ -451,8 +635,6 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
       ++aa;
     }
 
-  if ( add_chs )
-    add_channels( X , tt , ch_prefix );
 }
 
 void arousals2_t::build_ftr_matrix( edf_t & edf ,
@@ -597,7 +779,7 @@ void arousals2_t::build_ftr_matrix( edf_t & edf ,
         {
           eigen_matslice_t mslice( edf , eeg_signals , interval );
           if ( mslice.data_ref().rows() != eeg_index_length )
-            Helper::halt( "internal EEG epoch length mismatch in AROUSALS2" );
+            Helper::halt( "internal EEG epoch length mismatch in arousal detection" );
           Xeeg.row( eidx ) = calc_eeg_ftrs( mslice.data_ref() , *eeg_fft );
         }
 
@@ -896,7 +1078,10 @@ arousals2_t::assemble( const Eigen::MatrixXd & Xftr ,
 
 void arousals2_t::add_channels( const std::vector<std::vector<std::vector<Eigen::VectorXd> > > & X ,
                                 const std::vector<std::vector<std::vector<double> > > & tt ,
-                                const std::string & ch_prefix )
+                                const std::string & ch_prefix ,
+                                const signal_list_t & eeg_signals ,
+                                const double epoch_win ,
+                                std::vector<std::vector<std::vector<double> > > * eeg_artifact_out )
 {
   const int nr = parent->header.nr;
   const double rs = parent->header.record_duration;
@@ -904,10 +1089,238 @@ void arousals2_t::add_channels( const std::vector<std::vector<std::vector<Eigen:
 
   std::vector<std::string> chlab = {
     "delta", "theta", "alpha", "beta", "emg",
-    "eeg_tilt_rise", "eeg_fast_rise", "emg_rise", "delta_art"
+    "eeg_tilt_rise", "eeg_fast_rise", "emg_rise", "delta_art", "activation", "eeg_artifact"
   };
 
-  for (int cidx=0; cidx<NFTR; cidx++)
+  // Diagnostic-only bounded score for two kinds of non-EEG-like activity:
+  // narrow-band/harmonic trains and long plateaus with abrupt edges.  This
+  // never enters event detection.  It uses one EEG channel at a time; channels
+  // are pooled by max below.
+  auto artifact_score = [&]( const std::vector<double> & x , const int fs )
+    {
+      if ( x.size() < 20 || fs < 10 ) return 0.0;
+      for ( int i=0; i<x.size(); ++i )
+        if ( ! std::isfinite( x[i] ) ) return 0.0;
+      const int step = std::max( 1 , (int)std::ceil( x.size() / 64.0 ) );
+      std::vector<double> z;
+      for ( int i=0; i<x.size(); i+=step ) z.push_back( x[i] );
+      const double med = MiscMath::median( z );
+      std::vector<double> ad( z.size() );
+      for ( int i=0; i<z.size(); ++i ) ad[i] = std::fabs( z[i] - med );
+      const double mad = MiscMath::median( ad );
+      if ( mad < 1e-12 ) return 0.0;
+      for ( int i=0; i<z.size(); ++i ) z[i] = ( z[i] - med ) / ( 1.4826 * mad );
+
+      auto bound = [&]( const double v )
+        { return std::max( 0.0 , std::min( 1.0 , v ) ); };
+
+      std::vector<double> dx( z.size() - 1 );
+      for ( int i=1; i<z.size(); ++i ) dx[i-1] = std::fabs( z[i] - z[i-1] );
+      const double dsum = std::accumulate( dx.begin() , dx.end() , 0.0 );
+      double jump_concentration = 0;
+      if ( dsum > 1e-12 )
+        {
+          std::vector<double> sorted = dx;
+          std::sort( sorted.begin() , sorted.end() );
+          const int cut = std::max( 1 , (int)std::floor( 0.05 * sorted.size() ) );
+          double top = 0;
+          for ( int i=sorted.size()-cut; i<sorted.size(); ++i ) top += sorted[i];
+          jump_concentration = std::max( 0.0 , std::min( 1.0 , ( top / dsum - 0.12 ) / 0.45 ) );
+        }
+
+      // Plateau/edge branch: long low-slope runs plus concentrated jumps.
+      const double flat_fraction = bound( ( std::count_if( dx.begin() , dx.end(),
+                                      [&]( const double v ) { return v < 0.20; } ) /
+                                      (double)dx.size() - 0.45 ) / 0.45 );
+      const double plateau_score = bound( flat_fraction * ( 0.35 + 0.65 * jump_concentration ) );
+
+      double mean = std::accumulate( dx.begin() , dx.end() , 0.0 ) / dx.size();
+      double var = 0;
+      for ( int i=0; i<dx.size(); ++i ) var += ( dx[i] - mean ) * ( dx[i] - mean );
+      var /= dx.size();
+      const int lag0 = std::max( 1 , (int)std::lround( 0.20 * fs / step ) );
+      const int lag1 = std::min( (int)dx.size() / 3 , (int)std::lround( 1.50 * fs / step ) );
+      double periodicity = 0;
+      if ( var >= 1e-12 )
+        for ( int lag=lag0; lag<=lag1; ++lag )
+          {
+            double ac = 0;
+            const int n = dx.size() - lag;
+            for ( int i=0; i<n; ++i ) ac += ( dx[i] - mean ) * ( dx[i+lag] - mean );
+            periodicity = std::max( periodicity , std::fabs( ac / ( n * var ) ) );
+          }
+      periodicity = std::max( 0.0 , std::min( 1.0 , ( periodicity - 0.25 ) / 0.50 ) );
+
+      // Harmonic branch: use the raw waveform, since smooth periodic artifacts
+      // need not have sharp transitions.  A narrow spectral line is stronger
+      // evidence when it has additional harmonics above the local background.
+      std::vector<double> y( x.size() );
+      double ymean = 0;
+      for ( int i=0; i<x.size(); ++i ) ymean += x[i];
+      ymean /= x.size();
+      for ( int i=0; i<x.size(); ++i ) y[i] = x[i] - ymean;
+      FFT fft( y.size() , y.size() , fs , FFT_FORWARD , WINDOW_HANN );
+      fft.apply( y );
+      std::vector<double> power;
+      std::vector<double> freq;
+      for ( int i=0; i<fft.cutoff; ++i )
+        if ( fft.frq[i] >= 0.5 && fft.frq[i] <= 40.0 && std::isfinite( fft.X[i] ) )
+          {
+            freq.push_back( fft.frq[i] );
+            power.push_back( std::max( 0.0 , fft.X[i] ) );
+          }
+      double harmonic_score = 0;
+      if ( power.size() >= 8 )
+        {
+          std::vector<double> residual( power.size() , 0 );
+          for ( int i=0; i<power.size(); ++i )
+            {
+              std::vector<double> local;
+              for ( int j=std::max( 0 , i-5 ); j<=std::min( (int)power.size()-1 , i+5 ); ++j )
+                if ( j != i ) local.push_back( power[j] );
+              const double bg = MiscMath::median( local );
+              residual[i] = std::log( ( power[i] + 1e-12 ) / ( bg + 1e-12 ) );
+            }
+          double best = 0;
+          for ( int i=1; i+1<residual.size(); ++i )
+            if ( residual[i] > residual[i-1] && residual[i] >= residual[i+1] )
+              {
+                const double prominence = bound( ( residual[i] - 0.8 ) / 2.0 );
+                if ( prominence == 0 ) continue;
+                int nh = 0;
+                for ( int k=2; k<=5; ++k )
+                  {
+                    const double target = k * freq[i];
+                    if ( target > 40 ) break;
+                    int jbest = -1;
+                    double dbest = 1e9;
+                    for ( int j=1; j<residual.size(); ++j )
+                      if ( std::fabs( freq[j] - target ) < dbest )
+                        { dbest = std::fabs( freq[j] - target ); jbest = j; }
+                    if ( jbest >= 0 && dbest <= 0.5 && residual[jbest] > 0.8 ) ++nh;
+                  }
+                best = std::max( best , prominence * ( nh >= 1 ? 1.0 : 0.35 ) );
+              }
+          harmonic_score = bound( best * ( 0.45 + 0.55 * periodicity ) );
+        }
+
+      // Piecewise-linearity branch: fit short local straight lines.  This
+      // catches held/interpolated-looking segments even when there is no
+      // sharp edge or narrow spectral peak.
+      double straight_score = 0;
+      const int nsub = 8;
+      const int msub = z.size() / nsub;
+      if ( msub >= 4 )
+        {
+          int good = 0, longest = 0, run = 0;
+          for ( int s=0; s<nsub; ++s )
+            {
+              const int a = s * msub;
+              double st = 0, sy = 0, sty = 0, stt = 0, syy = 0;
+              for ( int j=0; j<msub; ++j )
+                {
+                  const double t = j;
+                  const double v = z[a+j];
+                  st += t; sy += v; sty += t*v; stt += t*t; syy += v*v;
+                }
+              const double den = msub * stt - st * st;
+              const double slope = std::fabs( den ) > 1e-12 ? ( msub * sty - st * sy ) / den : 0;
+              const double intercept = ( sy - slope * st ) / msub;
+              double rss = 0, tss = 0;
+              const double ybar = sy / msub;
+              for ( int j=0; j<msub; ++j )
+                {
+                  const double e = z[a+j] - ( intercept + slope*j );
+                  rss += e*e;
+                  const double d = z[a+j] - ybar;
+                  tss += d*d;
+                }
+              const double rms = std::sqrt( rss / msub );
+              const double r2 = tss > 1e-12 ? std::max( 0.0 , 1.0 - rss / tss ) : 1.0;
+              // Either a locally very good line, or a genuinely held/flat
+              // segment with little within-segment variation.
+              const bool is_straight = rms < 0.40 && ( r2 > 0.80 || tss / msub < 0.10 );
+              if ( is_straight ) { ++good; ++run; longest = std::max( longest , run ); }
+              else run = 0;
+            }
+          const double fraction = (double)good / nsub;
+          const double persistence = (double)longest / nsub;
+          const double evidence = bound( ( fraction - 0.25 ) / 0.50 ) *
+            bound( ( persistence - 0.125 ) / 0.375 );
+          straight_score = 1.0 - std::exp( -4.0 * evidence );
+        }
+
+      // The branches are deliberately independent: a smooth harmonic train,
+      // an edge/plateau artifact, and a piecewise-linear artifact need not
+      // share the same signature.
+      const double score = std::max( straight_score , std::max( harmonic_score , plateau_score ) );
+      return std::isfinite( score ) ? std::max( 0.0 , std::min( 1.0 , score ) ) : 0.0;
+    };
+
+  std::vector<std::vector<std::vector<double> > > eeg_artifact( tt.size() );
+  for ( int st=0; st<tt.size(); ++st )
+    {
+      eeg_artifact[st].resize( tt[st].size() );
+      for ( int sq=0; sq<tt[st].size(); ++sq )
+        eeg_artifact[st][sq].assign( tt[st][sq].size() , 0 );
+    }
+  if ( eeg_signals.size() )
+    {
+      const int fs = (int)std::lround( parent->header.sampling_freq( eeg_signals(0) ) );
+      std::vector<const std::vector<double> *> raw( eeg_signals.size() );
+      std::vector<const std::vector<uint64_t> *> raw_tp( eeg_signals.size() );
+      std::vector<slice_t *> slices;
+      for ( int s=0; s<eeg_signals.size(); ++s )
+        {
+          slice_t * sl = new slice_t( *parent , eeg_signals(s) , parent->timeline.wholetrace() );
+          slices.push_back( sl );
+          raw[s] = sl->pdata();
+          raw_tp[s] = sl->ptimepoints();
+        }
+      for ( int st=0; st<tt.size(); ++st )
+        for ( int sq=0; sq<tt[st].size(); ++sq )
+          {
+            const int ne = tt[st][sq].size();
+            for ( int i=0; i<ne; ++i )
+              {
+                const uint64_t center = (uint64_t)std::llround( tt[st][sq][i] * globals::tp_1sec );
+                const uint64_t half = (uint64_t)std::llround( 0.5 * epoch_win * globals::tp_1sec );
+                double pooled = 0;
+                for ( int s=0; s<eeg_signals.size(); ++s )
+                  {
+                    const std::vector<uint64_t> & tpv = *raw_tp[s];
+                    std::vector<uint64_t>::const_iterator lo = std::lower_bound( tpv.begin() , tpv.end() , center > half ? center-half : 0 );
+                    std::vector<uint64_t>::const_iterator hi = std::upper_bound( tpv.begin() , tpv.end() , center+half );
+                    if ( lo == hi ) continue;
+                    std::vector<double> w( raw[s]->begin() + ( lo - tpv.begin() ) , raw[s]->begin() + ( hi - tpv.begin() ) );
+                    const double score = artifact_score( w , fs );
+                    if ( std::isfinite( score ) ) pooled = std::max( pooled , score );
+                  }
+                eeg_artifact[st][sq][i] = pooled;
+              }
+            // The diagnostic is intended to identify sustained contamination,
+            // not isolated feature-window excursions.  Smooth the pooled
+            // per-channel score over five 2-Hz points (about 2.5 seconds).
+            // This reduces single blips while retaining artifacts lasting
+            // several seconds, including events shorter than 10 seconds.
+            const std::vector<double> raw_score = eeg_artifact[st][sq];
+            for ( int i=0; i<ne; ++i )
+              {
+                const int lo = std::max( 0 , i - 2 );
+                const int hi = std::min( ne - 1 , i + 2 );
+                double sum = 0;
+                for ( int j=lo; j<=hi; ++j ) sum += raw_score[j];
+                eeg_artifact[st][sq][i] = std::max( 0.0 , std::min( 1.0 , sum / ( hi - lo + 1 ) ) );
+              }
+          }
+      for ( int s=0; s<slices.size(); ++s ) delete slices[s];
+    }
+
+  if ( eeg_artifact_out != NULL ) *eeg_artifact_out = eeg_artifact;
+
+  if ( ch_prefix.empty() ) return;
+
+  for (int cidx=0; cidx<chlab.size(); cidx++)
     {
       std::string label = ch_prefix;
       if ( ! label.empty() && label[ label.size() - 1 ] != '_' ) label += "_";
@@ -933,7 +1346,17 @@ void arousals2_t::add_channels( const std::vector<std::vector<std::vector<Eigen:
             if ( ne == 0 ) continue;
 
             std::vector<double> xx0(ne);
-            for (int i=0; i<ne; i++) xx0[i] = X[st][sq][i][cidx];
+            for (int i=0; i<ne; i++)
+              {
+                if ( cidx < NFTR )
+                  xx0[i] = X[st][sq][i][cidx];
+                else if ( cidx == NFTR + 0 )
+                  xx0[i] = std::max( X[st][sq][i](IDX_THETA),
+                                     std::max( X[st][sq][i](IDX_ALPHA), X[st][sq][i](IDX_BETA) ) );
+                else
+                  xx0[i] = eeg_artifact[st][sq][i];
+                if ( ! std::isfinite( xx0[i] ) ) xx0[i] = 0;
+              }
 
             const double tmin = tt[st][sq][0];
             const double tmax = tt[st][sq][ne-1];
@@ -957,6 +1380,8 @@ void arousals2_t::add_channels( const std::vector<std::vector<std::vector<Eigen:
               }
           }
 
+      for ( int i=0; i<np; ++i )
+        if ( ! std::isfinite( xx[i] ) ) xx[i] = 0;
       parent->update_signal( slot , &xx );
     }
 }
@@ -964,6 +1389,7 @@ void arousals2_t::add_channels( const std::vector<std::vector<std::vector<Eigen:
 std::map<std::string,std::set<interval_t> >
 arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::VectorXd> > > & X ,
                               const std::vector<std::vector<std::vector<double> > > & tt ,
+                              const std::vector<std::vector<std::vector<double> > > & eeg_artifact ,
                               const arousals2_params_t & p )
 {
   std::map<std::string,std::set<interval_t> > ret;
@@ -982,14 +1408,14 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
       const std::string stg_lab = st == 0 ? "nrem" : "rem";
 
       Eigen::VectorXd ftr_art( NFTR ), ftr_nonart( NFTR );
-      Eigen::VectorXd ftr_baseline( NFTR ), ftr_arousal( NFTR ), ftr_uarousal( NFTR );
+      Eigen::VectorXd ftr_baseline( NFTR ), ftr_arousal( NFTR );
       ftr_art.setZero(); ftr_nonart.setZero();
-      ftr_baseline.setZero(); ftr_arousal.setZero(); ftr_uarousal.setZero();
-      int n_art = 0, n_nonart = 0, n_baseline = 0, n_arousal = 0, n_uarousal = 0;
+      ftr_baseline.setZero(); ftr_arousal.setZero();
+      int n_art = 0, n_nonart = 0, n_baseline = 0, n_arousal = 0;
 
-      int cnt_evts = 0, cnt_uevts = 0, cnt_long_evts = 0, cnt_arts = 0;
+      int cnt_evts = 0, cnt_long_evts = 0, cnt_arts = 0;
       int cnt_rem_cortical_only = 0, cnt_long_rem_cortical_only = 0, cnt_rem_emg_confirmed_long = 0;
-      double dur_major = 0, dur_micro = 0, dur_long = 0;
+      double dur_major = 0, dur_long = 0;
 
       int vcand_raw = 0, vcand_eeg_raw = 0, vcand_emg_raw = 0, vcand_dur_ok = 0;
       int vcand_dur_too_short = 0;
@@ -1008,7 +1434,7 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
 	          auto add_verbose_interval = [&]( const std::string & label , const double t0 , const double t1 )
 	            {
               if ( ! arousals2_verbose_annots || t1 <= t0 ) return;
-	              ret[ arousals2_verbose_prefix + stg_lab + "_" + label ].insert(
+              ret[ arousals2_verbose_label( label ) ].insert(
 	                interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
             };
 
@@ -1075,21 +1501,33 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
 
           std::vector<bool> eeg_seed( ne , false );
           std::vector<bool> emg_seed( ne , false );
+          std::vector<bool> eeg_tilt_rise_pass( ne , false );
+          std::vector<bool> eeg_fast_rise_pass( ne , false );
           std::vector<bool> eeg_active( ne , false );
           std::vector<bool> emg_active( ne , false );
           std::vector<bool> artifact( ne , false );
+          std::vector<bool> delta_artifact( ne , false );
+          std::vector<bool> raw_eeg_artifact( ne , false );
           std::vector<bool> artifact_blocked( ne , false );
 
           for (int i=0; i<ne; i++)
             {
               const Eigen::VectorXd & f = D[i];
-              eeg_seed[i] = f(IDX_EEG_TILT_RISE) >= p.eeg_tilt_rise_th &&
-                f(IDX_EEG_FAST_RISE) >= p.eeg_fast_rise_th;
+              const double eeg_tilt_rise_th = is_rem ? p.eeg_tilt_rise_th_rem : p.eeg_tilt_rise_th_nrem;
+              const double eeg_fast_rise_th = is_rem ? p.eeg_fast_rise_th_rem : p.eeg_fast_rise_th_nrem;
+              eeg_tilt_rise_pass[i] = f(IDX_EEG_TILT_RISE) >= eeg_tilt_rise_th;
+              eeg_fast_rise_pass[i] = f(IDX_EEG_FAST_RISE) >= eeg_fast_rise_th;
+              eeg_seed[i] = eeg_tilt_rise_pass[i] && eeg_fast_rise_pass[i];
               emg_seed[i] = f(IDX_EMG_RISE) >= p.emg_rise_th;
               eeg_active[i] = f(IDX_EEG_FAST_RISE) >= p.eeg_active_th &&
                 f(IDX_EEG_TILT_RISE) > 0;
               emg_active[i] = f(IDX_EMG_RISE) >= p.emg_active_th;
-              artifact[i] = f(IDX_DELTA_ART) > 0;
+              delta_artifact[i] = f(IDX_DELTA_ART) > 0;
+              raw_eeg_artifact[i] =
+                st < eeg_artifact.size() && c < eeg_artifact[st].size() &&
+                i < eeg_artifact[st][c].size() &&
+                eeg_artifact[st][c][i] >= p.eeg_artifact_th;
+              artifact[i] = delta_artifact[i] || raw_eeg_artifact[i];
 
               ++vdiag_win;
               if ( emg_seed[i] ) ++vdiag_emg_seed;
@@ -1101,10 +1539,13 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
           for (int i=0; i<ne; i++)
             if ( eeg_seed_supported[i] ) ++vdiag_eeg_seed;
 
-          add_verbose_mask( "eeg_tilt_seed" , eeg_seed_supported );
-          add_verbose_mask( "eeg_fast_seed" , eeg_active );
+          add_verbose_mask( "eeg_seed_supported" , eeg_seed_supported );
+          add_verbose_mask( "eeg_tilt_rise_pass" , eeg_tilt_rise_pass );
+          add_verbose_mask( "eeg_fast_rise_pass" , eeg_fast_rise_pass );
+          add_verbose_mask( "eeg_fast_active" , eeg_active );
           add_verbose_mask( "emg_rise_seed" , emg_seed );
-          add_verbose_mask( "delta_artifact" , artifact );
+          add_verbose_mask( "delta_artifact" , delta_artifact );
+          add_verbose_mask( "eeg_artifact" , raw_eeg_artifact );
 
           for (int i=0; i<ne; i++)
             {
@@ -1316,9 +1757,9 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
                   ++vcand_final_dur_trimmed;
                 }
               evts2.push_back( evt );
-            }
+          }
           vcand_final_dur_ok += evts2.size();
-          add_verbose_events( "candidate_final_duration_ok" , evts2 );
+          add_verbose_events( "candidate_duration_capped" , evts2 );
 
           evts.clear();
           for (int e=0; e<evts2.size(); e++)
@@ -1420,10 +1861,10 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
               evts = confirmed;
             }
 
-          // Place onset/offset at 50% of each event's own peak fast-band LEVEL.  The rise
+          // Place onset/offset at a configurable fraction of each event's own peak fast-band LEVEL.  The rise
           // feature is used to *detect* the transition, but it decays mid-event as the
           // baseline adapts, so it is a poor ruler for extent.  The (centered, zero-phase)
-          // band-power level stays elevated for the whole event, so its 50%-of-peak crossings
+          // band-power level stays elevated for the whole event, so its level crossings
           // coincide with the true onset and offset regardless of arousal strength.
           auto activation = [&]( int j ) {
             return std::max( D[j](IDX_THETA) , std::max( D[j](IDX_ALPHA) , D[j](IDX_BETA) ) );
@@ -1440,18 +1881,35 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
                   if ( v > pkv ) { pkv = v; pk = j; }
                 }
               if ( pkv <= 0 ) continue;
-              const double half = 0.5 * pkv;
+              const double level = p.duration_level_frac * pkv;
               // walk outward across the whole contig (not just the grown event, whose end was
-              // set by the decaying rise) until the level falls below half its peak
+              // set by the decaying rise) until the level falls below the configured fraction of peak
               int nf = pk, nl = pk;
-              while ( nf > 0      && activation( nf-1 ) >= half ) --nf;
-              while ( nl < ne - 1 && activation( nl+1 ) >= half ) ++nl;
+              while ( nf > 0      && activation( nf-1 ) >= level ) --nf;
+              while ( nl < ne - 1 && activation( nl+1 ) >= level ) ++nl;
               // cap to the same max the rest of the pipeline enforces, so the refined
               // event always lands in a valid duration bucket (avoids runaway extents)
               evts[e] = trim_to_candidate_max( std::make_pair( nf , nl ) );
             }
 
-          std::vector<std::pair<int,int> > arr_major, arr_micro;
+          // This is the final duration gate after level-based boundary
+          // refinement.  Emit it separately so the diagnostic track matches
+          // the events eligible for final standard/long annotation output.
+          add_verbose_events( "candidate_level_refined" , evts );
+          std::vector<std::pair<int,int> > final_duration_evts;
+          for (int e=0; e<evts.size(); e++)
+            {
+              const std::pair<double,double> tint = event_interval( evts[e] );
+              const double dur = tint.second - tint.first;
+              const bool duration_ok =
+                dur >= p.arousal_dur &&
+                ( dur <= p.max_dur || ( do_long && dur <= p.long_dur ) );
+              if ( duration_ok ) final_duration_evts.push_back( evts[e] );
+            }
+          add_verbose_events( "candidate_final_duration_ok" , final_duration_evts );
+          evts = final_duration_evts;
+
+          std::vector<std::pair<int,int> > arr_major;
 	          for (int e=0; e<evts.size(); e++)
 	            {
 	              const std::pair<double,double> tint = event_interval( evts[e] );
@@ -1461,33 +1919,27 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
 	      if ( do_long && dur > p.max_dur && dur <= p.long_dur )
 		{
 		  ret[ "arousal_long_" + stg_lab ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
-                  ret[ stg_lab == "nrem" ? "arousal_all_nrem" : "arousal_all_rem" ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
-		  ret[ "arousal_all" ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
+		  ret[ "arousal_long" ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
+		  ret[ "arousal_" + stg_lab ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
+		  ret[ "arousal" ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
 		  arr_major.push_back( evts[e] );
 		  dur_long += dur;
 		  ++cnt_long_evts;
 		}
 	      else if ( dur >= p.arousal_dur && dur <= p.max_dur )
 		{
+		  ret[ "arousal_std_" + stg_lab ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
+		  ret[ "arousal_std" ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
 		  ret[ "arousal_" + stg_lab ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
-                  ret[ stg_lab == "nrem" ? "arousal_all_nrem" : "arousal_all_rem" ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
 		  ret[ "arousal" ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
-		  ret[ "arousal_all" ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
 		  arr_major.push_back( evts[e] );
 		  dur_major += dur;
 		  ++cnt_evts;
 		}
 	      else if ( dur < p.arousal_dur )
-		{
-		  ret[ "arousal_micro_" + stg_lab ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
-                  ret[ stg_lab == "nrem" ? "arousal_all_nrem" : "arousal_all_rem" ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
-		  ret[ "arousal_all" ].insert( interval_t( globals::tp_1sec * t0 , globals::tp_1sec * t1 ) );
-		  arr_micro.push_back( evts[e] );
-		  dur_micro += dur;
-		  ++cnt_uevts;
-		}
+		continue;
 	      else
-		Helper::halt( "internal AROUSALS2 duration bucket error" );
+		Helper::halt( "internal arousal-detection duration bucket error" );
             }
 
           std::vector<std::pair<int,int> > arts = mask_to_intervals( artifact );
@@ -1501,8 +1953,6 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
           cnt_arts += arts.size();
 
           std::vector<int> arr( ne , 0 );
-          for (int e=0; e<arr_micro.size(); e++)
-            for (int i=arr_micro[e].first; i<=arr_micro[e].second; i++) arr[i] = 1;
           for (int e=0; e<arr_major.size(); e++)
             for (int i=arr_major[e].first; i<=arr_major[e].second; i++) arr[i] = 2;
 
@@ -1511,7 +1961,6 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
               if ( artifact[i] ) continue;
               if ( artifact_blocked[i] ) continue;
               if ( arr[i] == 2 ) { ftr_arousal += D[i]; ++n_arousal; }
-              else if ( arr[i] == 1 ) { ftr_uarousal += D[i]; ++n_uarousal; }
               else { ftr_baseline += D[i]; ++n_baseline; }
             }
         }
@@ -1539,7 +1988,6 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
       write_cls( "artifact" , ftr_art , n_art );
       write_cls( "non_artifact" , ftr_nonart , n_nonart );
       write_cls( "arousal" , ftr_arousal , n_arousal );
-      write_cls( "micro_arousal" , ftr_uarousal , n_uarousal );
       write_cls( "baseline" , ftr_baseline , n_baseline );
       writer.unlevel( "CLS" );
 
@@ -1568,29 +2016,21 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
         return d;
       };
 
-      const int n_final = final_count( "arousal_" + stg_lab );
-      const int n_micro_final = final_count( "arousal_micro_" + stg_lab );
+      const int n_std_final = final_count( "arousal_std_" + stg_lab );
       const int n_long_final = final_count( "arousal_long_" + stg_lab );
-      const double dur_final = final_duration( "arousal_" + stg_lab );
-      const double dur_micro_final = final_duration( "arousal_micro_" + stg_lab );
+      const double dur_std_final = final_duration( "arousal_std_" + stg_lab );
       const double dur_long_final = final_duration( "arousal_long_" + stg_lab );
-      const int n_all_final = n_final + n_long_final + n_micro_final;
-      const double dur_all_final = dur_final + dur_long_final + dur_micro_final;
+      const int n_all_final = n_std_final + n_long_final;
+      const double dur_all_final = dur_std_final + dur_long_final;
 
-      // N/AI/DUR are the default (standard 3-15 second) arousal metrics.
-      writer.value( "N" , n_final );
-      writer.value( "AI" , tot_sec > 0 ? n_final / ( tot_sec / 3600.0 ) : 0.0 );
-      if ( n_final > 0 ) writer.value( "DUR" , dur_final / (double)n_final );
-
-      // Explicit aggregate view: ALL includes standard, long, and micro
-      // arousals, while retaining the historical N/AI meanings for the
-      // standard/default class.
-      writer.value( "N_ALL" , n_all_final );
-      writer.value( "AI_ALL" , tot_sec > 0 ? n_all_final / ( tot_sec / 3600.0 ) : 0.0 );
-      if ( n_all_final > 0 ) writer.value( "DUR_ALL" , dur_all_final / (double)n_all_final );
-      writer.value( "N_MICRO" , n_micro_final );
-      writer.value( "AI_MICRO" , tot_sec > 0 ? n_micro_final / ( tot_sec / 3600.0 ) : 0.0 );
-      if ( n_micro_final > 0 ) writer.value( "DUR_MICRO" , dur_micro_final / (double)n_micro_final );
+      // Canonical automated metrics: default = all events; explicit STD/LONG
+      // fields split the same events at the 15-second boundary.
+      writer.value( "N" , n_all_final );
+      writer.value( "AI" , tot_sec > 0 ? n_all_final / ( tot_sec / 3600.0 ) : 0.0 );
+      if ( n_all_final > 0 ) writer.value( "DUR" , dur_all_final / (double)n_all_final );
+      writer.value( "N_STD" , n_std_final );
+      writer.value( "AI_STD" , tot_sec > 0 ? n_std_final / ( tot_sec / 3600.0 ) : 0.0 );
+      if ( n_std_final > 0 ) writer.value( "DUR_STD" , dur_std_final / (double)n_std_final );
       writer.value( "N_LONG" , n_long_final );
       writer.value( "AI_LONG" , tot_sec > 0 ? n_long_final / ( tot_sec / 3600.0 ) : 0.0 );
       if ( n_long_final > 0 ) writer.value( "DUR_LONG" , dur_long_final / (double)n_long_final );
@@ -1653,9 +2093,8 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
         }
 
       logger << "  " << ( is_rem ? "R" : "NR" )
-             << ": standard=" << n_final
+             << ": standard=" << n_std_final
              << " long=" << n_long_final
-             << " micro=" << n_micro_final
              << " all=" << n_all_final
              << " artifact=" << n_art_final
              << " suppressed=" << n_art_block_final << "\n";

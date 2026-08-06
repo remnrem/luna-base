@@ -43,6 +43,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <iomanip>
 #include <random>
@@ -1629,6 +1630,65 @@ static void test_write( lunapi_t * eng,
     record(R,"write/stats-preserved", pass, m.str(), V);
     std::remove( (tmp + ".edf").c_str() );
   } catch(std::exception & e) { record(R,"write/stats-preserved",false,e.what(),V); }
+
+  // J4 — clear-reserved input option blanks signal reserved fields
+  const bool old_clear_reserved = globals::clear_reserved;
+  try {
+    const std::string src = temp_base_path("test_clear_reserved_src");
+    const std::string keep = temp_base_path("test_clear_reserved_keep");
+    const std::string clear = temp_base_path("test_clear_reserved_clear");
+    const std::string uuid = "9cecc8e855df4ad8b78ebecaaa00dc84";
+
+    auto p = make_sine_inst(eng, 10.0, 256, 1.0);
+    p->eval( std::string("WRITE edf=") + src + " force-edf=T" );
+
+    // For one signal, the signal-reserved field is the final 32 bytes of
+    // the 256-byte signal header: offset 256 + 224 = 480.
+    {
+      std::fstream f( src + ".edf" , std::ios::in | std::ios::out | std::ios::binary );
+      f.seekp( 480 );
+      f.write( uuid.data() , uuid.size() );
+    }
+
+    globals::clear_reserved = false;
+    auto p_keep = eng->inst("T_clear_reserved_keep");
+    const bool attached_keep = p_keep->attach_edf( src + ".edf" );
+    p_keep->eval( std::string("WRITE edf=") + keep + " force-edf=T" );
+
+    globals::clear_reserved = true;
+    auto p_clear = eng->inst("T_clear_reserved_clear");
+    const bool attached_clear = p_clear->attach_edf( src + ".edf" );
+    p_clear->eval( std::string("WRITE edf=") + clear + " force-edf=T" );
+
+    std::string kept( 32 , '\0' ), cleared( 32 , '\0' );
+    {
+      std::ifstream f( keep + ".edf" , std::ios::binary );
+      f.seekg( 480 );
+      f.read( &kept[0] , kept.size() );
+    }
+    {
+      std::ifstream f( clear + ".edf" , std::ios::binary );
+      f.seekg( 480 );
+      f.read( &cleared[0] , cleared.size() );
+    }
+
+    globals::clear_reserved = old_clear_reserved;
+
+    const bool pass = attached_keep && attached_clear
+      && kept == uuid
+      && cleared == std::string( 32 , ' ' );
+    std::ostringstream m;
+    m << "kept='" << kept << "' cleared_spaces="
+      << ( cleared == std::string( 32 , ' ' ) );
+    record(R,"write/clear-reserved-input", pass, m.str(), V);
+
+    std::remove( (src + ".edf").c_str() );
+    std::remove( (keep + ".edf").c_str() );
+    std::remove( (clear + ".edf").c_str() );
+  } catch(std::exception & e) {
+    globals::clear_reserved = old_clear_reserved;
+    record(R,"write/clear-reserved-input",false,e.what(),V);
+  }
 }
 
 // ============================================================

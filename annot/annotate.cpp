@@ -126,6 +126,14 @@ annotate_t::annotate_t( param_t & param )
   // build up a new annotation file, and re-read
   const std::string aggregated = param.requires( "merged" ) + ".annot";
 
+  // In multi-sample mode, infer each individual's duration from the supplied
+  // background by default.  An explicit duration_sec annotation overrides
+  // this inference.
+  const bool infer_duration_from_bg = param.has( "bg" );
+
+  const std::set<std::string> duration_bg_specs =
+    infer_duration_from_bg ? param.strset( "bg" ) : std::set<std::string>();
+
   std::ofstream OUT1 = LunaIO::open_ofstream( aggregated , std::ios::out );
   
   // get size of each 
@@ -142,6 +150,68 @@ annotate_t::annotate_t( param_t & param )
       logger << "\n  processing " << indiv;
       
       const std::set<std::string> & afiles = aa->second;
+      bool explicit_indiv_duration = false;
+      bool have_indiv_bg_bounds = false;
+      double indiv_bg_start = 0;
+      double indiv_bg_stop = 0;
+
+      const auto is_duration_bg = [&duration_bg_specs]( const std::string & name )
+	{
+	  std::set<std::string>::const_iterator ss = duration_bg_specs.begin();
+	  while ( ss != duration_bg_specs.end() )
+	    {
+	      if ( Helper::iequals( *ss , name ) ) return true;
+	      if ( ss->size() > 1 && (*ss)[ ss->size() - 1 ] == '*' &&
+		   Helper::imatch( ss->substr( 0 , ss->size() - 1 ) , name ) )
+		return true;
+	      ++ss;
+	    }
+	  return false;
+	};
+
+      // Read the background envelope first, as annotation files may split
+      // background and event classes across separate files.
+      if ( infer_duration_from_bg )
+	{
+	  std::set<std::string>::const_iterator scan = afiles.begin();
+	  while ( scan != afiles.end() )
+	    {
+	      std::ifstream BIN( scan->c_str() , std::ios::in );
+	      if ( ! BIN ) Helper::halt( "could not open background scan file: " + *scan );
+	      while ( 1 )
+		{
+		  std::string line;
+		  Helper::safe_getline( BIN , line );
+		  if ( BIN.eof() || BIN.bad() ) break;
+		  if ( line == "" || line[0] == '#' ) continue;
+		  std::istringstream BIN_LINE( line );
+		  std::string cls, instance, channel, start_s, stop_s;
+		  BIN_LINE >> cls >> instance >> channel >> start_s >> stop_s;
+		  if ( cls == "" || cls == "class" || start_s == "." || stop_s == "." ||
+		       ! is_duration_bg( cls ) ) continue;
+
+		  double start, stop;
+		  if ( ! Helper::str2dbl( start_s , &start ) ||
+		       ! Helper::str2dbl( stop_s , &stop ) )
+		    Helper::halt( "invalid background interval in annotation file: " + *scan );
+
+		  if ( ! have_indiv_bg_bounds )
+		    {
+		      indiv_bg_start = start;
+		      indiv_bg_stop = stop;
+		      have_indiv_bg_bounds = true;
+		    }
+		  else
+		    {
+		      if ( start < indiv_bg_start ) indiv_bg_start = start;
+		      if ( stop > indiv_bg_stop ) indiv_bg_stop = stop;
+		    }
+		}
+	      BIN.close();
+	      ++scan;
+	    }
+	}
+
       std::set<std::string>::const_iterator bb = afiles.begin();
       while ( bb != afiles.end() )
 	{
@@ -157,8 +227,8 @@ annotate_t::annotate_t( param_t & param )
 	  logger << " " << * bb ;
 	  
 	  const bool seen_indiv = ind2dur.find( indiv ) != ind2dur.end();
-	  
-	  std::ifstream IN1( bb->c_str() , std::ios::in );
+
+      std::ifstream IN1( bb->c_str() , std::ios::in );
 	  bool seen_dur = false;
 	  while ( 1 )
 	    {
@@ -180,23 +250,27 @@ annotate_t::annotate_t( param_t & param )
 		  if ( ! Helper::str2dbl( tok[1] , &sec ) )
 		    Helper::halt( "problem reading duration_sec field: " + tok[1] );
 		  
-		  if ( seen_indiv )
+		  if ( explicit_indiv_duration )
 		    {
 		      if ( fabs( ind2dur[ indiv ] - sec ) > 0.1 )
 			Helper::halt( "different duration_sec observed for individual: " + indiv );
 		    }
 		  else
 		    {
-		      ind2dur[ indiv ] = sec ; 		      
+		      // An explicit duration always overrides a duration inferred from
+		      // an earlier annotation file for this individual.
+		      ind2dur[ indiv ] = sec ;
+		      explicit_indiv_duration = true;
 		    }		  
 		}
-	      
-	      
+
+
 	      // otherwise skip headers, etc
 	      if ( tok[0] == "class" || tok[3] == "." || tok[4] == "." ) continue;
 
-	      // requires we have duration before reading annots
-	      if ( ! seen_dur ) continue;
+      // requires we have duration before reading annots, unless duration is
+      // being inferred from bg.
+	      if ( ! seen_dur && ! infer_duration_from_bg ) continue;
 
 	      // otherwise, we can expect to parse this line
 	      //  - assumption, these will be elapsed seconds (i.e. standard WRITE-ANNOTS output form)
@@ -208,12 +282,29 @@ annotate_t::annotate_t( param_t & param )
 	      if ( ! Helper::str2dbl( tok[4] , &stop ) )
 		Helper::halt( "invalid start field (secs): " + tok[4] );
 
+      // In multi-sample bg mode, retain only events within the envelope
+      // spanning the first background start through the last background end.
+      if ( infer_duration_from_bg && have_indiv_bg_bounds )
+	{
+	  if ( stop == start )
+	    {
+	      // Preserve point annotations (e.g. ISO peaks) when their timestamp
+	      // lies inside the background envelope.
+	      if ( start < indiv_bg_start || start > indiv_bg_stop ) continue;
+	    }
+	  else
+	    {
+	      if ( start < indiv_bg_start ) start = indiv_bg_start;
+	      if ( stop > indiv_bg_stop ) stop = indiv_bg_stop;
+	      if ( stop <= start ) continue;
+	    }
+	}
+
 	      // move forward
 	      start += offset;
 	      stop += offset;
 
 	      // write out to mega-file
-
 	      std::string meta_data;
 	      if ( set_id )
 		{
@@ -238,9 +329,28 @@ annotate_t::annotate_t( param_t & param )
 	    }
 	  IN1.close();
 
+	  if ( infer_duration_from_bg && ! seen_dur )
+	    {
+      if ( ! have_indiv_bg_bounds || indiv_bg_stop <= 0 )
+		Helper::halt( "could not infer duration from bg for individual: " + indiv +
+			      " (bg=" + param.value( "bg" ) + ")" );
+
+	      if ( ! explicit_indiv_duration )
+	    {
+	      if ( seen_indiv )
+		ind2dur[ indiv ] = std::max( ind2dur[ indiv ] , indiv_bg_stop );
+	      else
+		ind2dur[ indiv ] = indiv_bg_stop;
+	    }
+	    }
+
 	  // next annotation file
 	  ++bb;
 	}
+
+      if ( infer_duration_from_bg && ! explicit_indiv_duration )
+	logger << "\n   inferred duration for " << indiv << " from bg: "
+	       << ind2dur[ indiv ] << " seconds";
 
       
       // for block-based permutation, special code for individuals
@@ -250,12 +360,16 @@ annotate_t::annotate_t( param_t & param )
 	OUT1 << "indiv_int_mrkr" << "\t"
 	     << indiv << "\t"
 	     << "." << "\t"
-	     << offset << "\t"
-	     << offset + ind2dur[ indiv ] << "\t"
+	     << Helper::dbl2str( offset , globals::time_format_dp ) << "\t"
+	     << Helper::dbl2str( offset + ind2dur[ indiv ] , globals::time_format_dp ) << "\t"
 	     << "." << "\n";
             
       logger << "\n"
-	     << "   annotations aligned from " << offset << " to " << offset + ind2dur[ indiv ] + 10.0 << " seconds\n";
+	     << "   annotations aligned from "
+	     << Helper::dbl2str( offset , globals::time_format_dp )
+	     << " to "
+	     << Helper::dbl2str( offset + ind2dur[ indiv ] + 10.0 , globals::time_format_dp )
+	     << " seconds\n";
 	
       // shift offset along, with a spacer (arbitrary, 10 seconds)
       // to avoid any flattening of contiguous regions (stop of ind A -- start of ind B)
@@ -458,6 +572,16 @@ void annotate_t::set_options( param_t & param )
   
   // distance to marker stats: default 12 hours = 12*60^2 effectively means no limit
   marker_window_sec = param.has( "mw" ) ? param.requires_dbl( "mw" ) : 12 * 60 * 60;  ;
+  marker_window_left_sec = param.has( "mw-left" ) ? param.requires_dbl( "mw-left" ) : marker_window_sec;
+  marker_window_right_sec = param.has( "mw-right" ) ? param.requires_dbl( "mw-right" ) : marker_window_sec;
+  marker_window_directional = param.has( "mw-left" ) || param.has( "mw-right" );
+
+  if ( marker_window_sec < 0 || marker_window_left_sec < 0 || marker_window_right_sec < 0 )
+    Helper::halt( "invalid negative value for 'mw', 'mw-left' or 'mw-right'" );
+
+  directional_window = false;
+  active_window_left_sec = window_sec;
+  active_window_right_sec = window_sec;
 
   // is D2 based on 'before' / 'after' ratio only, or the actual distance ( by default, have the counts +1/-1)
   d2_signed = param.has( "d2-quant" ) ? ( ! param.yesno( "d2-quant" ) ) : true ; 
@@ -666,7 +790,11 @@ void annotate_t::set_options( param_t & param )
   if ( use_rps ) logger <<"  reducing some annotations to rp-tags\n";
   if ( flanking_sec ) logger << "  adding f=" << flanking_sec << " seconds to each annotation\n";
   if ( window_sec ) logger << "  truncating distance at w=" << window_sec << " seconds for nearest neighbours\n";
-  if ( marker_window_sec ) logger << "  truncating seed-marker distance at mw=" << marker_window_sec << " seconds\n";
+  if ( marker_window_directional )
+    logger << "  restricting seed-marker distances to -" << marker_window_left_sec
+           << "/+" << marker_window_right_sec << " seconds\n";
+  else if ( marker_window_sec )
+    logger << "  truncating seed-marker distance at mw=" << marker_window_sec << " seconds\n";
 
   logger << "  " << ( include_overlap_in_dist ? "" : "not " )
 	 << "including overlapping events in nearest-neighbor distances\n";
@@ -1990,8 +2118,9 @@ void annotate_t::init_event_permutation()
   annot_t * aindivs = edf->annotations->find( "indiv_int_mrkr" );
 
   multi_indiv = aindivs != NULL; 
+  std::vector<std::string> indiv_ids;
 
-  if ( multi_indiv )
+    if ( multi_indiv )
     {
       indiv_segs.clear();
       
@@ -2000,9 +2129,22 @@ void annotate_t::init_event_permutation()
         {
           const instance_idx_t & instance_idx = aa->first;
           indiv_segs.push_back( instance_idx.interval );
+	  indiv_ids.push_back( instance_idx.id );
 	  //std::cout << " pushing indiv_segs " << instance_idx.interval.as_string() << "\n";
           ++aa;
         }
+
+      // The block-matching scan below assumes indiv_segs is chronological.
+      // Report ordering violations before attempting the scan.
+      for (size_t vi = 1; vi < indiv_segs.size(); ++vi)
+	{
+	  if ( indiv_segs[ vi ].start < indiv_segs[ vi - 1 ].start )
+	    logger << "  ** indiv_int_mrkr order inversion at index " << vi
+		   << ": previous start=" << indiv_segs[ vi - 1 ].start
+		   << " (" << indiv_segs[ vi - 1 ].start * globals::tp_duration << " sec),"
+		   << " current start=" << indiv_segs[ vi ].start
+		   << " (" << indiv_segs[ vi ].start * globals::tp_duration << " sec)\n";
+	}
     }
 
   
@@ -2059,19 +2201,72 @@ void annotate_t::init_event_permutation()
       // which 'indiv'? (else fixed to '0')
       //      std::cout << "is multi indiv " << multi_indiv << "\n";
       
-      if ( multi_indiv )
-	{
-	  while (1)
-	    {
-	      // current indiv okay
-	      if ( segstart >= ii->start && segstart < ii->stop )
-		break;
-	      // advance to next
-	      ++ii; ++indiv;
-	      if ( indiv > nindiv )
-		Helper::halt( "mismatch between indivs and blocks in annotate_t::init_block_permutation()" );
-	    }
-	}
+	if ( multi_indiv )
+	  {
+	    while (1)
+	      {
+		// Do not dereference past the final individual interval.  A
+		// background segment that is not contained by any indiv_int_mrkr
+		// interval indicates a malformed/inconsistent merged timeline.
+		if ( ii == indiv_segs.end() || indiv >= nindiv )
+		  {
+		    logger << "  ** event-permutation block mapping failure\n"
+			   << "     background segment: start=" << segstart
+			   << " stop=" << segstart + seglen
+			   << " (" << segstart * globals::tp_duration
+			   << " to " << (segstart + seglen) * globals::tp_duration
+			   << " sec)\n"
+			   << "     individual scan index=" << indiv
+			   << " of " << nindiv << "\n";
+		    if ( indiv > 0 && indiv - 1 < nindiv )
+	      logger << "     previous indiv_int_mrkr (" << indiv_ids[ indiv - 1 ] << "): start="
+			     << indiv_segs[ indiv - 1 ].start
+			     << " stop=" << indiv_segs[ indiv - 1 ].stop
+			     << " (" << indiv_segs[ indiv - 1 ].start * globals::tp_duration
+			     << " to " << indiv_segs[ indiv - 1 ].stop * globals::tp_duration
+			     << " sec)\n";
+		    if ( indiv < nindiv )
+	      logger << "     current indiv_int_mrkr (" << indiv_ids[ indiv ] << "): start="
+			     << indiv_segs[ indiv ].start
+			     << " stop=" << indiv_segs[ indiv ].stop
+			     << " (" << indiv_segs[ indiv ].start * globals::tp_duration
+			     << " to " << indiv_segs[ indiv ].stop * globals::tp_duration
+			     << " sec)\n";
+		    else
+	      logger << "     no current indiv_int_mrkr interval remains\n";
+		    std::vector<interval_t>::const_iterator bracket =
+		      std::lower_bound( indiv_segs.begin() , indiv_segs.end() , segstart ,
+					[]( const interval_t & i , uint64_t t )
+					{ return i.start < t; } );
+		    if ( bracket != indiv_segs.begin() )
+	      {
+			  const size_t bi = bracket - indiv_segs.begin() - 1;
+			  const interval_t & prior = *( bracket - 1 );
+			  logger << "     bracket previous (" << indiv_ids[ bi ] << "): start=" << prior.start
+				     << " stop=" << prior.stop
+				     << " (" << prior.start * globals::tp_duration
+				     << " to " << prior.stop * globals::tp_duration
+				     << " sec)\n";
+	      }
+		    if ( bracket != indiv_segs.end() )
+	      {
+			  const size_t bi = bracket - indiv_segs.begin();
+			  logger << "     bracket next (" << indiv_ids[ bi ] << "): start=" << bracket->start
+				     << " stop=" << bracket->stop
+				     << " (" << bracket->start * globals::tp_duration
+				     << " to " << bracket->stop * globals::tp_duration
+				     << " sec)\n";
+	      }
+		    Helper::halt( "mismatch between indivs and blocks in annotate_t::init_block_permutation()" );
+		  }
+
+		// current indiv okay
+		if ( segstart >= ii->start && segstart < ii->stop )
+		  break;
+		// advance to next
+		++ii; ++indiv;
+	      }
+	  }
       
       //      std::cout << " indiv = " << indiv << "\n";
       
@@ -2949,9 +3144,18 @@ annotate_stats_t annotate_t::eval()
 	      // calculate stats - can use the same seed_annot_stats()
 	      // but swap out window_sec first (then replace)
 	      double orig_window_sec = window_sec;
+	      bool orig_directional_window = directional_window;
+	      double orig_active_window_left_sec = active_window_left_sec;
+	      double orig_active_window_right_sec = active_window_right_sec;
 	      window_sec = marker_window_sec;
+	      directional_window = marker_window_directional;
+	      active_window_left_sec = marker_window_left_sec;
+	      active_window_right_sec = marker_window_right_sec;
 	      seed_annot_stats( a , *aa ,  mrk , *mm , offset , &r );
 	      window_sec = orig_window_sec;
+	      directional_window = orig_directional_window;
+	      active_window_left_sec = orig_active_window_left_sec;
+	      active_window_right_sec = orig_active_window_right_sec;
 	      
 	      ++mm;
 	    }
@@ -3565,7 +3769,68 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       // 	}
 
       
-      // does first take overlap seed?
+      // For directional marker windows, select the nearest eligible marker
+      // on either permitted side.  This must happen before the historical
+      // symmetric distance truncation, otherwise an ineligible marker on
+      // the wrong side could hide an eligible marker in the future.
+      if ( directional_window )
+	{
+	  bool found = false;
+	  double best_abs_dist = 0;
+
+	  const auto consider = [&]( std::set<interval_t>::const_iterator candidate )
+	    {
+	      if ( candidate == b.end() ) return;
+
+	      double candidate_dist = 0;
+	      bool candidate_overlap = false;
+
+	      if ( candidate->overlaps( *aa ) )
+		candidate_overlap = true;
+	      else if ( candidate->start >= aa->stop )
+		candidate_dist = ( candidate->start - ( aa->stop - 1LLU ) ) * globals::tp_duration;
+	      else
+		candidate_dist = - ( aa->start - ( candidate->stop - 1LLU ) ) * globals::tp_duration;
+
+	      const bool eligible = candidate_overlap
+		|| ( candidate_dist >= 0 && candidate_dist <= active_window_right_sec )
+		|| ( candidate_dist < 0 && -candidate_dist <= active_window_left_sec );
+	      if ( ! eligible ) return;
+
+	      if ( ! found || fabs( candidate_dist ) < best_abs_dist )
+		{
+		  found = true;
+		  best_abs_dist = fabs( candidate_dist );
+		  dist = candidate_dist;
+		  overlap = candidate_overlap;
+		  closestb = candidate;
+		}
+	    };
+
+	  consider( bb );
+	  if ( bb != b.begin() )
+	    {
+	      std::set<interval_t>::const_iterator previous = bb;
+	      --previous;
+	      consider( previous );
+	    }
+
+	  if ( ! found )
+	    {
+	      // Preserve the existing censored-distance convention when this
+	      // segment contains markers but none is in the permitted direction.
+	      const double max_window = std::max( active_window_left_sec,
+						  active_window_right_sec );
+	      r->adist[ astr ][ bstr ] += max_window;
+	      r->nadist[ astr ][ bstr ] += 1;
+	      ++aa;
+	      continue;
+	    }
+	}
+      else
+	{
+
+	      // does first take overlap seed?
       
       if ( bb != b.end() && bb->overlaps( *aa ) )
 	{
@@ -3637,8 +3902,9 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 		  // std::cout << " back b is before, so dist = " << left_dist << "\n";
 		  // std::cout << " final dist = " << dist << "\n";
 		  //   }
-		}
-	    }
+	  }
+	}
+	}
 	}
       
       
@@ -3653,7 +3919,8 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	}
       
       // truncate at window length?
-      const bool truncate = dist > window_sec || dist < -window_sec ;
+      const bool truncate = directional_window ? false
+	: dist > window_sec || dist < -window_sec ;
 
       // sets abs-dist to max;
       // ignores in calc of signed-dist
@@ -3709,10 +3976,14 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
       // evaluate any offsets windows? 
       //
 
-      if ( n_flanking_offsets 
-	   && ( flanking_overlap_seeds.size() == 0 || flanking_overlap_seeds.find( astr ) != flanking_overlap_seeds.end() )
-	   && ( flanking_overlap_others.size() == 0 || flanking_overlap_others.find( bstr ) != flanking_overlap_others.end() ) 
-	   )
+	  // Marker pairs use the same offset-grid machinery as ordinary
+	  // seed/other pairs.  Markers are not in achs, so they need to be
+	  // admitted explicitly here when OFFSET analysis is requested.
+	  const bool marker_pair = mannots.find( bstr ) != mannots.end();
+	  if ( n_flanking_offsets 
+	       && ( flanking_overlap_seeds.size() == 0 || flanking_overlap_seeds.find( astr ) != flanking_overlap_seeds.end() )
+	       && ( marker_pair || flanking_overlap_others.size() == 0 || flanking_overlap_others.find( bstr ) != flanking_overlap_others.end() )
+	       )
 	{
 
 	  // seed          is   *aa
@@ -3729,6 +4000,9 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	  
 	  
 	  // forwards:: events must span after
+	  // For a forward-only directional marker window, suppress the
+	  // backward side of the marker offset grid below, not this side.
+	  if ( ! ( marker_pair && directional_window && active_window_right_sec <= 0 ) )
 	  while ( 1 )
 	    {
 	      // nothing left?
@@ -3784,6 +4058,9 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	  // now consider going backwards: reset to closest
 	  cc = closestb;
 
+	  // For a forward-only directional marker window, do not populate
+	  // negative offset bins for marker pairs.
+	  if ( ! ( marker_pair && directional_window && active_window_left_sec <= 0 ) )
 	  while ( 1 )
 	    {
 

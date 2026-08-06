@@ -65,6 +65,7 @@ void optdefs_t::init()
   
   // reading EDFs
   globals::optdefs().add( "signals", "force-edf" , OPT_BOOL_T , "Read EDF+ as EDF (i.e. ignore gaps, annotations)");
+  globals::optdefs().add( "signals", "clear-reserved" , OPT_BOOL_T , "Clear EDF reserved header and signal fields on input (preserve EDF+C/EDF+D)");
   globals::optdefs().add( "signals", "sig" , OPT_STRVEC_T , "One or more signals to import from the EDF" );
   globals::optdefs().add( "signals", "order-signals" , OPT_BOOL_T , "Order signals alphabetically" );
   globals::optdefs().add( "signals", "anon" , OPT_BOOL_T , "Do not read IDs in" );
@@ -212,7 +213,6 @@ std::vector<std::string> optdefs_t::get_opts( const std::string & domain ) const
   if ( ii == domain2opt.end() ) return res;
   return ii->second;
 }
-
 
 
 

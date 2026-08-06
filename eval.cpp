@@ -6528,6 +6528,13 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
       return;
     }
 
+  // clear EDF reserved fields on input, while preserving the EDF+C/EDF+D marker
+  if ( Helper::iequals( tok0 , "clear-reserved" ) )
+    {
+      globals::clear_reserved = Helper::yesno( tok1 );
+      return;
+    }
+
   
 
   
@@ -7037,12 +7044,15 @@ void cmd_t::register_specials()
   specials.insert( "alias" ) ;
   specials.insert( "bail-on-fail" ) ;
   specials.insert( "force-edf" ) ;
+  specials.insert( "clear-reserved" ) ;
   specials.insert( "skip-edf-annots" ) ;
   specials.insert( "skip-annots" ) ;
   specials.insert( "skip-all-annots" ) ;
   specials.insert( "drop-annots-past-end" ) ;
   specials.insert( "annot-time-wrap" ) ;
   specials.insert( "path" ) ;
+  specials.insert( "start-file" );
+  specials.insert( "detect-times" );
   specials.insert( "tt-prepend" );
   specials.insert( "tt-prefix" ) ;
   specials.insert( "tt-append" ); 

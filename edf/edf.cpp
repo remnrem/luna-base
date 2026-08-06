@@ -283,10 +283,16 @@ std::string edf_header_t::summary() const
 
   std::stringstream ss;
 
+  // Reserved fields are EDF ASCII fields.  Keep SUMMARY output on one
+  // printable line even if an in-memory header contains non-ASCII bytes.
+  std::string ascii_reserved( reserved.begin() , reserved.end() );
+  Helper::ascii7( &ascii_reserved , ' ' );
+
   ss << "Patient ID     : " << patient_id << "\n"
      << "Recording info : " << recording_info << "\n"
      << "Start date     : " << startdate << "\n"
      << "Start time     : " << starttime << "\n"
+     << "Reserved       : [" << ascii_reserved << "]\n"
      << "\n"
      << "# signals      : " << ns << "\n"
      << "# records      : " << nr << "\n"
@@ -296,6 +302,14 @@ std::string edf_header_t::summary() const
     {
       
       ss << "Signal " << (s+1) << " : [" << label[s] << "]\n";
+
+      std::string ascii_signal_reserved;
+      if ( s < signal_reserved.size() )
+	{
+	  ascii_signal_reserved = signal_reserved[s];
+	  Helper::ascii7( &ascii_signal_reserved , ' ' );
+	}
+      ss << "\treserved             : [" << ascii_signal_reserved << "]\n";
       
       std::string primary = label[s];
       
@@ -724,19 +738,28 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , edfz2_t * edfz2,
     }
 
 
-  // enforce check that reserevd field contains only US-ASCII characters 32-126
-  // not clear this is needed, but other software seems to prefer this
+  // Keep reserved bytes as read.  The EDF+ marker is recognized below, but
+  // arbitrary reserved content is preserved unless clear-reserved=T was set.
+  const bool edfplus_marker = reserved.size() >= 5
+    && reserved[0] == 'E' && reserved[1] == 'D' && reserved[2] == 'F'
+    && reserved[3] == '+' && ( reserved[4] == 'C' || reserved[4] == 'D' );
+  bool nonstandard_header_reserved = false;
+  if ( reserved.size() >= 44 )
+    {
+      for (int i=edfplus_marker ? 5 : 0; i<44; i++)
+	if ( reserved[i] != ' ' ) nonstandard_header_reserved = true;
+    }
 
-  Helper::ascii7( &reserved , ' ' );
-
-  
-  // enfore rule that reserved fields should be null (allowing EDF+C and EDF+D codes)
-  for (int i=5;i<44;i++) reserved[i] = ' ';
-  if ( reserved[0] != 'E' ) reserved[0] = ' ';
-  if ( reserved[1] != 'D' ) reserved[1] = ' ';
-  if ( reserved[2] != 'F' ) reserved[2] = ' ';
-  if ( reserved[3] != '+' ) reserved[3] = ' ';
-  if ( reserved[4] != 'C' && reserved[4] != 'D' ) reserved[4] = ' ';
+  if ( globals::clear_reserved )
+    {
+      const char marker = edfplus_marker ? reserved[4] : ' ';
+      reserved.assign( 44 , ' ' );
+      if ( edfplus_marker )
+	{
+	  reserved[0] = 'E'; reserved[1] = 'D'; reserved[2] = 'F';
+	  reserved[3] = '+'; reserved[4] = marker;
+	}
+    }
   
   //
   // ensure starttime is in the PM, i.e. 07:00 --> 19:00
@@ -1114,14 +1137,32 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , edfz2_t * edfz2,
       n_samples_all.push_back( x );
     }
   
-  // reserved field
+  // reserved fields
+  int n_nonstandard_signal_reserved = 0;
   for (int s=0;s<ns_all;s++)
     {
+      const std::vector<char> signal_reserved_bytes = edf_t::get_bytes( &p , 32 );
+      std::string signal_reserved_field( signal_reserved_bytes.begin() , signal_reserved_bytes.end() );
+      bool nonstandard = false;
+      for (int i=0;i<signal_reserved_bytes.size();i++)
+	if ( signal_reserved_bytes[i] != ' ' ) nonstandard = true;
+      if ( nonstandard ) ++n_nonstandard_signal_reserved;
+
       if ( channels.find(s) != channels.end() )
-	signal_reserved.push_back( edf_t::get_string( &p , 32 ) );
-      else
-	edf_t::skip( &p , 32 );
+	{
+	  signal_reserved.push_back( signal_reserved_field );
+	  if ( globals::clear_reserved ) signal_reserved.back().assign( 32 , ' ' );
+	}
     }
+
+  if ( ! globals::clear_reserved
+       && ( nonstandard_header_reserved || n_nonstandard_signal_reserved > 0 ) )
+    logger << "  *** warning: non-standard text detected in EDF reserved field(s)\n"
+           << "  *** set clear-reserved=T to clear reserved fields\n";
+
+  if ( globals::clear_reserved )
+    logger << "  clearing EDF reserved header and signal fields on input"
+           << ( edfplus ? " (preserving EDF+C/EDF+D)" : "" ) << "\n";
 
   //
   // time-track absolute offset in record (we only care about this 

@@ -195,19 +195,19 @@ combine_emg_t::combine_emg_t( edf_t & edf , param_t & param )
   const std::string sigstr = param.requires( "sig" );
   signal_list_t sig0 = edf.header.signal_list( sigstr );
   if ( sig0.size() < 2 )
-    Helper::halt( "COMBINE-EMG requires 2+ signals in sig=" );
+    Helper::halt( "requires 2+ signals in sig=" );
 
   const bool auto_pairs = param.yesno( "pairs" , false , true );
 
   const std::string new_label  = param.has( "new"   ) ? param.value( "new"   ) : "cEMG";
   const std::string annot_name = param.has( "annot" ) ? param.value( "annot" ) : "emg_src";
 
-  const double win_s          = param.has( "win" )             ? param.requires_dbl( "win" )             : 5.0;
+  const double win_s          = param.has( "win" )             ? param.requires_dbl( "win" )             : 20.0;
   const double flat_sd_th     = param.has( "flat-sd-th" )      ? param.requires_dbl( "flat-sd-th" )      : 0.5;
   const double flat_deriv_prop= param.has( "flat-deriv-prop" ) ? param.requires_dbl( "flat-deriv-prop" ) : 0.8;
   const double flat_deriv_eps = param.has( "flat-deriv-eps" )  ? param.requires_dbl( "flat-deriv-eps" )  : 1e-4;
   const double clip_prop_th   = param.has( "clip-prop" )       ? param.requires_dbl( "clip-prop" )       : 0.01;
-  const double rms_th         = param.has( "rms-th" )          ? param.requires_dbl( "rms-th" )          : 150.0;
+  const double rms_th         = param.has( "rms-th" )          ? param.requires_dbl( "rms-th" )          : 300.0;
   const double line_bw        = param.has( "line-bw" )         ? param.requires_dbl( "line-bw" )         : 2.0;
   const double line_lo        = param.has( "line-lo" )         ? param.requires_dbl( "line-lo" )         : 10.0;
   const double line_hi        = param.has( "line-hi" )         ? param.requires_dbl( "line-hi" )         : 100.0;
@@ -220,20 +220,18 @@ combine_emg_t::combine_emg_t( edf_t & edf , param_t & param )
   // problem typically is
   const double flat_penalty   = param.has( "flat-penalty" )    ? param.requires_dbl( "flat-penalty" )    : 10.0;
   const double clip_penalty   = param.has( "clip-penalty" )    ? param.requires_dbl( "clip-penalty" )    : 10.0;
-  const double rms_penalty    = param.has( "rms-penalty" )     ? param.requires_dbl( "rms-penalty" )     : 5.0;
+  const double rms_penalty    = param.has( "rms-penalty" )     ? param.requires_dbl( "rms-penalty" )     : 2.0;
   const double ln_penalty     = param.has( "ln-penalty" )      ? param.requires_dbl( "ln-penalty" )      : 3.0;
 
-  const double switch_margin  = param.has( "switch-margin" )   ? param.requires_dbl( "switch-margin" )   : 1.0;
-  const double min_dwell_s    = param.has( "min-dwell" )       ? param.requires_dbl( "min-dwell" )       : 30.0;
-  const int    smooth_win     = param.has( "smooth-win" )      ? param.requires_int( "smooth-win" )      : 3;
+  const double switch_margin  = param.has( "switch-margin" )   ? param.requires_dbl( "switch-margin" )   : 2.5;
+  const double min_dwell_s    = param.has( "min-dwell" )       ? param.requires_dbl( "min-dwell" )       : 180.0;
+  const int    smooth_win     = param.has( "smooth-win" )      ? param.requires_int( "smooth-win" )      : 5;
   const double xfade_s        = param.has( "xfade" )           ? param.requires_dbl( "xfade" )           : 1.0;
   const bool   do_norm        = param.yesno( "norm" , true , true );
   const double norm_win_s     = param.has( "norm-win" )        ? param.requires_dbl( "norm-win" )        : 60.0;
   const double clamp_z        = param.has( "clamp" )           ? param.requires_dbl( "clamp" )           : 8.0;
   const bool   use_staging_opt= param.yesno( "use-staging" , true , true );
   const double stage_weight   = param.has( "stage-weight" )    ? param.requires_dbl( "stage-weight" )    : 0.5;
-
-  logger << "\n  COMBINE-EMG : quality-driven multi-channel EMG stitching\n";
 
   //
   // -----------------------------------------------------------------------
@@ -283,8 +281,8 @@ combine_emg_t::combine_emg_t( edf_t & edf , param_t & param )
   const double fs = edf.header.sampling_freq( cand_n[0] );
   for ( int i = 1 ; i < nc ; ++i )
     if ( std::fabs( edf.header.sampling_freq( cand_n[i] ) - fs ) > 1e-4 )
-      Helper::halt( "COMBINE-EMG requires all candidate channels to have the same sample rate" );
-  if ( fs <= 0 ) Helper::halt( "COMBINE-EMG: invalid sample rate" );
+      Helper::halt( "requires all candidate channels to have the same sample rate" );
+  if ( fs <= 0 ) Helper::halt( "invalid sample rate" );
 
   for ( int i = 0 ; i < nc ; ++i ) ensure_uV( edf , cand_n[i] );
 
@@ -298,13 +296,13 @@ combine_emg_t::combine_emg_t( edf_t & edf , param_t & param )
   for ( int i = 0 ; i < nc ; ++i ) cand_data[i] = read_whole( edf , cand_n[i] );
 
   const int N = (int)cand_data[0].size();
-  if ( N == 0 ) { logger << "  ** no data read, skipping COMBINE-EMG\n"; return; }
+  if ( N == 0 ) { logger << "  ** no data read, skipping... \n"; return; }
   for ( int i = 1 ; i < nc ; ++i )
     if ( (int)cand_data[i].size() != N )
-      Helper::halt( "internal error: candidate channel length mismatch in COMBINE-EMG" );
+      Helper::halt( "internal error: candidate channel length mismatch" );
 
   std::vector<seg_t> segs = build_segments( edf , cand_n[0] );
-  if ( segs.empty() ) { logger << "  ** no segments found, skipping COMBINE-EMG\n"; return; }
+  if ( segs.empty() ) { logger << "  ** no segments found, skipping...\n"; return; }
 
   //
   // -----------------------------------------------------------------------
@@ -720,7 +718,7 @@ combine_emg_t::combine_emg_t( edf_t & edf , param_t & param )
   //
 
   if ( ! edf.init_signal( new_label , fs ) )
-    Helper::halt( "COMBINE-EMG: could not create new channel '" + new_label + "' (label already exists?)" );
+    Helper::halt( "could not create new channel '" + new_label + "' (label already exists?)" );
   const int new_slot = edf.header.signal( new_label );
   edf.update_signal( new_slot , &out );
 
@@ -751,6 +749,6 @@ combine_emg_t::combine_emg_t( edf_t & edf , param_t & param )
   writer.value( "NEW"        , new_label );
   writer.value( "NEW_SR"     , fs );
 
-  logger << "  COMBINE-EMG complete: " << g_n_switch << " switches, new channel '" << new_label << "'\n\n";
+  logger << "  complete: " << g_n_switch << " switches, new channel '" << new_label << "'\n\n";
 
 }

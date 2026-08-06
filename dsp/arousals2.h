@@ -49,12 +49,17 @@ struct arousals2_params_t {
 
   double eeg_tilt_rise_th = 4.0;
   double eeg_fast_rise_th = 2.5;
+  double eeg_tilt_rise_th_nrem = 4.0;
+  double eeg_tilt_rise_th_rem = 4.0;
+  double eeg_fast_rise_th_nrem = 2.5;
+  double eeg_fast_rise_th_rem = 2.5;
   double eeg_active_th = 0.20;
   double emg_rise_th = 1.0;
   double emg_active_th = 0.5;
   double active_gap_sec = 1.0;
   double delta_artifact_th = 5.0;
   double artifact_frac = 0.8;
+  double eeg_artifact_th = 0.7;
 
   double emg_median_sec = 2.5;
 
@@ -62,6 +67,7 @@ struct arousals2_params_t {
   double max_dur = 15.0;
   double long_dur = 30.0;
   double arousal_dur = 3.0;
+  double duration_level_frac = 0.5;
   double merge_gap_sec = 2.5;
   double pre_sleep_sec = 10.0;
   double emg_rise_min_dur = 1.0;
@@ -118,11 +124,15 @@ struct arousals2_t {
   std::map<std::string,std::set<interval_t> >
   event_heuristic( const std::vector<std::vector<std::vector<Eigen::VectorXd> > > & X ,
                    const std::vector<std::vector<std::vector<double> > > & tt ,
+                   const std::vector<std::vector<std::vector<double> > > & eeg_artifact ,
                    const arousals2_params_t & p );
 
   void add_channels( const std::vector<std::vector<std::vector<Eigen::VectorXd> > > & X ,
                      const std::vector<std::vector<std::vector<double> > > & tt ,
-                     const std::string & ch_prefix );
+                     const std::string & ch_prefix ,
+                     const signal_list_t & eeg_signals ,
+                     const double epoch_win ,
+                     std::vector<std::vector<std::vector<double> > > * eeg_artifact );
 
   Eigen::VectorXd robust_mad_norm( const Eigen::VectorXd & x ,
                                    const std::vector<int> & st ,
