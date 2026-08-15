@@ -24,6 +24,7 @@
 #include "stats/dpp-spec.h"
 #include "stats/dpp-filter.h"
 #include "stats/dpp-io.h"
+#include "stats/dpp-fit.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"
@@ -272,10 +273,33 @@ void dsptools::dpp( edf_t & edf , param_t & param )
   const double qc_clip_th = param.has( "qc-clip" ) ? param.requires_dbl( "qc-clip" ) : 0.05;
   const double qc_th      = param.has( "qc-th" )   ? param.requires_dbl( "qc-th" )   : 6;
 
+  // PLV amplitude-weighting/gating (ipc_param_t, dsp/ipc.h): previously
+  // always left at struct defaults; now exposed. edge_drop_sec is *not*
+  // exposed -- DPP already trims the causal pad manually before calling
+  // compute_ipc(), and edge_drop_sec trims symmetrically (see stats/dpp.cpp's
+  // filtered_report()/get_window() comments), so it stays 0 here regardless
+  ipc_param_t plv_param;
+  plv_param.amplitude_weighting = param.has( "plv-weighted" ) ? param.yesno( "plv-weighted" ) : true;
+  plv_param.gate_low_amp = param.has( "plv-gate" ) ? param.yesno( "plv-gate" ) : true;
+  if ( param.has( "plv-gate-abs" ) )
+    {
+      plv_param.gate_use_quantile = false;
+      plv_param.gate_abs = param.requires_dbl( "plv-gate-abs" );
+    }
+  else
+    {
+      plv_param.gate_use_quantile = true;
+      plv_param.gate_quantile = param.has( "plv-gate-q" ) ? param.requires_dbl( "plv-gate-q" ) : 0.30;
+      if ( plv_param.gate_quantile < 0 || plv_param.gate_quantile >= 1 )
+	Helper::halt( "plv-gate-q must be in [0,1)" );
+    }
+
   logger << "  DPP options:\n"
 	 << "    spec        = " << ( has_spec_file ? param.value( "spec" ) : "(default)" ) << "\n"
 	 << "    step        = " << step_sec << "\n"
 	 << "    qc          = " << ( qc ? "T" : "F" ) << "\n"
+	 << "    plv-weighted= " << ( plv_param.amplitude_weighting ? "T" : "F" ) << "\n"
+	 << "    plv-gate    = " << ( plv_param.gate_low_amp ? "T" : "F" ) << "\n"
 	 << "    n features  = " << specs.specs.size() << "\n";
 
   //
@@ -430,7 +454,13 @@ void dsptools::dpp( edf_t & edf , param_t & param )
 		    {
 		      double act=0, mob=0, comp=0;
 		      MiscMath::hjorth( &win , &act , &mob , &comp );
-		      vals[0] = act; vals[1] = mob; vals[2] = comp;
+		      // activity (only) log-transformed, matching POPS's own
+		      // convention (pops/indiv.cpp, POPS_HJORTH_LEGACY: log(activity),
+		      // floored to avoid log(0) rather than POPS's own unguarded
+		      // fixed floor) -- mobility/complexity are already
+		      // scale-invariant ratios, left as-is
+		      const double EPS = 1e-300;
+		      vals[0] = log( std::max( act , EPS ) ); vals[1] = mob; vals[2] = comp;
 		    }
 		  else if ( spec.ftr == DPP_SKEW ) vals[0] = MiscMath::skewness( win );
 		  else if ( spec.ftr == DPP_KURTOSIS ) vals[0] = MiscMath::kurtosis( win );
@@ -482,8 +512,7 @@ void dsptools::dpp( edf_t & edf , param_t & param )
 		    {
 		      ipc_phaseamp_t seed; seed.phase = ph1; seed.amp = mag1;
 		      ipc_phaseamp_t tgt;  tgt.phase  = ph2; tgt.amp  = mag2;
-		      ipc_param_t ipar; // default: edge_drop_sec = 0 (already trimmed manually above)
-		      ipc_output_t out = ipc_t::compute_ipc( seed , tgt , tr1.sr , ipar );
+		      ipc_output_t out = ipc_t::compute_ipc( seed , tgt , tr1.sr , plv_param );
 		      vals[0] = out.summary.plv;
 		      vals[1] = out.summary.mean_ipc;
 		    }
@@ -605,5 +634,14 @@ void dsptools::dpp( edf_t & edf , param_t & param )
 
   if ( write_binary )
     dpp_io::save( param.value( "data" ) , mat , n_features_total , false );
+
+  if ( param.has( "model" ) )
+    {
+#ifdef HAS_LGBM
+      dpp_fit::apply( edf , param , specs , mat );
+#else
+      Helper::halt( "LGBM support not compiled in" );
+#endif
+    }
 
 }

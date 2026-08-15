@@ -23,7 +23,8 @@
 // Invocation: luna __LUNA_TESTS__ [group] [verbose]
 //
 // Groups: all, signal, epoch, mask, filter, resample, psd, spindles,
-//         hypno, annot, write, script, eval, lunapi, segsrv, plm, sigdyn, dpp
+//         hypno, annot, write, script, eval, lunapi, segsrv, plm, sigdyn, dpp,
+//         dpp-fit (HAS_LGBM builds only)
 //
 // All tests use fully synthetic in-memory data (no external files needed).
 // Exit code: 0 = all pass, 1 = any failure.
@@ -40,6 +41,7 @@
 #include "dsp/tsync.h"
 #include "stats/dpp-spec.h"
 #include "stats/dpp-filter.h"
+#include "stats/dpp-fit.h"
 
 #include <cmath>
 #include <cstdio>
@@ -3566,8 +3568,8 @@ static void test_dpp( lunapi_t * eng,
     auto p = make_dpp_inst(sig, 100, 20, "T_dpp_hjorth");
     p->eval("DPP sig=EEG windows=10 step=10 qc=F");
     double act = dpp_val(p, 10.0, "HJORTH.EEG.w10", "V1");
-    bool pass = approx_equal(act, 2.0, 0.02); // amp^2/2 = 2.0
-    std::ostringstream m; m << "activity=" << act << " (exp 2.0 = amp^2/2)";
+    bool pass = approx_equal(act, std::log(2.0), 0.02); // log(amp^2/2) = log(2.0)
+    std::ostringstream m; m << "log-activity=" << act << " (exp log(2.0)=" << std::log(2.0) << ")";
     record(R,"dpp/hjorth-exact-activity", pass, m.str(), V);
   } catch(std::exception & e){ record(R,"dpp/hjorth-exact-activity",false,e.what(),V); }
 
@@ -3655,6 +3657,59 @@ static void test_dpp( lunapi_t * eng,
     std::remove( tmp.c_str() );
   } catch(std::exception & e){ record(R,"dpp/plv-matched-vs-drifting",false,e.what(),V); }
 
+  // U6b -- plv-weighted= is actually wired through: a channel pair that is
+  // phase-locked and full-amplitude for the first half of the window, then
+  // near-zero-amplitude and phase-drifting for the second half. With
+  // amplitude weighting (default, gate disabled here to isolate weighting
+  // itself from the separate gating mechanism already exercised above),
+  // the ~100x-smaller-envelope drifting half barely votes, so PLV stays
+  // close to the locked half's own value; unweighted, the two halves
+  // contribute equally, diluting PLV well below that
+  try {
+    auto warmupA = make_sine(200, 30.0, 13.0, 1.0);
+    auto burstA  = make_sine(200, 90.0, 13.0, 1.0);
+    auto quietA  = make_sine(200, 90.0, 13.0, 1.0);
+    std::vector<double> sigA = warmupA;
+    sigA.insert(sigA.end(), burstA.begin(), burstA.end());
+    sigA.insert(sigA.end(), quietA.begin(), quietA.end());
+
+    auto warmupB = make_sine(200, 30.0, 13.0, 1.0);
+    auto burstB  = make_sine(200, 90.0, 13.0, 1.0);   // matched, full amp -> phase-locked
+    auto quietB  = make_sine(200, 90.0, 14.0, 0.01);  // drifting freq, ~100x smaller amp
+    std::vector<double> sigB = warmupB;
+    sigB.insert(sigB.end(), burstB.begin(), burstB.end());
+    sigB.insert(sigB.end(), quietB.begin(), quietB.end());
+
+    const std::string tmp = temp_base_path("test_dpp_plv_weighted") + ".spec";
+    {
+      std::ofstream out(tmp);
+      out << "CH A\n";
+      out << "CH B\n";
+      out << "FILTER sigma 12 15\n";
+      out << "CONN: PLV A,B band=sigma windows=180\n";
+    }
+
+    auto p1 = eng->inst("T_dpp_plv_w");
+    p1->empty_edf("T_dpp_plv_w", 21, 10, "01.01.85", "22.00.00");  // 210s total
+    p1->insert_signal("A", sigA, 200);
+    p1->insert_signal("B", sigB, 200);
+    p1->eval("DPP spec=" + tmp + " step=209 plv-weighted=T plv-gate=F qc=F");
+    double plv_weighted = dpp_val(p1, 209.0, "PLV.A-B.sigma.w180", "V1");
+
+    auto p2 = eng->inst("T_dpp_plv_uw");
+    p2->empty_edf("T_dpp_plv_uw", 21, 10, "01.01.85", "22.00.00");
+    p2->insert_signal("A", sigA, 200);
+    p2->insert_signal("B", sigB, 200);
+    p2->eval("DPP spec=" + tmp + " step=209 plv-weighted=F qc=F");
+    double plv_unweighted = dpp_val(p2, 209.0, "PLV.A-B.sigma.w180", "V1");
+
+    bool pass = plv_weighted > 0.85 && plv_unweighted < 0.7 && (plv_weighted - plv_unweighted) > 0.2;
+    std::ostringstream m; m << "plv-weighted=T (gate=F)=" << plv_weighted << " (exp>0.85) "
+			    << "plv-weighted=F=" << plv_unweighted << " (exp<0.7, and >=0.2 below weighted)";
+    record(R,"dpp/plv-weighting-param-wired", pass, m.str(), V);
+    std::remove( tmp.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/plv-weighting-param-wired",false,e.what(),V); }
+
   // U7 -- gap handling: MASK+RE removes epochs 11-20 (seconds [100,200)),
   // creating a real discontinuity. A window fully inside either remaining
   // segment is emitted; a window whose extent straddles the removed
@@ -3688,7 +3743,7 @@ static void test_dpp( lunapi_t * eng,
     double v_qcF = dpp_val(p_qcF, 10.0, "HJORTH.EEG.w10", "V1");
 
     bool pass = std::isnan(v_qcT) && !std::isnan(v_qcF);
-    std::ostringstream m; m << "qc=T -> " << v_qcT << " (exp NaN/missing); qc=F -> " << v_qcF << " (exp finite, ~0)";
+    std::ostringstream m; m << "qc=T -> " << v_qcT << " (exp NaN/missing); qc=F -> " << v_qcF << " (exp finite)";
     record(R,"dpp/qc-gate-flat-window", pass, m.str(), V);
   } catch(std::exception & e){ record(R,"dpp/qc-gate-flat-window",false,e.what(),V); }
 
@@ -3781,7 +3836,220 @@ static void test_dpp( lunapi_t * eng,
     record(R,"dpp/duplicate-label-halts", halted, halted ? "halted as expected" : "did not halt", V);
     std::remove( tmp.c_str() );
   } catch(std::exception & e){ record(R,"dpp/duplicate-label-halts",false,e.what(),V); }
+
+  // U12 -- CHEP-based per-channel artifact masking: window_masked()'s CHEP
+  // branch (edf.timeline.masked(e,ch)) is the only artifact-exclusion path
+  // in get_window() not otherwise covered (MASK/RE gaps and the raw-buffer
+  // qc= gate both have their own dedicated tests above). CHEP bad-channels=
+  // marks one channel bad for every epoch; a window on that channel must be
+  // excluded even with qc=F, while an untouched channel in the same
+  // recording is unaffected
+  try {
+    auto sig = make_sine(100, 60.0, 10.0, 1.0);
+    auto p = eng->inst("T_dpp_chep");
+    p->empty_edf("T_dpp_chep", 6, 10, "01.01.85", "22.00.00");
+    p->insert_signal("A", sig, 100);
+    p->insert_signal("B", sig, 100);
+    p->eval("EPOCH dur=10 & CHEP bad-channels=B");
+    p->eval("DPP sig=A,B windows=10 step=10 qc=F");
+
+    double v_A = dpp_val(p, 10.0, "HJORTH.A.w10", "V1");
+    double v_B = dpp_val(p, 10.0, "HJORTH.B.w10", "V1");
+
+    bool pass = !std::isnan(v_A) && std::isnan(v_B);
+    std::ostringstream m; m << "A (clean)=" << v_A << " (exp finite); B (CHEP bad-channels)=" << v_B << " (exp NaN/missing)";
+    record(R,"dpp/chep-masking-excludes-window", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp/chep-masking-excludes-window",false,e.what(),V); }
 }
+
+// ============================================================
+// Group V: DPP stage 3 (LightGBM fit/apply) -- HAS_LGBM only.
+// First HAS_LGBM-guarded content in this test suite.
+// ============================================================
+
+#ifdef HAS_LGBM
+
+static void test_dpp_fit( lunapi_t * eng,
+			  std::vector<test_result_t> & R, bool V )
+{
+  // helper: write a synthetic two-cluster corpus (n individuals per
+  // cluster, each with a few rows carrying a single feature value close to
+  // the cluster's mean) plus a matching phenotype file -- one feature
+  // ("BASE: SLOPE X", cols()==1) so the corpus's column count trivially
+  // matches a single-column spec; the label is arbitrary bookkeeping here,
+  // not a claim that these are real slope values
+  auto build_corpus = [&]( const std::string & base, int n_per_cluster, int nrows_per_indiv,
+			   double lo_val, double hi_val, double lo_y, double hi_y,
+			   std::vector<std::string> * lo_ids, std::vector<std::string> * hi_ids ) -> std::string
+    {
+      const std::string corpus = base + ".dat";
+      const std::string phenofile = base + ".pheno";
+      std::ofstream ph( phenofile.c_str() );
+      ph << "ID\tY\n";
+      bool first = true;
+      for (int grp=0; grp<2; grp++)
+	{
+	  const double val = grp==0 ? lo_val : hi_val;
+	  const double y   = grp==0 ? lo_y   : hi_y;
+	  for (int i=0; i<n_per_cluster; i++)
+	    {
+	      const std::string id = ( grp==0 ? "LO" : "HI" ) + std::to_string(i) + "_" + base.substr(base.size()>8?base.size()-8:0);
+	      dpp_matrix_t m;
+	      m.id = id;
+	      for (int r=0; r<nrows_per_indiv; r++)
+		{
+		  m.time_sec.push_back( (r+1) * 30.0 );
+		  m.X.push_back( { val + 0.001 * r } );
+		}
+	      dpp_io::save( corpus , m , 1 , ! first );
+	      first = false;
+	      ph << id << "\t" << y << "\n";
+	      if ( grp==0 ) lo_ids->push_back( id ); else hi_ids->push_back( id );
+	    }
+	}
+      ph.close();
+      return phenofile;
+    };
+
+  // V1 -- end-to-end fit: recovers the coarse LO/HI separation in-sample,
+  // and reloading the saved bundle reproduces the same prediction exactly
+  try {
+    const std::string base = temp_base_path("test_dppfit_v1");
+    std::vector<std::string> lo_ids, hi_ids;
+    const std::string phenofile = build_corpus( base , 10 , 5 , 0.0 , 10.0 , 0.0 , 10.0 , &lo_ids , &hi_ids );
+
+    const std::string specfile = base + ".spec";
+    { std::ofstream sp( specfile.c_str() ); sp << "CH X\nBASE: SLOPE X\n"; }
+
+    const std::string config = base + ".conf";
+    { std::ofstream cf( config.c_str() ); cf << "objective=regression\nverbosity=-1\nmin_data_in_leaf=1\nnum_leaves=7\n"; }
+
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data" , base + ".dat" );
+    param.add( "phe" , "Y" );
+    param.add( "spec" , specfile );
+    param.add( "config" , config );
+    param.add( "out" , base + "_model" );
+
+    dpp_fit_t fit( param );
+    fit.fit();
+
+    // in-sample recovery: predict on the training matrix directly
+    Eigen::MatrixXd Ylo = fit.lgbm.predict( fit.Xtrain.topRows(1) );
+    Eigen::MatrixXd Yhi = fit.lgbm.predict( fit.Xtrain.bottomRows(1) );
+    // Xtrain is filled group-by-group (LO block first, HI block last) by flatten_and_split()
+    const double pred_lo = Ylo(0,0);
+    const double pred_hi = Yhi(0,0);
+
+    // save/reload determinism
+    lgbm_t reloaded;
+    reloaded.qt_mode = true;
+    reloaded.load_model( Helper::expand( base + "_model.mod" ) );
+    Eigen::MatrixXd Ylo2 = reloaded.predict( fit.Xtrain.topRows(1) );
+
+    bool pass = approx_equal( pred_lo , 0.0 , 2.0 ) && approx_equal( pred_hi , 10.0 , 2.0 )
+      && ( pred_hi - pred_lo ) > 5.0
+      && approx_equal( Ylo2(0,0) , pred_lo , 1e-9 );
+    std::ostringstream m; m << "pred_lo=" << pred_lo << " (exp~0) pred_hi=" << pred_hi
+			    << " (exp~10) reload=" << Ylo2(0,0) << " (exp==pred_lo, bit-identical)";
+    record(R,"dpp-fit/end-to-end-recovery-and-reload", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/end-to-end-recovery-and-reload",false,e.what(),V); }
+
+  // V2 -- no-subject-leakage: individual-level validation split, never a
+  // raw row-index split -- every row from a held-out individual lands in
+  // Xvalid, every row from a training individual in Xtrain, with block
+  // sizes matching exactly (nrows_per_indiv each, in this synthetic setup)
+  try {
+    const std::string base = temp_base_path("test_dppfit_v2");
+    std::vector<std::string> lo_ids, hi_ids;
+    const std::string phenofile = build_corpus( base , 6 , 4 , 0.0 , 10.0 , 0.0 , 10.0 , &lo_ids , &hi_ids );
+
+    const std::string specfile = base + ".spec";
+    { std::ofstream sp( specfile.c_str() ); sp << "CH X\nBASE: SLOPE X\n"; }
+
+    // hold out 2 individuals (one per cluster)
+    const std::string valfile = base + ".valid";
+    { std::ofstream vf( valfile.c_str() ); vf << lo_ids[0] << "\n" << hi_ids[0] << "\n"; }
+
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data" , base + ".dat" );
+    param.add( "phe" , "Y" );
+    param.add( "spec" , specfile );
+    param.add( "validation" , valfile );
+    param.add( "out" , base + "_model" );
+
+    dpp_fit_t fit( param );
+    fit.load_corpus();
+    fit.build_feature_labels();
+    fit.attach_phenotypes();
+    fit.flatten_and_split();
+
+    // 12 individuals total, 2 held out -> 10 training x 4 rows, 2 validation x 4 rows
+    bool pass = fit.Xtrain.rows() == 40 && fit.Xvalid.rows() == 8
+      && fit.istart_train.size() == 10 && fit.istart_valid.size() == 2;
+    std::ostringstream m; m << "Xtrain.rows=" << fit.Xtrain.rows() << " (exp 40) Xvalid.rows=" << fit.Xvalid.rows()
+			    << " (exp 8) n_train_indiv=" << fit.istart_train.size() << " (exp 10) n_valid_indiv="
+			    << fit.istart_valid.size() << " (exp 2)";
+    record(R,"dpp-fit/no-subject-leakage-split", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/no-subject-leakage-split",false,e.what(),V); }
+
+  // V3 -- apply mode: DPP model= on a real (synthetic) EDF, using the SAME
+  // spec used at training, attaches a new signal with genuine (non-
+  // sentinel-only) values; a MISMATCHED spec at apply time halts loudly
+  // rather than silently producing wrong output
+  try {
+    const std::string base = temp_base_path("test_dppfit_v3");
+    std::vector<std::string> lo_ids, hi_ids;
+    const std::string phenofile = build_corpus( base , 8 , 3 , 0.0 , 10.0 , 0.0 , 10.0 , &lo_ids , &hi_ids );
+
+    const std::string specfile = base + ".spec";
+    { std::ofstream sp( specfile.c_str() ); sp << "CH X\nBASE: SLOPE X\n"; }
+    const std::string mismatch_specfile = base + "_mismatch.spec";
+    { std::ofstream sp( mismatch_specfile.c_str() ); sp << "CH X\nBASE: HJORTH X\n"; } // 3 cols, not 1 -- must mismatch
+
+    const std::string config = base + ".conf";
+    { std::ofstream cf( config.c_str() ); cf << "objective=regression\nverbosity=-1\nmin_data_in_leaf=1\nnum_leaves=7\n"; }
+
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data" , base + ".dat" );
+    param.add( "phe" , "Y" );
+    param.add( "spec" , specfile );
+    param.add( "config" , config );
+    param.add( "out" , base + "_model" );
+
+    dpp_fit_t fit( param );
+    fit.fit();
+
+    auto sig = make_sine( 100, 60.0, 10.0, 1.0 );
+    auto p = make_inst( eng, sig, 100, 6, 10, "X", "T_dppfit_apply" );
+
+    // matching spec: should attach DPP_Z with genuine (non-sentinel-only) values
+    p->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model" );
+    bool has_sig = p->has_channels( { "DPP_Z" } )[0];
+    p->eval( "STATS sig=DPP_Z" );
+    double smin = get_val( p , "STATS" , "MIN" );
+    double smax = get_val( p , "STATS" , "MAX" );
+
+    // mismatched spec: must halt, not silently attach a bogus signal
+    auto p2 = make_inst( eng, sig, 100, 6, 10, "X", "T_dppfit_apply_mismatch" );
+    bool halted = false;
+    try { p2->eval( "DPP spec=" + mismatch_specfile + " step=10 qc=F model=" + base + "_model" ); }
+    catch ( std::exception & ) { halted = true; }
+
+    bool pass = has_sig && Helper::realnum(smin) && Helper::realnum(smax) && smax > smin && halted;
+    std::ostringstream m; m << "has_sig=" << has_sig << " MIN=" << smin << " MAX=" << smax
+			    << " (exp MAX>MIN, real values present); mismatched-spec halted=" << halted << " (exp T)";
+    record(R,"dpp-fit/apply-mode-and-manifest-validation", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/apply-mode-and-manifest-validation",false,e.what(),V); }
+}
+
+#endif
 
 // ============================================================
 // Main entry point
@@ -3823,6 +4091,9 @@ void proc_tests( const std::string & group, const bool verbose )
   RUN("plm",      test_plm)
   RUN("sigdyn",   test_sigdyn)
   RUN("dpp",      test_dpp)
+#ifdef HAS_LGBM
+  RUN("dpp-fit",  test_dpp_fit)
+#endif
 
 #undef RUN
 

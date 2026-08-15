@@ -23,6 +23,7 @@
 #include "main.h"
 #include "param.h"
 #include "tests/tests.h"
+#include "stats/dpp-fit.h"
 
 #include <algorithm>
 #include <cctype>
@@ -1711,6 +1712,9 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
   clmap[ "--pops" ]         = PROC_POPS;
   clmap[ "--eval-stages" ]  = PROC_EVAL_STAGES;
   clmap[ "--priors" ]       = PROC_POPS_ESPRIORS;
+
+  // DPP model training
+  clmap[ "--dpp-fit" ]      = PROC_DPP_FIT;
   
   // some further redundant / obscure options 
   clmap[ "--otsu" ]         = PROC_OTSU;
@@ -2206,9 +2210,34 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       writer.level( "POPS", "_POPS" );
 
       pops_t pops( param );
-      pops.make_espriors( param );      
+      pops.make_espriors( param );
 
       writer.unlevel( "_POPS" );
+      writer.commit();
+#else
+      Helper::halt( "LGBM support not compiled in" );
+#endif
+      std::exit(0);
+    }
+
+  //
+  // DPP model training (--dpp-fit)
+  //
+
+  if ( cmdline == PROC_DPP_FIT )
+    {
+#ifdef HAS_LGBM
+      param_t param;
+      build_param( &param, argc, argv, param_from_command_line );
+      writer.begin();
+      writer.id( "." , "." );
+      writer.cmd( "DPP-FIT" , 1 , "" );
+      writer.level( "DPP-FIT", "_DPP-FIT" );
+
+      dpp_fit_t fit( param );
+      fit.fit();
+
+      writer.unlevel( "_DPP-FIT" );
       writer.commit();
 #else
       Helper::halt( "LGBM support not compiled in" );

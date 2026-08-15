@@ -6820,11 +6820,17 @@ void cmddefs_t::init()
             "after MASK+RE), overlap a masked/CHEP'd-bad region, or fail\n"
             "the optional raw-buffer QC gate (qc=, default on) are emitted\n"
             "as missing, never computed from truncated/bad data. PSD band\n"
-            "power is natural-log-transformed unconditionally (matching\n"
-            "POPS's own canonical-band feature convention). Output is\n"
-            "always written via the normal table (SEC x VAR); data= also\n"
-            "writes a binary per-individual feature-matrix corpus file for\n"
-            "efficient multi-individual concatenation." );
+            "power and HJORTH activity are natural-log-transformed\n"
+            "unconditionally (matching POPS's own feature conventions).\n"
+            "PLV is amplitude-weighted and low-amplitude-gated by default\n"
+            "(plv-*= to adjust). Output is always written via the normal\n"
+            "table (SEC x VAR); data= also writes a binary per-individual\n"
+            "feature-matrix corpus file for efficient multi-individual\n"
+            "concatenation, for training a model via --dpp-fit. model=\n"
+            "instead applies an already-trained --dpp-fit bundle to this\n"
+            "recording, attaching the prediction as a new signal (requires\n"
+            "the identical sig=/spec=/windows=/... used at training time;\n"
+            "halts on any feature-schema mismatch)." );
   add_param( "DPP" , "sig" , "C3" , "Signal(s) to featurize (zero-config default mode)" );
   add_param( "DPP" , "spec" , "feats.dpp" , "Feature-specification file (required for connectivity/filtering/multiple windows)" );
   add_param( "DPP" , "windows" , "30,60,300" , "Window length(s) in seconds (default 30)" );
@@ -6836,7 +6842,13 @@ void cmddefs_t::init()
   add_param( "DPP" , "qc-flat" , "0.05" , "Flat/clipped-proportion threshold for the QC gate (default 0.05)" );
   add_param( "DPP" , "qc-clip" , "0.05" , "Clipped-proportion threshold for the QC gate (default 0.05)" );
   add_param( "DPP" , "qc-th" , "6" , "SD-outlier threshold for the QC gate (default 6)" );
+  add_param( "DPP" , "plv-weighted" , "F" , "Disable amplitude weighting for PLV (default T)" );
+  add_param( "DPP" , "plv-gate" , "F" , "Disable low-amplitude gating for PLV (default T; no effect if plv-weighted=F)" );
+  add_param( "DPP" , "plv-gate-q" , "0.30" , "PLV low-amplitude gate: bottom quantile of the joint envelope to exclude (default 0.30)" );
+  add_param( "DPP" , "plv-gate-abs" , "0.5" , "PLV low-amplitude gate: absolute threshold instead of a quantile (overrides plv-gate-q)" );
   add_param( "DPP" , "data" , "dpp1.dat" , "Also write a binary per-individual feature-matrix corpus file" );
+  add_param( "DPP" , "model" , "age_model" , "Apply a trained model (root of <root>.mod/<root>.dpp, from --dpp-fit) and attach the prediction as a new signal; requires the same sig=/spec=/windows=/... used to train it" );
+  add_param( "DPP" , "label" , "DPP_AGE" , "Name for the new signal attached in model= apply mode (default DPP_Z)" );
 
   add_table( "DPP" , "SEC,VAR" , "Feature value(s) at each output time" );
   add_var( "DPP" , "SEC,VAR" , "V" , "Feature value (or V1..Vk for multi-column features, e.g. PSD's 5 log-power bands)" );

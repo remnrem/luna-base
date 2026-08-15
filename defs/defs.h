@@ -141,7 +141,8 @@ enum cmdline_proc_t
     PROC_GPA_PREP,
     PROC_GPA_RUN,
     PROC_GED_GROUP,
-    PROC_WAVEFORM_SUMMARY
+    PROC_WAVEFORM_SUMMARY,
+    PROC_DPP_FIT
   };
 
 typedef std::map<sleep_stage_t,std::string> sleep_stage_label_t;

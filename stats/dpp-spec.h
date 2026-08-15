@@ -43,7 +43,8 @@ enum dpp_feature_t
                     // beta) -- natural log, unconditional, matching POPS's
                     // own POPS_BANDS feature convention
     DPP_SLOPE ,     // spectral slope/aperiodic exponent
-    DPP_HJORTH ,    // activity, mobility, complexity
+    DPP_HJORTH ,    // log(activity), mobility, complexity -- activity only
+                    // is log-transformed, matching POPS's convention
     DPP_SKEW ,
     DPP_KURTOSIS ,
     DPP_MSE ,       // sample entropy
