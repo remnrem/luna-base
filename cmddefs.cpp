@@ -3948,20 +3948,20 @@ void cmddefs_t::init()
   add_var( "HYPNO" , "PRE,POST" , "P_PRE_COND_POST" , "P( S | S+1 )" );
 
   //
-  // DYNAM
+  // EPDYN
   //
 
-  add_cmd( "hypno" , "DYNAM" , "Summarize epoch-level outputs by NREM cycles" );
-  add_url( "DYNAM" , "hypnograms/#dynam" );
-  add_verb( "DYNAM" ,
+  add_cmd( "hypno" , "EPDYN" , "Summarize epoch-level outputs by NREM cycles" );
+  add_url( "EPDYN" , "dynamics/#epdyn" );
+  add_verb( "EPDYN" ,
             "Run the generic quantile-dynamics analysis on epoch-level variables, usually to "
             "summarize how a measure changes across sleep cycles or normalized sleep time.\n"
-            "DYNAM reads one or more epoch-level tabular outputs, groups rows by epoch and any "
+            "EPDYN reads one or more epoch-level tabular outputs, groups rows by epoch and any "
             "requested factors, and then derives quantile-profile summaries across the night." );
-  add_param( "DYNAM" , "inputs" , "psd1.db" , "One or more input epoch-level tables" );
-  add_param( "DYNAM" , "vars" , "PSD" , "Variables to include from the input files" );
-  add_param( "DYNAM" , "facs" , "CH,B" , "Factor columns that define separate dynamics profiles" );
-  add_param( "DYNAM" , "no-id" , "T" , "Ignore the ID column when matching rows to the current EDF" );
+  add_param( "EPDYN" , "inputs" , "psd1.db" , "One or more input epoch-level tables" );
+  add_param( "EPDYN" , "vars" , "PSD" , "Variables to include from the input files" );
+  add_param( "EPDYN" , "facs" , "CH,B" , "Factor columns that define separate dynamics profiles" );
+  add_param( "EPDYN" , "no-id" , "T" , "Ignore the ID column when matching rows to the current EDF" );
 
   //
   // EVTDYN
@@ -6683,6 +6683,163 @@ void cmddefs_t::init()
   add_var( "MEANS" , "CH,ANNOT,INST" , "L" , "Left-flanking mean (if 'w' set)" );
   add_var( "MEANS" , "CH,ANNOT,INST" , "R" , "Right-flanking mean (if 'w' set)" );
   add_var( "MEANS" , "CH,ANNOT,INST" , "M1" , "Within-class 0-1 normalized mean" );  
+
+  //
+  // SIGDYN
+  //
+
+  add_cmd( "interval" , "SIGDYN" , "Temporal dynamics of a signal" );
+  add_url( "SIGDYN" , "dynamics/#sigdyn" );
+  add_verb( "SIGDYN" ,
+            "Summarizes the temporal dynamics of any existing epoched or\n"
+            "continuous signal (e.g. SpO2, heart rate, an EEG power channel,\n"
+            "a posterior-probability trace) in a way that is comparable\n"
+            "across individuals. Three complementary views, all optional:\n"
+            "\n"
+            "  1) CH / CH,SS / CH,SS,REGION / CH,C / CH,SS,C : simple N/MEAN/\n"
+            "     SD/MIN/MAX/RANGE of the per-epoch signal mean, overall and\n"
+            "     stratified by sleep stage, local stage stability (REGION:\n"
+            "     STABLE/TRANS, as HDSTATS), and/or NREM cycle;\n"
+            "\n"
+            "  2) CH,VAR,QD(,Q) : whole-recording trend/decile/NREM-cycle\n"
+            "     summary, via the same engine as EPDYN's dynam= submodule\n"
+            "     (e.g. as used by PSD) -- all 'dynam-*' parameters documented\n"
+            "     for EPDYN apply here too;\n"
+            "\n"
+            "  3) CH,ANNOT(,SEC) : annotation/hypnogram-anchored peri-event\n"
+            "     averaging (a superset of MEANS' M/S/L/R), auto-seeded from\n"
+            "     HYPNO's landmark/cycle/transition annotations (from a prior\n"
+            "     'HYPNO annot=' run) and/or any annot= annotation class. Each\n"
+            "     instance contributes to a given SEC bin only if it has\n"
+            "     complete coverage of that bin's full sample range (no\n"
+            "     partial/thinned bins); an instance near the start/end of the\n"
+            "     recording or a discontinuity simply forms fewer bins, rather\n"
+            "     than being dropped outright, and the ANNOT summary row is\n"
+            "     still built from whichever bins/instances are complete.\n"
+            "     require-full=T instead requires an instance's whole window to\n"
+            "     be available (strict, all-or-nothing per instance). SEC\n"
+            "     offsets are always exactly k*inc (.. -2*inc -inc 0 inc 2*inc\n"
+            "     ..), symmetric about a 0 anchor; anchor= (start/middle/\n"
+            "     end, default start) picks where in an annotation instance's\n"
+            "     own interval that anchor sits (irrelevant for a 0-duration/\n"
+            "     point instance), and bin-align= (start/middle/end, default\n"
+            "     middle) picks which part of each bin sits at its labeled\n"
+            "     offset. bin=/inc= set the SEC bin width/step (inc < bin\n"
+            "     overlaps, default inc = bin, tiled); min-n= drops sparse\n"
+            "     offsets/anchors entirely." );
+  add_param( "SIGDYN" , "sig" , "SpO2" , "One or more signals to summarize" );
+  add_param( "SIGDYN" , "epoch-stats" , "F" , "Disable simple stage/cycle/stability-stratified descriptive statistics (default T)" );
+  add_param( "SIGDYN" , "stable-flank" , "1" , "Number of flanking epochs on each side that must share the same stage for an epoch to be considered STABLE" );
+  add_param( "SIGDYN" , "annot" , "arousal,resp_event" , "Annotation classes to use as peri-event anchors" );
+  add_param( "SIGDYN" , "hypno-annot" , "F" , "Disable auto-discovery of HYPNO-derived landmark/cycle/transition anchors (default T)" );
+  add_param( "SIGDYN" , "w" , "60" , "Half-window size in seconds around each anchor" );
+  add_param( "SIGDYN" , "anchor" , "middle" , "Where within an annotation instance's interval the t=0 anchor sits: start, middle or end (default start)" );
+  add_param( "SIGDYN" , "bin-align" , "start" , "Which part of each SEC bin sits at its labeled k*inc offset: start, middle or end (default middle)" );
+  add_param( "SIGDYN" , "tolog" , "" , "Take logs of the input signal before peri-event averaging" );
+  add_param( "SIGDYN" , "th" , "4" , "Remove peri-event outliers beyond this SD threshold before averaging (default: disabled)" );
+  add_param( "SIGDYN" , "win" , "4" , "Winsorize peri-event outliers beyond this SD threshold before averaging (default: disabled)" );
+  add_param( "SIGDYN" , "min-n" , "5" , "Minimum accepted peri-event windows to emit output for an anchor (default 1)" );
+  add_param( "SIGDYN" , "bin" , "10" , "Bin width in seconds for CH,ANNOT,SEC (default: native per-sample resolution)" );
+  add_param( "SIGDYN" , "inc" , "5" , "Step between bins in seconds; requires bin=; < bin overlaps, > bin gaps (default: = bin)" );
+  add_param( "SIGDYN" , "require-full" , "T" , "Require an instance's entire window to be available, rather than allowing partial contributions (default F)" );
+
+  add_table( "SIGDYN" , "CH" , "Overall (all epochs) descriptive statistics of the per-epoch signal mean" );
+  add_var( "SIGDYN" , "CH" , "N" , "Number of epochs" );
+  add_var( "SIGDYN" , "CH" , "MEAN" , "Mean of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH" , "SD" , "SD of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH" , "MIN" , "Min of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH" , "MAX" , "Max of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH" , "RANGE" , "Max minus min of per-epoch signal means" );
+
+  add_table( "SIGDYN" , "CH,SS" , "Descriptive statistics of the per-epoch signal mean, by sleep stage" );
+  add_var( "SIGDYN" , "CH,SS" , "N" , "Number of epochs" );
+  add_var( "SIGDYN" , "CH,SS" , "MEAN" , "Mean of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS" , "SD" , "SD of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS" , "MIN" , "Min of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS" , "MAX" , "Max of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS" , "RANGE" , "Max minus min of per-epoch signal means" );
+
+  add_table( "SIGDYN" , "CH,SS,REGION" , "Descriptive statistics of the per-epoch signal mean, by sleep stage and local stability (REGION)" );
+  add_var( "SIGDYN" , "CH,SS,REGION" , "N" , "Number of epochs" );
+  add_var( "SIGDYN" , "CH,SS,REGION" , "MEAN" , "Mean of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,REGION" , "SD" , "SD of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,REGION" , "MIN" , "Min of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,REGION" , "MAX" , "Max of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,REGION" , "RANGE" , "Max minus min of per-epoch signal means" );
+
+  add_table( "SIGDYN" , "CH,C" , "Descriptive statistics of the per-epoch signal mean, by NREM cycle (only if cycles present)" );
+  add_var( "SIGDYN" , "CH,C" , "N" , "Number of epochs" );
+  add_var( "SIGDYN" , "CH,C" , "MEAN" , "Mean of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,C" , "SD" , "SD of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,C" , "MIN" , "Min of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,C" , "MAX" , "Max of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,C" , "RANGE" , "Max minus min of per-epoch signal means" );
+
+  add_table( "SIGDYN" , "CH,SS,C" , "Descriptive statistics of the per-epoch signal mean, by sleep stage and NREM cycle (only if cycles present)" );
+  add_var( "SIGDYN" , "CH,SS,C" , "N" , "Number of epochs" );
+  add_var( "SIGDYN" , "CH,SS,C" , "MEAN" , "Mean of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,C" , "SD" , "SD of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,C" , "MIN" , "Min of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,C" , "MAX" , "Max of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,C" , "RANGE" , "Max minus min of per-epoch signal means" );
+
+  add_table( "SIGDYN" , "CH,ANNOT" , "Peri-event summary (overall/flanking means), by anchor annotation" );
+  add_var( "SIGDYN" , "CH,ANNOT" , "N" , "Number of distinct contributing instances" );
+  add_var( "SIGDYN" , "CH,ANNOT" , "M" , "Mean of per-offset/bin means across the whole window" );
+  add_var( "SIGDYN" , "CH,ANNOT" , "S" , "Total span of the anchor annotation's instances, in seconds" );
+  add_var( "SIGDYN" , "CH,ANNOT" , "L" , "Mean of per-offset/bin means over negative (pre-anchor) offsets" );
+  add_var( "SIGDYN" , "CH,ANNOT" , "R" , "Mean of per-offset/bin means over positive (post-anchor) offsets" );
+
+  add_table( "SIGDYN" , "CH,ANNOT,SEC" , "Peri-event signal summaries by offset/bin" );
+  add_var( "SIGDYN" , "CH,ANNOT,SEC" , "N" , "Number of distinct contributing instances at this offset/bin" );
+  add_var( "SIGDYN" , "CH,ANNOT,SEC" , "M" , "Mean aligned signal value" );
+  add_var( "SIGDYN" , "CH,ANNOT,SEC" , "SD" , "SD of aligned signal values" );
+  add_var( "SIGDYN" , "CH,ANNOT,SEC" , "MD" , "Median aligned signal value" );
+
+  //
+  // DPP
+  //
+
+  add_cmd( "interval" , "DPP" , "Multiscale feature extraction over trailing windows, for any signal(s)" );
+  add_url( "DPP" , "dynamics/#dpp" );
+  add_verb( "DPP" ,
+            "Computes a generic set of features (spectral power, spectral\n"
+            "slope, Hjorth, entropy, filter-Hilbert envelope, phase-locking\n"
+            "value, coherence, phase slope index) over trailing, causal,\n"
+            "fixed-length windows ending at a series of output times, for\n"
+            "any signal(s) already present in the EDF -- not limited to EEG,\n"
+            "and not tied to sleep staging, NREM cycles, or hypnodensity in\n"
+            "any way. Zero-config default (sig=): PSD/SLOPE/HJORTH,\n"
+            "independently per channel, at a single default window/step.\n"
+            "Full customization (multiple window lengths, named filter\n"
+            "bands, envelope/PLV/COH/PSI connectivity between channels\n"
+            "and/or filtered variants of the same channel) requires a\n"
+            "spec= file (grammar: CH/FILTER declaration lines, then\n"
+            "'block: FEATURE channel(s) [band=][windows=][args]' lines).\n"
+            "Windows that cross a genuine recording discontinuity (e.g.\n"
+            "after MASK+RE), overlap a masked/CHEP'd-bad region, or fail\n"
+            "the optional raw-buffer QC gate (qc=, default on) are emitted\n"
+            "as missing, never computed from truncated/bad data. PSD band\n"
+            "power is natural-log-transformed unconditionally (matching\n"
+            "POPS's own canonical-band feature convention). Output is\n"
+            "always written via the normal table (SEC x VAR); data= also\n"
+            "writes a binary per-individual feature-matrix corpus file for\n"
+            "efficient multi-individual concatenation." );
+  add_param( "DPP" , "sig" , "C3" , "Signal(s) to featurize (zero-config default mode)" );
+  add_param( "DPP" , "spec" , "feats.dpp" , "Feature-specification file (required for connectivity/filtering/multiple windows)" );
+  add_param( "DPP" , "windows" , "30,60,300" , "Window length(s) in seconds (default 30)" );
+  add_param( "DPP" , "step" , "30" , "Output step in seconds, independent of window length (default 30)" );
+  add_param( "DPP" , "filters" , "sigma:11-15,slow:0.3-1.5" , "Named filter bands, without a spec= file" );
+  add_param( "DPP" , "features" , "PSD,HJORTH,ENVELOPE" , "Feature classes to add to the zero-config default set" );
+  add_param( "DPP" , "prefilter" , "0.3-35" , "One-time whole-trace bandpass, applied before any feature computation" );
+  add_param( "DPP" , "qc" , "F" , "Disable the optional raw-buffer QC gate (default T)" );
+  add_param( "DPP" , "qc-flat" , "0.05" , "Flat/clipped-proportion threshold for the QC gate (default 0.05)" );
+  add_param( "DPP" , "qc-clip" , "0.05" , "Clipped-proportion threshold for the QC gate (default 0.05)" );
+  add_param( "DPP" , "qc-th" , "6" , "SD-outlier threshold for the QC gate (default 6)" );
+  add_param( "DPP" , "data" , "dpp1.dat" , "Also write a binary per-individual feature-matrix corpus file" );
+
+  add_table( "DPP" , "SEC,VAR" , "Feature value(s) at each output time" );
+  add_var( "DPP" , "SEC,VAR" , "V" , "Feature value (or V1..Vk for multi-column features, e.g. PSD's 5 log-power bands)" );
 
   /////////////////////////////////////////////////////////////////////////////////
   //

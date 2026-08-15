@@ -439,6 +439,8 @@ void proc_microstates( edf_t & , param_t & );
 
 void proc_asymm( edf_t & , param_t & );
 void proc_tlock( edf_t & , param_t & );
+void proc_sigdyn( edf_t & , param_t & );
+void proc_dpp( edf_t & , param_t & );
 void proc_peaks( edf_t & , param_t & );
 void proc_peri( edf_t & , param_t & );
 

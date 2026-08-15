@@ -23,7 +23,7 @@
 // Invocation: luna __LUNA_TESTS__ [group] [verbose]
 //
 // Groups: all, signal, epoch, mask, filter, resample, psd, spindles,
-//         hypno, annot, write, script, eval, lunapi, segsrv, plm
+//         hypno, annot, write, script, eval, lunapi, segsrv, plm, sigdyn, dpp
 //
 // All tests use fully synthetic in-memory data (no external files needed).
 // Exit code: 0 = all pass, 1 = any failure.
@@ -38,6 +38,8 @@
 #include "dsp/ipc.h"
 #include "dsp/ssa.h"
 #include "dsp/tsync.h"
+#include "stats/dpp-spec.h"
+#include "stats/dpp-filter.h"
 
 #include <cmath>
 #include <cstdio>
@@ -317,6 +319,41 @@ static double get_val_where( lunapi_inst_ptr p,
     if (std::holds_alternative<std::string>(data[fci][r2]))
       fval = std::get<std::string>(data[fci][r2]);
     if (fval == factor_val) {
+      if (vi < (int)data.size() && r2 < (int)data[vi].size()) {
+        const auto & e = data[vi][r2];
+        if (std::holds_alternative<double>(e)) return std::get<double>(e);
+        if (std::holds_alternative<int>(e))    return (double)std::get<int>(e);
+      }
+    }
+  }
+  return std::numeric_limits<double>::quiet_NaN();
+}
+
+// Same as get_val_where, but for a numeric (double/int) factor column,
+// e.g. SIGDYN's SEC offset level -- matched within 'tol'
+static double get_val_where_num( lunapi_inst_ptr p,
+				 const std::string & cmd,
+				 const std::string & strata,
+				 const std::string & factor_col,
+				 double factor_val,
+				 const std::string & var,
+				 double tol = 1e-3 )
+{
+  auto r   = p->results( cmd, strata );
+  const auto & cols = std::get<0>(r);
+  const auto & data = std::get<1>(r);
+  int fci = -1, vi = -1;
+  for (int i = 0; i < (int)cols.size(); i++) {
+    if (cols[i] == factor_col) fci = i;
+    if (cols[i] == var)        vi  = i;
+  }
+  if (fci < 0 || vi < 0 || data.empty()) return std::numeric_limits<double>::quiet_NaN();
+  int nrows = (int)data[fci].size();
+  for (int r2 = 0; r2 < nrows; r2++) {
+    double fval = std::numeric_limits<double>::quiet_NaN();
+    if (std::holds_alternative<double>(data[fci][r2])) fval = std::get<double>(data[fci][r2]);
+    else if (std::holds_alternative<int>(data[fci][r2])) fval = (double)std::get<int>(data[fci][r2]);
+    if (std::fabs(fval - factor_val) <= tol) {
       if (vi < (int)data.size() && r2 < (int)data[vi].size()) {
         const auto & e = data[vi][r2];
         if (std::holds_alternative<double>(e)) return std::get<double>(e);
@@ -3192,6 +3229,561 @@ static void test_plm( lunapi_t * eng,
 }
 
 // ============================================================
+// Group Q: SIGDYN
+// ============================================================
+
+static void test_sigdyn( lunapi_t * eng,
+			 std::vector<test_result_t> & R, bool V )
+{
+  // helper: a 1 Hz "ramp" signal (sample i, sr=1Hz, has value i -- i.e.
+  // signal value == elapsed second) on an n-second recording (n must be a
+  // multiple of rs=10 for add_signal's exact-length requirement). Gives
+  // fully predictable peri-event means: mean of samples [a,b] == (a+b)/2.
+  auto make_ramp = [&]( int n, const std::string & id ) -> lunapi_inst_ptr {
+    const int rs = 10;
+    const int nr = n / rs;
+    lunapi_inst_ptr p = eng->inst( id );
+    p->empty_edf( id, nr, rs, "01.01.85", "22.00.00" );
+    std::vector<double> ramp( n );
+    for (int i = 0; i < n; i++) ramp[i] = (double)i;
+    p->insert_signal( "X", ramp, 1 );
+    return p;
+  };
+
+  // Q1 -- mode 0: constant signal gives exact MEAN/SD, overall and by stage
+  try {
+    auto p = eng->inst("T_sigdyn_q1");
+    p->empty_edf("T_sigdyn_q1", 90, 10, "01.01.85", "22.00.00");     // 900s
+    p->insert_signal( "X", std::vector<double>(900, 5.0), 1 );
+    p->insert_annotation( "N2", make_stage_annots(30, 30.0) );        // 30x30s epochs
+    // STAGE populates the per-epoch stage lookup SIGDYN's mode 0 reads
+    // (timeline_t::epoch_annotation()) -- a raw inserted annotation class
+    // alone does not, until a STAGE/HYPNO run compiles it
+    p->eval("EPOCH dur=30 & STAGE & SIGDYN sig=X hypno-annot=F");
+    double n_ch    = get_val_s(p,"SIGDYN","CH","N");
+    double mean_ch = get_val_s(p,"SIGDYN","CH","MEAN");
+    double sd_ch   = get_val_s(p,"SIGDYN","CH","SD");
+    double mean_n2 = get_val_where(p,"SIGDYN","CH_SS","SS","N2","MEAN");
+    bool pass = approx_equal(n_ch,30,0.5) && approx_equal(mean_ch,5.0,0.01)
+      && approx_equal(sd_ch,0.0,0.01) && approx_equal(mean_n2,5.0,0.01);
+    std::ostringstream m; m << "N=" << n_ch << " MEAN=" << mean_ch << " SD=" << sd_ch << " N2-MEAN=" << mean_n2;
+    record(R,"sigdyn/mode0-constant-signal", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"sigdyn/mode0-constant-signal",false,e.what(),V); }
+
+  // Q2 -- mode 2, native (unbinned) resolution: a single 10s anchor well
+  // away from any edge gives an exactly symmetric +/-5s window, with M/L/R/S
+  // matching the ramp signal's known values by hand.
+  try {
+    auto p = make_ramp(2000, "T_sigdyn_q2");
+    p->insert_annotation( "Evt", { {1000.0, 1010.0} } );
+    p->eval("EPOCH dur=30 & SIGDYN sig=X annot=Evt hypno-annot=F w=5");
+    double n = get_val_s(p,"SIGDYN","ANNOT_CH","N");
+    double m = get_val_s(p,"SIGDYN","ANNOT_CH","M");
+    double l = get_val_s(p,"SIGDYN","ANNOT_CH","L");
+    double r = get_val_s(p,"SIGDYN","ANNOT_CH","R");
+    double s = get_val_s(p,"SIGDYN","ANNOT_CH","S");
+    int nsec = get_nrows(p,"SIGDYN","ANNOT_CH_SEC");
+    // tol=0.05: EDF's 16-bit physical/digital round-trip quantizes a
+    // 0..1999 range to ~0.03 resolution
+    bool pass = approx_equal(n,1,0.1) && approx_equal(m,1000,0.05)
+      && approx_equal(l,997,0.05) && approx_equal(r,1003,0.05)
+      && approx_equal(s,10,0.05) && nsec == 11;
+    std::ostringstream mm; mm << "N=" << n << " M=" << m << " L=" << l << " R=" << r << " S=" << s << " nSEC=" << nsec;
+    record(R,"sigdyn/native-symmetric-window", pass, mm.str(), V);
+  } catch(std::exception & e){ record(R,"sigdyn/native-symmetric-window",false,e.what(),V); }
+
+  // Q3 -- anchor= start vs end: the t=0 anchor shifts by exactly the
+  // instance's own duration (10s), since a ramp signal's value == time
+  try {
+    auto p1 = make_ramp(2000, "T_sigdyn_q3a");
+    p1->insert_annotation( "Evt", { {1000.0, 1010.0} } );
+    p1->eval("EPOCH dur=30 & SIGDYN sig=X annot=Evt hypno-annot=F w=2 anchor=start");
+    double m_start = get_val_where_num(p1,"SIGDYN","ANNOT_CH_SEC","SEC",0.0,"M");
+
+    auto p2 = make_ramp(2000, "T_sigdyn_q3b");
+    p2->insert_annotation( "Evt", { {1000.0, 1010.0} } );
+    p2->eval("EPOCH dur=30 & SIGDYN sig=X annot=Evt hypno-annot=F w=2 anchor=end");
+    double m_end = get_val_where_num(p2,"SIGDYN","ANNOT_CH_SEC","SEC",0.0,"M");
+
+    bool pass = approx_equal(m_start,1000,0.05) && approx_equal(m_end,1010,0.05);
+    std::ostringstream m; m << "anchor=start SEC0=" << m_start << " anchor=end SEC0=" << m_end;
+    record(R,"sigdyn/anchor-point-shifts-t0", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"sigdyn/anchor-point-shifts-t0",false,e.what(),V); }
+
+  // Q4 -- only complete bins contribute: an anchor placed 25 samples from
+  // the recording's physical end, with bin=10/w=35/bin-align=start, means
+  // only the SEC=10 bin (needing samples out to +19) can still complete on
+  // the right (SEC=20/30, needing +29/+39, cannot); bins that DO appear use
+  // their full, untruncated sample range (checked via the exact ramp mean),
+  // not a partial/thinned one.
+  try {
+    auto p = make_ramp(1000, "T_sigdyn_q4");                 // samples 0..999
+    p->insert_annotation( "Evt", { {974.0, 974.0} } );       // point anchor, offset cap = 999-974 = 25
+    p->eval("EPOCH dur=30 & SIGDYN sig=X annot=Evt hypno-annot=F w=35 bin=10 bin-align=start");
+    double m0   = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",0.0,"M");    // mean(974..983)
+    double mm10 = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",-10.0,"M");  // mean(964..973)
+    double m10  = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",10.0,"M");   // mean(984..993), full 10-wide bin
+    double m20  = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",20.0,"M");   // needs samples past 999: absent
+    double m30  = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",30.0,"M");   // absent
+    int nsec = get_nrows(p,"SIGDYN","ANNOT_CH_SEC");
+    bool pass = approx_equal(m0,978.5,0.02) && approx_equal(mm10,968.5,0.02)
+      && approx_equal(m10,988.5,0.02) && std::isnan(m20) && std::isnan(m30) && nsec == 5;
+    std::ostringstream m; m << "SEC0=" << m0 << " SEC-10=" << mm10 << " SEC10=" << m10
+			    << " SEC20=" << m20 << " SEC30=" << m30 << " nSEC=" << nsec << " (exp 5)";
+    record(R,"sigdyn/complete-bins-only-at-edge", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"sigdyn/complete-bins-only-at-edge",false,e.what(),V); }
+
+  // Q5 -- require-full=T rejects an instance outright when its whole
+  // nominal window can't fit (same near-edge anchor as Q4, w=35 needs +35
+  // but only +25 is available); the default (F) still emits a summary row
+  // built from whatever's available.
+  try {
+    auto p_full = make_ramp(1000, "T_sigdyn_q5a");
+    p_full->insert_annotation( "Evt", { {974.0, 974.0} } );
+    p_full->eval("EPOCH dur=30 & SIGDYN sig=X annot=Evt hypno-annot=F w=35 require-full=T");
+    int n_full = get_nrows(p_full,"SIGDYN","ANNOT_CH");
+
+    auto p_def = make_ramp(1000, "T_sigdyn_q5b");
+    p_def->insert_annotation( "Evt", { {974.0, 974.0} } );
+    p_def->eval("EPOCH dur=30 & SIGDYN sig=X annot=Evt hypno-annot=F w=35");
+    int n_def = get_nrows(p_def,"SIGDYN","ANNOT_CH");
+
+    bool pass = n_full == 0 && n_def == 1;
+    std::ostringstream m; m << "require-full=T rows=" << n_full << " (exp 0); default rows=" << n_def << " (exp 1)";
+    record(R,"sigdyn/require-full-rejects-instance", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"sigdyn/require-full-rejects-instance",false,e.what(),V); }
+
+  // Q6 -- min-n= drops a bin that only one of two instances could complete,
+  // while the coarser per-anchor summary (built across ALL bins) still
+  // counts both instances as contributing overall. bin-align=start means
+  // SEC=20 (bin [20,29]) needs samples out to offset+29, beyond even the
+  // requested w=20 window itself -- so it never completes for EITHER
+  // instance, regardless of edge proximity (5 nominal labels, 4 reachable).
+  // A is far from any physical edge (completes SEC=-20/-10/0/10); B is only
+  // 14 samples from the recording's end (completes SEC=-20/-10/0 only, not
+  // SEC=10, which needs offset+19).
+  try {
+    auto mk = [&]( const std::string & id ) {
+      auto p = make_ramp(1000, id);
+      p->insert_annotation( "Evt", { {500.0, 500.0}, {985.0, 985.0} } );
+      return p;
+    };
+
+    auto p1 = mk("T_sigdyn_q6a");
+    p1->eval("EPOCH dur=30 & SIGDYN sig=X annot=Evt hypno-annot=F w=20 bin=10 bin-align=start min-n=1");
+    int nsec1 = get_nrows(p1,"SIGDYN","ANNOT_CH_SEC");
+
+    auto p2 = mk("T_sigdyn_q6b");
+    p2->eval("EPOCH dur=30 & SIGDYN sig=X annot=Evt hypno-annot=F w=20 bin=10 bin-align=start min-n=2");
+    int nsec2 = get_nrows(p2,"SIGDYN","ANNOT_CH_SEC");
+    double m10_dropped = get_val_where_num(p2,"SIGDYN","ANNOT_CH_SEC","SEC",10.0,"M");
+    double n_annot = get_val_s(p2,"SIGDYN","ANNOT_CH","N");
+
+    bool pass = nsec1 == 4 && nsec2 == 3 && std::isnan(m10_dropped) && approx_equal(n_annot,2,0.1);
+    std::ostringstream m; m << "min-n=1 nSEC=" << nsec1 << " (exp 4); min-n=2 nSEC=" << nsec2
+			    << " (exp 3), SEC10=" << m10_dropped << " (exp absent), ANNOT N=" << n_annot << " (exp 2)";
+    record(R,"sigdyn/min-n-per-bin-filtering", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"sigdyn/min-n-per-bin-filtering",false,e.what(),V); }
+
+  // Q7 -- mode 2 per-bin stats are event- (instance-) weighted, not sample-
+  // weighted: two point anchors whose bin (bin=4, bin-align=start) covers 4
+  // consecutive ramp samples each -- tightly clustered internally (~1.29 SD)
+  // but far apart between instances (spread ~200). SD must reflect the
+  // *between-instance* spread of each instance's own bin mean, not the
+  // *within-bin* sample spread diluted 4x per instance
+  try {
+    auto p = make_ramp(2000, "T_sigdyn_q7");
+    p->insert_annotation( "Evt", { {500.0,500.0}, {700.0,700.0} } );
+    p->eval("EPOCH dur=30 & SIGDYN sig=X annot=Evt hypno-annot=F w=10 bin=4 bin-align=start");
+    double n0  = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",0.0,"N");
+    double m0  = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",0.0,"M");
+    double sd0 = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",0.0,"SD");
+    // event-weighted: vals={501.5,701.5} -> mean=601.5, SD=141.42
+    // (the pre-fix sample-weighted bug would instead give SD=106.91)
+    bool pass = approx_equal(n0,2,0.1) && approx_equal(m0,601.5,0.05) && approx_equal(sd0,141.42,0.1);
+    std::ostringstream m; m << "N=" << n0 << " M=" << m0 << " SD=" << sd0
+			    << " (exp N=2,M=601.5,SD=141.42; sample-weighted bug would give SD=106.91)";
+    record(R,"sigdyn/mode2-event-weighted-bin-stats", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"sigdyn/mode2-event-weighted-bin-stats",false,e.what(),V); }
+
+  // Q8 -- tolog=T: log() is undefined for values <= 0; those samples must
+  // be skipped rather than turning the bin into -inf/NaN. A single anchor
+  // at a ramp value of 0 has a window spanning both negative and positive
+  // ramp values: the negative offset vanishes entirely (no output row),
+  // the positive offset gives exactly log(value)
+  try {
+    auto p = eng->inst("T_sigdyn_q8");
+    const int rs = 10, n = 2000, nr = n / rs;
+    p->empty_edf("T_sigdyn_q8", nr, rs, "01.01.85", "22.00.00");
+    std::vector<double> shifted_ramp(n);
+    for (int i=0; i<n; i++) shifted_ramp[i] = (double)(i - 1000);
+    p->insert_signal("X", shifted_ramp, 1);
+    p->insert_annotation("Evt", { {1000.0, 1000.0} } );  // ramp value here == 0
+    p->eval("EPOCH dur=30 & SIGDYN sig=X annot=Evt hypno-annot=F w=5 tolog=T");
+    double m_pos = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",3.0,"M");   // value=3 -> log(3)
+    double m_neg = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",-3.0,"M");  // value=-3 -> skipped, absent
+    bool pass = approx_equal(m_pos, std::log(3.0), 0.02) && std::isnan(m_neg);
+    std::ostringstream m; m << "SEC3(log3)=" << m_pos << " (exp " << std::log(3.0) << ") SEC-3=" << m_neg << " (exp NaN)";
+    record(R,"sigdyn/mode2-tolog-skips-nonpositive", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"sigdyn/mode2-tolog-skips-nonpositive",false,e.what(),V); }
+}
+
+// ============================================================
+// Group U: DPP (dynamic phenotype projection, stage 2 feature engine)
+// ============================================================
+
+static void test_dpp( lunapi_t * eng,
+		      std::vector<test_result_t> & R, bool V )
+{
+  // DPP output lookup by (SEC, VAR) pair -- neither get_val_where (one
+  // string factor) nor get_val_where_num (one numeric factor) alone can
+  // match both factors of DPP's "SEC_VAR" table simultaneously; returns NaN
+  // if the row (or the requested column within it) doesn't exist, which for
+  // DPP means "that window was not emitted" (masked/gapped/QC-excluded)
+  auto dpp_val = []( lunapi_inst_ptr p, double t, const std::string & var,
+		     const std::string & col ) -> double
+    {
+      auto r = p->results( "DPP", "SEC_VAR" );
+      const auto & cols = std::get<0>(r);
+      const auto & data = std::get<1>(r);
+      int ti=-1, vi=-1, ci=-1;
+      for (int i=0; i<(int)cols.size(); i++) {
+	if (cols[i]=="SEC") ti=i;
+	if (cols[i]=="VAR") vi=i;
+	if (cols[i]==col)   ci=i;
+      }
+      if (ti<0 || vi<0 || ci<0 || data.empty()) return std::numeric_limits<double>::quiet_NaN();
+      int nrows = (int)data[ti].size();
+      for (int r2=0; r2<nrows; r2++) {
+	double tval = std::numeric_limits<double>::quiet_NaN();
+	if (std::holds_alternative<double>(data[ti][r2])) tval = std::get<double>(data[ti][r2]);
+	else if (std::holds_alternative<int>(data[ti][r2])) tval = (double)std::get<int>(data[ti][r2]);
+	std::string vval;
+	if (std::holds_alternative<std::string>(data[vi][r2])) vval = std::get<std::string>(data[vi][r2]);
+	if ( std::fabs(tval - t) <= 0.5 && vval == var ) {
+	  if ( ci < (int)data.size() && r2 < (int)data[ci].size() ) {
+	    const auto & e = data[ci][r2];
+	    if (std::holds_alternative<double>(e)) return std::get<double>(e);
+	    if (std::holds_alternative<int>(e))    return (double)std::get<int>(e);
+	  }
+	  return std::numeric_limits<double>::quiet_NaN();
+	}
+      }
+      return std::numeric_limits<double>::quiet_NaN();
+    };
+
+  // fresh empty EDF (rs=10s records) holding one inserted signal
+  auto make_dpp_inst = [&]( const std::vector<double> & sig, int sr, int dur_sec,
+			    const std::string & id, const std::string & label = "EEG" ) -> lunapi_inst_ptr
+    {
+      const int rs = 10;
+      const int nr = dur_sec / rs;
+      lunapi_inst_ptr p = eng->inst( id );
+      p->empty_edf( id, nr, rs, "01.01.85", "22.00.00" );
+      p->insert_signal( label, sig, sr );
+      return p;
+    };
+
+  // U1 -- spec grammar round-trip: CH/FILTER/block-line parsing, windows=
+  // crossing, channel-pair connectivity, per-feature column counts/labels
+  try {
+    const std::string tmp = temp_base_path("test_dpp_spec") + ".spec";
+    {
+      std::ofstream out(tmp);
+      out << "CH C3\n";
+      out << "CH C4 prefilter=0.3-35\n";
+      out << "FILTER sigma 11 15\n";
+      out << "BASE: PSD C3\n";
+      out << "BASE: HJORTH C3\n";
+      out << "CONN: PLV C3,C4 band=sigma windows=10,20\n";
+      out << "CONN: COH C3,C4\n";
+    }
+    dpp_specs_t S;
+    S.read( tmp );
+
+    bool pass = S.chs.size() == 2 && S.has_channel("C3") && S.has_channel("C4")
+      && S.chs["C4"].has_prefilter
+      && approx_equal(S.chs["C4"].prefilter_lwr, 0.3, 1e-9)
+      && approx_equal(S.chs["C4"].prefilter_upr, 35, 1e-9)
+      && S.filters.size() == 1 && S.has_filter("sigma")
+      && approx_equal(S.filters["sigma"].lwr, 11, 1e-9)
+      && approx_equal(S.filters["sigma"].upr, 15, 1e-9)
+      && S.specs.size() == 5; // PSD + HJORTH + 2x PLV(windows=10,20) + COH
+
+    int n_plv10=0, n_plv20=0, n_psd=0, n_hjorth=0, n_coh=0;
+    for (size_t i=0; i<S.specs.size(); i++) {
+      const dpp_spec_t & s = S.specs[i];
+      if (s.ftr == DPP_PLV && approx_equal(s.window_sec,10,1e-9)) { n_plv10++; pass = pass && s.cols()==2 && s.label_root()=="PLV.C3-C4.sigma"; }
+      if (s.ftr == DPP_PLV && approx_equal(s.window_sec,20,1e-9)) n_plv20++;
+      if (s.ftr == DPP_PSD)    { n_psd++;    pass = pass && s.cols()==5 && s.label_root()=="PSD.C3"; }
+      if (s.ftr == DPP_HJORTH) { n_hjorth++; pass = pass && s.cols()==3 && s.label_root()=="HJORTH.C3"; }
+      if (s.ftr == DPP_COH)    { n_coh++;    pass = pass && s.cols()==5 && s.label_root()=="COH.C3-C4"; }
+    }
+    pass = pass && n_plv10==1 && n_plv20==1 && n_psd==1 && n_hjorth==1 && n_coh==1;
+
+    std::ostringstream m; m << "n_specs=" << S.specs.size() << " (exp 5)";
+    record(R,"dpp/spec-grammar-roundtrip", pass, m.str(), V);
+    std::remove( tmp.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/spec-grammar-roundtrip",false,e.what(),V); }
+
+  // U2 -- zero-config default spec (init_default) matches an equivalent
+  // hand-written custom spec file, feature-for-feature
+  try {
+    dpp_specs_t A;
+    A.init_default( { "C3" } );
+
+    const std::string tmp = temp_base_path("test_dpp_spec_custom") + ".spec";
+    {
+      std::ofstream out(tmp);
+      out << "CH C3\n";
+      out << "BASE: PSD C3\n";
+      out << "BASE: SLOPE C3\n";
+      out << "BASE: HJORTH C3\n";
+    }
+    dpp_specs_t B;
+    B.read( tmp );
+
+    bool pass = A.specs.size() == 3 && B.specs.size() == 3;
+    std::set<std::string> a_labels, b_labels;
+    for (size_t i=0; i<A.specs.size(); i++) a_labels.insert( A.specs[i].label_root() + ":" + std::to_string(A.specs[i].cols()) );
+    for (size_t i=0; i<B.specs.size(); i++) b_labels.insert( B.specs[i].label_root() + ":" + std::to_string(B.specs[i].cols()) );
+    pass = pass && a_labels == b_labels && a_labels.size() == 3;
+    for (size_t i=0; i<A.specs.size(); i++) pass = pass && approx_equal(A.specs[i].window_sec, A.default_window_sec, 1e-9);
+
+    std::ostringstream m; m << "default n=" << A.specs.size() << " custom n=" << B.specs.size();
+    record(R,"dpp/default-spec-matches-custom", pass, m.str(), V);
+    std::remove( tmp.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/default-spec-matches-custom",false,e.what(),V); }
+
+  // U3 -- HJORTH exact value: a pure sine, window an exact integer number
+  // of cycles -> Activity (mean-square) == amp^2/2 exactly. qc=F: a coarse
+  // 10-samples/cycle sine quantized to 16-bit EDF resolution ties exactly
+  // at several samples per peak/trough, which can trip the qc=T flat-signal
+  // heuristic even though the signal isn't actually flat (qc itself has its
+  // own dedicated test, U8, below)
+  try {
+    auto sig = make_sine(100, 20.0, 10.0, 2.0);   // 10Hz, amp=2, sr=100 (10 samples/cycle)
+    auto p = make_dpp_inst(sig, 100, 20, "T_dpp_hjorth");
+    p->eval("DPP sig=EEG windows=10 step=10 qc=F");
+    double act = dpp_val(p, 10.0, "HJORTH.EEG.w10", "V1");
+    bool pass = approx_equal(act, 2.0, 0.02); // amp^2/2 = 2.0
+    std::ostringstream m; m << "activity=" << act << " (exp 2.0 = amp^2/2)";
+    record(R,"dpp/hjorth-exact-activity", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp/hjorth-exact-activity",false,e.what(),V); }
+
+  // U4 -- PSD: (a) a pure 10Hz sine's power is essentially all in ALPHA
+  // (8-12Hz), negligible in DELTA; (b) DPP's ALPHA band-power matches an
+  // independently-run PWELCH call on the identical window slice/Welch
+  // params DPP itself derives for a 10s window (segment=4s/overlap=2s) --
+  // confirms DPP wires the window buffer into PWELCH correctly, not just
+  // "some" plausible number
+  try {
+    auto sig = make_sine(100, 20.0, 10.0, 1.0);
+    auto p = make_dpp_inst(sig, 100, 20, "T_dpp_psd");
+    p->eval("DPP sig=EEG windows=10 step=10 qc=F");
+    double dpp_alpha = dpp_val(p, 10.0, "PSD.EEG.w10", "V3"); // delta,theta,alpha,sigma,beta -> V3
+    double dpp_delta = dpp_val(p, 10.0, "PSD.EEG.w10", "V1");
+
+    // DPP's own get_window(): idx_end = sample @ t=10s = index 1000;
+    // w_samples = 1000 -> idx_start_report = 1
+    std::vector<double> win( sig.begin() + 1, sig.begin() + 1001 );
+    PWELCH pwelch( win, 100, 4.0, 4, WINDOW_TUKEY50 );
+    double ref_alpha = std::log( pwelch.psdsum( ALPHA ) );  // DPP log-transforms PSD unconditionally
+
+    // dominance check in log-space: alpha should still be many natural-log
+    // units above delta (equivalent to >100x in linear power, log(100)=4.6)
+    bool pass = approx_equal_rel(dpp_alpha, ref_alpha, 1e-3) && (dpp_alpha - dpp_delta) > std::log(100.0);
+    std::ostringstream m; m << "DPP log-alpha=" << dpp_alpha << " ref log-alpha=" << ref_alpha << " log-delta=" << dpp_delta;
+    record(R,"dpp/psd-matches-direct-pwelch", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp/psd-matches-direct-pwelch",false,e.what(),V); }
+
+  // U5 -- ENVELOPE: filter-Hilbert magnitude of a constant-amplitude
+  // in-band sine tracks the true amplitude, with small CV
+  try {
+    auto sig = make_sine(200, 180.0, 13.0, 3.0);  // 13Hz, amp=3, inside sigma(12-15)
+    auto p = make_dpp_inst(sig, 200, 180, "T_dpp_env");
+    const std::string tmp = temp_base_path("test_dpp_env") + ".spec";
+    {
+      std::ofstream out(tmp);
+      out << "CH EEG\n";
+      out << "FILTER sigma 12 15\n";
+      out << "BASE: ENVELOPE EEG band=sigma windows=10\n";
+    }
+    p->eval("DPP spec=" + tmp + " step=90");
+    double mean_mag = dpp_val(p, 90.0, "ENVELOPE.EEG.sigma.w10", "V1");
+    double cv        = dpp_val(p, 90.0, "ENVELOPE.EEG.sigma.w10", "V3");
+    bool pass = approx_equal_rel(mean_mag, 3.0, 0.15) && cv < 0.1;
+    std::ostringstream m; m << "mean=" << mean_mag << " (exp~3.0) cv=" << cv << " (exp<0.1)";
+    record(R,"dpp/envelope-constant-magnitude", pass, m.str(), V);
+    std::remove( tmp.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/envelope-constant-magnitude",false,e.what(),V); }
+
+  // U6 -- PLV: matched-frequency channels lock (PLV~1); a 1Hz-offset pair
+  // (10 full relative-phase drift cycles over the 10s window) averages out
+  // to PLV~0
+  try {
+    auto sigA  = make_sine(200, 180.0, 13.0, 1.0);
+    auto sigB1 = make_sine(200, 180.0, 13.0, 1.0);  // matched
+    auto sigB2 = make_sine(200, 180.0, 14.0, 1.0);  // 1Hz offset -> drifting
+
+    const std::string tmp = temp_base_path("test_dpp_plv") + ".spec";
+    {
+      std::ofstream out(tmp);
+      out << "CH A\n";
+      out << "CH B\n";
+      out << "FILTER sigma 12 15\n";
+      out << "CONN: PLV A,B band=sigma windows=10\n";
+    }
+
+    auto p1 = eng->inst("T_dpp_plv_matched");
+    p1->empty_edf("T_dpp_plv_matched", 18, 10, "01.01.85", "22.00.00");
+    p1->insert_signal("A", sigA,  200);
+    p1->insert_signal("B", sigB1, 200);
+    p1->eval("DPP spec=" + tmp + " step=90");
+    double plv_matched = dpp_val(p1, 90.0, "PLV.A-B.sigma.w10", "V1");
+
+    auto p2 = eng->inst("T_dpp_plv_mismatched");
+    p2->empty_edf("T_dpp_plv_mismatched", 18, 10, "01.01.85", "22.00.00");
+    p2->insert_signal("A", sigA,  200);
+    p2->insert_signal("B", sigB2, 200);
+    p2->eval("DPP spec=" + tmp + " step=90");
+    double plv_mismatched = dpp_val(p2, 90.0, "PLV.A-B.sigma.w10", "V1");
+
+    bool pass = plv_matched > 0.9 && plv_mismatched < 0.3;
+    std::ostringstream m; m << "matched PLV=" << plv_matched << " (exp>0.9) mismatched PLV=" << plv_mismatched << " (exp<0.3)";
+    record(R,"dpp/plv-matched-vs-drifting", pass, m.str(), V);
+    std::remove( tmp.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/plv-matched-vs-drifting",false,e.what(),V); }
+
+  // U7 -- gap handling: MASK+RE removes epochs 11-20 (seconds [100,200)),
+  // creating a real discontinuity. A window fully inside either remaining
+  // segment is emitted; a window whose extent straddles the removed
+  // segment (in array-index terms, now contiguous, but with a real time
+  // jump) is marked missing, not computed from truncated/wrong data
+  try {
+    auto sig = make_sine(100, 400.0, 10.0, 1.0);
+    auto p = make_dpp_inst(sig, 100, 400, "T_dpp_gap");
+    p->eval("EPOCH dur=10 & MASK epoch=1-10,21-40 & RE"); // keep epochs 1-10,21-40; drop 11-20
+    p->eval("DPP sig=EEG windows=20 step=10 qc=F");
+
+    double v_before = dpp_val(p, 50.0,  "PSD.EEG.w20", "V1");  // window [30,50]:  pre-gap, present
+    double v_across = dpp_val(p, 210.0, "PSD.EEG.w20", "V1");  // straddles the removed [100,200): absent
+    double v_after  = dpp_val(p, 390.0, "PSD.EEG.w20", "V1");  // window [370,390]: post-gap, present
+
+    bool pass = !std::isnan(v_before) && std::isnan(v_across) && !std::isnan(v_after);
+    std::ostringstream m; m << "before=" << v_before << " across=" << v_across << " (exp NaN) after=" << v_after;
+    record(R,"dpp/gap-marks-window-missing", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp/gap-marks-window-missing",false,e.what(),V); }
+
+  // U8 -- artifact QC gate: a fully flat/constant window is excluded under
+  // qc=T (default), but included (finite Activity=0) under qc=F
+  try {
+    std::vector<double> flat_sig(6000, 5.0); // 60s @ sr=100, constant
+    auto p_qcT = make_dpp_inst(flat_sig, 100, 60, "T_dpp_qcT");
+    p_qcT->eval("DPP sig=EEG windows=10 step=10 qc=T");
+    double v_qcT = dpp_val(p_qcT, 10.0, "HJORTH.EEG.w10", "V1");
+
+    auto p_qcF = make_dpp_inst(flat_sig, 100, 60, "T_dpp_qcF");
+    p_qcF->eval("DPP sig=EEG windows=10 step=10 qc=F");
+    double v_qcF = dpp_val(p_qcF, 10.0, "HJORTH.EEG.w10", "V1");
+
+    bool pass = std::isnan(v_qcT) && !std::isnan(v_qcF);
+    std::ostringstream m; m << "qc=T -> " << v_qcT << " (exp NaN/missing); qc=F -> " << v_qcF << " (exp finite, ~0)";
+    record(R,"dpp/qc-gate-flat-window", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp/qc-gate-flat-window",false,e.what(),V); }
+
+  // U9 -- causal-only guarantee: two recordings share an identical prefix
+  // [0,30) and diverge only after t=30; a feature reported at t=29 (window
+  // [9,29], never touching t>=30) must closely match between them. Not
+  // bit-identical: each EDF auto-scales its own 16-bit physical range from
+  // its *full* signal (prefix+suffix), so the differing suffix amplitude
+  // gives the two recordings slightly different quantization step sizes
+  // for the (source-identical) prefix -- a real future-leakage bug would
+  // instead pull in the wildly different suffix (amp 5 vs 1, freq 3 vs
+  // 10Hz) and move the value by orders of magnitude, not ~1e-4 relative
+  try {
+    auto prefix  = make_sine(100, 30.0, 10.0, 1.0);
+    auto suffixA = make_sine(100, 30.0, 10.0, 1.0);  // continues identically
+    auto suffixB = make_sine(100, 30.0, 3.0,  5.0);  // diverges after t=30
+
+    std::vector<double> sigA = prefix; sigA.insert(sigA.end(), suffixA.begin(), suffixA.end());
+    std::vector<double> sigB = prefix; sigB.insert(sigB.end(), suffixB.begin(), suffixB.end());
+
+    auto pA = make_dpp_inst(sigA, 100, 60, "T_dpp_causalA");
+    pA->eval("DPP sig=EEG windows=20 step=29 qc=F");
+    double vA = dpp_val(pA, 29.0, "HJORTH.EEG.w20", "V1");
+
+    auto pB = make_dpp_inst(sigB, 100, 60, "T_dpp_causalB");
+    pB->eval("DPP sig=EEG windows=20 step=29 qc=F");
+    double vB = dpp_val(pB, 29.0, "HJORTH.EEG.w20", "V1");
+
+    bool pass = !std::isnan(vA) && !std::isnan(vB) && approx_equal_rel(vA, vB, 1e-3);
+    std::ostringstream m; m << "A=" << vA << " B=" << vB << " (exp closely matching -- window [9,29] never reads t>=30)";
+    record(R,"dpp/causal-no-future-leakage", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp/causal-no-future-leakage",false,e.what(),V); }
+
+  // U10 -- prefiltering must not carry filter state across a genuine
+  // discontinuity: a strong out-of-band segment immediately followed (in
+  // array-index terms) by an in-band segment, separated by an artificial
+  // ~100s gap in the timepoint sequence, must filter identically to the
+  // in-band segment filtered alone -- not show contamination from the
+  // out-of-band segment, which per real elapsed time is nowhere near it
+  try {
+    const int sr = 200;
+    const double lwr = 10, upr = 15;
+    auto seg1 = make_sine( sr, 5.0, 1.0, 50.0 );    // 1Hz, amp=50: well outside 10-15Hz
+    auto seg2 = make_sine( sr, 5.0, 12.0, 1.0 );    // 12Hz, amp=1: well inside 10-15Hz
+    std::vector<double> x = seg1; x.insert( x.end(), seg2.begin(), seg2.end() );
+
+    std::vector<uint64_t> tp( x.size() );
+    const uint64_t one_sample_tp = globals::tp_1sec / sr;
+    for (size_t i=0; i<seg1.size(); i++) tp[i] = i * one_sample_tp;
+    const uint64_t gap_tp = 100 * (uint64_t)globals::tp_1sec;  // ~100s artificial gap
+    for (size_t i=0; i<seg2.size(); i++)
+      tp[ seg1.size() + i ] = seg1.size() * one_sample_tp + gap_tp + i * one_sample_tp;
+
+    std::vector<double> filtered_gapped = dpp_filters::prefilter_trace( x, tp, sr, lwr, upr );
+    std::vector<double> filtered_seg2_alone = dsptools::apply_fir( seg2, sr, fir_t::BAND_PASS, 1,
+								    std::vector<double>(1,0.02), std::vector<double>(1,1.0),
+								    lwr, upr );
+    std::vector<double> filtered_whole = dsptools::apply_fir( x, sr, fir_t::BAND_PASS, 1,
+							       std::vector<double>(1,0.02), std::vector<double>(1,1.0),
+							       lwr, upr );
+
+    const double v_gapaware = filtered_gapped[ seg1.size() ];
+    const double v_isolated = filtered_seg2_alone[0];
+    const double v_naive    = filtered_whole[ seg1.size() ];
+
+    bool pass = approx_equal( v_gapaware, v_isolated, 1e-9 )
+      && std::fabs( v_naive - v_isolated ) > 1e-6;
+    std::ostringstream m; m << "gap-aware=" << v_gapaware << " isolated=" << v_isolated
+			    << " (exp equal); naive-whole-trace=" << v_naive
+			    << " (exp different from isolated -- this is the bug being fixed)";
+    record(R,"dpp/prefilter-respects-discontinuity", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp/prefilter-respects-discontinuity",false,e.what(),V); }
+
+  // U11 -- two spec blocks that resolve to the identical feature/channel/
+  // band/window label must halt loudly (not silently collide on the same
+  // output column)
+  try {
+    const std::string tmp = temp_base_path("test_dpp_dup_label") + ".spec";
+    {
+      std::ofstream out(tmp);
+      out << "CH C3\n";
+      out << "BASE: PSD C3\n";
+      out << "EXTRA: PSD C3\n";  // identical feature/channel/window -> same label
+    }
+    auto sig = make_sine(100, 20.0, 10.0, 1.0);
+    auto p = make_dpp_inst(sig, 100, 20, "T_dpp_duplabel");
+    bool halted = false;
+    try { p->eval("DPP spec=" + tmp); }
+    catch (std::exception &) { halted = true; }
+    record(R,"dpp/duplicate-label-halts", halted, halted ? "halted as expected" : "did not halt", V);
+    std::remove( tmp.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/duplicate-label-halts",false,e.what(),V); }
+}
+
+// ============================================================
 // Main entry point
 // ============================================================
 
@@ -3229,6 +3821,8 @@ void proc_tests( const std::string & group, const bool verbose )
   RUN("lunapi",   test_lunapi)
   RUN("segsrv",   test_segsrv)
   RUN("plm",      test_plm)
+  RUN("sigdyn",   test_sigdyn)
+  RUN("dpp",      test_dpp)
 
 #undef RUN
 

@@ -26,6 +26,8 @@
 #include "edf/slice.h"
 #include "pops/posteriors.h"
 #include "timeline/actig.h"
+#include "dynamics/sigdyn.h"
+#include "stats/dpp.h"
 #include <memory>
 
 // defined in timeline/ralign.cpp
@@ -1038,12 +1040,14 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "MTM" ) )          { fnd = true; proc_mtm( edf, param(c) ); }
       if ( (!fnd) && is( c, "IRASA" ) )        { fnd = true; proc_irasa( edf, param(c) ); }
       if ( (!fnd) && is( c, "1FNORM" ) )       { fnd = true; proc_1overf_norm( edf, param(c) ); }
-      if ( (!fnd) && is( c, "DYNAM" ) )        { fnd = true; proc_qdynam( edf , param(c) ); }
+      if ( (!fnd) && is( c, "EPDYN" ) )        { fnd = true; proc_qdynam( edf , param(c) ); }
       if ( (!fnd) && is( c, "EVTDYN" ) )       { fnd = true; proc_evtdyn( edf , param(c) ); }
       if ( (!fnd) && is( c, "PSC" ) )          { fnd = true; proc_psc( edf , param(c) ); }
       if ( (!fnd) && is( c, "MS" ) )           { fnd = true; proc_microstates( edf , param(c) ); }
       if ( (!fnd) && is( c, "ASYMM" ) )        { fnd = true; proc_asymm( edf , param(c) ); }
       if ( (!fnd) && is( c, "TLOCK" ) )        { fnd = true; proc_tlock( edf , param(c) ); }
+      if ( (!fnd) && is( c, "SIGDYN" ) )       { fnd = true; proc_sigdyn( edf , param(c) ); }
+      if ( (!fnd) && is( c, "DPP" ) )          { fnd = true; proc_dpp( edf , param(c) ); }
       if ( (!fnd) && is( c, "WAVEFORMS" ) )    { fnd = true; proc_waveform( edf , param(c) ); }
       if ( (!fnd) && is( c, "TCLST" ) )        { fnd = true; proc_tclst( edf , param(c) ); }
       if ( (!fnd) && is( c, "PERI" ) )         { fnd = true; proc_peri( edf , param(c) ); }
@@ -2700,6 +2704,22 @@ void proc_tlock( edf_t & edf  , param_t & param )
   dsptools::tlock( edf , param );
 }
 
+// SIGDYN : generic temporal-dynamics profiling of any existing signal
+//   (whole-recording trend/decile/cycle summary, via qdynam_t;
+//    plus anchor/peri-event windowed averaging, via tlock_t)
+void proc_sigdyn( edf_t & edf , param_t & param )
+{
+  dsptools::sigdyn( edf , param );
+}
+
+// DPP : generic multiscale feature-extraction over trailing, causal,
+//   fixed-length windows, for any signal(s) (stage 2 of the DPP plan --
+//   feature/matrix engine only, no train=/model= modes yet)
+void proc_dpp( edf_t & edf , param_t & param )
+{
+  dsptools::dpp( edf , param );
+}
+
 // WAVEFORMS
 void proc_waveform( edf_t & edf  , param_t & param )
 {
@@ -2777,7 +2797,7 @@ void proc_psc( edf_t & edf , param_t & param )
 
 }
 
-// DYNAM : take arbitrary inputs (files/ signals)
+// EPDYN : take arbitrary inputs (files/ signals)
 //         and run qdynam_t
 void proc_qdynam( edf_t & edf , param_t & param )
 {
@@ -4099,23 +4119,33 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   // simmple dump to standard out for STAGE
   if ( param.has( "min" ) ) eannot = "."; // code --> std::cout
   
-  // either read these from a file, or display
-  
+  // either read raw per-epoch stage labels from a file, or use existing annotations
+
   if ( param.has( "file" ) )
     {
+      // materialize the raw per-epoch labels as epoch annotations, using
+      // the same mechanism as loading a .eannot file via annot-file=
+      // (annot_t::map_epoch_annotations()); this then falls through to the
+      // same annotation-based staging path used below.  (Previously this
+      // called a separate hypnogram_t::construct(..., vector<string>)
+      // overload that skipped essential per-epoch bookkeeping
+      // initialization -- ne/epoch_n/epoch_dur/epoch_start/epoch_gap --
+      // done by the annotation-based construct() overload, which could
+      // crash downstream in hypnogram_t::edit().)
       std::vector<std::string> ss = Helper::file2strvector( param.value( "file" ) );
-      bool okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose , ss );
-      if ( ! okay ) return; // i.e. if no valid annotations found
+
+      bool okay = annot_t::map_epoch_annotations( edf , ss , param.value( "file" ) ,
+						    edf.timeline.epoch_len_tp() ,
+						    edf.timeline.epoch_increment_tp() );
+      if ( ! okay ) return;
     }
-  else
-    {      
-      bool okay = edf.annotations->make_sleep_stage( edf.timeline, force_remake,
-							     wake , nrem1 , nrem2 , nrem3 ,
-							     nrem4 , rem , lights, misc );
-      if ( ! okay ) return; // e.g. overlapping stages
-      okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose ); 
-      if ( ! okay ) return; // i.e. if no valid annotations found
-    }
+
+  bool okay = edf.annotations->make_sleep_stage( edf.timeline, force_remake,
+						   wake , nrem1 , nrem2 , nrem3 ,
+						   nrem4 , rem , lights, misc );
+  if ( ! okay ) return; // e.g. overlapping stages
+  okay = edf.timeline.hypnogram.construct( &edf.timeline , param , verbose );
+  if ( ! okay ) return; // i.e. if no valid annotations found
 
   // epoch level output for HYPNO?
   bool epoch_lvl_output =param.has( "epoch" );

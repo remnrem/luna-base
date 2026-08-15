@@ -63,31 +63,7 @@ bool is_same_3class( sleep_stage_t s1 , sleep_stage_t s2 )
   return false;
 }
 
-bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbose , const std::vector<std::string> & s )
-{ 
-  timeline = t;
-  req_pre_post_epochs = param.has( "req-pre-post" ) ? param.requires_int( "req-pre-post" ) : 4;
-  flanking_3class = param.has( "flanking-collapse-nrem" ) ? Helper::yesno( param.value( "flanking-collapse-nrem") ) : true;
-
-  if ( s.size() != timeline->num_total_epochs() ) 
-    Helper::halt( "bad number of stages, " 
-		  + Helper::int2str( (int)s.size() ) 
-		  + " but expecting " 
-		  + Helper::int2str( timeline->num_total_epochs() ) );    
-  stages.resize( s.size() );
-  for (int e=0;e<s.size();e++) stages[e] = globals::stage( s[e] );
-  original_stages = stages;
-  edit( t , param );
-  if ( empty() ) 
-    {
-      logger << " ** warning, no valid stage-annotated epochs, bailing...\n"; 
-      return false;
-    }
-  calc_stats( verbose );
-  return true;
-}
-
-bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbose , const std::string sslabel ) 
+bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbose , const std::string sslabel )
 {
 
   // point to 'parent' timeline
