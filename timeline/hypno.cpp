@@ -3644,8 +3644,35 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 
   annot_t * a6 = timeline->annotations->add( prefix + "t6_stop" );
   a6->add( "." , interval_t( tp_6_stop , tp_6_stop ) , "." );
-  
-  
+
+  //
+  // Sleep period (sleep onset to final wake), padded by an extra 2
+  // minutes on each side (typically 4 epochs, for 30s epochs), truncated
+  // to the actual recording bounds. Intended for masking to the WASO-
+  // eligible region while still leaving genuine trailing history
+  // available right at the sleep-onset boundary for a causal/trailing-
+  // window feature engine (e.g. DPP): masking to the bare sleep period
+  // alone would otherwise starve the first window_sec+pad_sec of real
+  // WASO of any valid window, since there'd be no unmasked history left
+  // of the mask boundary to build a trailing window from.
+  //
+  if ( first_sleep_epoch < final_wake_epoch )
+    {
+      int pad_epochs = (int)( 120.0 / timeline->epoch_length() + 0.5 );
+      if ( pad_epochs < 1 ) pad_epochs = 1;
+
+      int start_epoch = first_sleep_epoch - pad_epochs;
+      if ( start_epoch < 0 ) start_epoch = 0;
+
+      int stop_epoch = ( final_wake_epoch - 1 ) + pad_epochs;
+      if ( stop_epoch > ne - 1 ) stop_epoch = ne - 1;
+
+      annot_t * asp = timeline->annotations->add( prefix + "sleep_period_2m" );
+      interval_t spinterval = timeline->epoch( start_epoch );
+      spinterval.stop += timeline->epoch_length_tp * (uint64_t)( stop_epoch - start_epoch );
+      asp->add( "." , spinterval , "." );
+    }
+
   //
   // Epoch level annotations:
   //

@@ -91,6 +91,7 @@ void optdefs_t::init()
   globals::optdefs().add( "annotations", "force-inst-hms" , OPT_BOOL_T , "If T, force all annotation instances to hh:mm:ss" );
   globals::optdefs().add( "annotations", "skip-edf-annots" , OPT_BOOL_T , "Skip any EDF+ annotations" );
   globals::optdefs().add( "annotations", "skip-sl-annots" , OPT_BOOL_T , "Skip any sample-list annotations" );
+  globals::optdefs().add( "annotations", "skip-sl-edfs" , OPT_BOOL_T , "Skip sample-list EDFs, i.e. treat as annotation-only (as if EDF field were '.')" );
   globals::optdefs().add( "annotations", "annot-time-wrap" , OPT_BOOL_T , "Wrap undated annotation clock-times to the next day when within the EDF duration (default T)" );
   globals::optdefs().add( "annotations", "skip-annots" , OPT_BOOL_T , "Skip all sample-list annotations [also skip-all-annots]" );
   globals::optdefs().add( "annotations", "annot-file" , OPT_FILE_T , "One or more additional annotation files" );

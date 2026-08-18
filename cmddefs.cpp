@@ -6804,13 +6804,18 @@ void cmddefs_t::init()
   add_url( "DPP" , "dynamics/#dpp" );
   add_verb( "DPP" ,
             "Computes a generic set of features (spectral power, spectral\n"
-            "slope, Hjorth, entropy, filter-Hilbert envelope, phase-locking\n"
-            "value, coherence, phase slope index) over trailing, causal,\n"
+            "slope, Hjorth, entropy, catch22/catch24 canonical time-series\n"
+            "characteristics, filter-Hilbert envelope, phase-locking value,\n"
+            "coherence, phase slope index) over trailing, causal,\n"
             "fixed-length windows ending at a series of output times, for\n"
             "any signal(s) already present in the EDF -- not limited to EEG,\n"
-            "and not tied to sleep staging, NREM cycles, or hypnodensity in\n"
-            "any way. Zero-config default (sig=): PSD/SLOPE/HJORTH,\n"
-            "independently per channel, at a single default window/step.\n"
+            "and the feature computation itself is never tied to sleep\n"
+            "staging, NREM cycles, or hypnodensity in any way (only the\n"
+            "optional model=/hypno= LightGBM paths below can use\n"
+            "hypnodensity, and only if already attached as ordinary PP_*\n"
+            "signals by a prior POPS run). Zero-config default (sig=):\n"
+            "PSD/SLOPE/HJORTH, independently per channel, at a single\n"
+            "default window/step.\n"
             "Full customization (multiple window lengths, named filter\n"
             "bands, envelope/PLV/COH/PSI connectivity between channels\n"
             "and/or filtered variants of the same channel) requires a\n"
@@ -6823,18 +6828,30 @@ void cmddefs_t::init()
             "power and HJORTH activity are natural-log-transformed\n"
             "unconditionally (matching POPS's own feature conventions).\n"
             "PLV is amplitude-weighted and low-amplitude-gated by default\n"
-            "(plv-*= to adjust). Output is always written via the normal\n"
-            "table (SEC x VAR); data= also writes a binary per-individual\n"
+            "(plv-*= to adjust). show-features=T emits the feature values\n"
+            "via the normal output table (SEC x VAR), off by default so a\n"
+            "cohort-level data=/hypno= run doesn't dump the whole table to\n"
+            "stdout for every individual. data= also writes a binary per-individual\n"
             "feature-matrix corpus file for efficient multi-individual\n"
-            "concatenation, for training a model via --dpp-fit. model=\n"
-            "instead applies an already-trained --dpp-fit bundle to this\n"
+            "concatenation, for training a model via --dpp-fit. hypno=\n"
+            "additionally writes a row-aligned hypnodensity corpus (from\n"
+            "already-attached PP_* signals, hypno-prefix=) for --dpp-fit's\n"
+            "stage-conditioned (per-sleep-stage booster) training mode.\n"
+            "model= applies an already-trained --dpp-fit bundle to this\n"
             "recording, attaching the prediction as a new signal (requires\n"
             "the identical sig=/spec=/windows=/... used at training time;\n"
-            "halts on any feature-schema mismatch)." );
+            "halts on any feature-schema mismatch); a stage-conditioned\n"
+            "bundle additionally requires hypno-prefix= at apply time.\n"
+            "--dpp-fit's folds= runs individual-level K-fold cross-\n"
+            "validation as an evaluation layer (out-of-fold predictions\n"
+            "written to <out>.oof); the saved bundle is always trained on\n"
+            "the entire corpus regardless." );
   add_param( "DPP" , "sig" , "C3" , "Signal(s) to featurize (zero-config default mode)" );
   add_param( "DPP" , "spec" , "feats.dpp" , "Feature-specification file (required for connectivity/filtering/multiple windows)" );
   add_param( "DPP" , "windows" , "30,60,300" , "Window length(s) in seconds (default 30)" );
   add_param( "DPP" , "step" , "30" , "Output step in seconds, independent of window length (default 30)" );
+  add_param( "DPP" , "show-features" , "T" , "Emit the interactive SEC x VAR feature table via the normal output/db mechanism (default F -- off, since a cohort-level data=/hypno= corpus-writing run has no use for it, and without an explicit -o it would otherwise print the full table to stdout for every individual)" );
+  add_param( "DPP" , "verbose" , "T" , "Log each (output time, feature spec) as it starts computing (default F); a per-spec cumulative timing breakdown and a ~10s progress heartbeat are always logged regardless" );
   add_param( "DPP" , "filters" , "sigma:11-15,slow:0.3-1.5" , "Named filter bands, without a spec= file" );
   add_param( "DPP" , "features" , "PSD,HJORTH,ENVELOPE" , "Feature classes to add to the zero-config default set" );
   add_param( "DPP" , "prefilter" , "0.3-35" , "One-time whole-trace bandpass, applied before any feature computation" );
@@ -6849,6 +6866,13 @@ void cmddefs_t::init()
   add_param( "DPP" , "data" , "dpp1.dat" , "Also write a binary per-individual feature-matrix corpus file" );
   add_param( "DPP" , "model" , "age_model" , "Apply a trained model (root of <root>.mod/<root>.dpp, from --dpp-fit) and attach the prediction as a new signal; requires the same sig=/spec=/windows=/... used to train it" );
   add_param( "DPP" , "label" , "DPP_AGE" , "Name for the new signal attached in model= apply mode (default DPP_Z)" );
+  add_param( "DPP" , "hypno" , "hypno1.dat" , "Also write a binary per-individual hypnodensity corpus, row-aligned with data=, for --dpp-fit hypno= (stage-conditioned training)" );
+  add_param( "DPP" , "hypno-prefix" , "PP" , "Channel prefix for already-attached POPS hypnodensity signals (default PP; see POPS posterior-channels=). Required (with model=) to apply a stage-conditioned bundle" );
+  add_param( "DPP" , "hypno-three-state" , "T" , "Read 3-state (W/R/NR) hypnodensity channels instead of 5-state (W/R/N1/N2/N3) (default F)" );
+  add_param( "DPP" , "folds" , "5" , "--dpp-fit: run K-fold individual-level cross-validation, writing out-of-fold predictions to <out>.oof (evaluation only; the saved bundle is still trained on the entire corpus). Mutually exclusive with validation=" );
+  add_param( "DPP" , "fold-file" , "folds.txt" , "--dpp-fit: explicit ID/fold-index assignment (two columns), overriding folds='s default sorted-round-robin assignment" );
+  add_param( "DPP" , "folds-save" , "T" , "--dpp-fit: also save each fold's booster(s) to <out>.foldN.mod (default F -- fold models are normally ephemeral)" );
+  add_param( "DPP" , "early-stopping-rounds" , "20" , "--dpp-fit: early-stopping patience during folds= cross-validation (default 20 if folds= is set, else disabled); the resulting per-fold iteration counts are median-aggregated and applied to the final, full-corpus fit's own iteration count (no effect without folds=)" );
 
   add_table( "DPP" , "SEC,VAR" , "Feature value(s) at each output time" );
   add_var( "DPP" , "SEC,VAR" , "V" , "Feature value (or V1..Vk for multi-column features, e.g. PSD's 5 log-power bands)" );

@@ -49,9 +49,27 @@ enum dpp_feature_t
     DPP_KURTOSIS ,
     DPP_MSE ,       // sample entropy
     DPP_ENVELOPE ,  // filter-Hilbert magnitude summary (mean/SD/CV)
-    DPP_PLV ,       // phase-locking value between two (channel,band) inputs
+    DPP_PLV ,       // phase-locking value between two (channel,band) inputs --
+                    // cross-channel, within-band only (both sides must
+                    // resolve to the same band); cross-band phase-phase
+                    // "coupling" is deliberately not supported -- it does
+                    // not measure what SO-spindle-style coupling studies
+                    // actually want (phase-amplitude coupling, see DPP_PAC)
     DPP_COH ,       // coherence between two channels
-    DPP_PSI         // phase slope index between two channels
+    DPP_PSI ,       // phase slope index between two channels
+    DPP_CATCH22 ,   // catch22 (or catch24) canonical time-series characteristics
+    DPP_PAC         // phase-amplitude coupling: band[0] = phase source,
+                    // band[1] = amplitude source (ch[0]/ch[1] are typically
+                    // the same channel, e.g. slow-oscillation/spindle
+                    // coupling, but need not be). Normalized mean-vector-
+                    // length (Canolty et al. 2006 style) + preferred phase,
+                    // computed directly per window (no surrogate/permutation
+                    // testing -- this is a fast ML feature, not a
+                    // significance test; contrast dsp/pac.h's pac_t, which
+                    // is a CWT+1000-surrogate whole-recording tool, wrong
+                    // shape entirely for a per-window rolling feature).
+                    // Exactly one channel pair per line (no multi-pair
+                    // crossing like PLV/COH/PSI allow)
   };
 
 // a named bandpass definition, used both to pre-filter for ENVELOPE/PLV

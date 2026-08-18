@@ -3428,6 +3428,38 @@ static void test_sigdyn( lunapi_t * eng,
     std::ostringstream m; m << "SEC3(log3)=" << m_pos << " (exp " << std::log(3.0) << ") SEC-3=" << m_neg << " (exp NaN)";
     record(R,"sigdyn/mode2-tolog-skips-nonpositive", pass, m.str(), V);
   } catch(std::exception & e){ record(R,"sigdyn/mode2-tolog-skips-nonpositive",false,e.what(),V); }
+
+  // Q9 -- sub-1Hz signals (e.g. a DPP_Z/hypnodensity-style channel written
+  // once every 30s, via add_signal's negative-Fs "samples per record"
+  // convention) must not collapse to a single SEC=NaN row. Previously this
+  // block cast Fs to int: truncating any Fs<1 to 0 divided by zero for the
+  // SEC bin label, and even flooring that up to a minimum of 1 (a
+  // tempting-looking fix) was wrong in a different way -- it told
+  // discontinuity()/furthest_reachable() to expect ~1 sample/sec against
+  // samples that are really 30s apart, so every genuine inter-sample gap
+  // looked like a discontinuity and the window collapsed to the anchor's
+  // own single sample. One sample every 30s (Fs=-1 with a 30s record
+  // duration), ramp value == elapsed seconds, anchor at t=600 (sample 20)
+  // well away from either edge.
+  try {
+    auto p = eng->inst("T_sigdyn_q9");
+    const int rs = 30, nr = 40;                // 40 x 30s records = 1200s
+    p->empty_edf("T_sigdyn_q9", nr, rs, "01.01.85", "22.00.00");
+    std::vector<double> ramp(nr);
+    for (int i=0; i<nr; i++) ramp[i] = i * 30.0;
+    p->insert_signal( "X", ramp, -1 );          // Fs=-1 -> 1 sample/record -> 1/30 Hz
+    p->insert_annotation( "Evt", { {600.0, 600.0} } );
+    p->eval("SIGDYN sig=X annot=Evt hypno-annot=F w=150 bin=30 inc=30 require-full=F min-n=1");
+    int nsec    = get_nrows(p,"SIGDYN","ANNOT_CH_SEC");
+    double m0   = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",0.0,"M");
+    double mm30 = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",-30.0,"M");
+    double m30  = get_val_where_num(p,"SIGDYN","ANNOT_CH_SEC","SEC",30.0,"M");
+    bool pass = nsec == 11 && ! std::isnan(m0) && ! std::isnan(mm30) && ! std::isnan(m30)
+      && approx_equal(m0,600,0.5) && approx_equal(mm30,570,0.5) && approx_equal(m30,630,0.5);
+    std::ostringstream m; m << "nSEC=" << nsec << " (exp 11) SEC0=" << m0 << " (exp 600) SEC-30="
+			    << mm30 << " (exp 570) SEC30=" << m30 << " (exp 630)";
+    record(R,"sigdyn/sub1hz-signal-real-sec-offsets", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"sigdyn/sub1hz-signal-real-sec-offsets",false,e.what(),V); }
 }
 
 // ============================================================
@@ -3566,7 +3598,7 @@ static void test_dpp( lunapi_t * eng,
   try {
     auto sig = make_sine(100, 20.0, 10.0, 2.0);   // 10Hz, amp=2, sr=100 (10 samples/cycle)
     auto p = make_dpp_inst(sig, 100, 20, "T_dpp_hjorth");
-    p->eval("DPP sig=EEG windows=10 step=10 qc=F");
+    p->eval("DPP sig=EEG windows=10 step=10 qc=F show-features=T");
     double act = dpp_val(p, 10.0, "HJORTH.EEG.w10", "V1");
     bool pass = approx_equal(act, std::log(2.0), 0.02); // log(amp^2/2) = log(2.0)
     std::ostringstream m; m << "log-activity=" << act << " (exp log(2.0)=" << std::log(2.0) << ")";
@@ -3582,7 +3614,7 @@ static void test_dpp( lunapi_t * eng,
   try {
     auto sig = make_sine(100, 20.0, 10.0, 1.0);
     auto p = make_dpp_inst(sig, 100, 20, "T_dpp_psd");
-    p->eval("DPP sig=EEG windows=10 step=10 qc=F");
+    p->eval("DPP sig=EEG windows=10 step=10 qc=F show-features=T");
     double dpp_alpha = dpp_val(p, 10.0, "PSD.EEG.w10", "V3"); // delta,theta,alpha,sigma,beta -> V3
     double dpp_delta = dpp_val(p, 10.0, "PSD.EEG.w10", "V1");
 
@@ -3611,7 +3643,7 @@ static void test_dpp( lunapi_t * eng,
       out << "FILTER sigma 12 15\n";
       out << "BASE: ENVELOPE EEG band=sigma windows=10\n";
     }
-    p->eval("DPP spec=" + tmp + " step=90");
+    p->eval("DPP spec=" + tmp + " step=90 show-features=T");
     double mean_mag = dpp_val(p, 90.0, "ENVELOPE.EEG.sigma.w10", "V1");
     double cv        = dpp_val(p, 90.0, "ENVELOPE.EEG.sigma.w10", "V3");
     bool pass = approx_equal_rel(mean_mag, 3.0, 0.15) && cv < 0.1;
@@ -3641,14 +3673,14 @@ static void test_dpp( lunapi_t * eng,
     p1->empty_edf("T_dpp_plv_matched", 18, 10, "01.01.85", "22.00.00");
     p1->insert_signal("A", sigA,  200);
     p1->insert_signal("B", sigB1, 200);
-    p1->eval("DPP spec=" + tmp + " step=90");
+    p1->eval("DPP spec=" + tmp + " step=90 show-features=T");
     double plv_matched = dpp_val(p1, 90.0, "PLV.A-B.sigma.w10", "V1");
 
     auto p2 = eng->inst("T_dpp_plv_mismatched");
     p2->empty_edf("T_dpp_plv_mismatched", 18, 10, "01.01.85", "22.00.00");
     p2->insert_signal("A", sigA,  200);
     p2->insert_signal("B", sigB2, 200);
-    p2->eval("DPP spec=" + tmp + " step=90");
+    p2->eval("DPP spec=" + tmp + " step=90 show-features=T");
     double plv_mismatched = dpp_val(p2, 90.0, "PLV.A-B.sigma.w10", "V1");
 
     bool pass = plv_matched > 0.9 && plv_mismatched < 0.3;
@@ -3693,14 +3725,14 @@ static void test_dpp( lunapi_t * eng,
     p1->empty_edf("T_dpp_plv_w", 21, 10, "01.01.85", "22.00.00");  // 210s total
     p1->insert_signal("A", sigA, 200);
     p1->insert_signal("B", sigB, 200);
-    p1->eval("DPP spec=" + tmp + " step=209 plv-weighted=T plv-gate=F qc=F");
+    p1->eval("DPP spec=" + tmp + " step=209 plv-weighted=T plv-gate=F qc=F show-features=T");
     double plv_weighted = dpp_val(p1, 209.0, "PLV.A-B.sigma.w180", "V1");
 
     auto p2 = eng->inst("T_dpp_plv_uw");
     p2->empty_edf("T_dpp_plv_uw", 21, 10, "01.01.85", "22.00.00");
     p2->insert_signal("A", sigA, 200);
     p2->insert_signal("B", sigB, 200);
-    p2->eval("DPP spec=" + tmp + " step=209 plv-weighted=F qc=F");
+    p2->eval("DPP spec=" + tmp + " step=209 plv-weighted=F qc=F show-features=T");
     double plv_unweighted = dpp_val(p2, 209.0, "PLV.A-B.sigma.w180", "V1");
 
     bool pass = plv_weighted > 0.85 && plv_unweighted < 0.7 && (plv_weighted - plv_unweighted) > 0.2;
@@ -3719,7 +3751,7 @@ static void test_dpp( lunapi_t * eng,
     auto sig = make_sine(100, 400.0, 10.0, 1.0);
     auto p = make_dpp_inst(sig, 100, 400, "T_dpp_gap");
     p->eval("EPOCH dur=10 & MASK epoch=1-10,21-40 & RE"); // keep epochs 1-10,21-40; drop 11-20
-    p->eval("DPP sig=EEG windows=20 step=10 qc=F");
+    p->eval("DPP sig=EEG windows=20 step=10 qc=F show-features=T");
 
     double v_before = dpp_val(p, 50.0,  "PSD.EEG.w20", "V1");  // window [30,50]:  pre-gap, present
     double v_across = dpp_val(p, 210.0, "PSD.EEG.w20", "V1");  // straddles the removed [100,200): absent
@@ -3735,11 +3767,11 @@ static void test_dpp( lunapi_t * eng,
   try {
     std::vector<double> flat_sig(6000, 5.0); // 60s @ sr=100, constant
     auto p_qcT = make_dpp_inst(flat_sig, 100, 60, "T_dpp_qcT");
-    p_qcT->eval("DPP sig=EEG windows=10 step=10 qc=T");
+    p_qcT->eval("DPP sig=EEG windows=10 step=10 qc=T show-features=T");
     double v_qcT = dpp_val(p_qcT, 10.0, "HJORTH.EEG.w10", "V1");
 
     auto p_qcF = make_dpp_inst(flat_sig, 100, 60, "T_dpp_qcF");
-    p_qcF->eval("DPP sig=EEG windows=10 step=10 qc=F");
+    p_qcF->eval("DPP sig=EEG windows=10 step=10 qc=F show-features=T");
     double v_qcF = dpp_val(p_qcF, 10.0, "HJORTH.EEG.w10", "V1");
 
     bool pass = std::isnan(v_qcT) && !std::isnan(v_qcF);
@@ -3765,11 +3797,11 @@ static void test_dpp( lunapi_t * eng,
     std::vector<double> sigB = prefix; sigB.insert(sigB.end(), suffixB.begin(), suffixB.end());
 
     auto pA = make_dpp_inst(sigA, 100, 60, "T_dpp_causalA");
-    pA->eval("DPP sig=EEG windows=20 step=29 qc=F");
+    pA->eval("DPP sig=EEG windows=20 step=29 qc=F show-features=T");
     double vA = dpp_val(pA, 29.0, "HJORTH.EEG.w20", "V1");
 
     auto pB = make_dpp_inst(sigB, 100, 60, "T_dpp_causalB");
-    pB->eval("DPP sig=EEG windows=20 step=29 qc=F");
+    pB->eval("DPP sig=EEG windows=20 step=29 qc=F show-features=T");
     double vB = dpp_val(pB, 29.0, "HJORTH.EEG.w20", "V1");
 
     bool pass = !std::isnan(vA) && !std::isnan(vB) && approx_equal_rel(vA, vB, 1e-3);
@@ -3797,13 +3829,17 @@ static void test_dpp( lunapi_t * eng,
     for (size_t i=0; i<seg2.size(); i++)
       tp[ seg1.size() + i ] = seg1.size() * one_sample_tp + gap_tp + i * one_sample_tp;
 
+    // reference values use dpp_filters::apply_band() (the same causal
+    // filtering path prefilter_trace() itself now uses internally), not
+    // the raw dsptools::apply_fir() -- that lower-level function is
+    // deliberately group-delay-compensated (non-causal: output position j
+    // reflects real input through j+(taps-1)/2, see stats/dpp-filter.h's
+    // top comment), so comparing against it directly would no longer be
+    // an apples-to-apples check of prefilter_trace()'s own behavior
+    dpp_filter_t filt; filt.lwr = lwr; filt.upr = upr; filt.ripple = 0.02; filt.tw = 1.0;
     std::vector<double> filtered_gapped = dpp_filters::prefilter_trace( x, tp, sr, lwr, upr );
-    std::vector<double> filtered_seg2_alone = dsptools::apply_fir( seg2, sr, fir_t::BAND_PASS, 1,
-								    std::vector<double>(1,0.02), std::vector<double>(1,1.0),
-								    lwr, upr );
-    std::vector<double> filtered_whole = dsptools::apply_fir( x, sr, fir_t::BAND_PASS, 1,
-							       std::vector<double>(1,0.02), std::vector<double>(1,1.0),
-							       lwr, upr );
+    std::vector<double> filtered_seg2_alone = dpp_filters::apply_band( seg2, sr, filt );
+    std::vector<double> filtered_whole = dpp_filters::apply_band( x, sr, filt );
 
     const double v_gapaware = filtered_gapped[ seg1.size() ];
     const double v_isolated = filtered_seg2_alone[0];
@@ -3851,7 +3887,7 @@ static void test_dpp( lunapi_t * eng,
     p->insert_signal("A", sig, 100);
     p->insert_signal("B", sig, 100);
     p->eval("EPOCH dur=10 & CHEP bad-channels=B");
-    p->eval("DPP sig=A,B windows=10 step=10 qc=F");
+    p->eval("DPP sig=A,B windows=10 step=10 qc=F show-features=T");
 
     double v_A = dpp_val(p, 10.0, "HJORTH.A.w10", "V1");
     double v_B = dpp_val(p, 10.0, "HJORTH.B.w10", "V1");
@@ -3860,6 +3896,307 @@ static void test_dpp( lunapi_t * eng,
     std::ostringstream m; m << "A (clean)=" << v_A << " (exp finite); B (CHEP bad-channels)=" << v_B << " (exp NaN/missing)";
     record(R,"dpp/chep-masking-excludes-window", pass, m.str(), V);
   } catch(std::exception & e){ record(R,"dpp/chep-masking-excludes-window",false,e.what(),V); }
+
+  // U16 -- causal-only guarantee, with prefilter= enabled: same construction
+  // as U9 (two recordings sharing an identical prefix, diverging after
+  // t=30), but this time with CH ... prefilter= set, so a feature at t=29
+  // (window [9,29]) exercises the prefiltered trace, not just the raw one.
+  // Regression test for a real bug: dpp_filters::prefilter_trace() used to
+  // filter via dsptools::apply_fir(), which is deliberately group-delay-
+  // compensated (output position j reflects real input through
+  // j+(taps-1)/2) -- for a segment much longer than the filter's own
+  // settling length, that means genuinely reading future samples, so vA/vB
+  // would diverge by orders of magnitude here before the fix (same failure
+  // signature U9's own comment describes for a real future-leakage bug)
+  try {
+    auto prefix  = make_sine(100, 30.0, 10.0, 1.0);
+    auto suffixA = make_sine(100, 30.0, 10.0, 1.0);  // continues identically
+    auto suffixB = make_sine(100, 30.0, 3.0,  5.0);  // diverges after t=30
+
+    std::vector<double> sigA = prefix; sigA.insert(sigA.end(), suffixA.begin(), suffixA.end());
+    std::vector<double> sigB = prefix; sigB.insert(sigB.end(), suffixB.begin(), suffixB.end());
+
+    const std::string tmp = temp_base_path("test_dpp_causal_prefilter") + ".spec";
+    { std::ofstream out(tmp); out << "CH EEG prefilter=0.3-35\n"; out << "BASE: HJORTH EEG windows=20\n"; }
+
+    auto pA = make_dpp_inst(sigA, 100, 60, "T_dpp_causal_pf_A");
+    pA->eval("DPP spec=" + tmp + " step=29 qc=F show-features=T");
+    double vA = dpp_val(pA, 29.0, "HJORTH.EEG.w20", "V1");
+
+    auto pB = make_dpp_inst(sigB, 100, 60, "T_dpp_causal_pf_B");
+    pB->eval("DPP spec=" + tmp + " step=29 qc=F show-features=T");
+    double vB = dpp_val(pB, 29.0, "HJORTH.EEG.w20", "V1");
+
+    bool pass = !std::isnan(vA) && !std::isnan(vB) && approx_equal_rel(vA, vB, 1e-2);
+    std::ostringstream m; m << "A=" << vA << " B=" << vB << " (exp closely matching -- window [9,29] never reads t>=30, even prefiltered)";
+    record(R,"dpp/prefilter-causal-no-future-leakage", pass, m.str(), V);
+    std::remove( tmp.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/prefilter-causal-no-future-leakage",false,e.what(),V); }
+
+  // ---- Stage 6: catch22 feature family ----
+
+  // U13 -- spec-grammar: CATCH22 defaults to 22 columns/CATCH22.<ch> label;
+  // catch24= block arg switches to 24
+  try {
+    dpp_specs_t S;
+    S.init();
+    S.chs[ "C3" ] = dpp_channel_t();
+    S.chs[ "C3" ].ch = "C3";
+
+    dpp_spec_t s22; s22.ftr = DPP_CATCH22; s22.ch = { "C3" }; s22.window_sec = 30;
+    dpp_spec_t s24; s24.ftr = DPP_CATCH22; s24.ch = { "C3" }; s24.window_sec = 30; s24.arg[ "catch24" ] = "T";
+
+    bool pass = s22.cols() == 22 && s24.cols() == 24 && s22.label_root() == "CATCH22.C3";
+    std::ostringstream m; m << "cols(no-arg)=" << s22.cols() << " (exp 22) cols(catch24=T)=" << s24.cols()
+			    << " (exp 24) label=" << s22.label_root() << " (exp CATCH22.C3)";
+    record(R,"dpp/catch22-spec-grammar", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp/catch22-spec-grammar",false,e.what(),V); }
+
+  // U14 -- exact-value cross-check: DPP's CATCH22 output on a window
+  // reproduces an independent, direct catch22_t call on the identical
+  // extracted buffer, bit-for-bit -- same idiom as U4's PSD-vs-PWELCH
+  // cross-check (same signal/window-index construction: windows=10,
+  // step=10 on a 20s/sr=100 recording -> reporting range is sig[1:1001])
+  try {
+    auto sig = make_sine(100, 20.0, 10.0, 1.0);
+    auto p = make_dpp_inst(sig, 100, 20, "T_dpp_catch22");
+    const std::string tmp = temp_base_path("test_dpp_catch22") + ".spec";
+    { std::ofstream out(tmp); out << "CH EEG\n"; out << "BASE: CATCH22 EEG windows=10 catch24=T\n"; }
+    p->eval("DPP spec=" + tmp + " step=10 qc=F show-features=T");
+
+    std::vector<double> win( sig.begin() + 1, sig.begin() + 1001 );
+    catch22_t ref( true );
+    ref.calc( win.data() , (int)win.size() );
+
+    // insert_signal() round-trips the synthetic double buffer through the
+    // EDF's 16-bit digital/physical quantization, so DPP's window and the
+    // reference window aren't bit-identical inputs (same reason U4's PSD
+    // cross-check above uses a loose tolerance, not exact equality). Most
+    // of catch22's 22 stats are inherently discontinuous functions of the
+    // input (histogram-bin indices, motif counts, ...), so a tiny
+    // quantization perturbation can flip them to a genuinely different
+    // value -- no numeric tolerance papers over that meaningfully. Only
+    // check the two catch24 "mean"/"SD" extras here (plain, continuous,
+    // linear statistics), found by name rather than assumed index --
+    // sufficient to confirm DPP wires the exact expected window/length
+    // into catch22_t::calc(), which is this test's actual purpose.
+    int idx_mean = -1, idx_sd = -1;
+    for (int k=0; k<24; k++)
+      {
+	if ( catch22_t::short_name(k) == "mean" ) idx_mean = k;
+	if ( catch22_t::short_name(k) == "SD" )   idx_sd = k;
+      }
+
+    bool pass = ref.valid() && idx_mean >= 0 && idx_sd >= 0;
+    double dv_mean = std::numeric_limits<double>::quiet_NaN(), dv_sd = std::numeric_limits<double>::quiet_NaN();
+    if ( pass )
+      {
+	dv_mean = dpp_val( p , 10.0 , "CATCH22.EEG.w10" , "V" + std::to_string(idx_mean+1) );
+	dv_sd   = dpp_val( p , 10.0 , "CATCH22.EEG.w10" , "V" + std::to_string(idx_sd+1) );
+	pass = approx_equal( dv_mean , ref.stat(idx_mean) , 1e-3 ) && approx_equal( dv_sd , ref.stat(idx_sd) , 1e-3 );
+      }
+    std::ostringstream m; m << "ref.valid()=" << ref.valid() << " mean: dpp=" << dv_mean << " ref=" << ref.stat(idx_mean)
+			    << "; SD: dpp=" << dv_sd << " ref=" << ref.stat(idx_sd);
+    record(R,"dpp/catch22-matches-direct-call", pass, m.str(), V);
+    std::remove( tmp.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/catch22-matches-direct-call",false,e.what(),V); }
+
+  // U15 -- QC gate applies to CATCH22 the same as every other feature: a
+  // fully flat/constant window is excluded under qc=T, included under qc=F
+  try {
+    std::vector<double> flat_sig(6000, 5.0); // 60s @ sr=100, constant
+    const std::string tmp = temp_base_path("test_dpp_catch22_qc") + ".spec";
+    { std::ofstream out(tmp); out << "CH EEG\n"; out << "BASE: CATCH22 EEG windows=10\n"; }
+
+    auto p_qcT = make_dpp_inst(flat_sig, 100, 60, "T_dpp_catch22_qcT");
+    p_qcT->eval("DPP spec=" + tmp + " step=10 qc=T show-features=T");
+    double v_qcT = dpp_val(p_qcT, 10.0, "CATCH22.EEG.w10", "V1");
+
+    auto p_qcF = make_dpp_inst(flat_sig, 100, 60, "T_dpp_catch22_qcF");
+    p_qcF->eval("DPP spec=" + tmp + " step=10 qc=F show-features=T");
+    double v_qcF = dpp_val(p_qcF, 10.0, "CATCH22.EEG.w10", "V1");
+
+    bool pass = std::isnan(v_qcT);
+    std::ostringstream m; m << "qc=T -> " << v_qcT << " (exp NaN/missing); qc=F -> " << v_qcF << " (exp finite or catch22's own QC-NaN)";
+    record(R,"dpp/catch22-qc-gate", pass, m.str(), V);
+    std::remove( tmp.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/catch22-qc-gate",false,e.what(),V); }
+
+  // ---- native band= support on HJORTH/SKEW/KURTOSIS/MSE/CATCH22 ----
+
+  // U16 -- grammar: band=delta,sigma on a single-channel optional-band
+  // feature expands into one spec per band (mirrors windows='s own
+  // comma-list crossing); a single band= value still gives exactly one
+  // spec; PSD/SLOPE (never band-aware) halt loudly rather than silently
+  // ignoring band= at compute time
+  try {
+    const std::string tmp = temp_base_path("test_dpp_band_grammar") + ".spec";
+    {
+      std::ofstream out(tmp);
+      out << "CH C3\n";
+      out << "FILTER delta 0.5 4\n";
+      out << "FILTER sigma 11 15\n";
+      out << "BASE: HJORTH C3 band=delta,sigma windows=30\n";
+      out << "BASE: SKEW   C3 band=sigma windows=30\n";
+    }
+    dpp_specs_t S;
+    S.read( tmp );
+    std::set<std::string> labels;
+    for (int i=0; i<(int)S.specs.size(); i++) labels.insert( S.specs[i].label_root() );
+    bool pass = S.specs.size() == 3
+      && labels.count("HJORTH.C3.delta") == 1 && labels.count("HJORTH.C3.sigma") == 1
+      && labels.count("SKEW.C3.sigma") == 1;
+
+    const std::string tmp2 = temp_base_path("test_dpp_band_psd_halts") + ".spec";
+    { std::ofstream out(tmp2); out << "CH C3\n"; out << "FILTER sigma 11 15\n"; out << "BASE: PSD C3 band=sigma windows=30\n"; }
+    dpp_specs_t S2;
+    bool halted = false;
+    try { S2.read( tmp2 ); } catch (std::exception &) { halted = true; }
+    pass = pass && halted;
+
+    std::ostringstream m; m << "n=" << S.specs.size() << " (exp 3);";
+    for (const auto & l : labels) m << " " << l;
+    m << "; PSD band= halted=" << halted << " (exp 1)";
+    record(R,"dpp/band-optional-expand-grammar", pass, m.str(), V);
+    std::remove( tmp.c_str() );
+    std::remove( tmp2.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/band-optional-expand-grammar",false,e.what(),V); }
+
+  // U17 -- exact-value cross-check: HJORTH with band= reproduces an
+  // independent, direct dpp_filters::apply_band() + MiscMath::hjorth() call
+  // on the identical causally-padded-then-dropped buffer DPP itself builds
+  // (same technique as U14's raw-signal CATCH22 cross-check, extended to
+  // cover the new band-filtered path's padding arithmetic too)
+  try {
+    const int sr = 200; const int dur = 180; const double t = 90.0; const double w_sec = 10;
+    auto sig = make_sine(sr, (double)dur, 13.0, 3.0);  // 13Hz, inside sigma(12-15)
+    auto p = make_dpp_inst(sig, sr, dur, "T_dpp_band_hjorth");
+    const std::string tmp = temp_base_path("test_dpp_band_hjorth") + ".spec";
+    {
+      std::ofstream out(tmp);
+      out << "CH EEG\n";
+      out << "FILTER sigma 12 15\n";
+      out << "BASE: HJORTH EEG band=sigma windows=10\n";
+    }
+    p->eval("DPP spec=" + tmp + " step=90 show-features=T");
+    double dpp_logact = dpp_val(p, t, "HJORTH.EEG.sigma.w10", "V1");
+
+    dpp_filter_t filt; filt.name = "sigma"; filt.lwr = 12; filt.upr = 15; filt.ripple = 0.02; filt.tw = 1;
+    const double pad_sec = dpp_filters::pad_seconds( filt, sr );
+    const int idx_end = (int) std::llround( t * sr );
+    const int w_samples = (int) std::llround( w_sec * sr );
+    const int pad_samples = (int) std::llround( pad_sec * sr );
+    const int idx_start_report = idx_end - w_samples + 1;
+    const int idx_start_padded = idx_start_report - pad_samples;
+    std::vector<double> padded( sig.begin() + idx_start_padded, sig.begin() + idx_end + 1 );
+    std::vector<double> filtered = dpp_filters::apply_band( padded, sr, filt );
+    std::vector<double> win_ref( filtered.begin() + pad_samples, filtered.end() );
+    double act=0, mob=0, comp=0;
+    MiscMath::hjorth( &win_ref, &act, &mob, &comp );
+    const double ref_logact = log( std::max( act, 1e-300 ) );
+
+    bool pass = approx_equal_rel(dpp_logact, ref_logact, 1e-3);
+    std::ostringstream m; m << "dpp=" << dpp_logact << " ref=" << ref_logact;
+    record(R,"dpp/band-optional-hjorth-matches-direct-filter", pass, m.str(), V);
+    std::remove( tmp.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/band-optional-hjorth-matches-direct-filter",false,e.what(),V); }
+
+  // ---- PAC (phase-amplitude coupling), and PLV restricted to within-band ----
+
+  // U18 -- grammar: PAC requires band=<phase>,<amplitude> (exactly two
+  // values -- neither omitted nor a single shared value is accepted),
+  // allows only one channel pair per line (unlike PLV/COH/PSI), and PLV
+  // itself now halts on two distinct band values (cross-band phase-phase
+  // "coupling" removed in favour of PAC)
+  try {
+    const std::string tmp_ok = temp_base_path("test_dpp_pac_ok") + ".spec";
+    { std::ofstream out(tmp_ok); out << "CH C3\n" << "FILTER slow 0.3 1.5\n" << "FILTER sigma 11 15\n"
+				     << "CONN: PAC C3,C3 band=slow,sigma windows=30\n"; }
+    dpp_specs_t Sok;
+    Sok.read( tmp_ok );
+    bool pass = Sok.specs.size() == 1 && Sok.specs[0].cols() == 2
+      && Sok.specs[0].label_root() == "PAC.C3-C3.slow-sigma";
+
+    const std::string tmp_onepair = temp_base_path("test_dpp_pac_onepair") + ".spec";
+    { std::ofstream out(tmp_onepair); out << "CH C3\n" << "CH O1\n" << "FILTER slow 0.3 1.5\n" << "FILTER sigma 11 15\n"
+					  << "CONN: PAC C3,C3 O1,O1 band=slow,sigma windows=30\n"; }
+    dpp_specs_t S2;
+    bool halted_two_pairs = false;
+    try { S2.read( tmp_onepair ); } catch (std::exception &) { halted_two_pairs = true; }
+
+    const std::string tmp_oneband = temp_base_path("test_dpp_pac_oneband") + ".spec";
+    { std::ofstream out(tmp_oneband) ; out << "CH C3\n" << "FILTER sigma 11 15\n"
+					   << "CONN: PAC C3,C3 band=sigma windows=30\n"; }
+    dpp_specs_t S3;
+    bool halted_one_band = false;
+    try { S3.read( tmp_oneband ); } catch (std::exception &) { halted_one_band = true; }
+
+    const std::string tmp_noband = temp_base_path("test_dpp_pac_noband") + ".spec";
+    { std::ofstream out(tmp_noband); out << "CH C3\n" << "CONN: PAC C3,C3 windows=30\n"; }
+    dpp_specs_t S4;
+    bool halted_no_band = false;
+    try { S4.read( tmp_noband ); } catch (std::exception &) { halted_no_band = true; }
+
+    const std::string tmp_plv_crossband = temp_base_path("test_dpp_plv_crossband") + ".spec";
+    { std::ofstream out(tmp_plv_crossband); out << "CH C3\n" << "FILTER slow 0.3 1.5\n" << "FILTER sigma 11 15\n"
+						<< "CONN: PLV C3,C3 band=slow,sigma windows=30\n"; }
+    dpp_specs_t S5;
+    bool halted_plv_crossband = false;
+    try { S5.read( tmp_plv_crossband ); } catch (std::exception &) { halted_plv_crossband = true; }
+
+    pass = pass && halted_two_pairs && halted_one_band && halted_no_band && halted_plv_crossband;
+
+    std::ostringstream m; m << "ok: n=" << Sok.specs.size() << " cols=" << Sok.specs[0].cols()
+			    << " label=" << Sok.specs[0].label_root()
+			    << "; two-pairs halted=" << halted_two_pairs
+			    << "; one-band halted=" << halted_one_band
+			    << "; no-band halted=" << halted_no_band
+			    << "; PLV cross-band halted=" << halted_plv_crossband;
+    record(R,"dpp/pac-grammar-and-plv-within-band-only", pass, m.str(), V);
+    std::remove( tmp_ok.c_str() ); std::remove( tmp_onepair.c_str() );
+    std::remove( tmp_oneband.c_str() ); std::remove( tmp_noband.c_str() );
+    std::remove( tmp_plv_crossband.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/pac-grammar-and-plv-within-band-only",false,e.what(),V); }
+
+  // U19 -- PAC recovers known coupling: a 0.5Hz "slow" carrier plus a 13Hz
+  // "sigma" carrier whose amplitude is modulated in-phase with the slow
+  // wave (envelope peaks exactly at the slow wave's own peak, i.e.
+  // preferred phase ~0) gives a high normalized MVL; the same two carriers
+  // with constant (unmodulated) sigma amplitude -- otherwise identical --
+  // gives a near-zero MVL. Contrast-based check (same style as the
+  // existing PLV matched-vs-drifting test), since the filtered/Hilbert
+  // pipeline doesn't admit a simple closed-form exact value.
+  try {
+    const int sr = 200; const int dur = 180;
+    auto build = [&]( bool coupled ) {
+      std::vector<double> x( sr * dur );
+      for (int i=0; i<(int)x.size(); i++)
+	{
+	  const double t = i / (double)sr;
+	  const double slow = std::cos( 2.0 * M_PI * 0.5 * t );
+	  const double carrier = std::cos( 2.0 * M_PI * 13.0 * t );
+	  const double envelope = coupled ? ( 1.0 + 0.9 * slow ) : 1.0;
+	  x[i] = slow + envelope * carrier;
+	}
+      return x;
+    };
+    const std::string tmp = temp_base_path("test_dpp_pac") + ".spec";
+    { std::ofstream out(tmp); out << "CH EEG\n" << "FILTER slow 0.3 1.5\n" << "FILTER sigma 11 15\n"
+				  << "CONN: PAC EEG,EEG band=slow,sigma windows=60\n"; }
+
+    auto p_coupled = make_dpp_inst( build(true), sr, dur, "T_dpp_pac_coupled" );
+    p_coupled->eval("DPP spec=" + tmp + " step=90 show-features=T");
+    double mvl_coupled = dpp_val(p_coupled, 90.0, "PAC.EEG-EEG.slow-sigma.w60", "V1");
+
+    auto p_uncoupled = make_dpp_inst( build(false), sr, dur, "T_dpp_pac_uncoupled" );
+    p_uncoupled->eval("DPP spec=" + tmp + " step=90 show-features=T");
+    double mvl_uncoupled = dpp_val(p_uncoupled, 90.0, "PAC.EEG-EEG.slow-sigma.w60", "V1");
+
+    bool pass = mvl_coupled > 0.3 && mvl_uncoupled < 0.05 && mvl_coupled > 5.0 * mvl_uncoupled;
+    std::ostringstream m; m << "coupled MVL=" << mvl_coupled << " (exp >0.3); uncoupled MVL=" << mvl_uncoupled << " (exp <0.05)";
+    record(R,"dpp/pac-recovers-known-coupling", pass, m.str(), V);
+    std::remove( tmp.c_str() );
+  } catch(std::exception & e){ record(R,"dpp/pac-recovers-known-coupling",false,e.what(),V); }
 }
 
 // ============================================================
@@ -4047,6 +4384,995 @@ static void test_dpp_fit( lunapi_t * eng,
 			    << " (exp MAX>MIN, real values present); mismatched-spec halted=" << halted << " (exp T)";
     record(R,"dpp-fit/apply-mode-and-manifest-validation", pass, m.str(), V);
   } catch(std::exception & e){ record(R,"dpp-fit/apply-mode-and-manifest-validation",false,e.what(),V); }
+
+  // ---- Stage 7: DPP x SIGDYN integration (verification only -- no new
+  // code in either command; both were independently designed to be
+  // signal-agnostic, see the implementation plan's "Stage 7" section) ----
+
+  // V4 -- DPP model='s output (DPP_Z, an ordinary EDF signal) feeds SIGDYN
+  // with zero glue code: EPOCH the recording, then SIGDYN sig=DPP_Z runs
+  // to completion (mode 1, whole-recording trend/decile summary --
+  // epoch-stats=F/hypno-annot=F since this synthetic recording has no
+  // staging/annotations) and actually produces output, not a silent no-op
+  try {
+    const std::string base = temp_base_path("test_dppfit_v4");
+    std::vector<std::string> lo_ids, hi_ids;
+    const std::string phenofile = build_corpus( base , 8 , 3 , 0.0 , 10.0 , 0.0 , 10.0 , &lo_ids , &hi_ids );
+
+    const std::string specfile = base + ".spec";
+    { std::ofstream sp( specfile.c_str() ); sp << "CH X\nBASE: SLOPE X\n"; }
+    const std::string config = base + ".conf";
+    { std::ofstream cf( config.c_str() ); cf << "objective=regression\nverbosity=-1\nmin_data_in_leaf=1\nnum_leaves=7\n"; }
+
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data" , base + ".dat" );
+    param.add( "phe" , "Y" );
+    param.add( "spec" , specfile );
+    param.add( "config" , config );
+    param.add( "out" , base + "_model" );
+
+    dpp_fit_t fit( param );
+    fit.fit();
+
+    auto sig = make_sine( 100, 60.0, 10.0, 1.0 );
+    auto p = make_inst( eng, sig, 100, 6, 10, "X", "T_dppfit_sigdyn" );
+    p->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model" );
+    bool has_sig = p->has_channels( { "DPP_Z" } )[0];
+
+    p->eval( "EPOCH dur=10 & SIGDYN sig=DPP_Z epoch-stats=F hypno-annot=F" );
+    std::vector<std::string> cmds = p->commands();
+    bool sigdyn_ran = std::find( cmds.begin() , cmds.end() , "SIGDYN" ) != cmds.end();
+
+    bool pass = has_sig && sigdyn_ran;
+    std::ostringstream m; m << "has_sig(DPP_Z)=" << has_sig << " SIGDYN in commands()=" << sigdyn_ran;
+    record(R,"dpp-fit/sigdyn-integration", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/sigdyn-integration",false,e.what(),V); }
+
+  // ---- Stage 4: stage-conditioned training/blending ----
+
+  // W1 -- end-to-end: two individual-groups, hypnodensity ~pure-W vs
+  // ~pure-NR (3-state), distinct feature/phenotype values per group. Train
+  // stage-conditioned, then apply to two synthetic recordings whose PP_*
+  // context is ~pure-W vs ~pure-NR (at a coarser sr than the feature
+  // channel -- also exercises the differing-native-resolution lookup
+  // path). The blended predictions should land near each group's own
+  // value and differ substantially from each other -- proof the per-stage
+  // weighting and blending actually did something, not a silent no-op
+  // equivalent to the pooled (stage 3) path.
+  try {
+    const std::string base = temp_base_path("test_dppfit_w1");
+    const std::string corpus = base + ".dat";
+    const std::string hypno_corpus = base + ".hypno.dat";
+    const std::string phenofile = base + ".pheno";
+
+    std::ofstream ph( phenofile.c_str() );
+    ph << "ID\tY\n";
+
+    const int n_per_group = 8, nrows = 5;
+    bool first = true;
+    for (int grp=0; grp<2; grp++)
+      {
+	const double val = grp==0 ? 0.0 : 10.0;
+	const double y   = grp==0 ? 0.0 : 10.0;
+	for (int i=0; i<n_per_group; i++)
+	  {
+	    const std::string id = ( grp==0 ? "W" : "NR" ) + std::to_string(i) + "_w1";
+	    dpp_matrix_t m; m.id = id;
+	    dpp_matrix_t h; h.id = id;
+	    for (int r=0; r<nrows; r++)
+	      {
+		m.time_sec.push_back( (r+1) * 30.0 );
+		m.X.push_back( { val + 0.001 * r } );
+		h.time_sec.push_back( (r+1) * 30.0 );
+		h.X.push_back( grp==0 ? std::vector<double>{ 1.0 , 0.0 , 0.0 } : std::vector<double>{ 0.0 , 0.0 , 1.0 } );
+	      }
+	    dpp_io::save( corpus , m , 1 , ! first );
+	    dpp_io::save( hypno_corpus , h , 3 , ! first );
+	    first = false;
+	    ph << id << "\t" << y << "\n";
+	  }
+      }
+    ph.close();
+
+    const std::string specfile = base + ".spec";
+    { std::ofstream sp( specfile.c_str() ); sp << "CH X\nBASE: SLOPE X\n"; }
+    const std::string config = base + ".conf";
+    { std::ofstream cf( config.c_str() ); cf << "objective=regression\nverbosity=-1\nmin_data_in_leaf=1\nnum_leaves=7\n"; }
+
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data" , corpus );
+    param.add( "hypno" , hypno_corpus );
+    param.add( "hypno-three-state" , "T" );
+    param.add( "phe" , "Y" );
+    param.add( "spec" , specfile );
+    param.add( "config" , config );
+    param.add( "out" , base + "_model" );
+
+    dpp_fit_t fit( param );
+    fit.fit();
+
+    bool bundle_ok = Helper::fileExists( base + "_model.W.mod" )
+      && Helper::fileExists( base + "_model.R.mod" )
+      && Helper::fileExists( base + "_model.NR.mod" )
+      && Helper::fileExists( base + "_model.dpp" );
+
+    auto sig = make_sine( 100 , 60.0 , 10.0 , 1.0 );
+
+    // W-context apply recording: PP_* at sr=1 (coarser than the feature
+    // channel's sr=100/step=10 -- differing native resolutions), constant
+    // pure-W throughout
+    auto pw = eng->inst( "T_dppfit_w1_apply_w" );
+    pw->empty_edf( "T_dppfit_w1_apply_w" , 6 , 10 , "01.01.85" , "22.00.00" );
+    pw->insert_signal( "X" , sig , 100 );
+    pw->insert_signal( "PP_W" , std::vector<double>( 60 , 1.0 ) , 1 );
+    pw->insert_signal( "PP_R" , std::vector<double>( 60 , 0.0 ) , 1 );
+    pw->insert_signal( "PP_NR" , std::vector<double>( 60 , 0.0 ) , 1 );
+    pw->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model hypno-prefix=PP hypno-three-state=T" );
+    pw->eval( "STATS sig=DPP_Z" );
+    const double z_w = get_val( pw , "STATS" , "MEAN" );
+
+    // NR-context apply recording: constant pure-NR throughout
+    auto pn = eng->inst( "T_dppfit_w1_apply_nr" );
+    pn->empty_edf( "T_dppfit_w1_apply_nr" , 6 , 10 , "01.01.85" , "22.00.00" );
+    pn->insert_signal( "X" , sig , 100 );
+    pn->insert_signal( "PP_W" , std::vector<double>( 60 , 0.0 ) , 1 );
+    pn->insert_signal( "PP_R" , std::vector<double>( 60 , 0.0 ) , 1 );
+    pn->insert_signal( "PP_NR" , std::vector<double>( 60 , 1.0 ) , 1 );
+    pn->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model hypno-prefix=PP hypno-three-state=T" );
+    pn->eval( "STATS sig=DPP_Z" );
+    const double z_nr = get_val( pn , "STATS" , "MEAN" );
+
+    bool pass = bundle_ok && approx_equal( z_w , 0.0 , 3.0 ) && approx_equal( z_nr , 10.0 , 3.0 ) && ( z_nr - z_w ) > 5.0;
+    std::ostringstream m; m << "bundle_ok=" << bundle_ok << " z_W-context=" << z_w << " (exp~0) z_NR-context="
+			    << z_nr << " (exp~10, and >=5 apart)";
+    record(R,"dpp-fit/stage-weighting-and-blend", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/stage-weighting-and-blend",false,e.what(),V); }
+
+  // W2 -- mixed/ambiguous-epoch weighting: direct inspection of the actual
+  // per-row weight vector LightGBM receives (bypassing corpus files
+  // entirely), rather than inferring it indirectly from fit quality. Row 0
+  // pure-W, row 1 a 50/50 W/R mix, row 2 pure-NR, row 3 missing (NaN)
+  // hypnodensity -- confirms proportional (not all-or-nothing) weighting
+  // and that a missing/invalid row gets weight 0, not a crash or NaN
+  // weight passed to LightGBM
+  try {
+    const std::string base = temp_base_path("test_dppfit_w2");
+    param_t param;
+    param.add( "out" , base + "_model" );
+    param.add( "phe" , "Y" );
+    param.add( "hypno" , "unused" );   // only needed so the constructor sets stage_conditioned=true
+
+    dpp_fit_t fit( param );
+    fit.n_features = 1;
+    fit.stage_labels = { "W" , "R" , "NR" };
+
+    fit.Xtrain = Eigen::MatrixXd( 4 , 1 );
+    fit.Xtrain << 1.0 , 2.0 , 3.0 , 4.0;
+    fit.ytrain = { 1.0 , 2.0 , 3.0 , 4.0 };
+    fit.indiv_weight_train.assign( 4 , 1.0f );
+
+    const double NaN_value = std::numeric_limits<double>::quiet_NaN();
+    fit.Htrain = Eigen::MatrixXd( 4 , 3 );
+    fit.Htrain << 1.0 , 0.0 , 0.0 ,
+                  0.5 , 0.5 , 0.0 ,
+                  0.0 , 0.0 , 1.0 ,
+                  NaN_value , NaN_value , NaN_value;
+
+    fit.train_stage_boosters();
+
+    const std::vector<float> & w = fit.stage_lgbm[0].training_weights;   // stage "W"
+    bool pass = w.size() == 4 && approx_equal(w[0],1.0,0.01) && approx_equal(w[1],0.5,0.01)
+      && approx_equal(w[2],0.0,0.01) && approx_equal(w[3],0.0,0.01);
+    std::ostringstream m; m << "W-weights=[" << ( w.size()>0?w[0]:-1 ) << "," << ( w.size()>1?w[1]:-1 )
+			    << "," << ( w.size()>2?w[2]:-1 ) << "," << ( w.size()>3?w[3]:-1 )
+			    << "] (exp [1,0.5,0,0])";
+    record(R,"dpp-fit/mixed-epoch-proportional-weighting", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/mixed-epoch-proportional-weighting",false,e.what(),V); }
+
+  // W3 -- near-zero hypnodensity sum marks the output missing rather than
+  // reporting a misleading Z~=0: an apply-time recording whose PP_*
+  // channels are all zero throughout should yield an entirely
+  // sentinel-filled DPP_Z (no real value ever written -- MIN==MAX,
+  // degenerate but not a crash)
+  try {
+    const std::string base = temp_base_path("test_dppfit_w3");
+    // reuse a fresh, minimal stage-conditioned bundle (same shape as W1,
+    // smaller, purely to have a valid model to apply)
+    const std::string corpus = base + ".dat";
+    const std::string hypno_corpus = base + ".hypno.dat";
+    const std::string phenofile = base + ".pheno";
+    std::ofstream ph( phenofile.c_str() ); ph << "ID\tY\n";
+    for (int i=0; i<6; i++)
+      {
+	const std::string id = "S" + std::to_string(i) + "_w3";
+	dpp_matrix_t m; m.id = id;
+	dpp_matrix_t h; h.id = id;
+	for (int r=0; r<5; r++)
+	  {
+	    m.time_sec.push_back( (r+1)*30.0 );
+	    m.X.push_back( { 5.0 + 0.001*r } );
+	    h.time_sec.push_back( (r+1)*30.0 );
+	    h.X.push_back( { 1.0 , 0.0 , 0.0 } );
+	  }
+	dpp_io::save( corpus , m , 1 , i!=0 );
+	dpp_io::save( hypno_corpus , h , 3 , i!=0 );
+	ph << id << "\t5.0\n";
+      }
+    ph.close();
+
+    const std::string specfile = base + ".spec";
+    { std::ofstream sp( specfile.c_str() ); sp << "CH X\nBASE: SLOPE X\n"; }
+    const std::string config = base + ".conf";
+    { std::ofstream cf( config.c_str() ); cf << "objective=regression\nverbosity=-1\nmin_data_in_leaf=1\nnum_leaves=7\n"; }
+
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data" , corpus );
+    param.add( "hypno" , hypno_corpus );
+    param.add( "hypno-three-state" , "T" );
+    param.add( "phe" , "Y" );
+    param.add( "spec" , specfile );
+    param.add( "config" , config );
+    param.add( "out" , base + "_model" );
+
+    dpp_fit_t fit( param );
+    fit.fit();
+
+    auto sig = make_sine( 100 , 60.0 , 10.0 , 1.0 );
+    auto p = eng->inst( "T_dppfit_w3_apply" );
+    p->empty_edf( "T_dppfit_w3_apply" , 6 , 10 , "01.01.85" , "22.00.00" );
+    p->insert_signal( "X" , sig , 100 );
+    p->insert_signal( "PP_W" , std::vector<double>( 60 , 0.0 ) , 1 );
+    p->insert_signal( "PP_R" , std::vector<double>( 60 , 0.0 ) , 1 );
+    p->insert_signal( "PP_NR" , std::vector<double>( 60 , 0.0 ) , 1 );
+    p->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model hypno-prefix=PP hypno-three-state=T" );
+    p->eval( "STATS sig=DPP_Z" );
+    const double smin = get_val( p , "STATS" , "MIN" );
+    const double smax = get_val( p , "STATS" , "MAX" );
+
+    bool pass = Helper::realnum(smin) && Helper::realnum(smax) && approx_equal( smin , smax , 1e-6 );
+    std::ostringstream m; m << "MIN=" << smin << " MAX=" << smax << " (exp MIN==MAX -- all-sentinel, no real value written)";
+    record(R,"dpp-fit/near-zero-hypno-sum-marks-missing", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/near-zero-hypno-sum-marks-missing",false,e.what(),V); }
+
+  // W4 -- calibration: recovers a known systematic offset exactly (y is an
+  // exact linear function, slope 1, of the stage booster's own raw
+  // validation predictions -- GLM should recover a~=1, b~=OFFSET), and
+  // falls back to {1,0} rather than an unstable fit when there's no
+  // validation set at all, or too few PP_s>0.5 qualifying rows
+  try {
+    const std::string base = temp_base_path("test_dppfit_w4");
+    const std::string config = base + ".conf";
+    { std::ofstream cf( config.c_str() ); cf << "objective=regression\nverbosity=-1\nmin_data_in_leaf=1\nnum_leaves=7\n"; }
+
+    param_t param;
+    param.add( "out" , base + "_model" );
+    param.add( "phe" , "Y" );
+    param.add( "hypno" , "unused" );
+
+    dpp_fit_t fit( param );
+    fit.n_features = 1;
+    fit.stage_labels = { "W" , "R" , "NR" };
+
+    const int n = 20;
+    fit.Xtrain = Eigen::MatrixXd( n , 1 );
+    fit.ytrain.resize( n );
+    fit.indiv_weight_train.assign( n , 1.0f );
+    fit.Htrain = Eigen::MatrixXd( n , 3 );
+    for (int i=0; i<n; i++)
+      {
+	fit.Xtrain(i,0) = (double)i;
+	fit.ytrain[i] = (double)i;
+	fit.Htrain(i,0) = 1.0; fit.Htrain(i,1) = 0.0; fit.Htrain(i,2) = 0.0;
+      }
+
+    const int nv = 20;
+    fit.Xvalid = Eigen::MatrixXd( nv , 1 );
+    fit.yvalid.assign( nv , 0.0 );
+    fit.Hvalid = Eigen::MatrixXd( nv , 3 );
+    for (int i=0; i<nv; i++)
+      {
+	fit.Xvalid(i,0) = (double)i;
+	fit.Hvalid(i,0) = 1.0; fit.Hvalid(i,1) = 0.0; fit.Hvalid(i,2) = 0.0;
+      }
+
+    fit.stage_lgbm.resize( 3 );   // 3 default-constructed (empty) boosters -- lgbm_t is move-only, not copyable
+    lgbm_t & lg = fit.stage_lgbm[0];
+    lg.load_config( config );
+    lg.qt_mode = true;
+    lg.attach_training_matrix( fit.Xtrain );
+    lg.attach_training_qts( fit.ytrain );
+    lg.training_weights.assign( n , 1.0f );
+    lg.apply_weights( lg.training , &lg.training_weights );
+    lg.create_booster( false );
+
+    Eigen::MatrixXd Zraw = lg.predict( fit.Xvalid );
+    const double OFFSET = 7.5;
+    // tiny alternating jitter: an exactly-noiseless (zero-residual) fit is
+    // a real degenerate edge case for GLM::display()'s standard-error gate
+    // (see dpp_fit_t::calibrate()'s own comment) -- vanishingly unlikely
+    // with real validation data, but this synthetic construction would
+    // otherwise hit it by construction
+    for (int i=0; i<nv; i++) fit.yvalid[i] = Zraw(i,0) + OFFSET + ( (i%2==0) ? 0.01 : -0.01 );
+
+    std::pair<double,double> ab_offset = fit.calibrate( 0 );
+
+    // fallback: no validation set at all
+    std::vector<double> saved_yvalid = fit.yvalid;
+    fit.yvalid.clear();
+    std::pair<double,double> ab_noval = fit.calibrate( 0 );
+    fit.yvalid = saved_yvalid;
+
+    // fallback: too few qualifying (PP_s>0.5) rows
+    for (int i=0; i<nv; i++) fit.Hvalid(i,0) = i < 2 ? 1.0 : 0.0;   // only 2 rows qualify, need >=5
+    std::pair<double,double> ab_toofew = fit.calibrate( 0 );
+
+    bool pass = approx_equal( ab_offset.first , 1.0 , 0.05 ) && approx_equal( ab_offset.second , OFFSET , 0.5 )
+      && approx_equal( ab_noval.first , 1.0 , 1e-9 ) && approx_equal( ab_noval.second , 0.0 , 1e-9 )
+      && approx_equal( ab_toofew.first , 1.0 , 1e-9 ) && approx_equal( ab_toofew.second , 0.0 , 1e-9 );
+    std::ostringstream m; m << "offset: a=" << ab_offset.first << " (exp~1) b=" << ab_offset.second << " (exp~" << OFFSET
+			    << "); no-validation fallback: a=" << ab_noval.first << " b=" << ab_noval.second
+			    << " (exp 1,0); too-few-rows fallback: a=" << ab_toofew.first << " b=" << ab_toofew.second << " (exp 1,0)";
+    record(R,"dpp-fit/calibration-offset-and-fallbacks", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/calibration-offset-and-fallbacks",false,e.what(),V); }
+
+  // ---- Stage 5: grouped K-fold cross-validation / OOF ----
+
+  // X1 -- default fold assignment: deterministic sorted-round-robin over
+  // individual IDs, not hash-based -- assert against a hand-computed
+  // expectation for a small, deliberately-unsorted ID list
+  try {
+    param_t param;
+    param.add( "out" , temp_base_path("test_dppfit_x1") + "_model" );
+    param.add( "phe" , "Y" );
+    param.add( "folds" , "3" );
+
+    dpp_fit_t fit( param );
+    for ( const std::string & id : { "C" , "A" , "E" , "B" , "D" } )
+      { dpp_matrix_t m; m.id = id; fit.individuals.push_back( m ); }
+
+    fit.assign_folds();
+
+    // sorted: A,B,C,D,E -> fold = index % 3 -> 0,1,2,0,1
+    bool pass = fit.fold_assignment.size() == 5
+      && fit.fold_assignment["A"] == 0 && fit.fold_assignment["B"] == 1 && fit.fold_assignment["C"] == 2
+      && fit.fold_assignment["D"] == 0 && fit.fold_assignment["E"] == 1;
+    std::ostringstream m; m << "A=" << fit.fold_assignment["A"] << " B=" << fit.fold_assignment["B"]
+			    << " C=" << fit.fold_assignment["C"] << " D=" << fit.fold_assignment["D"]
+			    << " E=" << fit.fold_assignment["E"] << " (exp 0,1,2,0,1)";
+    record(R,"dpp-fit/fold-assignment-sorted-round-robin", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/fold-assignment-sorted-round-robin",false,e.what(),V); }
+
+  // X2 -- pooled K-fold CV/OOF: every usable row gets exactly one
+  // out-of-fold prediction, LO/HI groups separate sensibly in their OOF
+  // predictions (never having been trained on the fold that produced
+  // them), and the final saved bundle is still trained on the *entire*
+  // corpus (not any one fold's smaller subset)
+  try {
+    const std::string base = temp_base_path("test_dppfit_x2");
+    std::vector<std::string> lo_ids, hi_ids;
+    const std::string phenofile = build_corpus( base , 6 , 4 , 0.0 , 10.0 , 0.0 , 10.0 , &lo_ids , &hi_ids );
+
+    const std::string specfile = base + ".spec";
+    { std::ofstream sp( specfile.c_str() ); sp << "CH X\nBASE: SLOPE X\n"; }
+    const std::string config = base + ".conf";
+    { std::ofstream cf( config.c_str() ); cf << "objective=regression\nverbosity=-1\nmin_data_in_leaf=1\nnum_leaves=7\n"; }
+
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data" , base + ".dat" );
+    param.add( "phe" , "Y" );
+    param.add( "spec" , specfile );
+    param.add( "config" , config );
+    param.add( "out" , base + "_model" );
+    param.add( "folds" , "3" );   // 12 individuals, 3 folds -> 4 individuals (16 rows) held out per fold
+
+    dpp_fit_t fit( param );
+    fit.fit();
+
+    // 12 individuals x 4 rows/individual = 48 usable rows total
+    const int n_total_rows = 48;
+    bool every_row_covered = (int)fit.oof_rows.size() == n_total_rows;
+
+    double lo_sum = 0, hi_sum = 0; int lo_n = 0, hi_n = 0;
+    for ( const auto & row : fit.oof_rows )
+      {
+	if ( row.id.substr(0,2) == "LO" ) { lo_sum += row.y_pred; ++lo_n; }
+	else                              { hi_sum += row.y_pred; ++hi_n; }
+      }
+    const double lo_mean = lo_n > 0 ? lo_sum / lo_n : std::numeric_limits<double>::quiet_NaN();
+    const double hi_mean = hi_n > 0 ? hi_sum / hi_n : std::numeric_limits<double>::quiet_NaN();
+
+    // final bundle trained on the entire corpus, not a fold-reduced subset
+    // (cross_validate() restores validation_ids before fit()'s own,
+    // final, unconditional flatten_and_split() call)
+    bool final_bundle_full = fit.Xtrain.rows() == n_total_rows;
+
+    bool oof_file_written = Helper::fileExists( Helper::expand( base + "_model.oof" ) );
+
+    bool pass = every_row_covered && lo_n == 24 && hi_n == 24
+      && approx_equal( lo_mean , 0.0 , 3.0 ) && approx_equal( hi_mean , 10.0 , 3.0 ) && ( hi_mean - lo_mean ) > 4.0
+      && final_bundle_full && oof_file_written;
+    std::ostringstream m; m << "oof_rows=" << fit.oof_rows.size() << " (exp " << n_total_rows
+			    << ") lo_n=" << lo_n << " hi_n=" << hi_n << " lo_mean=" << lo_mean << " (exp~0) hi_mean="
+			    << hi_mean << " (exp~10) final_Xtrain.rows=" << fit.Xtrain.rows() << " (exp "
+			    << n_total_rows << ", i.e. full corpus) .oof written=" << oof_file_written;
+    record(R,"dpp-fit/pooled-kfold-oof-and-full-final-bundle", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/pooled-kfold-oof-and-full-final-bundle",false,e.what(),V); }
+
+  // X3 -- stage-conditioned K-fold CV: runs end-to-end (per-fold stage
+  // boosters + per-fold calibration + blending) without crashing, and
+  // still recovers the coarse W-vs-NR group separation in its out-of-fold
+  // predictions despite each fold only ever training on half the cohort
+  try {
+    const std::string base = temp_base_path("test_dppfit_x3");
+    const std::string corpus = base + ".dat";
+    const std::string hypno_corpus = base + ".hypno.dat";
+    const std::string phenofile = base + ".pheno";
+
+    std::ofstream ph( phenofile.c_str() ); ph << "ID\tY\n";
+    const int n_per_group = 6, nrows = 5;
+    bool first = true;
+    for (int grp=0; grp<2; grp++)
+      {
+	const double val = grp==0 ? 0.0 : 10.0;
+	for (int i=0; i<n_per_group; i++)
+	  {
+	    // tiny per-individual jitter: an exactly-noiseless (zero-residual)
+	    // fit is a real degenerate edge case for GLM::display()'s standard-
+	    // error gate (see dpp_fit_t::calibrate()'s own comment) -- this
+	    // synthetic cohort would otherwise hit it exactly, since each
+	    // stage's booster ends up perfectly predicting its (constant)
+	    // group phenotype. Period-3 (not period-2): the default fold
+	    // assignment is itself i%folds, so a period-2 jitter here would
+	    // make every 2-fold training subset a constant again (each fold's
+	    // training half is the *other* fold's individuals, all sharing one
+	    // i%2 parity) -- period-3 avoids aliasing against a 2-fold split.
+	    const double jitter = 0.01 * ( (i % 3) - 1 );
+	    const double y = ( grp==0 ? 0.0 : 10.0 ) + jitter;
+	    const std::string id = ( grp==0 ? "W" : "NR" ) + std::to_string(i) + "_x3";
+	    dpp_matrix_t m; m.id = id;
+	    dpp_matrix_t h; h.id = id;
+	    for (int r=0; r<nrows; r++)
+	      {
+		m.time_sec.push_back( (r+1) * 30.0 );
+		// feature must itself vary by individual (not just by row) so a
+		// fold-held-out booster has something to split on to predict
+		// this individual's jittered y -- otherwise (as originally
+		// written here) every individual in a group shares the exact
+		// same feature trace, the booster can only predict the flat
+		// group mean, and calibrate()'s y~[1,Zraw] fit degenerates
+		// (Zraw is then a constant column -- rank-deficient)
+		m.X.push_back( { val + jitter + 0.001 * r } );
+		h.time_sec.push_back( (r+1) * 30.0 );
+		h.X.push_back( grp==0 ? std::vector<double>{ 1.0 , 0.0 , 0.0 } : std::vector<double>{ 0.0 , 0.0 , 1.0 } );
+	      }
+	    dpp_io::save( corpus , m , 1 , ! first );
+	    dpp_io::save( hypno_corpus , h , 3 , ! first );
+	    first = false;
+	    ph << id << "\t" << y << "\n";
+	  }
+      }
+    ph.close();
+
+    const std::string specfile = base + ".spec";
+    { std::ofstream sp( specfile.c_str() ); sp << "CH X\nBASE: SLOPE X\n"; }
+    const std::string config = base + ".conf";
+    { std::ofstream cf( config.c_str() ); cf << "objective=regression\nverbosity=-1\nmin_data_in_leaf=1\nnum_leaves=7\n"; }
+
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data" , corpus );
+    param.add( "hypno" , hypno_corpus );
+    param.add( "hypno-three-state" , "T" );
+    param.add( "phe" , "Y" );
+    param.add( "spec" , specfile );
+    param.add( "config" , config );
+    param.add( "out" , base + "_model" );
+    param.add( "folds" , "2" );   // 12 individuals, 2 folds
+
+    dpp_fit_t fit( param );
+    fit.fit();
+
+    bool bundle_ok = Helper::fileExists( Helper::expand( base + "_model.W.mod" ) )
+      && Helper::fileExists( Helper::expand( base + "_model.NR.mod" ) )
+      && Helper::fileExists( Helper::expand( base + "_model.dpp" ) )
+      && Helper::fileExists( Helper::expand( base + "_model.oof" ) );
+
+    double w_sum = 0, nr_sum = 0; int w_n = 0, nr_n = 0;
+    for ( const auto & row : fit.oof_rows )
+      {
+	if ( row.id[0] == 'W' ) { w_sum += row.y_pred; ++w_n; }
+	else                    { nr_sum += row.y_pred; ++nr_n; }
+      }
+    const double w_mean  = w_n  > 0 ? w_sum  / w_n  : std::numeric_limits<double>::quiet_NaN();
+    const double nr_mean = nr_n > 0 ? nr_sum / nr_n : std::numeric_limits<double>::quiet_NaN();
+
+    bool pass = bundle_ok && w_n > 0 && nr_n > 0 && ( nr_mean - w_mean ) > 3.0;
+    std::ostringstream m; m << "bundle_ok=" << bundle_ok << " oof_rows=" << fit.oof_rows.size()
+			    << " w_mean=" << w_mean << " (exp low) nr_mean=" << nr_mean << " (exp high, separated)";
+    record(R,"dpp-fit/stage-conditioned-kfold-runs-and-separates", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/stage-conditioned-kfold-runs-and-separates",false,e.what(),V); }
+
+  // X4 -- fold-file= override is actually respected, not silently ignored:
+  // supply an assignment that deliberately differs from what the default
+  // sorted-round-robin would produce, confirm the override wins
+  try {
+    const std::string base = temp_base_path("test_dppfit_x4");
+    param_t param;
+    param.add( "out" , base + "_model" );
+    param.add( "phe" , "Y" );
+    param.add( "folds" , "2" );
+
+    const std::string foldfile = base + ".folds";
+    { std::ofstream ff( foldfile.c_str() ); ff << "A\t1\nB\t1\nC\t1\nD\t0\nE\t0\n"; }   // opposite of round-robin's 0,1,0,1,0
+    param.add( "fold-file" , foldfile );
+
+    dpp_fit_t fit( param );
+    for ( const std::string & id : { "A" , "B" , "C" , "D" , "E" } )
+      { dpp_matrix_t m; m.id = id; fit.individuals.push_back( m ); }
+
+    fit.assign_folds();
+
+    bool pass = fit.fold_assignment.size() == 5
+      && fit.fold_assignment["A"] == 1 && fit.fold_assignment["B"] == 1 && fit.fold_assignment["C"] == 1
+      && fit.fold_assignment["D"] == 0 && fit.fold_assignment["E"] == 0;
+    std::ostringstream m; m << "A=" << fit.fold_assignment["A"] << " B=" << fit.fold_assignment["B"]
+			    << " C=" << fit.fold_assignment["C"] << " D=" << fit.fold_assignment["D"]
+			    << " E=" << fit.fold_assignment["E"] << " (exp 1,1,1,0,0, i.e. the fold-file's own assignment)";
+    record(R,"dpp-fit/fold-file-override-respected", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/fold-file-override-respected",false,e.what(),V); }
+
+  // X5 -- folds= and validation= together halts with a clear error, rather
+  // than defining an ambiguous three-way split
+  try {
+    param_t param;
+    param.add( "out" , temp_base_path("test_dppfit_x5") + "_model" );
+    param.add( "phe" , "Y" );
+    param.add( "folds" , "3" );
+    param.add( "validation" , "somefile.txt" );
+
+    bool halted = false;
+    try { dpp_fit_t fit( param ); } catch ( std::exception & ) { halted = true; }
+
+    record(R,"dpp-fit/folds-and-validation-mutually-exclusive", halted,
+	   std::string("halted=") + ( halted ? "T" : "F" ) + " (exp T)", V);
+  } catch(std::exception & e){ record(R,"dpp-fit/folds-and-validation-mutually-exclusive",false,e.what(),V); }
+
+  // X6 -- regression: flatten_and_split() is re-invoked once per fold by
+  // cross_validate(), plus once more for the final full-corpus fit -- the
+  // per-individual block-boundary accumulators (istart_train/valid,
+  // wtable_train/valid) must reflect only the *current* call, not
+  // carry over stale entries from an earlier call (which would pair a
+  // stale, possibly out-of-range boundary against the current, differently-
+  // sized weight vector in lgbm_t::add_block_weights())
+  try {
+    const std::string base = temp_base_path("test_dppfit_x6");
+    std::vector<std::string> lo_ids, hi_ids;
+    const std::string phenofile = build_corpus( base , 6 , 4 , 0.0 , 10.0 , 0.0 , 10.0 , &lo_ids , &hi_ids );
+
+    const std::string specfile = base + ".spec";
+    { std::ofstream sp( specfile.c_str() ); sp << "CH X\nBASE: SLOPE X\n"; }
+
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data" , base + ".dat" );
+    param.add( "phe" , "Y" );
+    param.add( "spec" , specfile );
+    param.add( "out" , base + "_model" );
+
+    dpp_fit_t fit( param );
+    fit.load_corpus();
+    fit.build_feature_labels();
+    fit.attach_phenotypes();
+
+    // "fold A": hold out 2 individuals (1 per cluster) -> 10 train indiv
+    fit.validation_ids = { lo_ids[0] , hi_ids[0] };
+    fit.flatten_and_split();
+    const size_t istart_train_A = fit.istart_train.size();
+    const size_t wtable_train_A = fit.wtable_train.size();
+
+    // "fold B": hold out a *different*, larger set of 4 individuals (2 per
+    // cluster) -> only 8 train indiv this time -- deliberately smaller and
+    // differently-sized than fold A, so any leftover fold-A entries would
+    // be detectably stale (extra count, and/or a stale istart_train[i]
+    // pointing past the fold-B training matrix's actual row count)
+    fit.validation_ids = { lo_ids[0] , lo_ids[1] , hi_ids[0] , hi_ids[1] };
+    fit.flatten_and_split();
+    const size_t istart_train_B = fit.istart_train.size();
+    const size_t wtable_train_B = fit.wtable_train.size();
+
+    bool pass = istart_train_A == 10 && wtable_train_A == 10
+      && istart_train_B == 8 && wtable_train_B == 8
+      && fit.Xtrain.rows() == 32   // 8 individuals x 4 rows
+      && ( fit.istart_train.empty() || fit.istart_train.back() < (uint64_t)fit.Xtrain.rows() );
+    std::ostringstream m; m << "fold A: istart_train=" << istart_train_A << " wtable_train=" << wtable_train_A
+			    << " (exp 10,10); fold B: istart_train=" << istart_train_B << " wtable_train=" << wtable_train_B
+			    << " (exp 8,8, not accumulated to 18) Xtrain.rows=" << fit.Xtrain.rows() << " (exp 32)";
+    record(R,"dpp-fit/flatten-and-split-no-stale-boundaries", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/flatten-and-split-no-stale-boundaries",false,e.what(),V); }
+
+  // X6b -- regression: Xvalid/yvalid/indiv_weight_valid (and Hvalid, for a
+  // stage-conditioned fit) must themselves be reset to empty when a
+  // flatten_and_split() call has zero validation rows (validation_ids
+  // empty) -- not just the istart_valid/wtable_valid boundary bookkeeping
+  // covered by X6 above. Without this, the *final* full-corpus fit (which
+  // cross_validate() drives via exactly this "populated-validation fold,
+  // then empty-validation call" sequence) would silently retain the last
+  // CV fold's validation set: lgbm_t would see yvalid.size()>0, attach it
+  // as a real validation set, and run early stopping / calibration against
+  // stale, wrong data for what's supposed to be the validation-free final
+  // model. Caught via a real --dpp-fit folds= run's log unexpectedly
+  // showing "validation = ..." for the final, "0 held out" fit.
+  try {
+    const std::string base = temp_base_path("test_dppfit_x6b");
+    std::vector<std::string> lo_ids, hi_ids;
+    const std::string phenofile = build_corpus( base , 6 , 4 , 0.0 , 10.0 , 0.0 , 10.0 , &lo_ids , &hi_ids );
+
+    const std::string specfile = base + ".spec";
+    { std::ofstream sp( specfile.c_str() ); sp << "CH X\nBASE: SLOPE X\n"; }
+
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data" , base + ".dat" );
+    param.add( "phe" , "Y" );
+    param.add( "spec" , specfile );
+    param.add( "out" , base + "_model" );
+
+    dpp_fit_t fit( param );
+    fit.load_corpus();
+    fit.build_feature_labels();
+    fit.attach_phenotypes();
+
+    // simulates cross_validate()'s last fold: a real, non-empty validation set
+    fit.validation_ids = { lo_ids[0] , hi_ids[0] };
+    fit.flatten_and_split();
+    const int xvalid_rows_1 = (int) fit.Xvalid.rows();
+    const int yvalid_size_1 = (int) fit.yvalid.size();
+    const int xtrain_rows_1 = (int) fit.Xtrain.rows();
+    const bool populated_first = xvalid_rows_1 > 0 && yvalid_size_1 > 0
+      && fit.indiv_weight_valid.size() == fit.yvalid.size();
+
+    // simulates fit()'s subsequent final, full-corpus call: validation_ids
+    // restored to empty (mirrors cross_validate()'s own restore of the
+    // saved, pre-CV validation_ids at the end of the fold loop)
+    fit.validation_ids.clear();
+    fit.flatten_and_split();
+
+    bool pass = populated_first
+      && fit.Xvalid.rows() == 0 && fit.yvalid.empty() && fit.indiv_weight_valid.empty()
+      && fit.Xtrain.rows() == 48;   // all 6+6 individuals x 4 rows, none held out
+    std::ostringstream m; m << "1st call (2 held out): Xvalid.rows=" << xvalid_rows_1 << " yvalid.size=" << yvalid_size_1
+			    << " Xtrain.rows=" << xtrain_rows_1 << " (exp >0,>0,40); 2nd call (0 held out): Xvalid.rows="
+			    << fit.Xvalid.rows() << " yvalid.size=" << fit.yvalid.size()
+			    << " indiv_weight_valid.size=" << fit.indiv_weight_valid.size()
+			    << " (exp 0,0,0); Xtrain.rows=" << fit.Xtrain.rows() << " (exp 48)";
+    record(R,"dpp-fit/flatten-and-split-clears-stale-validation", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/flatten-and-split-clears-stale-validation",false,e.what(),V); }
+
+  // X7 -- hypnodensity/feature row *alignment* (not just row count) is
+  // validated: two corpora with matching IDs and row counts but a shifted
+  // time_sec[] for one individual must halt, not silently pair rows by
+  // position against the wrong stage-probability vector
+  try {
+    const std::string base = temp_base_path("test_dppfit_x7");
+    const std::string corpus = base + ".dat";
+    const std::string hypno_corpus = base + ".hypno.dat";
+    const std::string phenofile = base + ".pheno";
+    std::ofstream ph( phenofile.c_str() ); ph << "ID\tY\n";
+    for (int i=0; i<3; i++)
+      {
+	const std::string id = "S" + std::to_string(i) + "_x7";
+	dpp_matrix_t m; m.id = id;
+	dpp_matrix_t h; h.id = id;
+	for (int r=0; r<4; r++)
+	  {
+	    m.time_sec.push_back( (r+1)*30.0 );
+	    m.X.push_back( { 5.0 + 0.001*r } );
+	    // individual S1's hypno rows are offset by +1s -- same row COUNT
+	    // and same ID, but misaligned in time
+	    h.time_sec.push_back( (r+1)*30.0 + ( i==1 ? 1.0 : 0.0 ) );
+	    h.X.push_back( { 1.0 , 0.0 , 0.0 } );
+	  }
+	dpp_io::save( corpus , m , 1 , i!=0 );
+	dpp_io::save( hypno_corpus , h , 3 , i!=0 );
+	ph << id << "\t5.0\n";
+      }
+    ph.close();
+
+    param_t param;
+    param.add( "data" , corpus );
+    param.add( "hypno" , hypno_corpus );
+    param.add( "hypno-three-state" , "T" );
+    param.add( "phe" , "Y" );
+    param.add( "out" , base + "_model" );
+
+    dpp_fit_t fit( param );
+    fit.load_corpus();
+
+    bool halted = false;
+    try { fit.load_hypno_corpus(); } catch ( std::exception & ) { halted = true; }
+
+    record(R,"dpp-fit/hypno-corpus-time-misalignment-halts", halted,
+	   std::string("halted=") + ( halted ? "T" : "F" ) + " (exp T)", V);
+  } catch(std::exception & e){ record(R,"dpp-fit/hypno-corpus-time-misalignment-halts",false,e.what(),V); }
+
+  // X8 -- calibrate() falls back to {1,0} (not {0,0}) when GLM fit
+  // succeeds/is valid() but has a degenerate per-coefficient standard
+  // error (here: a deliberately exact, zero-residual linear relationship,
+  // no jitter) -- regression test for calibrate() previously using
+  // coef[]'s resized-but-never-set {0,0} default without checking
+  // display()'s return value, silently zeroing this stage's entire
+  // contribution to the blend instead of an honest pass-through
+  try {
+    const std::string base = temp_base_path("test_dppfit_x8");
+    const std::string config = base + ".conf";
+    { std::ofstream cf( config.c_str() ); cf << "objective=regression\nverbosity=-1\nmin_data_in_leaf=1\nnum_leaves=7\n"; }
+
+    param_t param;
+    param.add( "out" , base + "_model" );
+    param.add( "phe" , "Y" );
+    param.add( "hypno" , "unused" );
+
+    dpp_fit_t fit( param );
+    fit.n_features = 1;
+    fit.stage_labels = { "W" , "R" , "NR" };
+
+    const int n = 20;
+    fit.Xtrain = Eigen::MatrixXd( n , 1 );
+    fit.ytrain.resize( n );
+    fit.indiv_weight_train.assign( n , 1.0f );
+    fit.Htrain = Eigen::MatrixXd( n , 3 );
+    for (int i=0; i<n; i++)
+      {
+	fit.Xtrain(i,0) = (double)i;
+	fit.ytrain[i] = (double)i;
+	fit.Htrain(i,0) = 1.0; fit.Htrain(i,1) = 0.0; fit.Htrain(i,2) = 0.0;
+      }
+
+    const int nv = 20;
+    fit.Xvalid = Eigen::MatrixXd( nv , 1 );
+    fit.yvalid.assign( nv , 0.0 );
+    fit.Hvalid = Eigen::MatrixXd( nv , 3 );
+    for (int i=0; i<nv; i++)
+      {
+	fit.Xvalid(i,0) = (double)i;
+	fit.Hvalid(i,0) = 1.0; fit.Hvalid(i,1) = 0.0; fit.Hvalid(i,2) = 0.0;
+      }
+
+    fit.stage_lgbm.resize( 3 );
+    lgbm_t & lg = fit.stage_lgbm[0];
+    lg.load_config( config );
+    lg.qt_mode = true;
+    lg.attach_training_matrix( fit.Xtrain );
+    lg.attach_training_qts( fit.ytrain );
+    lg.training_weights.assign( n , 1.0f );
+    lg.apply_weights( lg.training , &lg.training_weights );
+    lg.create_booster( false );
+
+    // exact (zero-residual) relationship, no jitter -- deliberately
+    // triggers GLM::display()'s degenerate-standard-error gate
+    Eigen::MatrixXd Zraw = lg.predict( fit.Xvalid );
+    const double OFFSET = 7.5;
+    for (int i=0; i<nv; i++) fit.yvalid[i] = Zraw(i,0) + OFFSET;
+
+    std::pair<double,double> ab = fit.calibrate( 0 );
+
+    bool pass = approx_equal( ab.first , 1.0 , 1e-9 ) && approx_equal( ab.second , 0.0 , 1e-9 );
+    std::ostringstream m; m << "a=" << ab.first << " b=" << ab.second << " (exp 1,0 -- fallback, not 0,0)";
+    record(R,"dpp-fit/calibrate-degenerate-se-falls-back-to-noop", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/calibrate-degenerate-se-falls-back-to-noop",false,e.what(),V); }
+
+  // X9 -- subject-level OOF aggregation: per-individual rows collapse to
+  // one (y_true, mean y_pred) pair each, with the correct row count and
+  // mean; write_oof_subject() then computes Pearson r / Spearman rho /
+  // RMSE over those subject-level pairs (not the raw rows) and writes
+  // them to <out>.oof.subject -- constructed here as an exact y=x
+  // relationship (r=1, rho=1, rmse=0) so the stats are deterministic to
+  // check, unlike the row-level oof_rows they're aggregated from
+  try {
+    const std::string base = temp_base_path("test_dppfit_x9");
+    param_t param;
+    param.add( "out" , base + "_model" );
+    param.add( "phe" , "Y" );
+
+    dpp_fit_t fit( param );
+
+    auto add_row = [&]( const std::string & id, double y_true, double y_pred, int fold )
+      {
+	dpp_fit_t::oof_row_t row;
+	row.id = id; row.time_sec = 0; row.y_true = y_true; row.y_pred = y_pred; row.fold = fold;
+	fit.oof_rows.push_back( row );
+      };
+    add_row( "A" , 0.0  , 0.0  , 0 );
+    add_row( "A" , 0.0  , 0.0  , 0 );
+    add_row( "B" , 5.0  , 5.0  , 0 );
+    add_row( "B" , 5.0  , 5.0  , 0 );
+    add_row( "B" , 5.0  , 5.0  , 0 );
+    add_row( "C" , 10.0 , 10.0 , 1 );
+
+    fit.aggregate_oof_by_subject();
+
+    bool pass = fit.oof_subjects.size() == 3;
+    std::map<std::string,dpp_fit_t::oof_subject_t> by_id;
+    for ( const auto & s : fit.oof_subjects ) by_id[ s.id ] = s;
+    pass = pass && by_id.count("A") && by_id.count("B") && by_id.count("C")
+      && by_id["A"].n_rows == 2 && approx_equal( by_id["A"].y_pred_mean , 0.0  , 1e-9 )
+      && by_id["B"].n_rows == 3 && approx_equal( by_id["B"].y_pred_mean , 5.0  , 1e-9 )
+      && by_id["C"].n_rows == 1 && approx_equal( by_id["C"].y_pred_mean , 10.0 , 1e-9 );
+
+    fit.write_oof_subject();
+    const std::string subj_file = Helper::expand( base + "_model.oof.subject" );
+    bool file_written = Helper::fileExists( subj_file );
+
+    // exact y=x relationship by construction -> r=1, rho=1, rmse=0
+    bool stats_ok = file_written;
+    if ( file_written )
+      {
+	std::ifstream IN1( subj_file.c_str() );
+	std::string line;
+	double r_val = -99, rho_val = -99, rmse_val = -99;
+	while ( std::getline( IN1 , line ) )
+	  {
+	    if ( line.find( "# pearson_r=" ) == 0 )   r_val   = atof( line.substr( 12 ).c_str() );
+	    if ( line.find( "# spearman_rho=" ) == 0 ) rho_val = atof( line.substr( 15 ).c_str() );
+	    if ( line.find( "# rmse=" ) == 0 )         rmse_val = atof( line.substr( 7 ).c_str() );
+	  }
+	IN1.close();
+	stats_ok = approx_equal( r_val , 1.0 , 1e-6 ) && approx_equal( rho_val , 1.0 , 1e-6 ) && approx_equal( rmse_val , 0.0 , 1e-6 );
+      }
+
+    pass = pass && file_written && stats_ok;
+    std::ostringstream m; m << "n_subjects=" << fit.oof_subjects.size() << " (exp 3); A: n=" << by_id["A"].n_rows
+			    << " mean=" << by_id["A"].y_pred_mean << " (exp 2,0); B: n=" << by_id["B"].n_rows
+			    << " mean=" << by_id["B"].y_pred_mean << " (exp 3,5); C: n=" << by_id["C"].n_rows
+			    << " mean=" << by_id["C"].y_pred_mean << " (exp 1,10); file_written=" << file_written
+			    << "; stats (r,rho,rmse exp 1,1,0) ok=" << stats_ok;
+    record(R,"dpp-fit/subject-level-oof-aggregation", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/subject-level-oof-aggregation",false,e.what(),V); }
+
+  // X10 -- CV-derived iteration count (pooled): with folds= set,
+  // forced_n_iterations should be populated (median best_iteration across
+  // folds, capped by the configured iterations=), and -- the actual point
+  // of the feature -- the *final*, full-corpus booster's own n_iterations
+  // must equal it (wiring confirmed, not just computed and discarded).
+  // No-exclusion re-checked here too: this feature must never change which
+  // rows train the final booster, only its iteration count/calibration.
+  try {
+    const std::string base = temp_base_path("test_dppfit_x10");
+    std::vector<std::string> lo_ids, hi_ids;
+    const std::string phenofile = build_corpus( base , 6 , 4 , 0.0 , 10.0 , 0.0 , 10.0 , &lo_ids , &hi_ids );
+
+    const std::string specfile = base + ".spec";
+    { std::ofstream sp( specfile.c_str() ); sp << "CH X\nBASE: SLOPE X\n"; }
+    const std::string config = base + ".conf";
+    // aggressive early-stopping patience so it plausibly fires on this
+    // tiny synthetic set, giving real (not trivially-identical) per-fold
+    // best_iteration values for the median to aggregate over
+    { std::ofstream cf( config.c_str() ); cf << "objective=regression\nverbosity=-1\nmin_data_in_leaf=1\nnum_leaves=7\n"; }
+
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data" , base + ".dat" );
+    param.add( "phe" , "Y" );
+    param.add( "spec" , specfile );
+    param.add( "config" , config );
+    param.add( "out" , base + "_model" );
+    param.add( "folds" , "3" );
+    param.add( "iterations" , "50" );
+    param.add( "early-stopping-rounds" , "2" );
+
+    dpp_fit_t fit( param );
+    fit.fit();
+
+    const int n_total_rows = 48;   // 12 individuals x 4 rows
+    bool pass = fit.forced_n_iterations > 0 && fit.forced_n_iterations <= 50
+      && fit.lgbm.n_iterations == fit.forced_n_iterations
+      && fit.Xtrain.rows() == n_total_rows;
+    std::ostringstream m; m << "forced_n_iterations=" << fit.forced_n_iterations << " (exp 1..50); final lgbm.n_iterations="
+			    << fit.lgbm.n_iterations << " (exp == forced_n_iterations); Xtrain.rows()=" << fit.Xtrain.rows()
+			    << " (exp " << n_total_rows << ", i.e. full corpus, unaffected)";
+    record(R,"dpp-fit/cv-derived-iterations-pooled", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/cv-derived-iterations-pooled",false,e.what(),V); }
+
+  // X11 -- CV-derived calibration + iteration count (stage-conditioned):
+  // the final bundle's calib_a/calib_b must equal the mean of the K folds'
+  // own (real, non-trivial) calibrations -- not the {1,0} fallback
+  // train_stage_boosters() would otherwise leave them at for the final,
+  // no-validation fit -- and each stage's final n_iterations must equal
+  // its own CV-derived (median) value. No-exclusion re-checked again.
+  try {
+    const std::string base = temp_base_path("test_dppfit_x11");
+    const std::string corpus = base + ".dat";
+    const std::string hypno_corpus = base + ".hypno.dat";
+    const std::string phenofile = base + ".pheno";
+
+    std::ofstream ph( phenofile.c_str() ); ph << "ID\tY\n";
+    const int n_per_group = 6, nrows = 5;
+    bool first = true;
+    for (int grp=0; grp<2; grp++)
+      {
+	const double val = grp==0 ? 0.0 : 10.0;
+	for (int i=0; i<n_per_group; i++)
+	  {
+	    const double jitter = 0.01 * ( (i % 3) - 1 );   // see X3's comment: period-3, avoids the GLM degenerate-SE case
+	    const double y = ( grp==0 ? 0.0 : 10.0 ) + jitter;
+	    const std::string id = ( grp==0 ? "W" : "NR" ) + std::to_string(i) + "_x11";
+	    dpp_matrix_t m; m.id = id;
+	    dpp_matrix_t h; h.id = id;
+	    for (int r=0; r<nrows; r++)
+	      {
+		m.time_sec.push_back( (r+1) * 30.0 );
+		m.X.push_back( { val + jitter + 0.001 * r } );
+		h.time_sec.push_back( (r+1) * 30.0 );
+		h.X.push_back( grp==0 ? std::vector<double>{ 1.0 , 0.0 , 0.0 } : std::vector<double>{ 0.0 , 0.0 , 1.0 } );
+	      }
+	    dpp_io::save( corpus , m , 1 , ! first );
+	    dpp_io::save( hypno_corpus , h , 3 , ! first );
+	    first = false;
+	    ph << id << "\t" << y << "\n";
+	  }
+      }
+    ph.close();
+
+    const std::string specfile = base + ".spec";
+    { std::ofstream sp( specfile.c_str() ); sp << "CH X\nBASE: SLOPE X\n"; }
+    const std::string config = base + ".conf";
+    { std::ofstream cf( config.c_str() ); cf << "objective=regression\nverbosity=-1\nmin_data_in_leaf=1\nnum_leaves=7\n"; }
+
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data" , corpus );
+    param.add( "hypno" , hypno_corpus );
+    param.add( "hypno-three-state" , "T" );
+    param.add( "phe" , "Y" );
+    param.add( "spec" , specfile );
+    param.add( "config" , config );
+    param.add( "out" , base + "_model" );
+    param.add( "folds" , "2" );
+    param.add( "iterations" , "50" );
+    param.add( "early-stopping-rounds" , "2" );
+
+    dpp_fit_t fit( param );
+    fit.fit();
+
+    const int n_total_rows = 60;   // 12 individuals x 5 rows
+    const int n_stages = (int) fit.stage_labels.size();
+
+    bool pass = n_stages == 3
+      && (int)fit.forced_stage_n_iterations.size() == n_stages
+      && (int)fit.cv_calib_a.size() == n_stages && (int)fit.cv_calib_b.size() == n_stages
+      && fit.calib_a == fit.cv_calib_a && fit.calib_b == fit.cv_calib_b
+      && fit.Xtrain.rows() == n_total_rows;
+
+    bool iters_ok = pass;
+    bool any_real_calibration = false;
+    for (int s=0; s<n_stages && pass; s++)
+      {
+	iters_ok = iters_ok && fit.forced_stage_n_iterations[s] > 0 && fit.forced_stage_n_iterations[s] <= 50
+	  && fit.stage_lgbm[s].n_iterations == fit.forced_stage_n_iterations[s];
+	if ( ! approx_equal( fit.calib_a[s] , 1.0 , 1e-6 ) || ! approx_equal( fit.calib_b[s] , 0.0 , 1e-6 ) )
+	  any_real_calibration = true;
+      }
+    pass = pass && iters_ok && any_real_calibration;
+
+    std::ostringstream m; m << "n_stages=" << n_stages << " (exp 3); final calib_a==cv_calib_a && calib_b==cv_calib_b: "
+			    << ( fit.calib_a == fit.cv_calib_a && fit.calib_b == fit.cv_calib_b )
+			    << "; any_real_calibration=" << any_real_calibration << " (exp T, not all {1,0}); iters_ok=" << iters_ok
+			    << "; Xtrain.rows()=" << fit.Xtrain.rows() << " (exp " << n_total_rows << ", full corpus)";
+    record(R,"dpp-fit/cv-derived-calibration-and-iterations-stage-conditioned", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/cv-derived-calibration-and-iterations-stage-conditioned",false,e.what(),V); }
 }
 
 #endif

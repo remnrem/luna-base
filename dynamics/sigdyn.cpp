@@ -150,27 +150,46 @@ namespace {
     return dh < dl ? hi : lo;
   }
 
+  // double-rate equivalent of timeline_t::discontinuity() (timeline.cpp) --
+  // that primitive takes an int sr (it divides globals::tp_1sec by it), so
+  // it cannot represent a genuinely sub-1Hz channel (e.g. a DPP_Z/
+  // hypnodensity-style signal written every 5-30s): flooring such a rate to
+  // an integer either truncates to 0 (division by zero) or, if floored up
+  // to a minimum of 1, silently claims "1 sample/sec expected" against
+  // samples that are really 5-30s apart, which makes every real inter-
+  // sample gap look like a discontinuity and collapses furthest_reachable()
+  // to the anchor's own single sample. Same formula, just sr as a double.
+  bool discontinuity_d( const std::vector<uint64_t> & tp , double sr , int sp1 , int sp2 )
+  {
+    if ( sp2 < sp1 ) return true;
+    if ( sp1 < 0 || sp2 >= (int)tp.size() ) return true;
+    const uint64_t observed = tp[sp2] - tp[sp1];
+    const double one_sample_tp = globals::tp_1sec / sr;
+    const double expected = one_sample_tp * ( sp2 - sp1 );
+    const double diff = observed > expected ? observed - expected : expected - observed;
+    return diff > one_sample_tp / 2.0;
+  }
+
   // furthest sample offset from 'anchor', in the direction of 'sign'
   // (+1/-1), reachable without crossing a genuine discontinuity in the
-  // recording -- i.e. where timeline_t::discontinuity() first becomes
-  // true somewhere between 'anchor' and that point. 'bound' is the
-  // desired furthest sample in that direction (already clipped to the
-  // recording's own extent). Reachability is monotonic (if sp is
-  // reachable, every point between anchor and sp is too), so this is a
-  // binary search: one discontinuity() call in the common gap-free case,
-  // O(log window-length-in-samples) in the rare case a gap exists
-  // somewhere in range. This is what lets one anchor instance contribute
-  // to bins on the near side of a gap while correctly excluding bins
-  // beyond it, rather than discarding the whole instance (matching the
-  // same edge-of-recording philosophy in the file header comment, just
-  // applied to internal gaps too).
-  int furthest_reachable( const std::vector<uint64_t> & tp , int sr , int anchor , int bound , int sign )
+  // recording -- i.e. where discontinuity_d() first becomes true somewhere
+  // between 'anchor' and that point. 'bound' is the desired furthest sample
+  // in that direction (already clipped to the recording's own extent).
+  // Reachability is monotonic (if sp is reachable, every point between
+  // anchor and sp is too), so this is a binary search: one discontinuity_d()
+  // call in the common gap-free case, O(log window-length-in-samples) in
+  // the rare case a gap exists somewhere in range. This is what lets one
+  // anchor instance contribute to bins on the near side of a gap while
+  // correctly excluding bins beyond it, rather than discarding the whole
+  // instance (matching the same edge-of-recording philosophy in the file
+  // header comment, just applied to internal gaps too).
+  int furthest_reachable( const std::vector<uint64_t> & tp , double sr , int anchor , int bound , int sign )
   {
     if ( bound == anchor ) return anchor;
 
     const int a = sign > 0 ? anchor : bound;
     const int b = sign > 0 ? bound : anchor;
-    if ( ! timeline_t::discontinuity( tp , sr , a , b ) ) return bound;
+    if ( ! discontinuity_d( tp , sr , a , b ) ) return bound;
 
     int lo = 0;                          // offset from anchor, known reachable
     int hi = std::abs( bound - anchor );  // offset from anchor, known not fully reachable
@@ -180,7 +199,7 @@ namespace {
 	const int sp  = anchor + sign * mid;
 	const int aa  = sign > 0 ? anchor : sp;
 	const int bb  = sign > 0 ? sp : anchor;
-	if ( timeline_t::discontinuity( tp , sr , aa , bb ) ) hi = mid;
+	if ( discontinuity_d( tp , sr , aa , bb ) ) hi = mid;
 	else lo = mid;
       }
     return anchor + sign * lo;
@@ -748,11 +767,24 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
 
 	  if ( idx.size() == 0 ) continue;
 
-	  const int sr_i = (int)Fs[s];
-	  const int half_points = (int) std::lround( half_window * sr_i );
+	  // sub-1Hz signals (e.g. a DPP_Z/hypnodensity-style channel written
+	  // every 5-30s) are legitimate here -- keep the real, possibly
+	  // fractional rate throughout (half_points/bin_samples/inc_samples/
+	  // the SEC bin label, and discontinuity_d()/furthest_reachable()
+	  // above, which take a double sr for exactly this reason). Earlier
+	  // this whole block used (int)Fs[s] directly: truncating any Fs<1 to
+	  // 0 divided by zero in the SEC label, and even flooring it up to a
+	  // minimum of 1 (a tempting-looking fix) is wrong in a different way
+	  // -- it tells discontinuity_d() to expect ~1 sample/sec when real
+	  // samples are 5-30s apart, so every genuine inter-sample gap looks
+	  // like a discontinuity and furthest_reachable() collapses to the
+	  // anchor's own single sample (N=1, only the k=0 bin, no real window)
+	  const double sr_d = Fs[s];
+	  if ( sr_d <= 0 ) continue;
+	  const int half_points = (int) std::lround( half_window * sr_d );
 	  const int wsize = (int)wtrace.pdata()->size();
-	  const int bin_samples = bin_sec > 0 ? std::max( 1 , (int) std::lround( bin_sec * sr_i ) ) : 1;
-	  const int inc_samples = bin_sec > 0 ? std::max( 1 , (int) std::lround( inc_sec * sr_i ) ) : 1;
+	  const int bin_samples = bin_sec > 0 ? std::max( 1 , (int) std::lround( bin_sec * sr_d ) ) : 1;
+	  const int inc_samples = bin_sec > 0 ? std::max( 1 , (int) std::lround( inc_sec * sr_d ) ) : 1;
 	  const std::vector<double> * wd = wtrace.pdata();
 
 	  // symmetric bin-index grid: k = 0 is always the anchor itself, and
@@ -801,14 +833,14 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
 	      if ( require_full )
 		{
 		  if ( lo_c != lo || hi_c != hi ) continue;
-		  if ( timeline_t::discontinuity( *tp , sr_i , lo_c , hi_c ) ) continue;
+		  if ( discontinuity_d( *tp , sr_d , lo_c , hi_c ) ) continue;
 		}
 
 	      // otherwise, find how far this instance reaches on each side
 	      // without crossing a genuine gap (edge-of-recording truncation,
 	      // already reflected in lo_c/hi_c, is not itself a discontinuity)
-	      const int left_reach  = require_full ? lo_c : furthest_reachable( *tp , sr_i , idx[i] , lo_c , -1 );
-	      const int right_reach = require_full ? hi_c : furthest_reachable( *tp , sr_i , idx[i] , hi_c , +1 );
+	      const int left_reach  = require_full ? lo_c : furthest_reachable( *tp , sr_d , idx[i] , lo_c , -1 );
+	      const int right_reach = require_full ? hi_c : furthest_reachable( *tp , sr_d , idx[i] , hi_c , +1 );
 
 	      // only COMPLETE bins contribute: this instance is included in a
 	      // given bin only if every sample that bin covers is within its
@@ -895,7 +927,7 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
 		  // .. -- symmetric about the anchor regardless of bin-align
 		  // or bin width; bin-align only changes which part of the
 		  // bin's own sample range corresponds to this offset.
-		  writer.level( ( k * inc_samples ) / (double)sr_i , globals::sec_strat );
+		  writer.level( ( k * inc_samples ) / sr_d , globals::sec_strat );
 		  writer.value( "N" , bin_n_instances );
 		  writer.value( "M" , bin_m );
 		  if ( vals.size() > 1 ) writer.value( "SD" , MiscMath::sdev( vals , bin_m ) );

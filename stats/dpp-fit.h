@@ -31,6 +31,7 @@
 #include <vector>
 #include <set>
 #include <map>
+#include <utility>
 
 struct param_t;
 struct edf_t;
@@ -53,6 +54,7 @@ struct dpp_specs_t;
 struct dpp_fit_t
 {
   dpp_fit_t( param_t & param );
+  ~dpp_fit_t();   // explicit, out-of-line -- see the definition's comment (dpp-fit.cpp)
 
   // top-level driver
   void fit();
@@ -63,10 +65,44 @@ struct dpp_fit_t
   void load_corpus();
   void build_feature_labels();
   void attach_phenotypes();
+  void load_hypno_corpus();      // stage 4, only if stage_conditioned
   void flatten_and_split();
   void apply_row_weights();
-  void train_booster();
+  void train_booster();          // pooled (stage 3) path
+  void train_stage_boosters();   // stage-conditioned (stage 4) path
   void save_bundle();
+
+  // stage 5: individual-level K-fold CV/OOF, purely an evaluation layer --
+  // the final saved bundle (above) is always trained on the entire corpus,
+  // regardless of whether cross_validate() ran. assign_folds() builds
+  // fold_assignment (sorted-round-robin default, or fold-file= override);
+  // cross_validate() repeatedly re-drives flatten_and_split()/
+  // train_booster()/train_stage_boosters() with validation_ids set to each
+  // fold in turn, collecting one out-of-fold prediction per usable row into
+  // oof_rows, then restores validation_ids and calls write_oof().
+  void assign_folds();
+  void cross_validate();
+  void write_oof();
+
+  // subject-level OOF summary: the evaluation that actually matters, since
+  // the phenotype is per-subject, not per-row -- row-level r/RMSE (above)
+  // mixes in within-subject autocorrelation and unequal per-subject row
+  // counts. aggregate_oof_by_subject() means each subject's rows down to
+  // one (y_true, mean y_pred) pair (oof_subjects); write_oof_subject()
+  // computes Pearson/Spearman/RMSE over those pairs and writes them
+  void aggregate_oof_by_subject();
+  void write_oof_subject();
+
+  // stage 4: weighted regression of true phenotype on one stage's raw
+  // (uncalibrated) validation predictions, restricted to validation rows
+  // where that stage's PP_s > 0.5 (GLM has no weighted-least-squares path
+  // -- this hard-threshold selection is the pragmatic alternative, see the
+  // implementation plan's Stage 4 SS3). Returns {a_s,b_s} = {1,0} if no
+  // validation set, too few qualifying rows, or GLM itself reports an
+  // invalid/degenerate fit (GLM::beta() is declared but has no
+  // implementation anywhere in the tree -- use GLM::display() instead,
+  // which is implemented and does the same job)
+  std::pair<double,double> calibrate( int stage_idx );
 
   param_t & param;
 
@@ -82,21 +118,95 @@ struct dpp_fit_t
 
   // per-individual block starts (row index within Xtrain/Xvalid where that
   // individual's rows begin) and 1/n_i weight table, keyed the same way --
-  // mirrors pops_t::attach_indiv_weights (pops/pops.cpp)
+  // mirrors pops_t::attach_indiv_weights (pops/pops.cpp). Used by the
+  // pooled (stage 3) path's apply_row_weights()/add_block_weights()
   std::vector<uint64_t> istart_train, istart_valid;
   std::map<uint64_t,float> wtable_train, wtable_valid;
 
-  lgbm_t lgbm;
+  // stage 5: per-row (individual ID, time_sec) aligned with Xvalid, filled
+  // by flatten_and_split() alongside Xvalid -- needed only to attribute an
+  // out-of-fold prediction back to a specific row in cross_validate()'s
+  // .oof output; Xtrain has no equivalent since it's never written out
+  std::vector<std::pair<std::string,double> > valid_row_key;
+
+  lgbm_t lgbm;   // pooled (stage 3) booster
+
+  // stage 4: presence of hypno=/hypno-files= (checked in the constructor)
+  bool stage_conditioned;
+  bool hypno_three_state;
+  std::vector<std::string> stage_labels;        // "W","R","N1","N2","N3" or 3-state
+  std::vector<dpp_matrix_t> hypno_individuals;  // loaded from hypno=/hypno-files=
+
+  // per-row hypnodensity, aligned row-for-row with Xtrain/Xvalid (built by
+  // flatten_and_split() alongside them, from the same row selection/order)
+  Eigen::MatrixXd Htrain, Hvalid;
+
+  // per-row (1/n_i) individual weight, aligned with Xtrain/Xvalid -- unlike
+  // wtable_train/istart_train above (block-constant, for add_block_weights),
+  // stage 4 needs this expanded per-row since it's multiplied by a per-row
+  // PP_s value that varies within an individual's own rows
+  std::vector<float> indiv_weight_train, indiv_weight_valid;
+
+  std::vector<lgbm_t> stage_lgbm;         // one per stage, parallel to stage_labels
+  std::vector<double> calib_a, calib_b;   // one per stage, parallel to stage_labels
 
   std::string out_root;
+
+  // stage 5: K-fold CV/OOF (evaluation-only; see cross_validate() above)
+  int n_folds;                                    // 0 = disabled
+  bool save_fold_models;
+  std::map<std::string,int> fold_assignment;       // individual ID -> fold index
+
+  struct oof_row_t {
+    std::string id;
+    double time_sec;
+    double y_true;
+    double y_pred;
+    int fold;
+  };
+  std::vector<oof_row_t> oof_rows;
+
+  struct oof_subject_t {
+    std::string id;
+    double y_true;
+    double y_pred_mean;
+    int n_rows;
+  };
+  std::vector<oof_subject_t> oof_subjects;
+
+  // stage 5c: CV-derived calibration/iteration-count for the *final*,
+  // full-corpus bundle -- reuses signal the K-fold loop already produces
+  // rather than holding out any fresh data from the final fit (which
+  // would otherwise mean some subjects get in-sample-fit predictions and
+  // others genuinely out-of-sample ones when the same bundle is later
+  // applied back across the whole training cohort -- rejected for exactly
+  // that reason). See cross_validate()/fit() for how these get populated
+  // and consumed.
+  int early_stopping_rounds;   // 0 = disabled; only meaningful when a fold's own validation set is attached (a no-op for the final, no-validation fit)
+
+  // set by cross_validate() (median across folds), consumed by
+  // train_booster()/train_stage_boosters() in place of iterations=/default
+  // -- 0 / empty = unset, meaning "use iterations=/default as before"
+  int forced_n_iterations;
+  std::vector<int> forced_stage_n_iterations;
+
+  // set by cross_validate() (mean across folds' own calibrate() calls),
+  // applied by fit() to override the final fit's own calibrate() calls
+  // (which always return {1,0}, since the final fit has no validation set)
+  std::vector<double> cv_calib_a, cv_calib_b;
 };
 
 namespace dpp_fit {
 
   // per-EDF apply path: load bundle, validate the caller's feature labels
   // against the manifest, predict, reshape into an EDF signal (all-or-
-  // nothing -- halts on any mismatch rather than silently degrading)
-  void apply( edf_t & edf , param_t & param , const dpp_specs_t & specs , const dpp_matrix_t & mat );
+  // nothing -- halts on any mismatch rather than silently degrading).
+  // 'hmat' is the per-row hypnodensity (stats/dpp.cpp's hypno_mat, row-
+  // aligned with 'mat'), non-NULL whenever the caller supplied hypno-
+  // prefix=; required (halts if NULL) for a stage-conditioned bundle,
+  // ignored for a pooled one.
+  void apply( edf_t & edf , param_t & param , const dpp_specs_t & specs ,
+	     const dpp_matrix_t & mat , const dpp_matrix_t * hmat );
 
   // shared by dpp_fit_t::build_feature_labels() and dpp_fit::apply(): the
   // full, ordered, per-column feature-label list for a spec (same suffix

@@ -30,6 +30,7 @@
 #include "helper/helper.h"
 #include "stats/Eigen/Dense"
 #include <fstream>
+#include <utility>
 
 // wrappers
 struct param_t;
@@ -62,6 +63,41 @@ struct lgbm_t {
   {
     qt_mode = false;
     params = parse_config( config_file );
+  }
+
+  // owns raw LightGBM handles (freed in reset()/~lgbm_t()) -- an implicit
+  // (compiler-generated) copy would shallow-copy those handles and
+  // double-free them once both copies are destructed, so copying is
+  // disabled outright; move transfers ownership instead (needed so
+  // std::vector<lgbm_t> -- e.g. dpp_fit_t::stage_lgbm -- stays usable)
+  lgbm_t( const lgbm_t & ) = delete;
+  lgbm_t & operator=( const lgbm_t & ) = delete;
+
+  lgbm_t( lgbm_t && rhs ) noexcept
+    : params( std::move( rhs.params ) ),
+      has_booster( rhs.has_booster ), booster( rhs.booster ),
+      has_training( rhs.has_training ), training( rhs.training ), training_weights( std::move( rhs.training_weights ) ),
+      has_validation( rhs.has_validation ), validation( rhs.validation ), validation_weights( std::move( rhs.validation_weights ) ),
+      qt_mode( rhs.qt_mode ), fastconfig( rhs.fastconfig ),
+      n_iterations( rhs.n_iterations ), early_stopping_rounds( rhs.early_stopping_rounds ), best_iteration( rhs.best_iteration )
+  {
+    rhs.has_booster = rhs.has_training = rhs.has_validation = false;
+  }
+
+  lgbm_t & operator=( lgbm_t && rhs ) noexcept
+  {
+    if ( this != &rhs )
+      {
+	reset();
+	params = std::move( rhs.params );
+	has_booster = rhs.has_booster; booster = rhs.booster;
+	has_training = rhs.has_training; training = rhs.training; training_weights = std::move( rhs.training_weights );
+	has_validation = rhs.has_validation; validation = rhs.validation; validation_weights = std::move( rhs.validation_weights );
+	qt_mode = rhs.qt_mode; fastconfig = rhs.fastconfig;
+	n_iterations = rhs.n_iterations; early_stopping_rounds = rhs.early_stopping_rounds; best_iteration = rhs.best_iteration;
+	rhs.has_booster = rhs.has_training = rhs.has_validation = false;
+      }
+    return *this;
   }
 
   //

@@ -27,15 +27,30 @@
 
 #include "stats/dpp-spec.h"
 
-// Thin glue over the existing FIR kernel (dsptools::apply_fir(), dsp/fir.h)
-// and its own Kaiser settling-length calculator (fir_t::calculateKaiserParams,
-// called directly, not reimplemented). No new filtering algorithm here --
-// just (a) a helper to size a causal run-in pad for a named band, (b) a
-// one-shot whole-trace prefilter (no padding needed -- see stats/dpp.cpp),
-// and (c) applying a named band to an already-extracted (padded) window
-// buffer. Window extraction, padding, and gap-checking all live in
-// stats/dpp.cpp, which owns the trailing-buffer/window loop; this file only
-// does the actual filtering.
+// Thin glue over the existing FIR *design* machinery (dsptools::design_bandpass_fir(),
+// dsp/fir.h) and its own Kaiser settling-length calculator
+// (fir_t::calculateKaiserParams, called directly, not reimplemented) --
+// but NOT over dsptools::apply_fir()'s own filter *application*.
+// dsptools::apply_fir()/fir_impl_t::filter() deliberately trades causality
+// for zero phase shift: it burns in delay_idx=(taps-1)/2 samples before
+// recording any output, so output position j is actually the filter's
+// response through input position j+delay_idx -- i.e. it reads real
+// *future* samples relative to the time label it reports them under
+// (confirmed by tracing fir_impl_t::filter(), dsp/fir.cpp). That's exactly
+// right for Luna's other (offline, whole-recording) filtering commands,
+// but wrong for DPP, which promises (and tests) a causal-only guarantee.
+// So filtering here is applied directly via fir_impl_t::getOutputSample()
+// in plain sample order, with no burn-in/relabeling trick -- output
+// position j depends only on input positions <=j, at the cost of a
+// natural settling transient over the first ~delay_idx samples of each
+// segment (accepted; the alternative is reading the future).
+//
+// (a) a helper to size a causal run-in pad for a named band, (b) a
+// one-shot whole-trace prefilter (no separate run-in needed -- see
+// stats/dpp.cpp), and (c) applying a named band to an already-extracted
+// (padded) window buffer. Window extraction, padding, and gap-checking all
+// live in stats/dpp.cpp, which owns the trailing-buffer/window loop; this
+// file only does the actual filtering.
 
 namespace dpp_filters {
 
@@ -45,15 +60,16 @@ namespace dpp_filters {
   // length, not a fixed guess
   double pad_seconds( const dpp_filter_t & filt , int sr );
 
-  // one-time bandpass (default ripple/tw), no padding within a contiguous
-  // run -- a filter transient confined to the first/last fraction of a
-  // second of a multi-hour recording is negligible. 'tp' is required and
-  // used to detect internal discontinuities (e.g. from MASK+RE): each
-  // contiguous run is filtered independently, so filter state never
-  // carries across a genuine gap in the recording (a window entirely on
-  // one side of a gap would otherwise still pick up a filtered value
-  // contaminated by history from the other side, even though the window
-  // itself passes get_window()'s own discontinuity check)
+  // one-time, causal bandpass (default ripple/tw): output at sample i
+  // depends only on samples <=i, so no explicit run-in padding is needed
+  // -- just a settling transient confined to the first fraction of a
+  // second of each contiguous run, negligible for a multi-hour recording.
+  // 'tp' is required and used to detect internal discontinuities (e.g.
+  // from MASK+RE): each contiguous run is filtered independently, so
+  // filter state never carries across a genuine gap in the recording (a
+  // window entirely on one side of a gap would otherwise still pick up a
+  // filtered value contaminated by history from the other side, even
+  // though the window itself passes get_window()'s own discontinuity check)
   std::vector<double> prefilter_trace( const std::vector<double> & x ,
 				       const std::vector<uint64_t> & tp ,
 				       int sr , double lwr , double upr );

@@ -268,7 +268,8 @@ struct globals
   static bool skip_edf_annots;
   static bool skip_nonedf_annots;
   static bool skip_sl_annots;
-  
+  static bool skip_sl_edfs;
+
   static bool edf_stream_read;
 
   static bool set_annot_inst2hms;

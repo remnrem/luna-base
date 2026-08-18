@@ -6614,6 +6614,14 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
 
+  // do not load sample-list EDFs (treat EDF field as '.', i.e. annot-only mode)
+  if ( Helper::iequals( tok0 , "skip-sl-edfs" ) )
+    {
+      globals::skip_sl_edfs = Helper::yesno( tok1 );
+      return;
+    }
+
+
     
   // do not read ANY annotations
   if ( Helper::iequals( tok0 , "skip-annots" ) ||

@@ -87,6 +87,8 @@ int dpp_spec_t::cols() const
     case DPP_PLV: return 2; // plv, mean_ipc
     case DPP_COH: return ( band.size() == 1 && band[0] != "" ) ? 1 : 5;
     case DPP_PSI: return 1;
+    case DPP_CATCH22: return ( has( "catch24" ) && Helper::yesno( arg.at( "catch24" ) ) ) ? 24 : 22;
+    case DPP_PAC: return 2; // normalized mean-vector-length, preferred phase (radians)
     }
   return 0;
 }
@@ -100,12 +102,15 @@ std::string dpp_spec_t::label_root() const
   const std::string chlab = ch.size() == 2 ? ( ch[0] + "-" + ch[1] ) : ch[0];
   std::string s = ftrlab + "." + chlab;
 
-  if ( ftr == DPP_ENVELOPE || ftr == DPP_PLV )
+  if ( ftr == DPP_ENVELOPE || ftr == DPP_PLV || ftr == DPP_PAC )
     {
       if ( band.size() == 2 && band[0] != band[1] ) s += "." + band[0] + "-" + band[1];
       else if ( band.size() >= 1 ) s += "." + band[0];
     }
-  else if ( ( ftr == DPP_COH || ftr == DPP_PSI ) && band.size() == 1 && band[0] != "" )
+  // COH/PSI (optional/required single band=), and HJORTH/SKEW/KURTOSIS/MSE/
+  // CATCH22's own optional band= (each expanded spec carries exactly one
+  // band value, per read()'s band_expandable handling) -- same suffix rule
+  else if ( band.size() == 1 && band[0] != "" )
     s += "." + band[0];
 
   return s;
@@ -130,6 +135,8 @@ void dpp_specs_t::init()
   lab2ftr[ "PLV" ]      = DPP_PLV;
   lab2ftr[ "COH" ]      = DPP_COH;
   lab2ftr[ "PSI" ]      = DPP_PSI;
+  lab2ftr[ "CATCH22" ]  = DPP_CATCH22;
+  lab2ftr[ "PAC" ]      = DPP_PAC;
 
   ftr2lab[ DPP_PSD ]      = "PSD";
   ftr2lab[ DPP_SLOPE ]    = "SLOPE";
@@ -141,6 +148,8 @@ void dpp_specs_t::init()
   ftr2lab[ DPP_PLV ]      = "PLV";
   ftr2lab[ DPP_COH ]      = "COH";
   ftr2lab[ DPP_PSI ]      = "PSI";
+  ftr2lab[ DPP_CATCH22 ]  = "CATCH22";
+  ftr2lab[ DPP_PAC ]      = "PAC";
 
   if ( default_window_sec <= 0 ) default_window_sec = 30;
   if ( default_step_sec <= 0 )   default_step_sec = 30;
@@ -230,7 +239,7 @@ void dpp_specs_t::read( const std::string & f )
       if ( lab2ftr.find( ftr_lab ) == lab2ftr.end() )
 	Helper::halt( "feature not recognized: " + tok[1] );
       const dpp_feature_t ftr = lab2ftr[ ftr_lab ];
-      const bool two_channel = ( ftr == DPP_PLV || ftr == DPP_COH || ftr == DPP_PSI );
+      const bool two_channel = ( ftr == DPP_PLV || ftr == DPP_COH || ftr == DPP_PSI || ftr == DPP_PAC );
 
       std::vector<std::string> chan_tokens;
       std::map<std::string,std::string> targs;
@@ -244,6 +253,15 @@ void dpp_specs_t::read( const std::string & f )
 	}
 
       if ( chan_tokens.size() == 0 ) Helper::halt( "no channel(s) specified: " + line );
+
+      // PAC (phase-channel,amplitude-channel) is deliberately restricted to
+      // one pair per line, unlike PLV/COH/PSI which allow several
+      // space-separated pairs -- with a directional phase-first/amplitude-
+      // second role, crossing multiple pairs on one line risks silently
+      // pairing the wrong roles across pairs; one line, one pair keeps it
+      // unambiguous
+      if ( ftr == DPP_PAC && chan_tokens.size() > 1 )
+	Helper::halt( "PAC allows only one channel pair per line: " + line );
 
       // window list for this block: arg override, else global default
       std::vector<double> windows;
@@ -269,31 +287,86 @@ void dpp_specs_t::read( const std::string & f )
 	    if ( ! has_channel( chlabs[k] ) )
 	      Helper::halt( chlabs[k] + " not specified via CH: " + line );
 
-	  // band=
+	  // band= -- five different roles by feature:
+	  //  - PSD/SLOPE: never accepted (band= would silently do nothing at
+	  //    compute time otherwise -- reject loudly instead)
+	  //  - ENVELOPE: required, one shared value (always single-channel,
+	  //    so chlabs.size()==1 here -- the "one per channel" half of the
+	  //    old shared rule never actually applied to it)
+	  //  - PLV: required, and now *within-band only* -- a single value
+	  //    (shared by both channels) is the only accepted form; two
+	  //    distinct values (cross-band, same-channel "coupling") used to
+	  //    be allowed but is removed -- it measured phase-phase
+	  //    synchronization, not what SO-spindle-style coupling studies
+	  //    actually want (phase-*amplitude* coupling -- see PAC below)
+	  //  - PSI: required, exactly one value; COH: optional, exactly one
+	  //    value if given (else all 5 canonical bands) -- unchanged
+	  //  - PAC: required, exactly *two* values, band[0]=phase source,
+	  //    band[1]=amplitude source -- never a single shared value
+	  //    (phase/amplitude of the same band is a degenerate, not the
+	  //    intended, use of this feature)
+	  //  - HJORTH/SKEW/KURTOSIS/MSE/CATCH22: optional (default: computed
+	  //    on the raw/prefiltered trace, exactly as before band= support
+	  //    existed); if given, one *or more* comma-separated values --
+	  //    each expands into its own spec, exactly like windows= already
+	  //    crosses a block across multiple window lengths. Since these
+	  //    features are always single-channel (two_channel is false),
+	  //    chlabs.size()==1 here always, so this never collides with
+	  //    ENVELOPE/PLV's pair-vs-shared distinction above.
+	  const bool band_rejected  = ( ftr == DPP_PSD || ftr == DPP_SLOPE );
+	  const bool band_env_plv   = ( ftr == DPP_ENVELOPE || ftr == DPP_PLV );
+	  const bool band_one_only  = ( ftr == DPP_COH || ftr == DPP_PSI );
+	  const bool band_pac       = ( ftr == DPP_PAC );
+	  const bool band_expandable = ( ftr == DPP_HJORTH || ftr == DPP_SKEW || ftr == DPP_KURTOSIS ||
+					 ftr == DPP_MSE || ftr == DPP_CATCH22 );
+
 	  std::vector<std::string> bands;
+	  bool expand_bands = false;
+
 	  if ( targs.find( "band" ) != targs.end() )
 	    {
+	      if ( band_rejected )
+		Helper::halt( ftr_lab + " does not support band= : " + line );
+
 	      std::vector<std::string> blist = Helper::parse( targs[ "band" ] , ',' );
-	      if ( ftr == DPP_COH || ftr == DPP_PSI )
+
+	      if ( band_one_only )
 		{
 		  if ( blist.size() != 1 )
 		    Helper::halt( ftr_lab + " band= takes exactly one value: " + line );
 		  bands = blist;
 		}
-	      else
+	      else if ( band_pac )
+		{
+		  if ( blist.size() != 2 )
+		    Helper::halt( "PAC requires band=<phase-band>,<amplitude-band> (exactly two values): " + line );
+		  bands = blist;
+		}
+	      else if ( band_env_plv )
 		{
 		  if ( blist.size() == 1 && chlabs.size() == 2 ) bands = { blist[0] , blist[0] };
 		  else if ( blist.size() == chlabs.size() ) bands = blist;
 		  else Helper::halt( "band= must give one value, or one per channel: " + line );
+
+		  if ( ftr == DPP_PLV && bands.size() == 2 && bands[0] != bands[1] )
+		    Helper::halt( "PLV requires the same band for both channels -- cross-band "
+				 "phase-phase coupling is not supported (use PAC for cross-frequency "
+				 "phase-amplitude coupling): " + line );
 		}
+	      else if ( band_expandable )
+		{
+		  bands = blist;   // one spec per band value, expanded below
+		  expand_bands = true;
+		}
+
 	      for (int k=0; k<(int)bands.size(); k++)
 		if ( bands[k] != "" && ! has_filter( bands[k] ) )
 		  Helper::halt( bands[k] + " not specified via FILTER: " + line );
 	    }
-	  else if ( ftr != DPP_COH && ftr != DPP_PSI )
+	  else if ( ftr != DPP_COH && ftr != DPP_PSI && ftr != DPP_PAC )
 	    bands.assign( chlabs.size() , "" );
 
-	  if ( ( ftr == DPP_ENVELOPE || ftr == DPP_PLV ) )
+	  if ( band_env_plv )
 	    for (int k=0; k<(int)bands.size(); k++)
 	      if ( bands[k] == "" )
 		Helper::halt( ftr_lab + " requires band=: " + line );
@@ -301,16 +374,36 @@ void dpp_specs_t::read( const std::string & f )
 	  if ( ftr == DPP_PSI && bands.size() == 0 )
 	    Helper::halt( "PSI requires band=: " + line );
 
+	  if ( band_pac && bands.size() != 2 )
+	    Helper::halt( "PAC requires band=<phase-band>,<amplitude-band> (exactly two values): " + line );
+
 	  for (int w=0; w<(int)windows.size(); w++)
 	    {
-	      dpp_spec_t spec;
-	      spec.block = block;
-	      spec.ftr = ftr;
-	      spec.ch = chlabs;
-	      spec.band = bands;
-	      spec.window_sec = windows[w];
-	      spec.arg = targs;
-	      specs.push_back( spec );
+	      if ( expand_bands )
+		{
+		  for (int b=0; b<(int)bands.size(); b++)
+		    {
+		      dpp_spec_t spec;
+		      spec.block = block;
+		      spec.ftr = ftr;
+		      spec.ch = chlabs;
+		      spec.band = { bands[b] };
+		      spec.window_sec = windows[w];
+		      spec.arg = targs;
+		      specs.push_back( spec );
+		    }
+		}
+	      else
+		{
+		  dpp_spec_t spec;
+		  spec.block = block;
+		  spec.ftr = ftr;
+		  spec.ch = chlabs;
+		  spec.band = bands;
+		  spec.window_sec = windows[w];
+		  spec.arg = targs;
+		  specs.push_back( spec );
+		}
 	    }
 	}
     }

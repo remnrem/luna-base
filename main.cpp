@@ -776,7 +776,11 @@ void process_edfs( cmd_t & cmd )
 	  // ignore SL annots?
 
 	  if ( globals::skip_sl_annots ) tok.resize(2);
-	  
+
+	  // ignore SL EDF (treat as annot-only, i.e. as if EDF field were '.')
+
+	  if ( globals::skip_sl_edfs ) tok[1] = ".";
+
 	  // allow annot field to be comma delimited? expand out here
 	  
 	  if ( tok.size() == 3 )

@@ -35,6 +35,28 @@ double dpp_filters::pad_seconds( const dpp_filter_t & filt , int sr )
   return 1.5 * ( windowLength / 2.0 ) / (double)sr;
 }
 
+namespace {
+
+  // genuinely causal bandpass: design the same Kaiser-window coefficients
+  // dsptools::apply_fir() would (reused directly, not reimplemented), but
+  // apply them via fir_impl_t::getOutputSample() in plain sample order --
+  // no burn-in/output-relabeling trick, so output[i] depends only on
+  // input[0..i]. delayLine starts zero-initialized (fir_impl_t's own
+  // constructor), giving a settling transient over the first ~(taps-1)/2
+  // samples rather than ever reading ahead. See stats/dpp-filter.h's top
+  // comment for why dsptools::apply_fir() itself isn't used here.
+  std::vector<double> causal_bandpass( const std::vector<double> & x , int sr ,
+				       double ripple , double tw , double lwr , double upr )
+  {
+    std::vector<double> fc = dsptools::design_bandpass_fir( ripple , tw , (double)sr , lwr , upr );
+    fir_impl_t fir( fc );
+    std::vector<double> out( x.size() );
+    for (int i=0; i<(int)x.size(); i++) out[i] = fir.getOutputSample( x[i] );
+    return out;
+  }
+
+}
+
 std::vector<double> dpp_filters::prefilter_trace( const std::vector<double> & x ,
 						  const std::vector<uint64_t> & tp ,
 						  int sr , double lwr , double upr )
@@ -71,10 +93,7 @@ std::vector<double> dpp_filters::prefilter_trace( const std::vector<double> & x 
       if ( seg_len >= min_len )
 	{
 	  std::vector<double> seg( x.begin() + seg_start , x.begin() + i );
-	  std::vector<double> filtered = dsptools::apply_fir( seg , sr , fir_t::BAND_PASS , 1 ,
-							      std::vector<double>( 1 , 0.02 ) ,
-							      std::vector<double>( 1 , 1.0 ) ,
-							      lwr , upr );
+	  std::vector<double> filtered = causal_bandpass( seg , sr , 0.02 , 1.0 , lwr , upr );
 	  std::copy( filtered.begin() , filtered.end() , out.begin() + seg_start );
 	}
 
@@ -87,8 +106,5 @@ std::vector<double> dpp_filters::prefilter_trace( const std::vector<double> & x 
 std::vector<double> dpp_filters::apply_band( const std::vector<double> & x , int sr ,
 					     const dpp_filter_t & filt )
 {
-  return dsptools::apply_fir( x , sr , fir_t::BAND_PASS , 1 ,
-			      std::vector<double>( 1 , filt.ripple ) ,
-			      std::vector<double>( 1 , filt.tw ) ,
-			      filt.lwr , filt.upr );
+  return causal_bandpass( x , sr , filt.ripple , filt.tw , filt.lwr , filt.upr );
 }
