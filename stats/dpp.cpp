@@ -26,6 +26,7 @@
 #include "stats/dpp-io.h"
 #include "stats/dpp-fit.h"
 #include "stats/dpp-hypno.h"
+#include "stats/dpp-vector.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"
@@ -303,6 +304,17 @@ namespace {
 
 void dsptools::dpp( edf_t & edf , param_t & param )
 {
+
+  // Low-rate/vector observations (e.g. SleepFM embeddings) are already
+  // window-level samples and must not enter the scalar DSP/specification
+  // path below.  Keep this path separate: it accepts fractional sampling
+  // rates and uses actual time-aligned samples rather than integer-Hz
+  // window arithmetic.
+  if ( dpp_vector::enabled( param ) )
+    {
+      dpp_vector::run( edf , param );
+      return;
+    }
 
   //
   // build the feature spec

@@ -25,6 +25,8 @@
 
 #include "stats/dpp-spec.h"
 #include "stats/dpp-hypno.h"
+#include "stats/dpp-vector.h"
+#include "stats/dpp-twolevel.h"
 #include "stats/glm.h"
 #include "stats/matrix.h"
 #include "edf/edf.h"
@@ -92,7 +94,12 @@ dpp_fit_t::dpp_fit_t( param_t & param )
   out_root = param.requires( "out" );
   ensure_parent_dir_exists( out_root );
   phe_label = param.requires( "phe" );
+  vector_mode = dpp_vector::enabled( param );
+  two_level = dpp_twolevel::enabled( param );
+  if ( two_level && ! vector_mode ) Helper::halt( "DPP two-level requires vector=T" );
   stage_conditioned = param.has( "hypno" ) || param.has( "hypno-files" );
+  if ( (vector_mode || two_level) && stage_conditioned )
+    Helper::halt( "DPP vector mode currently uses context features in the vector row and cannot use stage-conditioned hypno corpus fitting" );
   hypno_three_state = param.has( "hypno-three-state" ) ? param.yesno( "hypno-three-state" ) : false;
 
   n_folds = param.has( "folds" ) ? param.requires_int( "folds" ) : 0;
@@ -129,6 +136,11 @@ dpp_fit_t::~dpp_fit_t() { }
 
 void dpp_fit_t::fit()
 {
+  if ( two_level )
+    {
+      dpp_twolevel::fit( param );
+      return;
+    }
   load_corpus();
   build_feature_labels();
   attach_phenotypes();
@@ -190,6 +202,14 @@ void dpp_fit_t::load_corpus()
 
 void dpp_fit_t::build_feature_labels()
 {
+  if ( vector_mode )
+    {
+      full_labels.clear();
+      for (int i=0; i<n_features; i++)
+        full_labels.push_back( "VEC.F" + Helper::int2str(i+1) );
+      return;
+    }
+
   dpp_specs_t specs;
 
   if ( param.has( "spec" ) )
@@ -504,6 +524,11 @@ void dpp_fit_t::train_booster()
   lgbm.qt_mode = true;
 
   lgbm.attach_training_matrix( Xtrain );
+  // full_labels may be unpopulated/mismatched here when train_booster() is
+  // called directly against a hand-built Xtrain (as some tests do, bypassing
+  // load_corpus()/build_feature_labels()) -- skip naming rather than halt,
+  // since the real fit() path already enforces full_labels.size()==n_features
+  if ( (int)full_labels.size() == Xtrain.cols() ) lgbm.set_feature_names( full_labels );
   lgbm.attach_training_qts( ytrain );
 
   if ( yvalid.size() > 0 )
@@ -550,6 +575,9 @@ void dpp_fit_t::train_stage_boosters()
       lg.qt_mode = true;
 
       lg.attach_training_matrix( Xtrain );
+      // see train_booster()'s matching comment: skip naming rather than
+      // halt when full_labels doesn't match Xtrain (direct-unit-test paths)
+      if ( (int)full_labels.size() == Xtrain.cols() ) lg.set_feature_names( full_labels );
       lg.attach_training_qts( ytrain );
       if ( yvalid.size() > 0 )
 	{
@@ -902,12 +930,85 @@ void dpp_fit_t::write_oof_subject()
   logger << "  wrote " << oof_subjects.size() << " subject-level out-of-fold summaries to " << f << "\n";
 }
 
+namespace {
+  // shared by write_importance_table() (single booster) and
+  // write_aggregate_importance_table() (summed across stage boosters)
+  void write_importance_rows( std::ofstream & O1 ,
+			       const std::vector<std::string> & labels ,
+			       const std::vector<double> & gain ,
+			       const std::vector<double> & split )
+  {
+    std::vector<int> idx( labels.size() );
+    for (int i=0; i<(int)idx.size(); i++) idx[i] = i;
+
+    std::sort( idx.begin() , idx.end() ,
+	       [&gain]( int a , int b ) { return gain[a] > gain[b]; } );
+
+    O1 << "RANK\tFEATURE\tGAIN\tSPLIT\n";
+    for (int r=0; r<(int)idx.size(); r++)
+      O1 << (r+1) << "\t" << labels[ idx[r] ] << "\t" << gain[ idx[r] ] << "\t" << (int)split[ idx[r] ] << "\n";
+  }
+}
+
+void dpp_fit_t::write_importance_table( lgbm_t & lg , const std::string & file )
+{
+  const std::vector<double> gain  = lg.feature_importance( 1 ); // C_API_FEATURE_IMPORTANCE_GAIN
+  const std::vector<double> split = lg.feature_importance( 0 ); // C_API_FEATURE_IMPORTANCE_SPLIT
+
+  if ( (int)gain.size() != (int)full_labels.size() )
+    Helper::halt( "internal error: feature_importance() length does not match full_labels" );
+
+  std::ofstream O1( file.c_str() );
+  if ( ! O1.good() ) Helper::halt( "could not write " + file );
+
+  O1 << "# DPP feature importance : " << file << "\n";
+  O1 << "# sorted by GAIN (total loss-reduction attributable to splits on that feature), descending\n";
+  O1 << "# SPLIT = number of times the feature was chosen as a split variable across all trees\n";
+  write_importance_rows( O1 , full_labels , gain , split );
+  O1.close();
+
+  logger << "  wrote feature importance table to " << file << "\n";
+}
+
+void dpp_fit_t::write_aggregate_importance_table( const std::string & file )
+{
+  // stage-conditioned bundles have no single shared model -- this combines
+  // the five independent stage boosters' own importances (summed gain and
+  // summed split, per feature) into one overall ranking, so "which features
+  // matter across the whole bundle" has a direct answer alongside the
+  // per-stage <root>.<stage>.importance files
+  const int n = (int)full_labels.size();
+  std::vector<double> agg_gain( n , 0.0 ) , agg_split( n , 0.0 );
+
+  for (int s=0; s<(int)stage_labels.size(); s++)
+    {
+      const std::vector<double> gain  = stage_lgbm[s].feature_importance( 1 );
+      const std::vector<double> split = stage_lgbm[s].feature_importance( 0 );
+      if ( (int)gain.size() != n )
+	Helper::halt( "internal error: feature_importance() length does not match full_labels" );
+      for (int i=0; i<n; i++) { agg_gain[i] += gain[i]; agg_split[i] += split[i]; }
+    }
+
+  std::ofstream O1( file.c_str() );
+  if ( ! O1.good() ) Helper::halt( "could not write " + file );
+
+  O1 << "# DPP feature importance (aggregate across stage boosters " << Helper::stringize( stage_labels ) << ") : " << file << "\n";
+  O1 << "# GAIN/SPLIT summed across all stage boosters -- see <root>.<stage>.importance for per-stage values\n";
+  O1 << "# sorted by summed GAIN, descending\n";
+  write_importance_rows( O1 , full_labels , agg_gain , agg_split );
+  O1.close();
+
+  logger << "  wrote aggregate (cross-stage) feature importance table to " << file << "\n";
+}
+
+
 void dpp_fit_t::save_bundle()
 {
   if ( ! stage_conditioned )
     {
       const std::string model_file = Helper::expand( out_root + ".mod" );
       lgbm.save_model( model_file );
+      write_importance_table( lgbm , Helper::expand( out_root + ".importance" ) );
 
       const std::string manifest_file = Helper::expand( out_root + ".dpp" );
       std::ofstream O1( manifest_file.c_str() );
@@ -917,6 +1018,7 @@ void dpp_fit_t::save_bundle()
       O1 << "# model_file=" << model_file << "\n";
       O1 << "# phe=" << phe_label << "\n";
       O1 << "# mode=regression\n";
+      if ( vector_mode ) O1 << "# vector=T\n";
       O1 << "# n_features=" << full_labels.size() << "\n";
       O1 << "# feature_names_begin\n";
       for (int i=0; i<(int)full_labels.size(); i++) O1 << full_labels[i] << "\n";
@@ -930,7 +1032,12 @@ void dpp_fit_t::save_bundle()
   // (POPS's own stage label strings, so "R" not "REM" -- consistency with
   // posterior_labels(), pops/posteriors.cpp)
   for (int s=0; s<(int)stage_labels.size(); s++)
-    stage_lgbm[s].save_model( Helper::expand( out_root + "." + stage_labels[s] + ".mod" ) );
+    {
+      stage_lgbm[s].save_model( Helper::expand( out_root + "." + stage_labels[s] + ".mod" ) );
+      write_importance_table( stage_lgbm[s] , Helper::expand( out_root + "." + stage_labels[s] + ".importance" ) );
+    }
+
+  write_aggregate_importance_table( Helper::expand( out_root + ".importance" ) );
 
   const std::string manifest_file = Helper::expand( out_root + ".dpp" );
   std::ofstream O1( manifest_file.c_str() );
@@ -1024,6 +1131,11 @@ void dpp_fit::apply( edf_t & edf , param_t & param , const dpp_specs_t & specs ,
   if ( ! Helper::fileExists( manifest_file ) ) Helper::halt( "could not find " + manifest_file );
 
   const manifest_t manifest = read_manifest( manifest_file );
+  if ( manifest.mode == "two-level" )
+    {
+      dpp_twolevel::apply( edf , param , mat );
+      return;
+    }
   const bool stage_conditioned = manifest.mode == "stage-conditioned";
 
   if ( ( ! stage_conditioned ) && ! Helper::fileExists( model_file ) )
@@ -1032,7 +1144,13 @@ void dpp_fit::apply( edf_t & edf , param_t & param , const dpp_specs_t & specs ,
   // validate feature labels against the caller's own (re-supplied) spec --
   // both to actually recompute features on the new recording, and as the
   // cross-check that it matches what the model was trained on
-  std::vector<std::string> expected = dpp_fit::feature_labels( specs );
+  std::vector<std::string> expected;
+  if ( param.has("vector") && param.yesno("vector") )
+    {
+      expected.resize( mat.X.empty() ? 0 : mat.X[0].size() );
+      for (int i=0; i<(int)expected.size(); i++) expected[i] = "VEC.F" + Helper::int2str(i+1);
+    }
+  else expected = dpp_fit::feature_labels( specs );
   if ( manifest.feature_labels.size() != expected.size() )
     Helper::halt( "DPP model=: feature count mismatch: loaded=" + Helper::int2str( (int)manifest.feature_labels.size() ) +
 		 " expected=" + Helper::int2str( (int)expected.size() ) );
@@ -1112,7 +1230,20 @@ void dpp_fit::apply( edf_t & edf , param_t & param , const dpp_specs_t & specs ,
   if ( edf.is_actually_discontinuous() )
     Helper::halt( "DPP model=: cannot attach a signal to a discontinuous EDF" );
 
-  const double step_sec = param.has( "step" ) ? param.requires_dbl( "step" ) : 30;
+  double step_sec = param.has( "step" ) ? param.requires_dbl( "step" ) : 30;
+  if ( param.has("vector") && param.yesno("vector") )
+    {
+      // Normally infer the vector spacing from adjacent observations.  A
+      // long-record EDF may legitimately contain only one vector sample per
+      // record; in that case the record duration is the only available
+      // spacing (and is exactly the intended one-sample-per-record layout).
+      if ( ! param.has("step") )
+        {
+          if ( nr_out >= 2 ) step_sec = mat.time_sec[1] - mat.time_sec[0];
+          else step_sec = edf.header.record_duration;
+        }
+      if ( step_sec <= 0 ) Helper::halt( "DPP vector model application found invalid time points" );
+    }
   const double n_spr_d = edf.header.record_duration / step_sec;
   const int n_spr = (int) std::lround( n_spr_d );
   if ( std::fabs( n_spr_d - n_spr ) > 1e-6 || n_spr < 1 )

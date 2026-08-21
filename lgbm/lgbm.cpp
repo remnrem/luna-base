@@ -615,12 +615,45 @@ bool lgbm_t::save_model( const std::string & filename )
   int res = LGBM_BoosterSaveModel( booster ,
  				   0 ,              // start_iteration
  				   best_iteration , // <= 0 means save all
- 				   C_API_FEATURE_IMPORTANCE_SPLIT ,
+ 				   C_API_FEATURE_IMPORTANCE_GAIN ,
  				   Helper::expand( filename ).c_str() );
-  
-  if ( res ) Helper::halt( "problem in lgmb_t::save_model()" );  
-  logger << "  saved model file to " << filename << "\n";  
+
+  if ( res ) Helper::halt( "problem in lgmb_t::save_model()" );
+  logger << "  saved model file to " << filename << "\n";
   return true;
+}
+
+
+bool lgbm_t::set_feature_names( const std::vector<std::string> & names )
+{
+  if ( ! has_training )
+    Helper::halt( "no training data attached, cannot set feature names" );
+
+  std::vector<const char*> cnames( names.size() );
+  for (int i=0; i<(int)names.size(); i++)
+    cnames[i] = names[i].c_str();
+
+  int res = LGBM_DatasetSetFeatureNames( training , cnames.data() , (int)cnames.size() );
+  if ( res ) Helper::halt( "problem in lgbm_t::set_feature_names()" );
+  return true;
+}
+
+
+std::vector<double> lgbm_t::feature_importance( const int importance_type )
+{
+  if ( ! has_booster )
+    Helper::halt( "no model defined" );
+
+  int num_feature = 0;
+  int res = LGBM_BoosterGetNumFeature( booster , &num_feature );
+  if ( res ) Helper::halt( "problem getting number of features" );
+
+  std::vector<double> out( num_feature , 0.0 );
+  // best_iteration <= 0 means use all trained iterations (same convention as save_model())
+  res = LGBM_BoosterFeatureImportance( booster , best_iteration , importance_type , out.data() );
+  if ( res ) Helper::halt( "problem in lgbm_t::feature_importance()" );
+
+  return out;
 }
 
 

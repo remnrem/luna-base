@@ -72,6 +72,16 @@ struct dpp_fit_t
   void train_stage_boosters();   // stage-conditioned (stage 4) path
   void save_bundle();
 
+  // writes <root>.importance (pooled) / <root>.<stage>.importance
+  // (stage-conditioned): full_labels paired with lg's gain- and
+  // split-based feature importance, sorted by gain descending. Called
+  // from save_bundle(), after each booster's save_model().
+  void write_importance_table( lgbm_t & lg , const std::string & file );
+
+  // stage-conditioned only: <root>.importance, gain/split summed across
+  // all stage boosters (there's no single shared model to report otherwise)
+  void write_aggregate_importance_table( const std::string & file );
+
   // stage 5: individual-level K-fold CV/OOF, purely an evaluation layer --
   // the final saved bundle (above) is always trained on the entire corpus,
   // regardless of whether cross_validate() ran. assign_folds() builds
@@ -133,6 +143,8 @@ struct dpp_fit_t
 
   // stage 4: presence of hypno=/hypno-files= (checked in the constructor)
   bool stage_conditioned;
+  bool vector_mode;
+  bool two_level;
   bool hypno_three_state;
   std::vector<std::string> stage_labels;        // "W","R","N1","N2","N3" or 3-state
   std::vector<dpp_matrix_t> hypno_individuals;  // loaded from hypno=/hypno-files=

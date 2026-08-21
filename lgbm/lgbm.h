@@ -159,6 +159,19 @@ struct lgbm_t {
 
   bool save_model( const std::string & f ) ;
 
+  //
+  // Feature names / importance
+  //
+
+  // must be called after attach_training_matrix() (needs 'training' to
+  // exist) and before create_booster() (the booster copies feature names
+  // from the dataset it is created from)
+  bool set_feature_names( const std::vector<std::string> & names );
+
+  // importance_type: 0 = split count, 1 = gain (default; the more
+  // informative of the two -- see C_API_FEATURE_IMPORTANCE_SPLIT/GAIN)
+  std::vector<double> feature_importance( const int importance_type = 1 );
+
 
   //
   // Core learning/prediction

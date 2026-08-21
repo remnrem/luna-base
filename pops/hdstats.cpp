@@ -27,7 +27,7 @@
 //    INSTABILITY          - how much does the posterior move over time
 //    TRANSITION STRUCTURE - what happens near likely state boundaries
 //
-//    i.e. stable mixed/intermediate states  vs.  transitional instability
+//    i.e. stable periods  vs.  unstable (mixed/intermediate/transitional) periods
 //
 
 #include "hdstats.h"
@@ -113,14 +113,18 @@ struct hd_params_t
   int min_events_profile;           // minimum events needed to emit aligned profile
   int min_samples_region;           // minimum samples needed to emit REGION summaries
   std::string emit_annot_label;     // if non-empty, emit transition annotations under this class
-  double stable_tv_th;              // per-sample TV must be < this to qualify as stable
+  double stable_ps_th;              // per-sample PS must be < this to qualify as stable
   double stable_conf_th;            // per-sample C must be > this to qualify as stable
   double min_shift;                 // minimum L1 posterior shift for TR event acceptance (0=disabled)
   double shift_win_sec;             // pre/post window (seconds) for shift computation
   bool emit_annot_typed_classes;    // if true, encode directional transition type in point-event class name
-  double clean_min_sec;             // minimum stable-run span (seconds) for clean transition flanks
-  double clean_gap_sec;             // max within-run gap (seconds) tolerated before splitting a stable run
+  double bout_min_sec;              // minimum stable-run span (seconds) to qualify as a bout
+  double bout_gap_sec;               // max within-run gap (seconds) tolerated before splitting a bout
+  double bout_smooth_sec;           // centered moving-average half-window (seconds) applied to PS/CONF before the bout stability test (0=off)
   std::string ch_valid;             // channel name for PP_INVALID invalidity flag (optional)
+  std::string emit_sig_label;       // if non-empty, emit PS/H/CONF per-sample signals under this channel-name prefix
+  bool do_emit_hypnogram;           // if true, emit hard-called (argmax) stage run annotations
+  std::string hypno_prefix;         // optional prefix for those annotation classes, e.g. "hd_"
 };
 
 
@@ -299,16 +303,11 @@ struct hd_derived_t
   // 5-state signals
   std::vector<double> H, C, Mg;          // entropy, confidence, margin
   std::vector<double> TV, TV_lag;        // motion metrics
-  std::vector<double> mix_wn1;           // min(W, N1)
-  std::vector<double> mix_n2n3;          // min(N2, N3)
-  std::vector<double> mix_rn1;           // min(R, N1)
   std::vector<int>    argmax5;
 
   // 3-state signals (only populated if do_3state)
   std::vector<double> H3, C3, Mg3;
   std::vector<double> TV3, TV3_lag;
-  std::vector<double> mix3_wnrem;        // min(W, NREM)
-  std::vector<double> mix3_nremr;        // min(NREM, R)
   std::vector<int>    argmax3;
 
   void compute( const hd_data_t & dat, const hd_params_t & par )
@@ -321,9 +320,6 @@ struct hd_derived_t
     Mg.assign( N, 0.0 );
     TV.assign( N, 0.0 );
     TV_lag.assign( N, 0.0 );
-    mix_wn1.assign( N, 0.0 );
-    mix_n2n3.assign( N, 0.0 );
-    mix_rn1.assign( N, 0.0 );
     argmax5.assign( N, 0 );
 
     for ( int i = 0; i < N; i++ )
@@ -348,11 +344,6 @@ struct hd_derived_t
 	C[i]      = mx1;
 	Mg[i]     = ( mx2 >= 0.0 ) ? mx1 - mx2 : mx1;
 	argmax5[i] = amax;
-
-	// Pairwise mixing
-	mix_wn1[i]  = std::min( dat.p[0][i], dat.p[1][i] );
-	mix_n2n3[i] = std::min( dat.p[2][i], dat.p[3][i] );
-	mix_rn1[i]  = std::min( dat.p[4][i], dat.p[1][i] );
 
 	// Motion metrics (step from previous sample)
 	if ( i > 0 )
@@ -382,8 +373,6 @@ struct hd_derived_t
     Mg3.assign( N, 0.0 );
     TV3.assign( N, 0.0 );
     TV3_lag.assign( N, 0.0 );
-    mix3_wnrem.assign( N, 0.0 );
-    mix3_nremr.assign( N, 0.0 );
     argmax3.assign( N, 0 );
 
     for ( int i = 0; i < N; i++ )
@@ -406,9 +395,6 @@ struct hd_derived_t
 	C3[i]      = mx1;
 	Mg3[i]     = ( mx2 >= 0.0 ) ? mx1 - mx2 : mx1;
 	argmax3[i]  = amax;
-
-	mix3_wnrem[i] = std::min( dat.p3[0][i], dat.p3[1][i] );
-	mix3_nremr[i] = std::min( dat.p3[1][i], dat.p3[2][i] );
 
 	if ( i > 0 )
 	  {
@@ -498,6 +484,25 @@ static double dominant_margin( const std::vector<double> & p , const int amax )
   return p[amax] - std::max( 0.0 , mx2 );
 }
 
+// Centered moving average, used only to smooth PS/CONF for the bout-formation
+// stability test -- so a single noisy sample doesn't reset the whole
+// stable-run clock the way it does for the (unsmoothed) IS_STABLE/TRANS path.
+static std::vector<double> smooth_series( const std::vector<double> & x, int half_win )
+{
+  const int N = (int)x.size();
+  if ( half_win <= 0 || N == 0 ) return x;
+  std::vector<double> prefix( N + 1, 0.0 );
+  for ( int i = 0; i < N; i++ ) prefix[i+1] = prefix[i] + x[i];
+  std::vector<double> out( N );
+  for ( int i = 0; i < N; i++ )
+    {
+      const int lo = std::max( 0,     i - half_win );
+      const int hi = std::min( N - 1, i + half_win );
+      out[i] = ( prefix[hi+1] - prefix[lo] ) / (double)( hi - lo + 1 );
+    }
+  return out;
+}
+
 // STABLE mask: contiguous runs where TV < tv_th AND C > conf_th for >= min_run_samples
 static void build_stable_mask(
     const std::vector<double> & tv,
@@ -523,17 +528,152 @@ static void build_stable_mask(
     }
 }
 
+// A bout: a long, settled, single-dominant-stage run (see bout-min/bout-gap).
+struct hd_bout_t { int lo, hi, dom; };
+
+// Find bouts within context: contiguous is_stable runs, merged across gaps of
+// <= bout_gap_sec, kept only if the merged span is >= bout_min_sec.
+static std::vector<hd_bout_t> compute_bouts(
+    const std::vector<bool> & context_mask,
+    const std::vector<bool> & is_stable,
+    const std::vector<int> & argmax,
+    const double bout_min_sec,
+    const double bout_gap_sec,
+    const double Fs )
+{
+  const int bout_min_smp = std::max( 1, (int)std::round( bout_min_sec * Fs ) );
+  const int bout_gap_smp = std::max( 0, (int)std::round( bout_gap_sec * Fs ) );
+
+  // Step 1: find raw stable runs within context
+  std::vector<hd_bout_t> raw;
+  const int Ns = (int)context_mask.size();
+  int si = 0;
+  while ( si < Ns )
+    {
+      if ( !context_mask[si] || !is_stable[si] ) { ++si; continue; }
+      int lo = si;
+      while ( si < Ns && context_mask[si] && is_stable[si] ) ++si;
+      std::map<int,int> scnt;
+      for ( int j = lo; j < si; j++ ) ++scnt[ argmax[j] ];
+      int dom = -1, best = -1;
+      for ( const auto & kv : scnt )
+        if ( kv.second > best ) { best = kv.second; dom = kv.first; }
+      hd_bout_t r; r.lo = lo; r.hi = si - 1; r.dom = dom;
+      raw.push_back( r );
+    }
+
+  // Step 2: merge adjacent same-stage runs separated by <= bout_gap_smp
+  std::vector<hd_bout_t> merged;
+  for ( const auto & r : raw )
+    {
+      if ( !merged.empty() &&
+           r.dom == merged.back().dom &&
+           r.lo - merged.back().hi - 1 <= bout_gap_smp )
+        merged.back().hi = r.hi;   // extend span
+      else
+        merged.push_back( r );
+    }
+
+  // Step 3: require span >= bout_min_sec to qualify as a bout
+  std::vector<hd_bout_t> bouts;
+  for ( const auto & r : merged )
+    if ( r.hi - r.lo + 1 >= bout_min_smp )
+      bouts.push_back( r );
+
+  return bouts;
+}
+
+// Bout-to-bout transitions: adjacent bouts with different dominant stages.
+// The gap between them is always non-empty (see build_stable_mask: any state
+// change forces at least one non-stable sample immediately after it, so
+// adjacent bouts never directly touch), but can otherwise be anywhere from a
+// single sample to many minutes long -- any intervening run too short to
+// itself qualify as a bout is simply absorbed into the gap. Anchor at the
+// highest-shift TRANS event already detected within the gap (the same
+// windowed, pre/post-averaged shift measure TRANS itself uses to place its
+// own events) rather than raw per-sample TV: TV is a single-step (lag-1)
+// posterior derivative, noisy enough that its peak can land on an unrelated
+// local blip somewhere in a long, messy gap instead of the actual crossing.
+// Falls back to the peak-TV sample only for the rare gap with no TRANS event
+// in it at all. Reuses hd_event_t so the existing profile-shape machinery
+// needs no duplication.
+static std::vector<hd_event_t> compute_bout_transitions( const std::vector<hd_bout_t> & bouts,
+                                                           const std::vector<hd_event_t> & events,
+                                                           const std::vector<double> & tv )
+{
+  std::vector<hd_event_t> out;
+  for ( int ri = 1; ri < (int)bouts.size(); ri++ )
+    if ( bouts[ri].dom != bouts[ri-1].dom )
+      {
+        const int gap_lo = bouts[ri-1].hi + 1;
+        const int gap_hi = bouts[ri].lo   - 1;
+
+        int peak = -1;
+        double best_shift = -1.0;
+        for ( const auto & te : events )
+          if ( te.idx >= gap_lo && te.idx <= gap_hi && te.shift > best_shift )
+            {
+              best_shift = te.shift;
+              peak = te.idx;
+            }
+
+        if ( peak < 0 )
+          {
+            peak = gap_lo;
+            for ( int i = gap_lo + 1; i <= gap_hi; i++ )
+              if ( tv[i] > tv[peak] ) peak = i;
+          }
+
+        hd_event_t e;
+        e.idx      = peak;
+        e.from_st  = bouts[ri-1].dom;
+        e.to_st    = bouts[ri].dom;
+        e.is_dir   = true;
+        e.is_stable = true;
+        out.push_back( e );
+      }
+  return out;
+}
+
+// Count of TRANS events whose index falls within a bout-to-bout gap with a
+// matching stage pair — i.e. detected crossings corroborated by genuine
+// settled-block-to-settled-block movement, as opposed to crossings inside
+// stretches that never consolidate on one or both sides. Speaks to fragmentation:
+// a low match rate means most detected switching isn't anchored to real bouts.
+static int count_trans_bout_matches(
+    const std::vector<hd_event_t> & trans_events,
+    const std::vector<hd_bout_t> & bouts )
+{
+  int n_matched = 0;
+  for ( const auto & e : trans_events )
+    for ( int ri = 1; ri < (int)bouts.size(); ri++ )
+      {
+        if ( bouts[ri].dom == bouts[ri-1].dom ) continue;
+        if ( e.from_st != bouts[ri-1].dom || e.to_st != bouts[ri].dom ) continue;
+        if ( e.idx >= bouts[ri-1].hi && e.idx <= bouts[ri].lo )
+          {
+            ++n_matched;
+            break;
+          }
+      }
+  return n_matched;
+}
+
 struct hd_trans_t
 {
   std::vector<hd_event_t> events5;
+  std::vector<hd_event_t> bout_events5;
   std::vector<bool>       is_trans5;
+  std::vector<bool>       is_bout_trans5;
   std::vector<bool>       is_stable5;
-  std::vector<bool>       is_neither5;
+  std::vector<bool>       is_bout_stable5;   // smoothed PS/CONF stability test, bout-formation only
 
   std::vector<hd_event_t> events3;
+  std::vector<hd_event_t> bout_events3;
   std::vector<bool>       is_trans3;
+  std::vector<bool>       is_bout_trans3;
   std::vector<bool>       is_stable3;
-  std::vector<bool>       is_neither3;
+  std::vector<bool>       is_bout_stable3;   // smoothed PS/CONF stability test, bout-formation only
 
   static std::vector<hd_event_t> detect_boundary_events(
       const std::vector<std::vector<double>> & P,
@@ -678,14 +818,15 @@ struct hd_trans_t
 	       const hd_derived_t & der,
 	       const hd_params_t & par )
   {
-    const int N          = dat.N;
-    const int win_smp    = std::max( 1, (int)std::round( par.window_sec     * dat.Fs ) );
-    const int stable_smp = std::max( 1, (int)std::round( par.stable_min_sec * dat.Fs ) );
+    const int N              = dat.N;
+    const int win_smp        = std::max( 1, (int)std::round( par.window_sec       * dat.Fs ) );
+    const int stable_smp     = std::max( 1, (int)std::round( par.stable_min_sec   * dat.Fs ) );
+    const int bout_smooth_smp = std::max( 0, (int)std::round( par.bout_smooth_sec * dat.Fs ) );
 
     // 5-state detection
     {
       build_stable_mask( der.TV, der.C, N, stable_smp,
-                         par.stable_tv_th, par.stable_conf_th, is_stable5 );
+                         par.stable_ps_th, par.stable_conf_th, is_stable5 );
       events5 = detect_boundary_events( dat.p, der.TV, is_stable5, der.argmax5, par, dat.Fs );
       build_trans_mask( events5, N, win_smp, is_trans5 );
 
@@ -693,9 +834,23 @@ struct hd_trans_t
       for ( int i = 0; i < N; i++ )
         if ( is_trans5[i] ) is_stable5[i] = false;
 
-      is_neither5.assign( N, false );
+      // Bouts are formed on a separately smoothed PS/CONF stability test --
+      // scoped to bout-formation only, so a single noisy sample doesn't reset
+      // the whole stable-run clock the way it still does for IS_STABLE/TRANS.
+      const std::vector<double> ps_smooth5   = smooth_series( der.TV, bout_smooth_smp );
+      const std::vector<double> conf_smooth5 = smooth_series( der.C,  bout_smooth_smp );
+      build_stable_mask( ps_smooth5, conf_smooth5, N, stable_smp,
+                         par.stable_ps_th, par.stable_conf_th, is_bout_stable5 );
       for ( int i = 0; i < N; i++ )
-        is_neither5[i] = !is_trans5[i] && !is_stable5[i];
+        if ( is_trans5[i] ) is_bout_stable5[i] = false;
+
+      // BOUT_TRANS: per-sample halo (±window_sec), same construction as
+      // IS_TRANS but anchored on bout-to-bout transitions instead of events.
+      const std::vector<bool> all_mask( N, true );
+      const std::vector<hd_bout_t> bouts5 = compute_bouts( all_mask, is_bout_stable5, der.argmax5,
+                                                             par.bout_min_sec, par.bout_gap_sec, dat.Fs );
+      bout_events5 = compute_bout_transitions( bouts5, events5, der.TV );
+      build_trans_mask( bout_events5, N, win_smp, is_bout_trans5 );
     }
 
     if ( ! par.do_3state ) return;
@@ -703,7 +858,7 @@ struct hd_trans_t
     // 3-state detection (independent from 5-state)
     {
       build_stable_mask( der.TV3, der.C3, N, stable_smp,
-                         par.stable_tv_th, par.stable_conf_th, is_stable3 );
+                         par.stable_ps_th, par.stable_conf_th, is_stable3 );
       events3 = detect_boundary_events( dat.p3, der.TV3, is_stable3, der.argmax3, par, dat.Fs );
       build_trans_mask( events3, N, win_smp, is_trans3 );
 
@@ -711,9 +866,18 @@ struct hd_trans_t
       for ( int i = 0; i < N; i++ )
         if ( is_trans3[i] ) is_stable3[i] = false;
 
-      is_neither3.assign( N, false );
+      const std::vector<double> ps_smooth3   = smooth_series( der.TV3, bout_smooth_smp );
+      const std::vector<double> conf_smooth3 = smooth_series( der.C3,  bout_smooth_smp );
+      build_stable_mask( ps_smooth3, conf_smooth3, N, stable_smp,
+                         par.stable_ps_th, par.stable_conf_th, is_bout_stable3 );
       for ( int i = 0; i < N; i++ )
-        is_neither3[i] = !is_trans3[i] && !is_stable3[i];
+        if ( is_trans3[i] ) is_bout_stable3[i] = false;
+
+      const std::vector<bool> all_mask3( N, true );
+      const std::vector<hd_bout_t> bouts3 = compute_bouts( all_mask3, is_bout_stable3, der.argmax3,
+                                                             par.bout_min_sec, par.bout_gap_sec, dat.Fs );
+      bout_events3 = compute_bout_transitions( bouts3, events3, der.TV3 );
+      build_trans_mask( bout_events3, N, win_smp, is_bout_trans3 );
     }
   }
 };
@@ -931,13 +1095,11 @@ struct hd_region_stats_t
   int n = 0;
   bool valid = false;
   // Domain A: mixedness
-  double mean_H = 0, sd_H = 0, p90_H = 0;
+  double mean_H = 0, p90_H = 0;
   double mean_C = 0, frac_C_below = 0, mean_Mg = 0;
   // Domain B: instability
-  double mean_TV = 0, sd_TV = 0, p90_TV = 0, mean_TV_lag = 0;
+  double mean_TV = 0, p90_TV = 0, mean_TV_lag = 0;
   double corr_H_TV = 0;
-  // Domain C: pairwise mixing (a=WN1/WNREM, b=N2N3, c=RN1/NREMR)
-  double mean_mix_a = 0, mean_mix_b = 0, mean_mix_c = 0;
   // Mean posterior probability for each state across included samples.
   std::vector<double> mean_p;
 };
@@ -951,7 +1113,7 @@ static hd_region_stats_t compute_region(
 {
   hd_region_stats_t rs;
 
-  std::vector<double> vH, vC, vMg, vTV, vTV_lag, vMix_a, vMix_b, vMix_c;
+  std::vector<double> vH, vC, vMg, vTV, vTV_lag;
   std::vector<double> sum_p( threestate ? 3 : 5 , 0.0 );
   int n_p = 0;
 
@@ -960,12 +1122,8 @@ static hd_region_stats_t compute_region(
   const std::vector<double> & Mg_ref      = threestate ? der.Mg3     : der.Mg;
   const std::vector<double> & TV_ref      = threestate ? der.TV3     : der.TV;
   const std::vector<double> & TVlag_ref   = threestate ? der.TV3_lag : der.TV_lag;
-  const std::vector<double> & mix_a_ref   = threestate ? der.mix3_wnrem : der.mix_wn1;
-  const std::vector<double> & mix_c_ref   = threestate ? der.mix3_nremr : der.mix_rn1;
   const std::vector<std::vector<double>> & P_ref = threestate ? dat.p3 : dat.p;
   const int K = threestate ? 3 : 5;
-  // mix_b is N2/N3 mixing — only meaningful in 5-state
-  const std::vector<double> & mix_b_ref   = der.mix_n2n3;
 
   int N = (int)mask.size();
   for ( int i = 0; i < N; i++ )
@@ -976,9 +1134,6 @@ static hd_region_stats_t compute_region(
       vMg.push_back( Mg_ref[i] );
       vTV.push_back( TV_ref[i] );
       vTV_lag.push_back( TVlag_ref[i] );
-      vMix_a.push_back( mix_a_ref[i] );
-      if ( !threestate ) vMix_b.push_back( mix_b_ref[i] );
-      vMix_c.push_back( mix_c_ref[i] );
       for ( int k = 0; k < K; k++ ) sum_p[k] += P_ref[k][i];
       ++n_p;
     }
@@ -992,26 +1147,13 @@ static hd_region_stats_t compute_region(
     if (v.empty()) return 0.0;
     return std::accumulate( v.begin(), v.end(), 0.0 ) / v.size();
   };
-  auto vsd = [&vmean](const std::vector<double> & v) {
-    if (v.size() < 2) return 0.0;
-    double m = vmean(v);
-    double s = 0.0;
-    for (auto x : v) s += (x-m)*(x-m);
-    return std::sqrt( s / (v.size()-1) );
-  };
-
   rs.mean_H      = vmean( vH );
-  rs.sd_H        = vsd( vH );
   rs.p90_H       = percentile( vH, 0.9 );
   rs.mean_C      = vmean( vC );
   rs.mean_Mg     = vmean( vMg );
   rs.mean_TV     = vmean( vTV );
-  rs.sd_TV       = vsd( vTV );
   rs.p90_TV      = percentile( vTV, 0.9 );
   rs.mean_TV_lag = vmean( vTV_lag );
-  rs.mean_mix_a  = vmean( vMix_a );
-  rs.mean_mix_b  = threestate ? std::numeric_limits<double>::quiet_NaN() : vmean( vMix_b );
-  rs.mean_mix_c  = vmean( vMix_c );
   rs.mean_p.assign( K, std::numeric_limits<double>::quiet_NaN() );
   if ( n_p > 0 )
     for ( int k = 0; k < K; k++ )
@@ -1026,6 +1168,42 @@ static hd_region_stats_t compute_region(
   rs.corr_H_TV = pearson( vH, vTV );
 
   return rs;
+}
+
+
+// State-set mixing: which combinations to report, and how the density is computed.
+//
+// Label order follows state index order (W, N1, N2, N3, R / W, NR, R) so labels
+// are always emitted the same way regardless of iteration order.
+static std::vector<std::vector<int>> hd_mix_combinations( const bool threestate )
+{
+  if ( threestate )
+    return { {0,1}, {0,2}, {1,2}, {0,1,2} };
+  return { {0,1}, {0,2}, {0,3}, {0,4}, {1,2}, {1,3}, {1,4}, {2,3}, {2,4}, {3,4},
+           {1,2,3}, {0,1,4} };
+}
+
+// HD_MINS (under MIX): expected minutes jointly ambiguous across a set of states.
+// For each sample, its contribution is the minimum posterior across the set, i.e.
+// a fractional/soft occupancy weight, integrated exactly as HD_MINS is elsewhere
+// in this file (no threshold — every sample contributes, however small).
+static double compute_mix_mins(
+    const std::vector<std::vector<double>> & P,
+    const std::vector<bool> & mask,
+    const std::vector<int> & states,
+    const double Fs )
+{
+  const double dt_min = 1.0 / Fs / 60.0;
+  double sum_min = 0.0;
+  for ( int i = 0; i < (int)mask.size(); i++ )
+    {
+      if ( !mask[i] ) continue;
+      double mn = 1.0;
+      for ( int k : states )
+        if ( P[k][i] < mn ) mn = P[k][i];
+      sum_min += mn * dt_min;
+    }
+  return sum_min;
 }
 
 
@@ -1214,25 +1392,21 @@ static void compute_trans_shape(
 // Output helpers
 // ============================================================
 
+// Core mixedness/instability summary: valid at any granularity (top-level, ANNOT,
+// STATE, SS, or within a STABLE/UNSTABLE region) since it's built from means and
+// percentiles, which stay well-defined under range restriction.
 static void write_region( const hd_region_stats_t & rs, bool threestate )
 {
   if ( !rs.valid ) return;
   writer.value( "N",          rs.n );
   writer.value( "H",          rs.mean_H );
-  writer.value( "SD_H",       rs.sd_H );
-  writer.value( "P90_H",      rs.p90_H );
-  writer.value( "C",          rs.mean_C );
-  writer.value( "FRAC_C_LT",  rs.frac_C_below );
+  writer.value( "H_P90",      rs.p90_H );
+  writer.value( "CONF",       rs.mean_C );
+  writer.value( "FRAC_LOW_CONF", rs.frac_C_below );
   writer.value( "MG",         rs.mean_Mg );
-  writer.value( "TV",         rs.mean_TV );
-  writer.value( "SD_TV",      rs.sd_TV );
-  writer.value( "P90_TV",     rs.p90_TV );
-  writer.value( "TV_LAG",     rs.mean_TV_lag );
-  writer.value( "CORR_H_TV",  rs.corr_H_TV );
-  writer.value( "MIX_A",      rs.mean_mix_a );
-  if ( !threestate )
-    writer.value( "MIX_B",    rs.mean_mix_b );
-  writer.value( "MIX_C",      rs.mean_mix_c );
+  writer.value( "PS",         rs.mean_TV );
+  writer.value( "PS_P90",     rs.p90_TV );
+  writer.value( "PS_LAG",     rs.mean_TV_lag );
   if ( threestate )
     {
 	if ( rs.mean_p.size() >= 3 )
@@ -1255,16 +1429,27 @@ static void write_region( const hd_region_stats_t & rs, bool threestate )
     }
 }
 
+// CORR_H_PS: entropy/PS correlation. Only valid at bare (unstratified-by-REGION)
+// granularity — within a STABLE or UNSTABLE bucket, both entropy and PS are
+// artificially range-restricted by the same thresholds that define the bucket,
+// which destabilizes a correlation coefficient (unlike the means/percentiles
+// above, which remain well-defined under range restriction).
+static void write_region_corr( const hd_region_stats_t & rs )
+{
+  if ( !rs.valid ) return;
+  writer.value( "CORR_H_PS", rs.corr_H_TV );
+}
+
 static void write_trans_stats( const hd_trans_stats_t & ts )
 {
-  writer.value( "N_TRANS",      ts.n_events );
-  writer.value( "TRANS_DENS",   ts.density );
+  writer.value( "TRANS_N",         ts.n_events );
+  writer.value( "TRANS_DENS",      ts.density );
   if ( ts.valid )
     {
-      writer.value( "TRANS_WIDTH",  ts.mean_width_sec );
-      writer.value( "PEAK_H",   ts.mean_peak_H );
-      writer.value( "MIN_C",    ts.mean_min_C );
-      writer.value( "TV_AREA",  ts.mean_TV_area );
+      writer.value( "TRANS_DUR",      ts.mean_width_sec );
+      writer.value( "TRANS_PEAK_H",   ts.mean_peak_H );
+      writer.value( "TRANS_MIN_CONF", ts.mean_min_C );
+      writer.value( "TRANS_TOT_PS",   ts.mean_TV_area );
     }
 }
 
@@ -1412,6 +1597,35 @@ static bool hd_make_pp_nrem( edf_t & edf , param_t & param )
   return true;
 }
 
+static void hd_emit_signals( edf_t & edf,
+			      const hd_data_t & dat,
+			      const hd_derived_t & der,
+			      const hd_params_t & par )
+{
+  auto add_sig = [&]( const std::string & label, const std::vector<double> & x )
+    {
+      if ( edf.header.has_signal( label ) )
+	{
+	  logger << "  HDSTATS emit-sigs: " << label << " already exists, skipping\n";
+	  return;
+	}
+      edf.add_signal( label, dat.Fs, x );
+    };
+
+  add_sig( par.emit_sig_label + "_PS",   der.TV );
+  add_sig( par.emit_sig_label + "_H",    der.H );
+  add_sig( par.emit_sig_label + "_CONF", der.C );
+
+  if ( par.do_3state )
+    {
+      add_sig( par.emit_sig_label + "_PS3",   der.TV3 );
+      add_sig( par.emit_sig_label + "_H3",    der.H3 );
+      add_sig( par.emit_sig_label + "_CONF3", der.C3 );
+    }
+
+  logger << "  HDSTATS emit-sigs: added PS/H/CONF signal(s) under prefix '" << par.emit_sig_label << "'\n";
+}
+
 static void write_hd_hypno_metrics( const hd_hypno_metrics_t & hm )
 {
   if ( hm.valid_onset ) writer.value( "HD_SOL" , hm.hd_sol );
@@ -1455,7 +1669,7 @@ static std::vector<bool> make_stage_mask(
 }
 
 // Write HDSTATS rows for one context (global or per-stratum).
-// Emits REGION strata: ALL, STABLE, TRANS.
+// Emits a bare (unstratified) summary plus REGION strata: STABLE, UNSTABLE.
 // Emits STATE stratum only when do_3state is true.
 // Emits SS stratum for primary summary metrics only, based on argmax stage.
 static void write_hdstats(
@@ -1477,114 +1691,106 @@ static void write_hdstats(
     for ( int i = 0; i < (int)rm.size(); i++ ) m[i] = rm[i] && is_stable[i];
     return m;
   };
-  auto make_trans = [&]( const std::vector<bool> & rm,
-			  const std::vector<bool> & is_trans ) {
-    std::vector<bool> m( rm.size() );
-    for ( int i = 0; i < (int)rm.size(); i++ ) m[i] = rm[i] && is_trans[i];
-    return m;
-  };
-
   // Helper: emit one state (5 or 3)
   auto emit_state = [&]( bool threestate ) {
 
-    const std::vector<bool> & rmask     = threestate ? region_mask3 : region_mask5;
-    const std::vector<bool> & is_trans  = threestate ? tr.is_trans3  : tr.is_trans5;
-    const std::vector<bool> & is_stable = threestate ? tr.is_stable3 : tr.is_stable5;
-    const std::vector<int>  & argmax    = threestate ? der.argmax3    : der.argmax5;
+    const std::vector<bool> & rmask       = threestate ? region_mask3 : region_mask5;
+    const std::vector<bool> & is_stable   = threestate ? tr.is_stable3 : tr.is_stable5;
+    const std::vector<bool> & is_bout_stable = threestate ? tr.is_bout_stable3 : tr.is_bout_stable5;
+    const std::vector<int>  & argmax      = threestate ? der.argmax3    : der.argmax5;
     const int K = threestate ? 3 : 5;
 
     auto emit_context = [&]( const std::vector<bool> & context_mask,
 			     const bool emit_top_level_transition_stats,
 			     const bool emit_profiles_and_pairs )
       {
-	// Helper: emit a transition profile vector under the current writer context
-	auto emit_profile_rows = [&]( const hd_profile_t & pf ) {
+	// Helper: emit a transition profile vector under the current writer context.
+	// Per-state posteriors are only meaningful once events are restricted to a
+	// single pair (BOUT_TRANS,SEC) — pooled across mixed pair types they average
+	// together unrelated state identities, so the generic SEC table omits them.
+	auto emit_profile_rows = [&]( const hd_profile_t & pf, const bool emit_posteriors ) {
 	  for ( int j = 0; j < (int)pf.offsets.size(); j++ )
 	    {
-	      writer.level( pf.offsets[j], "OFFSET" );
+	      writer.level( pf.offsets[j], globals::sec_strat );
 	      writer.value( "H",  pf.H[j] );
-	      writer.value( "C",  pf.C[j] );
+	      writer.value( "CONF", pf.C[j] );
 	      writer.value( "MG", pf.Mg[j] );
-	      writer.value( "TV", pf.TV[j] );
-	      if ( threestate )
+	      writer.value( "PS", pf.TV[j] );
+	      if ( emit_posteriors )
 		{
-		  writer.value( "P_W",  pf.P[0][j] );
-		  writer.value( "P_NR", pf.P[1][j] );
-		  writer.value( "P_R",  pf.P[2][j] );
+		  if ( threestate )
+		    {
+		      writer.value( "P_W",  pf.P[0][j] );
+		      writer.value( "P_NR", pf.P[1][j] );
+		      writer.value( "P_R",  pf.P[2][j] );
+		    }
+		  else
+		    {
+		      writer.value( "P_W",  pf.P[0][j] );
+		      writer.value( "P_N1", pf.P[1][j] );
+		      writer.value( "P_N2", pf.P[2][j] );
+		      writer.value( "P_N3", pf.P[3][j] );
+		      writer.value( "P_R",  pf.P[4][j] );
+		    }
 		}
-	      else
-		{
-		  writer.value( "P_W",  pf.P[0][j] );
-		  writer.value( "P_N1", pf.P[1][j] );
-		  writer.value( "P_N2", pf.P[2][j] );
-		  writer.value( "P_N3", pf.P[3][j] );
-		  writer.value( "P_R",  pf.P[4][j] );
-		}
-	      writer.unlevel( "OFFSET" );
+	      writer.unlevel( globals::sec_strat );
 	    }
 	};
 
-	// HDSTATS table (REGION strata)
+	// HDSTATS table: bare (unstratified-by-STABLE) summary, plus a binary
+	// STABLE/UNSTABLE breakdown. UNSTABLE merges what were previously the
+	// separate TRANS (near a crossing) and unlabeled remainder buckets —
+	// the finer distinction is still available via the event-based
+	// TRANS/SEC tables below, which are unaffected by this.
 	{
-	  auto make_neither_mask = [&]( const std::vector<bool> & rm ) {
+	  auto make_unstable = [&]( const std::vector<bool> & rm ) {
 	    std::vector<bool> m( rm.size() );
 	    for ( int i = 0; i < (int)rm.size(); i++ )
-	      m[i] = rm[i] && !is_trans[i] && !is_stable[i];
+	      m[i] = rm[i] && !is_stable[i];
 	    return m;
 	  };
 
-	  hd_region_stats_t rs_all     = compute_region( dat, der, make_all(context_mask),                par, threestate );
-	  hd_region_stats_t rs_stable  = compute_region( dat, der, make_stable(context_mask, is_stable),  par, threestate );
-	  hd_region_stats_t rs_trans   = compute_region( dat, der, make_trans(context_mask,  is_trans),   par, threestate );
-	  hd_region_stats_t rs_neither = compute_region( dat, der, make_neither_mask(context_mask),       par, threestate );
+	  hd_region_stats_t rs_all      = compute_region( dat, der, make_all(context_mask),               par, threestate );
+	  hd_region_stats_t rs_stable   = compute_region( dat, der, make_stable(context_mask, is_stable),  par, threestate );
+	  hd_region_stats_t rs_unstable = compute_region( dat, der, make_unstable(context_mask),           par, threestate );
 
-	  const bool ok_all     = rs_all.valid     && rs_all.n     >= par.min_samples_region;
-	  const bool ok_stable  = rs_stable.valid  && rs_stable.n  >= par.min_samples_region;
-	  const bool ok_trans   = rs_trans.valid   && rs_trans.n   >= par.min_samples_region;
-	  const bool ok_neither = rs_neither.valid && rs_neither.n >= par.min_samples_region;
+	  const bool ok_all      = rs_all.valid      && rs_all.n      >= par.min_samples_region;
+	  const bool ok_stable   = rs_stable.valid   && rs_stable.n   >= par.min_samples_region;
+	  const bool ok_unstable = rs_unstable.valid && rs_unstable.n >= par.min_samples_region;
 
+	  // Bare summary: no REGION token, so this lands wherever we're already
+	  // nested (top-level/ANNOT/STATE for the main pass, bare SS=<stage> for
+	  // the stage-conditioned pass). CORR_H_PS and PCT_STABLE only make sense
+	  // here, not within a STABLE/UNSTABLE bucket (see write_region_corr).
 	  if ( ok_all )
 	    {
-	      writer.level( "ALL", "REGION" );
 	      write_region( rs_all, threestate );
-	      writer.value( "PCT_STABLE",  rs_all.n > 0 ? 100.0 * rs_stable.n  / rs_all.n : 0.0 );
-	      writer.value( "PCT_TRANS",   rs_all.n > 0 ? 100.0 * rs_trans.n   / rs_all.n : 0.0 );
-	      writer.value( "PCT_NEITHER", rs_all.n > 0 ? 100.0 * rs_neither.n / rs_all.n : 0.0 );
-	      writer.unlevel( "REGION" );
+	      write_region_corr( rs_all );
+	      writer.value( "PCT_STABLE", 100.0 * rs_stable.n / rs_all.n );
 	    }
 
 	  if ( ok_stable )
 	    {
-	      writer.level( "STABLE", "REGION" );
+	      writer.level( 1, "STABLE" );
 	      write_region( rs_stable, threestate );
-	      writer.unlevel( "REGION" );
+	      writer.unlevel( "STABLE" );
 	    }
 
-	  if ( ok_trans )
+	  if ( ok_unstable )
 	    {
-	      writer.level( "TRANS", "REGION" );
-	      write_region( rs_trans, threestate );
-	      writer.unlevel( "REGION" );
+	      writer.level( 0, "STABLE" );
+	      write_region( rs_unstable, threestate );
+	      writer.unlevel( "STABLE" );
 	    }
 
-	  if ( ok_neither )
+	  // Stable-vs-unstable contrasts (no REGION stratum; top-level context only)
+	  if ( emit_top_level_transition_stats && ok_stable && ok_unstable )
 	    {
-	      writer.level( "NEITHER", "REGION" );
-	      write_region( rs_neither, threestate );
-	      writer.unlevel( "REGION" );
-	    }
-
-	  // Stable-vs-transition ratios (no REGION stratum)
-	  if ( emit_top_level_transition_stats && ok_all )
-	    {
-	      if ( ok_stable && ok_trans )
-		{
-		  writer.value( "H_RATIO_TR_ST",  rs_stable.mean_H > 0
-				? rs_trans.mean_H / rs_stable.mean_H : std::numeric_limits<double>::quiet_NaN() );
-		  writer.value( "CONF_DIFF_TR_ST", rs_trans.mean_C - rs_stable.mean_C );
-		  writer.value( "TV_RATIO_TR_ST",  rs_stable.mean_TV > 0
-				? rs_trans.mean_TV / rs_stable.mean_TV : std::numeric_limits<double>::quiet_NaN() );
-		}
+	      writer.value( "H_RATIO_UN_ST",   rs_stable.mean_H  > 0
+			    ? rs_unstable.mean_H  / rs_stable.mean_H  : std::numeric_limits<double>::quiet_NaN() );
+	      writer.value( "CONF_DIFF_UN_ST", rs_unstable.mean_C - rs_stable.mean_C );
+	      writer.value( "PS_RATIO_UN_ST",  rs_stable.mean_TV > 0
+			    ? rs_unstable.mean_TV / rs_stable.mean_TV : std::numeric_limits<double>::quiet_NaN() );
 	    }
 	}
 
@@ -1595,78 +1801,67 @@ static void write_hdstats(
 	  hd_profile_t     profile;
 	  compute_trans_shape( der, evts, context_mask, is_stable, dat, par, dat.Fs, threestate,
                                false, false, tshape, profile );
+
+	  // Bouts: long, settled, single-dominant-stage runs (see bout-min/bout-gap).
+	  // Reused below both to count bout-to-bout transitions (N_BOUT_TRANS) and,
+	  // via compute_bout_transitions(), to anchor every OFFSET profile — OFFSET
+	  // no longer has its own independent flank-qualification notion.
+	  const std::vector<hd_bout_t> bouts = compute_bouts( context_mask, is_bout_stable, argmax,
+	                                                       par.bout_min_sec, par.bout_gap_sec, dat.Fs );
+	  const std::vector<hd_event_t> bout_events = compute_bout_transitions( bouts, evts, threestate ? der.TV3 : der.TV );
+
+	  // TRANS events restricted to this context (matches how TRANS_N itself, via
+	  // compute_trans_shape's region_mask filtering, is scoped).
+	  std::vector<hd_event_t> evts_in_context;
+	  for ( const auto & e : evts )
+	    if ( e.idx >= 0 && e.idx < (int)context_mask.size() && context_mask[e.idx] )
+	      evts_in_context.push_back( e );
+
 	  if ( emit_top_level_transition_stats )
 	    {
 	      write_trans_stats( tshape );
-	      // Clean transitions: adjacent stable-run pairs with different dominant stages.
-	      // Region-centric: flank consolidation matters; transition dynamics are irrelevant.
-	      // Runs of the same dominant stage separated by <= clean_gap_sec are merged before
-	      // applying the clean_min_sec duration threshold.
-	      int n_stable = 0;
-	      {
-		const int clean_min_smp = std::max( 1, (int)std::round( par.clean_min_sec * dat.Fs ) );
-		const int clean_gap_smp = std::max( 0, (int)std::round( par.clean_gap_sec * dat.Fs ) );
 
-		struct srun_t { int lo, hi, dom; };
+	      const int n_matched = count_trans_bout_matches( evts_in_context, bouts );
+	      writer.value( "TRANS_N_MATCHED",   n_matched );
+	      writer.value( "TRANS_PCT_MATCHED", tshape.n_events > 0 ? 100.0 * n_matched / tshape.n_events : 0.0 );
 
-		// Step 1: find raw stable runs within context
-		std::vector<srun_t> raw;
-		const int Ns = (int)context_mask.size();
-		int si = 0;
-		while ( si < Ns )
-		  {
-		    if ( !context_mask[si] || !is_stable[si] ) { ++si; continue; }
-		    int lo = si;
-		    while ( si < Ns && context_mask[si] && is_stable[si] ) ++si;
-		    std::map<int,int> scnt;
-		    for ( int j = lo; j < si; j++ ) ++scnt[ argmax[j] ];
-		    int dom = -1, best = -1;
-		    for ( const auto & kv : scnt )
-		      if ( kv.second > best ) { best = kv.second; dom = kv.first; }
-		    srun_t r; r.lo = lo; r.hi = si - 1; r.dom = dom;
-		    raw.push_back( r );
-		  }
-
-		// Step 2: merge adjacent same-stage runs separated by <= clean_gap_smp
-		std::vector<srun_t> merged;
-		for ( const auto & r : raw )
-		  {
-		    if ( !merged.empty() &&
-			 r.dom == merged.back().dom &&
-			 r.lo - merged.back().hi - 1 <= clean_gap_smp )
-		      merged.back().hi = r.hi;   // extend span
-		    else
-		      merged.push_back( r );
-		  }
-
-		// Step 3: require span >= clean_min_sec
-		std::vector<srun_t> long_runs;
-		for ( const auto & r : merged )
-		  if ( r.hi - r.lo + 1 >= clean_min_smp )
-		    long_runs.push_back( r );
-
-		// Step 4: count adjacent pairs with different dominant stages
-		for ( int ri = 1; ri < (int)long_runs.size(); ri++ )
-		  if ( long_runs[ri].dom != long_runs[ri-1].dom ) ++n_stable;
-	      }
 	      int n_in_region = 0;
 	      for ( bool b : context_mask ) if (b) ++n_in_region;
 	      double dur_hr = (double)n_in_region / dat.Fs / 3600.0;
-	      writer.value( "N_CLEAN",   n_stable );
-	      writer.value( "DENS_CLEAN", dur_hr > 0 ? n_stable / dur_hr : 0.0 );
+	      writer.value( "BOUT_TRANS_N",    (int)bout_events.size() );
+	      writer.value( "BOUT_TRANS_DENS", dur_hr > 0 ? (int)bout_events.size() / dur_hr : 0.0 );
+
+	      // MIX table: state-set mixing, in the same MINS/DENS units as the HD_*
+	      // hypnodensity metrics (top-level context only; not under SS, matching
+	      // how HD_MINS/HD_DENS themselves are only available where hm != NULL).
+	      {
+		const std::vector<std::vector<double>> & P_ref = threestate ? dat.p3 : dat.p;
+		for ( const auto & combo : hd_mix_combinations( threestate ) )
+		  {
+		    std::string label = hd_state_label( threestate, combo[0] );
+		    for ( int ci = 1; ci < (int)combo.size(); ci++ )
+		      label += "_" + hd_state_label( threestate, combo[ci] );
+		    const double mix_mins = compute_mix_mins( P_ref, context_mask, combo, dat.Fs );
+		    writer.level( label, "MIX" );
+		    writer.value( "HD_MINS", mix_mins );
+		    if ( hm != NULL )
+		      writer.value( "HD_DENS", hm->hd_spt > 0 ? mix_mins / hm->hd_spt : 0.0 );
+		    writer.unlevel( "MIX" );
+		  }
+	      }
 	    }
 
 	  if ( ! emit_profiles_and_pairs ) return;
 
-          // Generic OFFSET analyses use stable directional events only.
-          hd_trans_stats_t tshape_stable;
-          hd_profile_t     profile_stable;
-          compute_trans_shape( der, evts, context_mask, is_stable, dat, par, dat.Fs, threestate,
-                               true, true, tshape_stable, profile_stable );
-	  if ( profile_stable.valid )
-	    emit_profile_rows( profile_stable );
+          // Generic OFFSET: aligned profile pooled across all bout-to-bout transitions.
+          hd_trans_stats_t tshape_bout;
+          hd_profile_t     profile_bout;
+          compute_trans_shape( der, bout_events, context_mask, is_stable, dat, par, dat.Fs, threestate,
+                               false, false, tshape_bout, profile_bout );
+	  if ( profile_bout.valid )
+	    emit_profile_rows( profile_bout, false );
 
-	  // Pair-specific summaries use directional events; pair-specific OFFSET uses only stable directional events.
+	  // TRANS: pair-specific summary statistics still use directional events (unchanged).
 	  std::set<std::pair<int,int>> trans_pairs;
 	  for ( const auto & e : evts )
 	    if ( e.is_dir && e.from_st >= 0 && e.to_st >= 0 && e.from_st != e.to_st )
@@ -1686,19 +1881,48 @@ static void write_hdstats(
 	      compute_trans_shape( der, evts_pair, context_mask, is_stable, dat, par, dat.Fs, threestate,
                                    true, false, tshape_pair, profile_pair_dir );
 
-              hd_trans_stats_t tshape_pair_stable;
-              hd_profile_t     profile_pair_stable;
-              compute_trans_shape( der, evts_pair, context_mask, is_stable, dat, par, dat.Fs, threestate,
-                                   true, true, tshape_pair_stable, profile_pair_stable );
+	      std::vector<hd_event_t> evts_pair_in_context;
+	      for ( const auto & e : evts_pair )
+		if ( e.idx >= 0 && e.idx < (int)context_mask.size() && context_mask[e.idx] )
+		  evts_pair_in_context.push_back( e );
+	      const int n_matched_pair = count_trans_bout_matches( evts_pair_in_context, bouts );
 
 	      const std::string trans_label = hd_state_label( threestate , tp.first ) + "to"
 		+ hd_state_label( threestate , tp.second );
 
 	      writer.level( trans_label , "TRANS" );
 	      write_trans_stats( tshape_pair );
-	      if ( profile_pair_stable.valid )
-		emit_profile_rows( profile_pair_stable );
+	      writer.value( "TRANS_N_MATCHED",   n_matched_pair );
+	      writer.value( "TRANS_PCT_MATCHED", tshape_pair.n_events > 0 ? 100.0 * n_matched_pair / tshape_pair.n_events : 0.0 );
 	      writer.unlevel( "TRANS" );
+	    }
+
+	  // BOUT: pair-specific aligned profiles, one per observed bout-to-bout stage pair.
+	  std::set<std::pair<int,int>> bout_pairs;
+	  for ( const auto & e : bout_events )
+	    bout_pairs.insert( std::make_pair( e.from_st , e.to_st ) );
+
+	  for ( const auto & tp : bout_pairs )
+	    {
+	      std::vector<hd_event_t> bout_events_pair;
+	      for ( const auto & e : bout_events )
+		if ( e.from_st == tp.first && e.to_st == tp.second )
+		  bout_events_pair.push_back( e );
+
+	      if ( bout_events_pair.empty() ) continue;
+
+	      hd_trans_stats_t tshape_bout_pair;
+              hd_profile_t     profile_bout_pair;
+	      compute_trans_shape( der, bout_events_pair, context_mask, is_stable, dat, par, dat.Fs, threestate,
+                                   false, false, tshape_bout_pair, profile_bout_pair );
+
+	      const std::string bout_label = hd_state_label( threestate , tp.first ) + "to"
+		+ hd_state_label( threestate , tp.second );
+
+	      writer.level( bout_label , "BOUT_TRANS" );
+	      if ( profile_bout_pair.valid )
+		emit_profile_rows( profile_bout_pair, true );
+	      writer.unlevel( "BOUT_TRANS" );
 	    }
 	}
       };
@@ -1721,41 +1945,47 @@ static void write_hdstats(
       }
   };
 
+  // NSS is always emitted, even when only 5-state is computed, so table shape
+  // never depends on the 3state parameter.
+  writer.level( "5", "NSS" );
+  emit_state( false );
+  writer.unlevel( "NSS" );
+
   if ( par.do_3state )
     {
-      writer.level( "5", "STATE" );
-      emit_state( false );
-      writer.unlevel( "STATE" );
-
-      writer.level( "3", "STATE" );
+      writer.level( "3", "NSS" );
       emit_state( true );
-      writer.unlevel( "STATE" );
-    }
-  else
-    {
-      emit_state( false );
+      writer.unlevel( "NSS" );
     }
 }
 
 static void set_hdstats_offset_outputs( bool enabled )
 {
-  const std::vector<std::string> offset_tables = {
-    "OFFSET",
-    "STATE,OFFSET",
-    "ANNOT,OFFSET",
-    "ANNOT,STATE,OFFSET",
-    "TRANS,OFFSET",
-    "STATE,TRANS,OFFSET",
-    "ANNOT,TRANS,OFFSET",
-    "ANNOT,STATE,TRANS,OFFSET"
+  // Generic SEC: no per-state posteriors (pooled across mixed pair types).
+  const std::vector<std::string> sec_tables = {
+    "NSS,SEC",
+    "ANNOT,NSS,SEC"
   };
-  const std::vector<std::string> offset_vars = {
-    "H", "C", "MG", "TV", "P_W", "P_NR", "P_N1", "P_N2", "P_N3", "P_R"
+  const std::vector<std::string> sec_vars = {
+    "H", "CONF", "MG", "PS"
   };
 
-  for ( int i = 0; i < (int)offset_tables.size(); i++ )
-    for ( int j = 0; j < (int)offset_vars.size(); j++ )
-      globals::cmddefs().register_var( "HDSTATS", offset_tables[i], offset_vars[j], enabled );
+  // Pair-specific BOUT_TRANS,SEC: posteriors are meaningful once restricted to one pair.
+  const std::vector<std::string> bout_sec_tables = {
+    "NSS,BOUT_TRANS,SEC",
+    "ANNOT,NSS,BOUT_TRANS,SEC"
+  };
+  const std::vector<std::string> bout_sec_vars = {
+    "H", "CONF", "MG", "PS", "P_W", "P_NR", "P_N1", "P_N2", "P_N3", "P_R"
+  };
+
+  for ( int i = 0; i < (int)sec_tables.size(); i++ )
+    for ( int j = 0; j < (int)sec_vars.size(); j++ )
+      globals::cmddefs().register_var( "HDSTATS", sec_tables[i], sec_vars[j], enabled );
+
+  for ( int i = 0; i < (int)bout_sec_tables.size(); i++ )
+    for ( int j = 0; j < (int)bout_sec_vars.size(); j++ )
+      globals::cmddefs().register_var( "HDSTATS", bout_sec_tables[i], bout_sec_vars[j], enabled );
 }
 
 struct hdstats_offset_outputs_scope_t
@@ -1771,6 +2001,12 @@ struct hdstats_offset_outputs_scope_t
 
 void proc_hdstats( edf_t & edf, param_t & param )
 {
+  // Detection/bout logic throughout this file assumes samples 0..N-1 are
+  // contiguous and evenly spaced in time; a genuine gap would silently treat
+  // non-adjacent samples as neighbors (see hd_data_t::load()).
+  if ( edf.is_actually_discontinuous() )
+    Helper::halt( "HDSTATS requires a single-segment EDF (no within-recording gaps)" );
+
   hdstats_offset_outputs_scope_t offset_outputs_scope;
 
   const bool emit_nr_pp =
@@ -1794,7 +2030,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
   par.ch[4] = param.has( "R" )  ? param.value( "R" )  : "PP_R";
 
   par.do_hd_metrics    = param.has( "hd-metrics" ) ? param.yesno( "hd-metrics" ) : true;
-  par.do_3state       = param.yesno( "3state" );
+  par.do_3state       = param.yesno( "3state", true );
   par.window_sec      = param.has( "window"    ) ? param.requires_dbl( "window"     ) : 60.0;
   par.lag_sec         = param.has( "lag"       ) ? param.requires_dbl( "lag"        ) : 30.0;
   par.stable_min_sec  = param.has( "stable-min") ? param.requires_dbl( "stable-min" ) : 30.0;
@@ -1813,18 +2049,20 @@ void proc_hdstats( edf_t & edf, param_t & param )
   par.emit_annot_label   =
     param.has( "emit-annots" ) ? ( ( ! param.empty("emit-annots" ) ) ? param.value( "emit-annots" ) : "hd" )
     : ( par.emit_annot_typed_classes ? "hd" : "" );
-  par.stable_tv_th    = param.has( "stable-tv"   ) ? param.requires_dbl( "stable-tv"   ) : 0.05;
+  par.stable_ps_th    = param.has( "stable-ps"   ) ? param.requires_dbl( "stable-ps"   ) : 0.05;
   par.stable_conf_th  = param.has( "stable-conf" ) ? param.requires_dbl( "stable-conf" ) : 0.70;
   par.min_shift       = param.has( "min-shift"   ) ? param.requires_dbl( "min-shift"   ) : 0.10;
   par.shift_win_sec   = param.has( "shift-win"   ) ? param.requires_dbl( "shift-win"   ) : 30.0;
-  par.clean_min_sec   = param.has( "clean-min"   ) ? param.requires_dbl( "clean-min"   ) : 300.0;
-  par.clean_gap_sec   = param.has( "clean-gap"   ) ? param.requires_dbl( "clean-gap"   ) : 30.0;
+  par.bout_min_sec    = param.has( "bout-min"    ) ? param.requires_dbl( "bout-min"    ) : 120.0;
+  par.bout_gap_sec    = param.has( "bout-gap"    ) ? param.requires_dbl( "bout-gap"    ) : 30.0;
+  par.bout_smooth_sec = param.has( "bout-smooth" ) ? param.requires_dbl( "bout-smooth" ) : 15.0;
   par.ch_valid        = param.has( "VALID" ) ? param.value( "VALID" ) : infer_invalid_channel_label( par.ch );
-
-  if ( param.has( "transition" ) )
-    logger << "   'transition' option is ignored; using boundary-based transition detection\n";
-  if ( param.has( "motion-th" ) )
-    logger << "   'motion-th' option is ignored by boundary-based transition detection\n";
+  par.emit_sig_label  =
+    param.has( "emit-sigs" ) ? ( ( ! param.empty( "emit-sigs" ) ) ? param.value( "emit-sigs" ) : "hd" ) : "";
+  par.do_emit_hypnogram = param.has( "emit-hypnogram" );
+  par.hypno_prefix    =
+    ( par.do_emit_hypnogram && ! param.empty( "emit-hypnogram" ) )
+    ? param.value( "emit-hypnogram" ) + "_" : "";
 
   logger << "  loading hypnodensity channels ["
 	 << par.ch[0] << ", " << par.ch[1] << ", " << par.ch[2] << ", "
@@ -1840,6 +2078,9 @@ void proc_hdstats( edf_t & edf, param_t & param )
   // Layer 2: derive per-sample signals
   hd_derived_t der;
   der.compute( dat, par );
+
+  if ( ! par.emit_sig_label.empty() )
+    hd_emit_signals( edf, dat, der, par );
 
   // Layer 3: detect transitions
   hd_trans_t tr;
@@ -1874,7 +2115,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
             }
         };
 
-      // Emit 5-state transitions as point events; use instance label "from->to" or "." if states unknown
+      // Emit TRANS events as point events; use instance label "from->to" or "." if states unknown
       const uint64_t half_sample_tp = sample_tp / 2;
       for ( const auto & e : tr.events5 )
 	{
@@ -1884,23 +2125,37 @@ void proc_hdstats( edf_t & edf, param_t & param )
 	    : ".";
 	  const std::string cls =
 	    ( par.emit_annot_typed_classes && inst != "." )
-	    ? par.emit_annot_label + "_" + inst
-	    : par.emit_annot_label;
+	    ? par.emit_annot_label + "_trans_event_" + inst
+	    : par.emit_annot_label + "_trans_event";
 	  uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
 	  edf.annotations->add( cls )->add( inst , interval_t( tp0 , tp0 ) , "." );
 	}
 
-      // Emit stable, trans, and neither whole intervals (5-state)
+      // Emit BOUT_TRANS transitions as point events, anchored at the bout-gap
+      // midpoint; from/to states are always known (bouts are always dominant-state runs)
+      for ( const auto & e : tr.bout_events5 )
+	{
+	  const std::string inst = hd_state_label( false, e.from_st ) + "to" + hd_state_label( false, e.to_st );
+	  const std::string cls =
+	    par.emit_annot_typed_classes
+	    ? par.emit_annot_label + "_bout_trans_event_" + inst
+	    : par.emit_annot_label + "_bout_trans_event";
+	  uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
+	  edf.annotations->add( cls )->add( inst , interval_t( tp0 , tp0 ) , "." );
+	}
+
+      // Emit stable, trans, and bout_trans whole intervals (5-state) -- the same
+      // three independent flags as the TIME table's STABLE/TRANS/BOUT_TRANS
       annot_t * atr_stable = edf.annotations->add( par.emit_annot_label + "_stable" );
       emit_runs( atr_stable , tr.is_stable5 , "stable" , &der.argmax5 , false );
 
       annot_t * atr_trans = edf.annotations->add( par.emit_annot_label + "_trans" );
       emit_runs( atr_trans , tr.is_trans5 , "trans" );
 
-      annot_t * atr_neither = edf.annotations->add( par.emit_annot_label + "_neither" );
-      emit_runs( atr_neither , tr.is_neither5 , "neither" );
+      annot_t * atr_bout_trans = edf.annotations->add( par.emit_annot_label + "_bout_trans" );
+      emit_runs( atr_bout_trans , tr.is_bout_trans5 , "bout_trans" );
 
-      // If 3-state mode, also emit 3-state transitions, stable, trans, and neither intervals
+      // If 3-state mode, also emit 3-state transitions, stable, trans, and bout_trans intervals
       if ( par.do_3state )
 	{
 	  for ( const auto & e : tr.events3 )
@@ -1911,8 +2166,19 @@ void proc_hdstats( edf_t & edf, param_t & param )
 		: ".";
 	      const std::string cls =
 		( par.emit_annot_typed_classes && inst != "." )
-		? par.emit_annot_label + "_3_" + inst
-		: par.emit_annot_label + "_3";
+		? par.emit_annot_label + "_3_trans_event_" + inst
+		: par.emit_annot_label + "_3_trans_event";
+	      uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
+	      edf.annotations->add( cls )->add( inst , interval_t( tp0 , tp0 ) , "." );
+	    }
+
+	  for ( const auto & e : tr.bout_events3 )
+	    {
+	      const std::string inst = hd_state_label( true, e.from_st ) + "to" + hd_state_label( true, e.to_st );
+	      const std::string cls =
+		par.emit_annot_typed_classes
+		? par.emit_annot_label + "_3_bout_trans_event_" + inst
+		: par.emit_annot_label + "_3_bout_trans_event";
 	      uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
 	      edf.annotations->add( cls )->add( inst , interval_t( tp0 , tp0 ) , "." );
 	    }
@@ -1923,11 +2189,72 @@ void proc_hdstats( edf_t & edf, param_t & param )
 	  annot_t * atr3_trans = edf.annotations->add( par.emit_annot_label + "_3_trans" );
 	  emit_runs( atr3_trans , tr.is_trans3 , "trans" );
 
-	  annot_t * atr3_neither = edf.annotations->add( par.emit_annot_label + "_3_neither" );
-	  emit_runs( atr3_neither , tr.is_neither3 , "neither" );
+	  annot_t * atr3_bout_trans = edf.annotations->add( par.emit_annot_label + "_3_bout_trans" );
+	  emit_runs( atr3_bout_trans , tr.is_bout_trans3 , "bout_trans" );
 	}
 
       logger << "  emitting transition annotations under '" << par.emit_annot_label << "'\n";
+    }
+
+  // Optionally emit hard-called (argmax) stage runs as annotations, one class
+  // per stage (e.g. N1, N2, N3, R, W, or prefix_N1 etc if a prefix was given).
+  // Pooled to conventional 30s epochs (mean posterior over each epoch's
+  // sub-samples, then argmax) rather than called at the native sample
+  // resolution -- otherwise, whenever the source posteriors are sampled
+  // faster than 30s (e.g. 5s blocks), sub-epoch flicker produces a mass of
+  // very short runs that don't line up with any single 30s epoch. This
+  // assumes samples 0..N-1 are contiguous and start at t=0 (true for a
+  // continuous EDF); it does not account for timeline gaps -- see the
+  // detect()/compute_bouts() machinery elsewhere in this file, which shares
+  // the same sample-index-contiguity assumption throughout.
+  if ( par.do_emit_hypnogram && ! dat.tp.empty() )
+    {
+      const uint64_t sample_tp = (uint64_t)std::round( (double)globals::tp_1sec / dat.Fs );
+      const int epoch_smp = std::max( 1, (int)std::round( 30.0 * dat.Fs ) );
+      const int n_epochs  = ( dat.N + epoch_smp - 1 ) / epoch_smp;
+
+      std::vector<int>  epoch_argmax( n_epochs, -1 );
+      std::vector<bool> epoch_valid( n_epochs, false );
+      std::vector<int>  epoch_lo( n_epochs ), epoch_hi( n_epochs );
+
+      for ( int e = 0; e < n_epochs; e++ )
+	{
+	  const int lo = e * epoch_smp;
+	  const int hi = std::min( dat.N, lo + epoch_smp ) - 1;
+	  epoch_lo[e] = lo;
+	  epoch_hi[e] = hi;
+
+	  double sum[5] = { 0.0, 0.0, 0.0, 0.0, 0.0 };
+	  int n_valid = 0;
+	  for ( int i = lo; i <= hi; i++ )
+	    if ( dat.valid[i] )
+	      {
+		for ( int k = 0; k < 5; k++ ) sum[k] += dat.p[k][i];
+		++n_valid;
+	      }
+	  if ( n_valid == 0 ) continue;
+
+	  epoch_valid[e] = true;
+	  int best = 0;
+	  for ( int k = 1; k < 5; k++ )
+	    if ( sum[k] > sum[best] ) best = k;
+	  epoch_argmax[e] = best;
+	}
+
+      int e = 0;
+      while ( e < n_epochs )
+	{
+	  if ( ! epoch_valid[e] ) { ++e; continue; }
+	  const int lo_e = e;
+	  const int st = epoch_argmax[e];
+	  while ( e < n_epochs && epoch_valid[e] && epoch_argmax[e] == st ) ++e;
+	  const int hi_e = e - 1;
+	  const std::string cls = par.hypno_prefix + hd_state_label( false, st );
+	  edf.annotations->add( cls )->add(
+	    "." , interval_t( dat.tp[ epoch_lo[lo_e] ] , dat.tp[ epoch_hi[hi_e] ] + sample_tp ) , "." );
+	}
+      logger << "  emitting hard-called stage annotations (pooled to 30s epochs) under prefix '"
+	     << par.hypno_prefix << "'\n";
     }
 
   hd_hypno_metrics_t hm;
@@ -1963,28 +2290,24 @@ void proc_hdstats( edf_t & edf, param_t & param )
 
 	  writer.level( t_sec, "TIME" );
 	  writer.value( "H",        der.H[i] );
-	  writer.value( "C",        der.C[i] );
+	  writer.value( "CONF",     der.C[i] );
 	  writer.value( "MG",       der.Mg[i] );
-	  writer.value( "TV",       der.TV[i] );
-	  writer.value( "TV_LAG",   der.TV_lag[i] );
-	  writer.value( "MIX_A",    der.mix_wn1[i] );
-	  writer.value( "MIX_B",    der.mix_n2n3[i] );
-	  writer.value( "MIX_C",    der.mix_rn1[i] );
+	  writer.value( "PS",       der.TV[i] );
+	  writer.value( "PS_LAG",   der.TV_lag[i] );
 	  writer.value( "ARGMAX",   der.argmax5[i] );
-	  writer.value( "IS_TRANS",   (int)tr.is_trans5[i] );
-	  writer.value( "IS_STABLE",  (int)tr.is_stable5[i] );
-	  writer.value( "IS_NEITHER", (int)tr.is_neither5[i] );
+	  writer.value( "IS_TRANS",      (int)tr.is_trans5[i] );
+	  writer.value( "IS_BOUT_TRANS", (int)tr.is_bout_trans5[i] );
+	  writer.value( "IS_STABLE",     (int)tr.is_stable5[i] );
 	  if ( par.do_3state )
 	    {
 	      writer.value( "H3",          der.H3[i] );
-	      writer.value( "C3",          der.C3[i] );
-	      writer.value( "TV3",         der.TV3[i] );
+	      writer.value( "CONF3",       der.C3[i] );
+	      writer.value( "PS3",         der.TV3[i] );
+	      writer.value( "PS3_LAG",     der.TV3_lag[i] );
 	      writer.value( "ARGMAX3",     der.argmax3[i] );
-	      writer.value( "IS_TRANS3",   (int)tr.is_trans3[i] );
-	      writer.value( "IS_STABLE3",  (int)tr.is_stable3[i] );
-	      writer.value( "IS_NEITHER3", (int)tr.is_neither3[i] );
-	      writer.value( "MIX_A3",      der.mix3_wnrem[i] );
-	      writer.value( "MIX_C3",      der.mix3_nremr[i] );
+	      writer.value( "IS_TRANS3",      (int)tr.is_trans3[i] );
+	      writer.value( "IS_BOUT_TRANS3", (int)tr.is_bout_trans3[i] );
+	      writer.value( "IS_STABLE3",     (int)tr.is_stable3[i] );
 	    }
 	  writer.unlevel( "TIME" );
 	}

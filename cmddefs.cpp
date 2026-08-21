@@ -2395,15 +2395,13 @@ void cmddefs_t::init()
   add_cmd( "manip" , "RECORD-SIZE" , "Change EDF record size" );
   add_url( "RECORD-SIZE" , "manipulations/#record-size" );
   add_verb( "RECORD-SIZE" ,
-	    "RECORD-SIZE rewrites the in-memory EDF to a new record duration and then writes the result\n"
-	    "to disk via the normal WRITE machinery.\n"
-	    "\n"
-	    "This is primarily a file-writing operation, and unless no-problem is set it marks the EDF as\n"
-	    "done so processing continues with the next record in a sample list." );
+	    "RECORD-SIZE changes the in-memory EDF record duration. By default it writes a restructured EDF; "
+	    "use continue to keep the restructured EDF in memory for later commands." );
   add_param( "RECORD-SIZE" , "dur" , "1" , "New EDF record/block size" );
   add_param( "RECORD-SIZE" , "edf-dir" , "edfs/" , "Folder for writing new EDFs" );
   add_param( "RECORD-SIZE" , "edf-tag" , "rec1" , "Tag added to new EDFs" );
   add_param( "RECORD-SIZE" , "sample-list" , "s2.lst" , "Generate a sample-list pointing to the new EDFs" );
+  add_param( "RECORD-SIZE" , "continue" , "" , "Keep the restructured EDF in memory; do not write a new EDF" );
   add_param( "RECORD-SIZE" , "no-problem" , "" , "Do not set the problem flag after writing the new EDF" );
 
   add_table( "RECORD-SIZE" , "" , "Restructured data duration" );
@@ -3784,6 +3782,8 @@ void cmddefs_t::init()
   add_param( "HYPNO" , "force" , "" , "Rebuild sleep staging annotations even if they already exist" );
   add_param( "HYPNO" , "epoch" , "" , "Emit epoch-level hypnogram outputs" );
   add_param( "HYPNO" , "verbose" , "T" , "Control cycle and transition outputs (default T)" );
+  add_param( "HYPNO" , "trans3" , "T" , "Emit NR/R/W PRE/POST transition strata (default T)" );
+  add_param( "HYPNO" , "trans5" , "F" , "Emit N1/N2/N3/R/W PRE/POST transition strata (default F)" );
   add_param( "HYPNO" , "annot" , "hyp_" , "Add hypnogram-derived annotations with this optional prefix" );
   add_param( "HYPNO" , "annot-cycles" , "hyp_" , "Legacy alias for annot" );
 
@@ -3943,9 +3943,19 @@ void cmddefs_t::init()
   
   add_table( "HYPNO" , "PRE,POST" , "Stage transitions" );
   add_var( "HYPNO", "PRE,POST" , "N" , "Number of transitions" );
+  add_var( "HYPNO", "PRE,POST" , "N_PRE" , "Total transitions with this PRE stage" );
+  add_var( "HYPNO", "PRE,POST" , "N_POST" , "Total transitions with this POST stage" );
   add_var( "HYPNO", "PRE,POST" , "P" , "Overall proportion of transitions in this cell" );
   add_var( "HYPNO" , "PRE,POST" , "P_POST_COND_PRE" , "P( S+1 | S )" );
   add_var( "HYPNO" , "PRE,POST" , "P_PRE_COND_POST" , "P( S | S+1 )" );
+
+  add_table( "HYPNO" , "TRANS5,PRE,POST" , "Five-state stage transitions" );
+  add_var( "HYPNO", "TRANS5,PRE,POST" , "N" , "Number of transitions" );
+  add_var( "HYPNO", "TRANS5,PRE,POST" , "N_PRE" , "Total transitions with this PRE stage" );
+  add_var( "HYPNO", "TRANS5,PRE,POST" , "N_POST" , "Total transitions with this POST stage" );
+  add_var( "HYPNO", "TRANS5,PRE,POST" , "P" , "Overall proportion of transitions in this cell" );
+  add_var( "HYPNO" , "TRANS5,PRE,POST" , "P_POST_COND_PRE" , "P( S+1 | S )" );
+  add_var( "HYPNO" , "TRANS5,PRE,POST" , "P_PRE_COND_POST" , "P( S | S+1 )" );
 
   //
   // EPDYN
@@ -4538,72 +4548,79 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "N1"         , "PP_N1"  , "Channel name for N1 posterior" );
   add_param( "HDSTATS" , "N2"         , "PP_N2"  , "Channel name for N2 posterior" );
   add_param( "HDSTATS" , "N3"         , "PP_N3"  , "Channel name for N3 posterior" );
-  add_param( "HDSTATS" , "NR"         , "PP_NR"  , "Channel name for NREM posterior output used by emit-nr-pp" );
+  add_param( "HDSTATS" , "NR"         , "PP_NR"  , "Channel name for NREM posterior (used by emit-nr-pp)" );
   add_param( "HDSTATS" , "R"          , "PP_R"   , "Channel name for REM posterior" );
-  add_param( "HDSTATS" , "emit-nr-pp" , "F"      , "If set, create NR by summing any available N1/N2/N3 posterior channels unless NR already exists; errors if none of N1/N2/N3 are present, then continues with HDSTATS unless emit-stats=F" );
-  add_param( "HDSTATS" , "emit-stats" , "T"      , "Emit the normal HDSTATS summaries/tables; set F to only run helper actions such as emit-nr-pp" );
-  add_param( "HDSTATS" , "3state"     , ""       , "Also compute 3-state (W/NREM/R) summaries" );
-  add_param( "HDSTATS" , "transition" , "boundary" , "Legacy option retained for compatibility; HDSTATS now uses boundary-based left/right support to detect transitions" );
-  add_param( "HDSTATS" , "motion-th"  , "0.1"    , "Legacy option retained for compatibility; ignored by boundary-based transition detection" );
+  add_param( "HDSTATS" , "emit-nr-pp" , "F"      , "Create NR by summing available N1/N2/N3 posterior channels" );
+  add_param( "HDSTATS" , "emit-stats" , "T"      , "Emit the normal HDSTATS summaries and tables" );
+  add_param( "HDSTATS" , "3state"     , "T"      , "Also compute 3-state (W/NREM/R) summaries" );
   add_param( "HDSTATS" , "window"     , "60"     , "Transition window half-width (seconds)" );
-  add_param( "HDSTATS" , "lag"        , "30"     , "Lag for longer-lag TV metric (seconds)" );
-  add_param( "HDSTATS" , "stable-min" , "30"     , "Minimum contiguous duration (seconds) required on each flank for a directional transition to qualify as stable-to-stable" );
-  add_param( "HDSTATS" , "stable-tv"  , "0.05"   , "Per-sample TV must be below this threshold to qualify as stable-core" );
-  add_param( "HDSTATS" , "stable-conf", "0.70"   , "Per-sample confidence must exceed this threshold to qualify as stable-core" );
-  add_param( "HDSTATS" , "conf-th"    , "0.8"    , "Confidence threshold for FRAC_C_LT metric" );
-  add_param( "HDSTATS" , "min-shift"  , "0.10"   , "Minimum left/right posterior L1 shift required to retain a detected boundary transition event" );
-  add_param( "HDSTATS" , "shift-win"  , "30"     , "Left/right support window (seconds) used to compute boundary-transition support and min-shift filtering" );
+  add_param( "HDSTATS" , "lag"        , "30"     , "Lag for the longer-lag PS metric (seconds)" );
+  add_param( "HDSTATS" , "stable-min" , "30"     , "Minimum contiguous flank duration (seconds) for a stable-to-stable transition" );
+  add_param( "HDSTATS" , "stable-ps"  , "0.05"   , "Per-sample PS must be below this to qualify as stable-core" );
+  add_param( "HDSTATS" , "stable-conf", "0.70"   , "Per-sample confidence threshold to qualify as stable-core" );
+  add_param( "HDSTATS" , "conf-th"    , "0.8"    , "Confidence threshold for FRAC_LOW_CONF" );
+  add_param( "HDSTATS" , "min-shift"  , "0.10"   , "Minimum left/right posterior shift to accept a boundary transition" );
+  add_param( "HDSTATS" , "shift-win"  , "30"     , "Left/right support window (seconds) for boundary-transition detection" );
+  add_param( "HDSTATS" , "bout-min"   , "120"    , "Minimum settled-run duration (seconds) to qualify as a bout, used for N_BOUT_TRANS and the SEC-aligned profiles" );
+  add_param( "HDSTATS" , "bout-gap"   , "30"     , "Maximum gap (seconds) tolerated when merging same-stage runs into a bout" );
+  add_param( "HDSTATS" , "bout-smooth", "15"     , "Centered moving-average half-window (seconds) applied to PS/CONF before the bout stability test only (0=off)" );
   add_param( "HDSTATS" , "hd-metrics" , "T"      , "Emit HD_ hypnodensity analogs of selected HYPNO metrics" );
   add_param( "HDSTATS" , "hd-smooth"  , "30"     , "Smoothing window (seconds) for soft sleep/REM trajectories" );
-  add_param( "HDSTATS" , "hd-onset-win" , "10"   , "Forward integrated-area window (minutes) for sustained sleep/REM entry detection" );
+  add_param( "HDSTATS" , "hd-onset-win" , "10"   , "Forward integration window (minutes) for sustained sleep/REM entry" );
   add_param( "HDSTATS" , "hd-sleep-mass-th" , "0.60" , "Mean sleep probability threshold for sustained sleep entry" );
   add_param( "HDSTATS" , "hd-rem-mass-th" , "0.30" , "Mean REM probability threshold for sustained REM entry" );
-  add_param( "HDSTATS" , "hd-offset-win" , "10"  , "Backward integrated-area window (minutes) for final sustained sleep detection" );
-  add_param( "HDSTATS" , "hd-offset-mass-th" , "0.60" , "Mean sleep probability threshold for final sustained sleep detection" );
-  add_param( "HDSTATS" , "min-samples" , "20"    , "Minimum samples required to emit REGION-based summaries for any context/stratum" );
+  add_param( "HDSTATS" , "hd-offset-win" , "10"  , "Backward integration window (minutes) for final sustained sleep" );
+  add_param( "HDSTATS" , "hd-offset-mass-th" , "0.60" , "Mean sleep probability threshold for final sustained sleep" );
+  add_param( "HDSTATS" , "min-samples" , "20"    , "Minimum samples required to emit STABLE summaries" );
   add_param( "HDSTATS" , "annot"      , ""       , "Annotation class to stratify output by" );
   add_param( "HDSTATS" , "min-events"  , "3"      , "Minimum events required to emit aligned transition profile" );
   add_param( "HDSTATS" , "emit-annots", ""       , "Emit detected transitions as annotations under this class name" );
-  add_param( "HDSTATS" , "emit-annots-by-type", "F" , "If set, encode directional transition type in the emitted point-event annotation class name; implies emit-annots with default label hd" );
-  add_param( "HDSTATS" , "verbose"    , ""       , "Emit per-sample HDSIG time-series table" );
+  add_param( "HDSTATS" , "emit-annots-by-type", "F" , "Encode transition type in the emitted annotation class name" );
+  add_param( "HDSTATS" , "emit-sigs"  , ""       , "Emit per-sample PS/H/CONF (and PS3/H3/CONF3 if 3state) as new EDF signals under this channel-name prefix" );
+  add_param( "HDSTATS" , "emit-hypnogram", ""    , "Emit hard-called stage runs, pooled to 30s epochs, as annotations (N1/N2/N3/R/W), optionally under this prefix" );
+  add_param( "HDSTATS" , "verbose"    , ""       , "Emit the per-sample TIME table" );
 
-  const std::vector<std::string> hdstats_top_tables = { "", "ANNOT", "STATE", "ANNOT,STATE" };
-  const std::vector<std::string> hdstats_ss_tables = { "SS", "SS,ANNOT" };
+  // emit_state() — which carries every var below except HD_SPT-family, HD_MINS/
+  // HD_PCT/HD_DENS, and the validity counts — always emits an NSS level (5, and
+  // also 3 when 3state is on), unconditionally, so every table below that depends
+  // on it genuinely always includes NSS. There is no bare/NSS-less variant.
+  const std::vector<std::string> hdstats_top_tables = { "NSS", "ANNOT,NSS" };
+  // HD_SPT-family / HD_MINS / HD_PCT / HD_DENS come from write_hd_hypno_metrics(),
+  // called once before any NSS/ANNOT stratification and gated on hm != NULL —
+  // hm is only ever non-NULL for the single unstratified top-level pass, so these
+  // only ever populate under bare "SS", never NSS- or ANNOT-stratified.
+  const std::vector<std::string> hdstats_ss_tables = { "SS" };
+  // Bare (unstratified-by-STABLE) contexts: top-level plus per-stage (SS), crossed
+  // with NSS/ANNOT wherever emit_state()'s SS loop actually runs.
+  const std::vector<std::string> hdstats_bare_tables = {
+    "NSS", "ANNOT,NSS", "NSS,SS", "ANNOT,NSS,SS"
+  };
   const std::vector<std::string> hdstats_region_tables = {
-    "REGION",
-    "REGION,ANNOT",
-    "REGION,STATE",
-    "REGION,ANNOT,STATE",
-    "REGION,SS",
-    "REGION,ANNOT,SS",
-    "REGION,STATE,SS",
-    "REGION,ANNOT,STATE,SS"
+    "STABLE,NSS",
+    "STABLE,ANNOT,NSS",
+    "STABLE,NSS,SS",
+    "STABLE,ANNOT,NSS,SS"
   };
   const std::vector<std::string> hdstats_trans_tables = {
-    "TRANS",
-    "STATE,TRANS",
-    "ANNOT,TRANS",
-    "ANNOT,STATE,TRANS"
+    "NSS,TRANS",
+    "ANNOT,NSS,TRANS"
   };
-  const std::vector<std::string> hdstats_offset_tables = {
-    "OFFSET",
-    "QUAL,OFFSET",
-    "STATE,OFFSET",
-    "STATE,QUAL,OFFSET",
-    "ANNOT,OFFSET",
-    "ANNOT,QUAL,OFFSET",
-    "ANNOT,STATE,OFFSET",
-    "ANNOT,STATE,QUAL,OFFSET"
+  const std::vector<std::string> hdstats_mix_tables = {
+    "NSS,MIX",
+    "ANNOT,NSS,MIX"
   };
-  const std::vector<std::string> hdstats_trans_offset_tables = {
-    "TRANS,OFFSET",
-    "QUAL,TRANS,OFFSET",
-    "STATE,TRANS,OFFSET",
-    "STATE,QUAL,TRANS,OFFSET",
-    "ANNOT,TRANS,OFFSET",
-    "ANNOT,QUAL,TRANS,OFFSET",
-    "ANNOT,STATE,TRANS,OFFSET",
-    "ANNOT,STATE,QUAL,TRANS,OFFSET"
+  // HD_DENS needs hd_spt, which is only computed for the unstratified pass
+  // (hm is always NULL under ANNOT) — so it never populates under ANNOT,MIX.
+  const std::vector<std::string> hdstats_mix_bare_tables = {
+    "NSS,MIX"
+  };
+  const std::vector<std::string> hdstats_sec_tables = {
+    "NSS,SEC",
+    "ANNOT,NSS,SEC"
+  };
+  const std::vector<std::string> hdstats_bout_sec_tables = {
+    "NSS,BOUT_TRANS,SEC",
+    "ANNOT,NSS,BOUT_TRANS,SEC"
   };
   auto add_hdstats_var = [&]( const std::vector<std::string> & tables ,
 			      const std::string & var ,
@@ -4613,123 +4630,128 @@ void cmddefs_t::init()
 	add_var( "HDSTATS" , tables[i] , var , desc );
     };
 
-  add_table( "HDSTATS" , ""                 , "Overall HDSTATS summary" );
-  add_table( "HDSTATS" , "ANNOT"            , "Same top-level summary statistics, stratified by annotation level" );
-  add_table( "HDSTATS" , "STATE"            , "Top-level transition summaries by state representation (5/3); only with 3state option" );
-  add_table( "HDSTATS" , "ANNOT,STATE"      , "Same top-level transition summaries, stratified by annotation level and state representation" );
+  add_table( "HDSTATS" , ""                 , "Sleep timing (HD_*) and channel-validity summary, unstratified" );
+  add_table( "HDSTATS" , "NSS"              , "Overall HDSTATS summary, by state representation (5/3)" );
+  add_table( "HDSTATS" , "ANNOT,NSS"        , "Overall HDSTATS summary, by annotation level and state representation" );
+  add_var(   "HDSTATS" , ""                 , "HD_SPT"       , "Sleep period time (minutes, first to final sustained sleep)" );
+  add_var(   "HDSTATS" , ""                 , "HD_SME"       , "Sleep maintenance efficiency (sleep mass / HD_SPT)" );
+  add_var(   "HDSTATS" , ""                 , "HD_WASO"      , "Wake after sleep onset (minutes)" );
+  add_var(   "HDSTATS" , ""                 , "HD_SOL"       , "Sleep latency (minutes from recording start)" );
+  add_var(   "HDSTATS" , ""                 , "HD_REM_LAT"   , "REM latency (minutes from sleep onset)" );
+  add_var(   "HDSTATS" , ""                 , "HD_REM_LAT2"  , "REM latency excluding wake (minutes)" );
+  add_var(   "HDSTATS" , ""                 , "N_VALID"          , "Number of valid (in-range posterior) samples" );
+  add_var(   "HDSTATS" , ""                 , "PCT_VALID"        , "Percentage of samples that are valid" );
+  add_var(   "HDSTATS" , ""                 , "N_INVALID_LEAD"   , "Number of invalid samples trimmed from the start" );
+  add_var(   "HDSTATS" , ""                 , "N_INVALID_TRAIL"  , "Number of invalid samples trimmed from the end" );
+  add_var(   "HDSTATS" , ""                 , "N_INVALID_MID"    , "Number of invalid samples found mid-recording" );
 
-  add_table( "HDSTATS" , "SS"               , "HYPNO-style stage summaries derived from hypnodensity" );
-  add_table( "HDSTATS" , "SS,ANNOT"         , "Same, stratified by annotation level" );
-  add_var(   "HDSTATS" , ""                 , "HD_SPT"       , "Hypnodensity sleep period time (minutes from first to final sustained sleep)" );
-  add_var(   "HDSTATS" , ""                 , "HD_SME"       , "Hypnodensity sleep maintenance efficiency (sleep mass / HD_SPT)" );
-  add_var(   "HDSTATS" , ""                 , "HD_WASO"      , "Hypnodensity wake after sleep onset (minutes)" );
-  add_var(   "HDSTATS" , ""                 , "HD_SOL"       , "Hypnodensity sleep latency (minutes from recording start)" );
-  add_var(   "HDSTATS" , ""                 , "HD_REM_LAT"   , "Hypnodensity REM latency (minutes from HD sleep onset)" );
-  add_var(   "HDSTATS" , ""                 , "HD_REM_LAT2"  , "Hypnodensity REM latency excluding wake (minutes of sleep mass until REM)" );
+  add_table( "HDSTATS" , "SS"               , "Sleep timing (HD_MINS/HD_PCT/HD_DENS) by stage, unstratified" );
+  add_table( "HDSTATS" , "NSS,SS"           , "Mixedness/instability by stage, by state representation (5/3)" );
+  add_table( "HDSTATS" , "ANNOT,NSS,SS"     , "Mixedness/instability by stage, by annotation level and state representation" );
   add_hdstats_var( hdstats_ss_tables, "HD_MINS", "Expected stage duration from posterior mass (minutes)" );
-  add_hdstats_var( hdstats_ss_tables, "HD_PCT",  "Expected stage duration as % of hypnodensity total sleep time" );
+  add_hdstats_var( hdstats_ss_tables, "HD_PCT",  "Expected stage duration as % of total sleep time" );
   add_hdstats_var( hdstats_ss_tables, "HD_DENS", "Expected stage duration as a proportion of HD_SPT" );
 
-  add_table( "HDSTATS" , "REGION"                  , "Mixedness and instability by region (ALL/STABLE/TRANS/NEITHER)" );
-  add_table( "HDSTATS" , "REGION,ANNOT"            , "Same, stratified by annotation level" );
-  add_table( "HDSTATS" , "REGION,STATE"            , "Same, by state representation (5/3); only with 3state option" );
-  add_table( "HDSTATS" , "REGION,ANNOT,STATE"      , "Same, stratified by annotation level and state representation" );
-  add_table( "HDSTATS" , "REGION,SS"            , "Same, stratified by most-likely stage" );
-  add_table( "HDSTATS" , "REGION,ANNOT,SS"      , "Same, stratified by annotation level and most-likely stage" );
-  add_table( "HDSTATS" , "REGION,STATE,SS"      , "Same, stratified by state representation and most-likely stage" );
-  add_table( "HDSTATS" , "REGION,ANNOT,STATE,SS", "Same, stratified by annotation level, state representation, and most-likely stage" );
+  add_table( "HDSTATS" , "STABLE,NSS",       "Mixedness and instability, by STABLE (1) / UNSTABLE (0) and state representation" );
+  add_table( "HDSTATS" , "STABLE,ANNOT,NSS", "Mixedness and instability, by STABLE (1) / UNSTABLE (0), annotation level, and state representation" );
+  add_table( "HDSTATS" , "STABLE,NSS,SS",       "Mixedness and instability, by STABLE (1) / UNSTABLE (0), state representation, and most-likely stage" );
+  add_table( "HDSTATS" , "STABLE,ANNOT,NSS,SS", "Mixedness and instability, by STABLE (1) / UNSTABLE (0), annotation level, state representation, and most-likely stage" );
+
+  // Core mixedness/instability vars: valid both bare (unstratified by STABLE,
+  // e.g. the overall context or a per-stage SS row) and within a STABLE=1/0
+  // bucket.
+  add_hdstats_var( hdstats_bare_tables,   "N",         "Number of samples" );
   add_hdstats_var( hdstats_region_tables, "N",         "Number of samples in region" );
-  add_hdstats_var( hdstats_region_tables, "H",         "Mean entropy of the posterior distribution across states" );
-  add_hdstats_var( hdstats_region_tables, "SD_H",      "SD entropy" );
-  add_hdstats_var( hdstats_region_tables, "P90_H",     "90th percentile entropy" );
-  add_hdstats_var( hdstats_region_tables, "C",         "Mean confidence, defined as the maximum posterior probability at each sample" );
-  add_hdstats_var( hdstats_region_tables, "FRAC_C_LT", "Fraction of samples with confidence below conf-th" );
-  add_hdstats_var( hdstats_region_tables, "MG",        "Mean margin, defined as the largest minus second-largest posterior at each sample" );
-  add_hdstats_var( hdstats_region_tables, "TV",        "Mean one-sample total-variation step, i.e. 0.5 * sum |p(t)-p(t-1)| across states" );
-  add_hdstats_var( hdstats_region_tables, "SD_TV",     "SD of the one-sample total-variation step across samples in the region" );
-  add_hdstats_var( hdstats_region_tables, "P90_TV",    "90th percentile of the one-sample total-variation step" );
-  add_hdstats_var( hdstats_region_tables, "TV_LAG",    "Mean longer-lag total variation, i.e. 0.5 * sum |p(t)-p(t-lag)|; default lag is 30 seconds" );
-  add_hdstats_var( hdstats_region_tables, "CORR_H_TV", "Pearson correlation between entropy and TV" );
-  add_hdstats_var( hdstats_region_tables, "MIX_A",     "Mean W/N1 pairwise mixing (5-state) or W/NREM (3-state)" );
-  add_hdstats_var( hdstats_region_tables, "MIX_B",     "Mean N2/N3 pairwise mixing (5-state only)" );
-  add_hdstats_var( hdstats_region_tables, "MIX_C",     "Mean R/N1 pairwise mixing (5-state) or NREM/R (3-state)" );
+  add_hdstats_var( hdstats_bare_tables,   "H",         "Mean entropy of the posterior across states" );
+  add_hdstats_var( hdstats_region_tables, "H",         "Mean entropy of the posterior across states" );
+  add_hdstats_var( hdstats_bare_tables,   "H_P90",     "90th percentile entropy" );
+  add_hdstats_var( hdstats_region_tables, "H_P90",     "90th percentile entropy" );
+  add_hdstats_var( hdstats_bare_tables,   "CONF",         "Mean confidence (max posterior probability)" );
+  add_hdstats_var( hdstats_region_tables, "CONF",         "Mean confidence (max posterior probability)" );
+  add_hdstats_var( hdstats_bare_tables,   "FRAC_LOW_CONF", "Fraction of samples with confidence below conf-th" );
+  add_hdstats_var( hdstats_region_tables, "FRAC_LOW_CONF", "Fraction of samples with confidence below conf-th" );
+  add_hdstats_var( hdstats_bare_tables,   "MG",        "Mean margin (top minus second posterior)" );
+  add_hdstats_var( hdstats_region_tables, "MG",        "Mean margin (top minus second posterior)" );
+  add_hdstats_var( hdstats_bare_tables,   "PS",        "Mean one-sample posterior shift" );
+  add_hdstats_var( hdstats_region_tables, "PS",        "Mean one-sample posterior shift" );
+  add_hdstats_var( hdstats_bare_tables,   "PS_P90",    "90th percentile PS" );
+  add_hdstats_var( hdstats_region_tables, "PS_P90",    "90th percentile PS" );
+  add_hdstats_var( hdstats_bare_tables,   "PS_LAG",    "Mean longer-lag posterior shift (default 30s lag)" );
+  add_hdstats_var( hdstats_region_tables, "PS_LAG",    "Mean longer-lag posterior shift (default 30s lag)" );
+  add_hdstats_var( hdstats_bare_tables,   "P_W",       "Mean wake posterior probability" );
   add_hdstats_var( hdstats_region_tables, "P_W",       "Mean wake posterior probability" );
+  add_hdstats_var( hdstats_bare_tables,   "P_NR",      "Mean NREM posterior probability (3-state only)" );
   add_hdstats_var( hdstats_region_tables, "P_NR",      "Mean NREM posterior probability (3-state only)" );
+  add_hdstats_var( hdstats_bare_tables,   "P_N1",      "Mean N1 posterior probability (5-state only)" );
   add_hdstats_var( hdstats_region_tables, "P_N1",      "Mean N1 posterior probability (5-state only)" );
+  add_hdstats_var( hdstats_bare_tables,   "P_N2",      "Mean N2 posterior probability (5-state only)" );
   add_hdstats_var( hdstats_region_tables, "P_N2",      "Mean N2 posterior probability (5-state only)" );
+  add_hdstats_var( hdstats_bare_tables,   "P_N3",      "Mean N3 posterior probability (5-state only)" );
   add_hdstats_var( hdstats_region_tables, "P_N3",      "Mean N3 posterior probability (5-state only)" );
+  add_hdstats_var( hdstats_bare_tables,   "P_R",       "Mean REM posterior probability" );
   add_hdstats_var( hdstats_region_tables, "P_R",       "Mean REM posterior probability" );
-  add_hdstats_var( std::vector<std::string>{ "REGION", "REGION,ANNOT", "REGION,STATE", "REGION,ANNOT,STATE" },
-                    "PCT_STABLE", "Percentage of context samples classified as stable-core (REGION=ALL rows only)" );
-  add_hdstats_var( std::vector<std::string>{ "REGION", "REGION,ANNOT", "REGION,STATE", "REGION,ANNOT,STATE" },
-                    "PCT_TRANS", "Percentage of context samples classified as transition-zone (REGION=ALL rows only)" );
-  add_hdstats_var( std::vector<std::string>{ "REGION", "REGION,ANNOT", "REGION,STATE", "REGION,ANNOT,STATE" },
-                    "PCT_NEITHER", "Percentage of context samples classified as neither stable-core nor transition-zone (REGION=ALL rows only)" );
 
-  add_hdstats_var( hdstats_top_tables,   "H_RATIO_TR_ST",  "Entropy ratio: transition / stable" );
-  add_hdstats_var( hdstats_top_tables,   "CONF_DIFF_TR_ST","Confidence difference: transition - stable" );
-  add_hdstats_var( hdstats_top_tables,   "TV_RATIO_TR_ST", "TV ratio: transition / stable" );
-  add_hdstats_var( hdstats_top_tables,   "N_TRANS",        "Number of transition events detected" );
-  add_hdstats_var( hdstats_top_tables,   "N_CLEAN",        "Number of clean transition events with stable-core on both sides of the transition window" );
-  add_hdstats_var( hdstats_top_tables,   "TRANS_DENS",     "Transition density (events per hour)" );
-  add_hdstats_var( hdstats_top_tables,   "DENS_CLEAN",     "Density of clean transition events (events per hour)" );
-  add_hdstats_var( hdstats_top_tables,   "TRANS_WIDTH",    "Mean transition width in seconds, estimated from the detected transition window" );
-  add_hdstats_var( hdstats_top_tables,   "PEAK_H",         "Mean peak entropy attained within the transition window" );
-  add_hdstats_var( hdstats_top_tables,   "MIN_C",          "Mean minimum confidence attained within the transition window" );
-  add_hdstats_var( hdstats_top_tables,   "TV_AREA",        "Mean TV area under the transition window curve, reported in seconds" );
+  // Bare-only: unstable/broken under range restriction (CORR_H_PS) or only
+  // meaningful as a share of the whole context (PCT_STABLE).
+  add_hdstats_var( hdstats_bare_tables, "CORR_H_PS", "Pearson correlation between entropy and PS" );
+  add_hdstats_var( hdstats_bare_tables, "PCT_STABLE", "Percentage of context classified as stable" );
 
-  add_table( "HDSTATS" , "TRANS"                  , "Transition-pair-specific summary statistics" );
-  add_table( "HDSTATS" , "STATE,TRANS"            , "Transition-pair-specific summary statistics by state representation" );
-  add_table( "HDSTATS" , "ANNOT,TRANS"            , "Same, stratified by annotation level" );
-  add_table( "HDSTATS" , "ANNOT,STATE,TRANS"      , "Same, stratified by annotation level and state representation" );
-  add_hdstats_var( hdstats_trans_tables, "N_TRANS",    "Number of transition events detected" );
-  add_hdstats_var( hdstats_trans_tables, "TRANS_DENS", "Transition density (events per hour)" );
-  add_hdstats_var( hdstats_trans_tables, "TRANS_WIDTH","Mean transition width in seconds, estimated from the detected transition window" );
-  add_hdstats_var( hdstats_trans_tables, "PEAK_H",     "Mean peak entropy attained within the transition window" );
-  add_hdstats_var( hdstats_trans_tables, "MIN_C",      "Mean minimum confidence attained within the transition window" );
-  add_hdstats_var( hdstats_trans_tables, "TV_AREA",    "Mean TV area under the transition window curve, reported in seconds" );
+  add_hdstats_var( hdstats_top_tables,   "H_RATIO_UN_ST",  "Entropy ratio: unstable / stable" );
+  add_hdstats_var( hdstats_top_tables,   "CONF_DIFF_UN_ST","Confidence difference: unstable - stable" );
+  add_hdstats_var( hdstats_top_tables,   "PS_RATIO_UN_ST", "PS ratio: unstable / stable" );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_N",        "Number of transitions detected (event-based, see min-shift/shift-win)" );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_N",   "Number of bout-to-bout transitions (block-based, see bout-min/bout-gap)" );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_DENS",     "TRANS_N density (per hour)" );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_DENS","BOUT_TRANS_N density (per hour)" );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_DUR",      "Mean transition duration (seconds)" );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_PEAK_H",   "Mean peak entropy across each transition window" );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_MIN_CONF", "Mean minimum confidence across each transition window" );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_TOT_PS",   "Mean PS area under each transition curve (seconds)" );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_N_MATCHED",   "Number of TRANS events that also fall within a BOUT_TRANS gap" );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_PCT_MATCHED", "TRANS_N_MATCHED as a percentage of TRANS_N; low values indicate fragmentation" );
 
-  add_table( "HDSTATS" , "OFFSET"                  , "Transition-aligned mean profiles (HDTRANS_PROFILE)" );
-  add_table( "HDSTATS" , "QUAL,OFFSET"             , "Transition-aligned mean profiles restricted to clean transitions" );
-  add_table( "HDSTATS" , "STATE,OFFSET"            , "Same aligned profiles by state representation" );
-  add_table( "HDSTATS" , "STATE,QUAL,OFFSET"       , "Same clean aligned profiles by state representation" );
-  add_table( "HDSTATS" , "ANNOT,OFFSET"            , "Same aligned profiles, stratified by annotation level" );
-  add_table( "HDSTATS" , "ANNOT,QUAL,OFFSET"       , "Same clean aligned profiles, stratified by annotation level" );
-  add_table( "HDSTATS" , "ANNOT,STATE,OFFSET"      , "Same aligned profiles, stratified by annotation level and state representation" );
-  add_table( "HDSTATS" , "ANNOT,STATE,QUAL,OFFSET" , "Same clean aligned profiles, stratified by annotation level and state representation" );
-  add_hdstats_var( hdstats_offset_tables, "H",    "Mean entropy at offset" );
-  add_hdstats_var( hdstats_offset_tables, "C",    "Mean confidence at offset" );
-  add_hdstats_var( hdstats_offset_tables, "MG",   "Mean margin at offset" );
-  add_hdstats_var( hdstats_offset_tables, "TV",   "Centered mean one-sample total-variation step at the given offset from transition time" );
-  add_hdstats_var( hdstats_offset_tables, "P_W",  "Mean wake posterior at offset" );
-  add_hdstats_var( hdstats_offset_tables, "P_NR", "Mean NREM posterior at offset (3-state only)" );
-  add_hdstats_var( hdstats_offset_tables, "P_N1", "Mean N1 posterior at offset (5-state only)" );
-  add_hdstats_var( hdstats_offset_tables, "P_N2", "Mean N2 posterior at offset (5-state only)" );
-  add_hdstats_var( hdstats_offset_tables, "P_N3", "Mean N3 posterior at offset (5-state only)" );
-  add_hdstats_var( hdstats_offset_tables, "P_R",  "Mean REM posterior at offset" );
+  add_table( "HDSTATS" , "NSS,TRANS"            , "Transition-pair-specific summary statistics, by state representation" );
+  add_table( "HDSTATS" , "ANNOT,NSS,TRANS"      , "Transition-pair-specific summary statistics, by annotation level and state representation" );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_N",        "Number of transitions detected" );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_DENS",     "Transition density (per hour)" );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_DUR",      "Mean transition duration (seconds)" );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_PEAK_H",   "Mean peak entropy across each transition window" );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_MIN_CONF", "Mean minimum confidence across each transition window" );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_TOT_PS",   "Mean PS area under each transition curve (seconds)" );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_N_MATCHED",   "Number of TRANS events (this pair) that also fall within a BOUT_TRANS gap" );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_PCT_MATCHED", "TRANS_N_MATCHED as a percentage of TRANS_N (this pair)" );
 
-  add_table( "HDSTATS" , "TRANS,OFFSET"            , "Transition-pair-specific aligned profiles" );
-  add_table( "HDSTATS" , "QUAL,TRANS,OFFSET"       , "Clean transition-pair-specific aligned profiles" );
-  add_table( "HDSTATS" , "STATE,TRANS,OFFSET"      , "Transition-pair-specific aligned profiles by state representation" );
-  add_table( "HDSTATS" , "STATE,QUAL,TRANS,OFFSET" , "Clean transition-pair-specific aligned profiles by state representation" );
-  add_table( "HDSTATS" , "ANNOT,TRANS,OFFSET"      , "Same, stratified by annotation level" );
-  add_table( "HDSTATS" , "ANNOT,QUAL,TRANS,OFFSET" , "Same clean profiles, stratified by annotation level" );
-  add_table( "HDSTATS" , "ANNOT,STATE,TRANS,OFFSET", "Same, stratified by annotation level and state representation" );
-  add_table( "HDSTATS" , "ANNOT,STATE,QUAL,TRANS,OFFSET", "Same clean profiles, stratified by annotation level and state representation" );
-  add_hdstats_var( hdstats_trans_offset_tables, "H",    "Mean entropy at offset" );
-  add_hdstats_var( hdstats_trans_offset_tables, "C",    "Mean confidence at offset" );
-  add_hdstats_var( hdstats_trans_offset_tables, "MG",   "Mean margin at offset" );
-  add_hdstats_var( hdstats_trans_offset_tables, "TV",   "Centered mean one-sample total-variation step at the given offset from transition time" );
-  add_hdstats_var( hdstats_trans_offset_tables, "P_W",  "Mean wake posterior at offset" );
-  add_hdstats_var( hdstats_trans_offset_tables, "P_NR", "Mean NREM posterior at offset (3-state only)" );
-  add_hdstats_var( hdstats_trans_offset_tables, "P_N1", "Mean N1 posterior at offset (5-state only)" );
-  add_hdstats_var( hdstats_trans_offset_tables, "P_N2", "Mean N2 posterior at offset (5-state only)" );
-  add_hdstats_var( hdstats_trans_offset_tables, "P_N3", "Mean N3 posterior at offset (5-state only)" );
-  add_hdstats_var( hdstats_trans_offset_tables, "P_R",  "Mean REM posterior at offset" );
+  add_table( "HDSTATS" , "NSS,MIX"              , "State-set mixing, by combination of states and state representation" );
+  add_table( "HDSTATS" , "ANNOT,NSS,MIX"        , "State-set mixing, by combination of states, annotation level, and state representation" );
+  add_hdstats_var( hdstats_mix_tables,      "HD_MINS", "Expected minutes jointly ambiguous across this state set" );
+  add_hdstats_var( hdstats_mix_bare_tables, "HD_DENS", "HD_MINS as a proportion of HD_SPT" );
+
+  add_table( "HDSTATS" , "NSS,SEC"            , "Bout-to-bout transition-aligned mean profiles, by state representation" );
+  add_table( "HDSTATS" , "ANNOT,NSS,SEC"      , "Bout-to-bout transition-aligned mean profiles, by annotation level and state representation" );
+  add_hdstats_var( hdstats_sec_tables, "H",    "Mean entropy at offset" );
+  add_hdstats_var( hdstats_sec_tables, "CONF", "Mean confidence at offset" );
+  add_hdstats_var( hdstats_sec_tables, "MG",   "Mean margin at offset" );
+  add_hdstats_var( hdstats_sec_tables, "PS",   "Mean PS at offset" );
+
+  add_table( "HDSTATS" , "NSS,BOUT_TRANS,SEC"      , "Bout-to-bout transition-pair-specific aligned profiles, by state representation" );
+  add_table( "HDSTATS" , "ANNOT,NSS,BOUT_TRANS,SEC", "Bout-to-bout transition-pair-specific aligned profiles, by annotation level and state representation" );
+  add_hdstats_var( hdstats_bout_sec_tables, "H",    "Mean entropy at offset" );
+  add_hdstats_var( hdstats_bout_sec_tables, "CONF", "Mean confidence at offset" );
+  add_hdstats_var( hdstats_bout_sec_tables, "MG",   "Mean margin at offset" );
+  add_hdstats_var( hdstats_bout_sec_tables, "PS",   "Mean PS at offset" );
+  add_hdstats_var( hdstats_bout_sec_tables, "P_W",  "Mean wake posterior at offset" );
+  add_hdstats_var( hdstats_bout_sec_tables, "P_NR", "Mean NREM posterior at offset (3-state only)" );
+  add_hdstats_var( hdstats_bout_sec_tables, "P_N1", "Mean N1 posterior at offset (5-state only)" );
+  add_hdstats_var( hdstats_bout_sec_tables, "P_N2", "Mean N2 posterior at offset (5-state only)" );
+  add_hdstats_var( hdstats_bout_sec_tables, "P_N3", "Mean N3 posterior at offset (5-state only)" );
+  add_hdstats_var( hdstats_bout_sec_tables, "P_R",  "Mean REM posterior at offset" );
 
   // Aligned-profile tables are conditional on enough events being present.
-  const std::vector<std::string> hdstats_offset_vars = {
-    "H", "C", "MG", "TV", "P_W", "P_NR", "P_N1", "P_N2", "P_N3", "P_R"
+  const std::vector<std::string> hdstats_sec_vars = {
+    "H", "CONF", "MG", "PS"
+  };
+  const std::vector<std::string> hdstats_bout_sec_vars = {
+    "H", "CONF", "MG", "PS", "P_W", "P_NR", "P_N1", "P_N2", "P_N3", "P_R"
   };
   auto disable_hdstats_vars = [&]( const std::vector<std::string> & tables ,
 				   const std::vector<std::string> & vars )
@@ -4738,31 +4760,27 @@ void cmddefs_t::init()
 	for ( int j = 0 ; j < (int)vars.size() ; j++ )
 	  register_var( "HDSTATS" , tables[i] , vars[j] , false );
     };
-  disable_hdstats_vars( hdstats_offset_tables, hdstats_offset_vars );
-  disable_hdstats_vars( hdstats_trans_offset_tables, hdstats_offset_vars );
+  disable_hdstats_vars( hdstats_sec_tables, hdstats_sec_vars );
+  disable_hdstats_vars( hdstats_bout_sec_tables, hdstats_bout_sec_vars );
 
   add_table( "HDSTATS" , "TIME"             , "Per-sample time-series (verbose only)" );
   add_var(   "HDSTATS" , "TIME"             , "H"           , "Entropy" );
-  add_var(   "HDSTATS" , "TIME"             , "C"           , "Confidence" );
+  add_var(   "HDSTATS" , "TIME"             , "CONF"        , "Confidence" );
   add_var(   "HDSTATS" , "TIME"             , "MG"          , "Margin" );
-  add_var(   "HDSTATS" , "TIME"             , "TV"          , "One-sample total-variation step, i.e. 0.5 * sum |p(t)-p(t-1)| across states" );
-  add_var(   "HDSTATS" , "TIME"             , "TV_LAG"      , "Longer-lag total variation, i.e. 0.5 * sum |p(t)-p(t-lag)| across states; default lag is 30 seconds" );
-  add_var(   "HDSTATS" , "TIME"             , "MIX_A"       , "W/N1 mixing" );
-  add_var(   "HDSTATS" , "TIME"             , "MIX_B"       , "N2/N3 mixing" );
-  add_var(   "HDSTATS" , "TIME"             , "MIX_C"       , "R/N1 mixing" );
+  add_var(   "HDSTATS" , "TIME"             , "PS"          , "One-sample posterior shift" );
+  add_var(   "HDSTATS" , "TIME"             , "PS_LAG"      , "Longer-lag posterior shift (default 30s lag)" );
   add_var(   "HDSTATS" , "TIME"             , "ARGMAX"      , "Argmax state index (0=W 1=N1 2=N2 3=N3 4=R)" );
-  add_var(   "HDSTATS" , "TIME"             , "IS_TRANS"    , "1 if sample is in a transition zone" );
-  add_var(   "HDSTATS" , "TIME"             , "IS_STABLE"   , "1 if sample is in stable-core" );
-  add_var(   "HDSTATS" , "TIME"             , "IS_NEITHER"  , "1 if sample is neither in a transition zone nor stable-core" );
-  add_var(   "HDSTATS" , "TIME"             , "H3"          , "Entropy in the 3-state representation" );
-  add_var(   "HDSTATS" , "TIME"             , "C3"          , "Confidence in the 3-state representation" );
-  add_var(   "HDSTATS" , "TIME"             , "TV3"         , "Total-variation step in the 3-state representation" );
-  add_var(   "HDSTATS" , "TIME"             , "ARGMAX3"     , "Argmax state index in the 3-state representation (0=W 1=NR 2=R)" );
-  add_var(   "HDSTATS" , "TIME"             , "IS_TRANS3"   , "1 if sample is in a transition zone in the 3-state representation" );
-  add_var(   "HDSTATS" , "TIME"             , "IS_STABLE3"  , "1 if sample is in stable-core in the 3-state representation" );
-  add_var(   "HDSTATS" , "TIME"             , "IS_NEITHER3" , "1 if sample is neither in a transition zone nor stable-core in the 3-state representation" );
-  add_var(   "HDSTATS" , "TIME"             , "MIX_A3"      , "W/NREM mixing in the 3-state representation" );
-  add_var(   "HDSTATS" , "TIME"             , "MIX_C3"      , "NREM/R mixing in the 3-state representation" );
+  add_var(   "HDSTATS" , "TIME"             , "IS_TRANS"      , "1 if sample is within a detected TRANS event's window" );
+  add_var(   "HDSTATS" , "TIME"             , "IS_BOUT_TRANS" , "1 if sample is within a BOUT_TRANS transition's window" );
+  add_var(   "HDSTATS" , "TIME"             , "IS_STABLE"     , "1 if sample is in stable-core" );
+  add_var(   "HDSTATS" , "TIME"             , "H3"          , "Entropy, 3-state representation" );
+  add_var(   "HDSTATS" , "TIME"             , "CONF3"       , "Confidence, 3-state representation" );
+  add_var(   "HDSTATS" , "TIME"             , "PS3"         , "Posterior shift, 3-state representation" );
+  add_var(   "HDSTATS" , "TIME"             , "PS3_LAG"     , "Longer-lag posterior shift, 3-state representation" );
+  add_var(   "HDSTATS" , "TIME"             , "ARGMAX3"     , "Argmax state index (0=W 1=NR 2=R)" );
+  add_var(   "HDSTATS" , "TIME"             , "IS_TRANS3"      , "1 if sample is within a detected TRANS event's window, 3-state" );
+  add_var(   "HDSTATS" , "TIME"             , "IS_BOUT_TRANS3" , "1 if sample is within a BOUT_TRANS transition's window, 3-state" );
+  add_var(   "HDSTATS" , "TIME"             , "IS_STABLE3"     , "1 if sample is in stable-core, 3-state" );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -6696,9 +6714,9 @@ void cmddefs_t::init()
             "a posterior-probability trace) in a way that is comparable\n"
             "across individuals. Three complementary views, all optional:\n"
             "\n"
-            "  1) CH / CH,SS / CH,SS,REGION / CH,C / CH,SS,C : simple N/MEAN/\n"
+            "  1) CH / CH,SS / CH,SS,STABLE / CH,C / CH,SS,C : simple N/MEAN/\n"
             "     SD/MIN/MAX/RANGE of the per-epoch signal mean, overall and\n"
-            "     stratified by sleep stage, local stage stability (REGION:\n"
+            "     stratified by sleep stage, local stage stability (STABLE:\n"
             "     STABLE/TRANS, as HDSTATS), and/or NREM cycle;\n"
             "\n"
             "  2) CH,VAR,QD(,Q) : whole-recording trend/decile/NREM-cycle\n"
@@ -6724,15 +6742,18 @@ void cmddefs_t::init()
             "     own interval that anchor sits (irrelevant for a 0-duration/\n"
             "     point instance), and bin-align= (start/middle/end, default\n"
             "     middle) picks which part of each bin sits at its labeled\n"
-            "     offset. bin=/inc= set the SEC bin width/step (inc < bin\n"
-            "     overlaps, default inc = bin, tiled); min-n= drops sparse\n"
-            "     offsets/anchors entirely." );
+            "     offset. w= sets the half-window (default 60s, symmetric\n"
+            "     +/-w); two comma-separated values (w=pre,post) instead give\n"
+            "     an asymmetric window, e.g. w=30,90 for -30s to +90s. bin=/\n"
+            "     inc= set the SEC bin width/step (inc < bin overlaps, default\n"
+            "     inc = bin, tiled); min-n= drops sparse offsets/anchors\n"
+            "     entirely." );
   add_param( "SIGDYN" , "sig" , "SpO2" , "One or more signals to summarize" );
   add_param( "SIGDYN" , "epoch-stats" , "F" , "Disable simple stage/cycle/stability-stratified descriptive statistics (default T)" );
   add_param( "SIGDYN" , "stable-flank" , "1" , "Number of flanking epochs on each side that must share the same stage for an epoch to be considered STABLE" );
   add_param( "SIGDYN" , "annot" , "arousal,resp_event" , "Annotation classes to use as peri-event anchors" );
   add_param( "SIGDYN" , "hypno-annot" , "F" , "Disable auto-discovery of HYPNO-derived landmark/cycle/transition anchors (default T)" );
-  add_param( "SIGDYN" , "w" , "60" , "Half-window size in seconds around each anchor" );
+  add_param( "SIGDYN" , "w" , "60" , "Half-window size in seconds around each anchor; or two comma-separated values w=pre,post for an asymmetric window" );
   add_param( "SIGDYN" , "anchor" , "middle" , "Where within an annotation instance's interval the t=0 anchor sits: start, middle or end (default start)" );
   add_param( "SIGDYN" , "bin-align" , "start" , "Which part of each SEC bin sits at its labeled k*inc offset: start, middle or end (default middle)" );
   add_param( "SIGDYN" , "tolog" , "" , "Take logs of the input signal before peri-event averaging" );
@@ -6759,13 +6780,13 @@ void cmddefs_t::init()
   add_var( "SIGDYN" , "CH,SS" , "MAX" , "Max of per-epoch signal means" );
   add_var( "SIGDYN" , "CH,SS" , "RANGE" , "Max minus min of per-epoch signal means" );
 
-  add_table( "SIGDYN" , "CH,SS,REGION" , "Descriptive statistics of the per-epoch signal mean, by sleep stage and local stability (REGION)" );
-  add_var( "SIGDYN" , "CH,SS,REGION" , "N" , "Number of epochs" );
-  add_var( "SIGDYN" , "CH,SS,REGION" , "MEAN" , "Mean of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS,REGION" , "SD" , "SD of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS,REGION" , "MIN" , "Min of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS,REGION" , "MAX" , "Max of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS,REGION" , "RANGE" , "Max minus min of per-epoch signal means" );
+  add_table( "SIGDYN" , "CH,SS,STABLE" , "Descriptive statistics of the per-epoch signal mean, by sleep stage and local stability (STABLE)" );
+  add_var( "SIGDYN" , "CH,SS,STABLE" , "N" , "Number of epochs" );
+  add_var( "SIGDYN" , "CH,SS,STABLE" , "MEAN" , "Mean of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,STABLE" , "SD" , "SD of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,STABLE" , "MIN" , "Min of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,STABLE" , "MAX" , "Max of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,STABLE" , "RANGE" , "Max minus min of per-epoch signal means" );
 
   add_table( "SIGDYN" , "CH,C" , "Descriptive statistics of the per-epoch signal mean, by NREM cycle (only if cycles present)" );
   add_var( "SIGDYN" , "CH,C" , "N" , "Number of epochs" );
@@ -6842,11 +6863,29 @@ void cmddefs_t::init()
             "the identical sig=/spec=/windows=/... used at training time;\n"
             "halts on any feature-schema mismatch); a stage-conditioned\n"
             "bundle additionally requires hypno-prefix= at apply time.\n"
+            "With vector=T, sig= selects already-windowed, time-aligned\n"
+            "channels, including fractional-Hz channels such as one value\n"
+            "per 300-second EDF record; DPP emits transparent raw,\n"
+            "sleep/cycle-context, geometric, and dynamic features.\n"
+            "For --dpp-fit, two-level=T adds subject-level nested\n"
+            "cross-fitting: a local LightGBM score trajectory is combined\n"
+            "with compact BASE/VAR/STAGE/SCORE/TIME/GEOM summaries in a\n"
+            "second subject-level model.\n"
             "--dpp-fit's folds= runs individual-level K-fold cross-\n"
             "validation as an evaluation layer (out-of-fold predictions\n"
             "written to <out>.oof); the saved bundle is always trained on\n"
             "the entire corpus regardless." );
   add_param( "DPP" , "sig" , "C3" , "Signal(s) to featurize (zero-config default mode)" );
+  add_param( "DPP" , "vector" , "F" , "Treat selected signals as already-windowed, time-aligned vector observations; supports fractional sampling rates" );
+  add_param( "DPP" , "vector-features" , "RAW,CONTEXT,GEOM,DYN" , "Vector-mode feature groups: RAW, CONTEXT, GEOM, DYN" );
+  add_param( "DPP" , "hypno-context" , "F" , "Add vector-mode stage/cycle context from the existing epoched hypnogram" );
+  add_param( "DPP" , "two-level" , "F" , "--dpp-fit vector mode: fit a cross-fitted local (row-level) model followed by a subject-level summary model" );
+  add_param( "DPP" , "embedding-dim" , "128" , "--dpp-fit two-level: number of raw embedding columns at the start of each vector row" );
+  add_param( "DPP" , "level2-features" , "BASE,VAR,STAGE,SCORE,TIME,GEOM" , "--dpp-fit two-level subject summary groups" );
+  add_param( "DPP" , "outer-folds" , "5" , "--dpp-fit two-level: outer subject-level folds for honest nested evaluation" );
+  add_param( "DPP" , "inner-folds" , "5" , "--dpp-fit two-level: inner subject-level folds for Level-1 cross-fitting" );
+  add_param( "DPP" , "l1-iterations" , "100" , "--dpp-fit two-level: LightGBM iterations for the local model" );
+  add_param( "DPP" , "l2-iterations" , "100" , "--dpp-fit two-level: LightGBM iterations for the subject model" );
   add_param( "DPP" , "spec" , "feats.dpp" , "Feature-specification file (required for connectivity/filtering/multiple windows)" );
   add_param( "DPP" , "windows" , "30,60,300" , "Window length(s) in seconds (default 30)" );
   add_param( "DPP" , "step" , "30" , "Output step in seconds, independent of window length (default 30)" );
@@ -7665,6 +7704,33 @@ void cmddefs_t::init()
   // PREDICTION
   //
   /////////////////////////////////////////////////////////////////////////////////
+
+  add_cmd( "pred" , "ORT" , "Run an ONNX Runtime model on signal windows" );
+  add_verb( "ORT" ,
+            "ORT evaluates a SleepFM ONNX model on EDF signal windows. SleepFM preprocessing, "
+            "tensor shapes, modality/channel rules, and output semantics are implemented by Luna. "
+            "Build Luna with ORT=1 to enable this command." );
+  add_param( "ORT" , "path" , "." , "Base path for SleepFM model resources" );
+  add_param( "ORT" , "lib" , "sleepfm" , "SleepFM model root (without .onnx extension)" );
+  add_param( "ORT" , "sig" , "EEG" , "Input signal selection" );
+  add_param( "ORT" , "modality" , "auto" , "Required SleepFM modality: BAS, RESP, EKG, or EMG; channel aliases are handled by Luna" );
+  add_param( "ORT" , "step" , "300" , "Optional window step in seconds" );
+  add_param( "ORT" , "output" , "pooled_embedding" , "SleepFM embedding output" );
+  add_param( "ORT" , "add-channels" , "" , "Add output embedding dimensions as EDF channels using this root (default: modality)" );
+  add_param( "ORT" , "no-output" , "" , "Do not emit embedding values to the ORT output database" );
+  add_param( "ORT" , "threads" , "1" , "ONNX Runtime intra-op threads" );
+  add_table( "ORT" , "WIN,OUT" , "ONNX Runtime output values" );
+  add_var( "ORT" , "WIN" , "START" , "Window start time in seconds" );
+  add_var( "ORT" , "WIN" , "END" , "Window end time in seconds" );
+  add_var( "ORT" , "WIN" , "MODEL" , "ONNX model file" );
+  add_var( "ORT" , "WIN" , "MODALITY" , "Validated SleepFM modality" );
+  add_var( "ORT" , "WIN" , "CHANNELS" , "Number of supplied channels" );
+  add_var( "ORT" , "WIN" , "CHANNEL_LIST" , "Validated input channel labels" );
+  add_var( "ORT" , "WIN" , "SR" , "Validated input sample rate" );
+  add_var( "ORT" , "WIN" , "OUTPUT" , "Selected embedding output" );
+  add_var( "ORT" , "WIN" , "N" , "Number of values in the selected output" );
+  add_var( "ORT" , "OUT" , "TIME" , "Embedding timestamp in seconds" );
+  add_var( "ORT" , "OUT" , "VALUE" , "Output tensor value" );
 
   //
   // PREDICT
@@ -9220,7 +9286,7 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 		continue;
 	      }
 	    
-	    ss << "  " << std::left << std::setw( 24 ) << jj->first
+	    ss << "  " << std::left << std::setw( 24 ) << jj->first << " "
 	       << jj->second;
 	    
 	    // requirements?
@@ -9265,7 +9331,7 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 		  continue;
 		}
 	      
-	      ss << "   " << std::left << std::setw( 24 ) << tfac.as_string( " x " ) 
+	      ss << "   " << tfac.as_string( " x " ) << " : "
 		 << ii->second << "\n";
 	      
 	      ss << "   " << std::left << std::string( 60 , '-' )
@@ -9295,10 +9361,10 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 			    continue;
 			  }
 			
-			ss << "     " 
-			   << std::left 
-			   << std::setw(21) 
-			   << vv->first << " " 
+			ss << "     "
+			   << std::left
+			   << std::setw(22)
+			   << vv->first << " "
 			   << vv->second << "\n";
 			++vv;
 		      }

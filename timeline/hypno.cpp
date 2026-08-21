@@ -72,6 +72,8 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   // set any params
   req_pre_post_epochs = param.has( "req-pre-post" ) ? param.requires_int( "req-pre-post" ) : 4;
   flanking_3class = param.has( "flanking-collapse-nrem" ) ? Helper::yesno( param.value( "flanking-collapse-nrem") ) : true;
+  trans3 = param.yesno( "trans3" , true , true );
+  trans5 = param.yesno( "trans5" , false , true );
 
   // get handle
   annot_t * annot = timeline->annotations->find( sslabel );
@@ -2922,7 +2924,7 @@ void hypnogram_t::calc_stats( const bool verbose )
 	  // too much
 	  if ( eleft < 0 || eright >= ne ) { sim = j-1; break; }
 	  
-	  // 3 class or full comparison?
+      // 3 class or full comparison for flanking metrics only.
 	  if ( flanking_3class )
 	    {
 	      if (  ( ! is_same_3class( stages[eleft] , stages[e] ) )
@@ -2973,23 +2975,16 @@ void hypnogram_t::calc_stats( const bool verbose )
       flanking_tot[e] = sim_all;
       nearest_wake[e] = nw;
 
-      //
-      // Generic transition matrix counts
-      //
+      // Generic transition matrix counts.  Keep 3-state and 5-state
+      // matrices independent of the flanking definition.
             
       if ( e != 0 )	
 	{
-	  if ( flanking_3class )
-	    {
-	      // make all NREM --> NREM2 (and switch output) 
-	      sleep_stage_t ss1 = is_nrem( stages[ e - 1 ] ) ? NREM2 : stages[ e - 1 ] ;
-	      sleep_stage_t ss2 = is_nrem( stages[ e ] ) ? NREM2 : stages[ e ] ;
-	      ++transitions[ ss1 ][ ss2 ];
-	    }
-	  else	    
-	    ++transitions[ stages[ e - 1 ] ][ stages[e] ];
+	  sleep_stage_t ss1 = is_nrem( stages[ e - 1 ] ) ? NREM2 : stages[ e - 1 ] ;
+	  sleep_stage_t ss2 = is_nrem( stages[ e ] ) ? NREM2 : stages[ e ] ;
+	  ++transitions[ ss1 ][ ss2 ];
 
-	  // return 5-class transitions in either case (for STI etc)
+	  // 5-class transitions are retained independently.
 	  ++transitions5[ stages[ e - 1 ] ][ stages[e] ];
 	  
 	}
@@ -4392,58 +4387,67 @@ void hypnogram_t::output( const bool verbose ,
 	  // Transitions
 	  //
 	  
-	  std::vector<sleep_stage_t> ss = { NREM1 , NREM2 , NREM3 , REM , WAKE };
-	  std::vector<std::string> ss_str = { "N1" , "N2" , "N3" , "R" , "W" };
-
-	  std::vector<sleep_stage_t> ss3 = { NREM2 , REM , WAKE };
-	  std::vector<std::string> ss3_str = { "NR" , "R" , "W" };
+	  const std::vector<sleep_stage_t> ss3 = { NREM2 , REM , WAKE };
+	  const std::vector<std::string> ss3_str = { "NR" , "R" , "W" };
+	  const std::vector<sleep_stage_t> ss5 = { NREM1 , NREM2 , NREM3 , REM , WAKE };
+	  const std::vector<std::string> ss5_str = { "N1" , "N2" , "N3" , "R" , "W" };
 	  
-	  if ( flanking_3class ) 
+	  // Emit either transition view, or both, without coupling this choice
+	  // to the definition of FLANKING/FLANKING_ALL.
+	  auto emit_transitions = [&]( const std::vector<sleep_stage_t> & ss,
+				       const std::vector<std::string> & ss_str,
+				       const std::map<sleep_stage_t,std::map<sleep_stage_t,int> > & counts,
+				       const std::string & table )
+	  {
+	    auto count = [&]( const sleep_stage_t pre, const sleep_stage_t post )
 	    {
-	      ss = ss3; 
-	      ss_str = ss3_str; 
-	    }
-
-	  std::map<sleep_stage_t,int> marg_pre, marg_post;
-	  int tot = 0;
-          for (int ss1=0; ss1<ss.size(); ss1++)	    
-	    for (int ss2=0; ss2<ss.size(); ss2++)
-	      {
-		tot += transitions[ ss[ss1] ][ ss[ss2] ];
-		marg_pre[ ss[ss1] ] += transitions[ ss[ss1] ][ ss[ss2] ];
-		marg_post[ ss[ss2] ] += transitions[ ss[ss1] ][ ss[ss2] ];
-	      }
-
-	  for (int ss1=0; ss1<ss.size(); ss1++)
-	    {
-	      writer.level( ss_str[ss1] , "PRE" );
-
+	      std::map<sleep_stage_t,std::map<sleep_stage_t,int> >::const_iterator i = counts.find( pre );
+	      if ( i == counts.end() ) return 0;
+	      std::map<sleep_stage_t,int>::const_iterator j = i->second.find( post );
+	      return j == i->second.end() ? 0 : j->second;
+	    };
+	    std::map<sleep_stage_t,int> marg_pre, marg_post;
+	    int tot = 0;
+	    for (int ss1=0; ss1<ss.size(); ss1++)
 	      for (int ss2=0; ss2<ss.size(); ss2++)
 		{
-		  writer.level(  ss_str[ss2] , "POST" );
-		  writer.value( "N" , transitions[ ss[ss1] ][ ss[ss2] ] );
-
-		  // probabilities: joint 
-		  if ( tot > 0 ) 
-		    writer.value( "P" , transitions[ ss[ss1] ][ ss[ss2] ] / (double)tot );
-		  
-		  // P( post | pre ) 
-		  if ( marg_pre[ ss[ss1] ] > 0 )
-		    writer.value( "P_POST_COND_PRE" , transitions[ ss[ss1] ][ ss[ss2] ] / (double)marg_pre[ ss[ss1] ] );
-
-		  // P( pre | post )
-		  if ( marg_post[ ss[ss2] ] > 0 ) 
-		    writer.value( "P_PRE_COND_POST" , transitions[ ss[ss1] ][ ss[ss2] ] / (double)marg_post[ ss[ss2] ] );
-
+		  const int n = count( ss[ss1], ss[ss2] );
+		  tot += n;
+		  marg_pre[ ss[ss1] ] += n;
+		  marg_post[ ss[ss2] ] += n;
 		}
-	      writer.unlevel( "POST" );
-	    }
-	  writer.unlevel( "PRE" );
+	    
+      if ( ! table.empty() )
+	writer.level( table == "TRANS5" ? "1" : table , table );
+	    for (int ss1=0; ss1<ss.size(); ss1++)
+	      {
+		writer.level( ss_str[ss1] , "PRE" );
+		for (int ss2=0; ss2<ss.size(); ss2++)
+		  {
+		    const int n = count( ss[ss1], ss[ss2] );
+              writer.level( ss_str[ss2] , "POST" );
+              writer.value( "N" , n );
+              writer.value( "N_PRE" , marg_pre[ ss[ss1] ] );
+              writer.value( "N_POST" , marg_post[ ss[ss2] ] );
+              if ( tot > 0 ) writer.value( "P" , n / (double)tot );
+		    if ( marg_pre[ ss[ss1] ] > 0 )
+		      writer.value( "P_POST_COND_PRE" , n / (double)marg_pre[ ss[ss1] ] );
+		    if ( marg_post[ ss[ss2] ] > 0 )
+		      writer.value( "P_PRE_COND_POST" , n / (double)marg_post[ ss[ss2] ] );
+		  }
+		writer.unlevel( "POST" );
+	      }
+	    writer.unlevel( "PRE" );
+	    if ( ! table.empty() ) writer.unlevel( table );
+	  };
+	  
+	  if ( trans3 ) emit_transitions( ss3, ss3_str, transitions, "" );
+	  if ( trans5 ) emit_transitions( ss5, ss5_str, transitions5, "TRANS5" );
 	  
 	}
-
+      
     }
-
+  
   
   //
   // Per epoch level output

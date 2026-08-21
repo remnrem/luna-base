@@ -665,8 +665,14 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
 
   logger << "  SIGDYN peri-event anchors: " << Helper::stringize( anchors ) << "\n";
 
-  const double half_window = param.has( "w" ) ? param.requires_dbl( "w" ) : 60;
-  if ( half_window <= 0 ) Helper::halt( "w must be a positive number" );
+  // w= : either one value (symmetric +/-w) or two comma-separated values
+  // (w=pre,post -- asymmetric, e.g. w=30,90 for -30s to +90s around the anchor)
+  const std::vector<double> wvec = param.has( "w" ) ? param.dblvector( "w" ) : std::vector<double>{ 60 };
+  if ( wvec.size() != 1 && wvec.size() != 2 )
+    Helper::halt( "w= requires one value (symmetric +/-w) or two comma-separated values (w=pre,post)" );
+  const double half_window_pre  = wvec[0];
+  const double half_window_post = wvec.size() == 2 ? wvec[1] : wvec[0];
+  if ( half_window_pre <= 0 || half_window_post <= 0 ) Helper::halt( "w must be positive number(s)" );
 
   // anchor= : where within an annotation instance's interval the t=0
   // anchor sits (start/middle/end of the instance; a 0-duration/point
@@ -781,7 +787,8 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
 	  // anchor's own single sample (N=1, only the k=0 bin, no real window)
 	  const double sr_d = Fs[s];
 	  if ( sr_d <= 0 ) continue;
-	  const int half_points = (int) std::lround( half_window * sr_d );
+	  const int half_points_pre  = (int) std::lround( half_window_pre  * sr_d );
+	  const int half_points_post = (int) std::lround( half_window_post * sr_d );
 	  const int wsize = (int)wtrace.pdata()->size();
 	  const int bin_samples = bin_sec > 0 ? std::max( 1 , (int) std::lround( bin_sec * sr_d ) ) : 1;
 	  const int inc_samples = bin_sec > 0 ? std::max( 1 , (int) std::lround( inc_sec * sr_d ) ) : 1;
@@ -793,9 +800,8 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
 	  // bin-align or bin width. The same grid is used for every instance,
 	  // so bins line up across instances regardless of which ones can
 	  // complete which.
-	  const int k_max = (int) std::floor( half_points / (double)inc_samples );
-	  const int global_k_lo = -k_max;
-	  const int global_k_hi = k_max;
+	  const int global_k_lo = - (int) std::floor( half_points_pre  / (double)inc_samples );
+	  const int global_k_hi =   (int) std::floor( half_points_post / (double)inc_samples );
 
 	  // which part of the bin (start/middle/end) sits at its labeled
 	  // k*inc_samples offset -- e.g. bin-align=start means the bin *begins*
@@ -820,8 +826,8 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
 
 	  for (int i=0; i<(int)idx.size(); i++)
 	    {
-	      const int lo = idx[i] - half_points;
-	      const int hi = idx[i] + half_points;
+	      const int lo = idx[i] - half_points_pre;
+	      const int hi = idx[i] + half_points_post;
 	      const int lo_c = std::max( 0 , lo );
 	      const int hi_c = std::min( wsize - 1 , hi );
 	      if ( lo_c > hi_c ) continue;

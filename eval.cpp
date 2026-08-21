@@ -39,6 +39,8 @@ extern writer_t writer;
 
 extern freezer_t freezer;
 
+void proc_ort( edf_t & , param_t & );
+
 //
 // cmd_t
 //
@@ -1081,6 +1083,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "CFC" ) )          { fnd = true; proc_cfc( edf , param(c) ); }
       if ( (!fnd) && is( c, "GED" ) )          { fnd = true; proc_ged( edf , param(c) ); }
       if ( (!fnd) && is( c, "PREDICT" ) )      { fnd = true; proc_predict( edf , param(c) ); }
+      if ( (!fnd) && is( c, "ORT" ) )          { fnd = true; proc_ort( edf , param(c) ); }
       if ( (!fnd) && is( c, "TAG" ) )          { fnd = true; proc_tag( param(c) ); }
       if ( (!fnd) && is( c, "RESAMPLE" ) )     { fnd = true; proc_resample( edf, param(c) ); }
       if ( (!fnd) && is( c, "FIX-SAMPLING" ) ) { fnd = true; proc_fix_sampling( edf , param(c) ); }

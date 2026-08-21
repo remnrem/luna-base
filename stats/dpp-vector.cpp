@@ -1,0 +1,332 @@
+//    --------------------------------------------------------------------
+//
+//    This file is part of Luna.
+//
+//    --------------------------------------------------------------------
+
+#include "stats/dpp-vector.h"
+
+#include "stats/dpp-io.h"
+#include "stats/dpp-fit.h"
+#include "stats/dpp-spec.h"
+#include "edf/edf.h"
+#include "edf/slice.h"
+#include "timeline/timeline.h"
+#include "param.h"
+#include "helper/helper.h"
+#include "helper/logger.h"
+#include "miscmath/miscmath.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <limits>
+#include <map>
+#include <set>
+
+extern logger_t logger;
+
+namespace {
+
+  bool finite( const double x ) { return std::isfinite( x ); }
+
+  std::vector<std::string> feature_set( const param_t & param )
+  {
+    std::vector<std::string> f;
+    if ( param.has( "vector-features" ) )
+      f = param.strvector( "vector-features" );
+    else
+      f = { "RAW" , "CONTEXT" , "GEOM" , "DYN" };
+
+    for (int i=0; i<(int)f.size(); i++)
+      for (int j=0; j<(int)f[i].size(); j++)
+        f[i][j] = (char)std::toupper( (unsigned char)f[i][j] );
+    return f;
+  }
+
+  bool has_feature( const std::vector<std::string> & f , const std::string & x )
+  {
+    return std::find( f.begin() , f.end() , x ) != f.end();
+  }
+
+  void add_label( std::vector<std::string> * l , const std::string & s )
+  { l->push_back( s ); }
+
+  double safe_cosine( const std::vector<double> & a , const std::vector<double> & b )
+  {
+    double ab = 0 , aa = 0 , bb = 0;
+    const int n = std::min( a.size() , b.size() );
+    for (int i=0; i<n; i++)
+      if ( finite(a[i]) && finite(b[i]) )
+        { ab += a[i] * b[i]; aa += a[i] * a[i]; bb += b[i] * b[i]; }
+    if ( aa <= 0 || bb <= 0 ) return std::numeric_limits<double>::quiet_NaN();
+    return ab / std::sqrt( aa * bb );
+  }
+
+  double safe_distance( const std::vector<double> & a , const std::vector<double> & b )
+  {
+    double s = 0; int n = 0;
+    const int m = std::min( a.size() , b.size() );
+    for (int i=0; i<m; i++)
+      if ( finite(a[i]) && finite(b[i]) )
+        { const double d = a[i] - b[i]; s += d*d; ++n; }
+    return n > 0 ? std::sqrt( s ) : std::numeric_limits<double>::quiet_NaN();
+  }
+
+  double norm( const std::vector<double> & x )
+  {
+    double s = 0; int n = 0;
+    for (int i=0; i<(int)x.size(); i++)
+      if ( finite(x[i]) ) { s += x[i] * x[i]; ++n; }
+    return n > 0 ? std::sqrt(s) : std::numeric_limits<double>::quiet_NaN();
+  }
+
+  // Find the current epoch using the standard epoch geometry.  This keeps
+  // vector DPP independent of the vector sampling rate, including one
+  // sample per long EDF record.
+  int epoch_at( edf_t & edf , const uint64_t tp )
+  {
+    if ( ! edf.timeline.epoched() ) return -1;
+    const uint64_t elen = edf.timeline.epoch_len_tp_uint64_t();
+    const uint64_t einc = edf.timeline.epoch_increment_tp();
+    const int ne = edf.timeline.num_total_epochs();
+    if ( elen == 0 || einc == 0 || ne == 0 ) return -1;
+    return MiscMath::position2leftepoch( tp , elen , einc , ne );
+  }
+
+}
+
+bool dpp_vector::enabled( const param_t & param )
+{
+  return param.has( "vector" ) && param.yesno( "vector" );
+}
+
+dpp_vector::layout_t dpp_vector::layout( const int embedding_dim , const param_t & param )
+{
+  const std::vector<std::string> f = feature_set( param );
+  layout_t l;
+  l.embedding_dim = embedding_dim;
+  l.raw = has_feature(f,"RAW");
+  l.context = has_feature(f,"CONTEXT");
+  l.geom = has_feature(f,"GEOM");
+  l.dyn = has_feature(f,"DYN");
+  int o = 0;
+  l.raw_offset = l.raw ? o : -1; if ( l.raw ) o += embedding_dim;
+  l.context_offset = l.context ? o : -1; if ( l.context ) o += 10;
+  l.geom_offset = l.geom ? o : -1; if ( l.geom ) o += 5;
+  l.dyn_offset = l.dyn ? o : -1; if ( l.dyn ) o += 4;
+  return l;
+}
+
+std::vector<std::string> dpp_vector::labels( const int n_channels , const param_t & param )
+{
+  const std::vector<std::string> f = feature_set( param );
+  std::vector<std::string> l;
+
+  if ( has_feature(f,"RAW") )
+    for (int i=0; i<n_channels; i++) add_label( &l , "VEC.RAW.V" + Helper::int2str(i+1) );
+
+  if ( has_feature(f,"CONTEXT") )
+    {
+      add_label(&l,"VEC.CONTEXT.TIME_FRAC");
+      add_label(&l,"VEC.CONTEXT.STAGE_W");
+      add_label(&l,"VEC.CONTEXT.STAGE_N1");
+      add_label(&l,"VEC.CONTEXT.STAGE_N2");
+      add_label(&l,"VEC.CONTEXT.STAGE_N3");
+      add_label(&l,"VEC.CONTEXT.STAGE_R");
+      add_label(&l,"VEC.CONTEXT.STAGE_UNKNOWN");
+      add_label(&l,"VEC.CONTEXT.CYCLE");
+      add_label(&l,"VEC.CONTEXT.CYCLE_PHASE");
+      add_label(&l,"VEC.CONTEXT.VALID_DIM_FRAC");
+    }
+
+  if ( has_feature(f,"GEOM") )
+    {
+      add_label(&l,"VEC.GEOM.NORM");
+      add_label(&l,"VEC.GEOM.BASELINE_DIST");
+      add_label(&l,"VEC.GEOM.BASELINE_COS");
+      add_label(&l,"VEC.GEOM.PREV_DIST");
+      add_label(&l,"VEC.GEOM.PREV_COS");
+    }
+
+  if ( has_feature(f,"DYN") )
+    {
+      add_label(&l,"VEC.DYN.VELOCITY");
+      add_label(&l,"VEC.DYN.ACCELERATION");
+      add_label(&l,"VEC.DYN.NORM_DELTA");
+      add_label(&l,"VEC.DYN.TURN_ANGLE");
+    }
+
+  return l;
+}
+
+bool dpp_vector::run( edf_t & edf , param_t & param )
+{
+  if ( ! enabled(param) ) return false;
+
+  signal_list_t signals = edf.header.signal_list( param.requires("sig") , true );
+  if ( signals.size() == 0 ) { logger << "  *** no signals selected for DPP vector mode\n"; return true; }
+
+  const int nc = signals.size();
+  std::vector<double> fs(nc);
+  std::vector<std::vector<double> > x(nc);
+  std::vector<std::vector<uint64_t> > tp(nc);
+
+  double common_fs = 0;
+  for (int c=0; c<nc; c++)
+    {
+      fs[c] = edf.header.sampling_freq( signals(c) );
+      if ( ! finite(fs[c]) || fs[c] <= 0 ) Helper::halt("DPP vector mode requires positive sampling rates");
+      if ( c == 0 ) common_fs = fs[c];
+      else if ( std::fabs(fs[c]-common_fs) > 1e-9 * std::max(1.0,common_fs) )
+        Helper::halt("DPP vector mode requires all selected channels to have the same sampling rate");
+
+      slice_t w( edf , signals(c) , edf.timeline.wholetrace() );
+      x[c] = *w.pdata();
+      tp[c] = *w.ptimepoints();
+      if ( x[c].size() != tp[c].size() ) Helper::halt("DPP vector mode found invalid signal time points");
+    }
+
+  for (int c=1; c<nc; c++)
+    if ( tp[c] != tp[0] ) Helper::halt("DPP vector mode requires time-aligned selected channels");
+
+  const int nr = tp[0].size();
+  if ( nr == 0 ) { logger << "  *** no vector observations for DPP\n"; return true; }
+
+  if ( param.has("hypno-context") && param.yesno("hypno-context") ) edf.timeline.ensure_epoched();
+
+  // Cache cycle extents in epoch coordinates so a low-rate vector sample
+  // (including one sample per long EDF record) can still receive a stable
+  // within-cycle phase value without assuming that vector and hypnogram
+  // sampling rates match.
+  std::vector<int> epoch_cycle;
+  std::map<int,std::pair<int,int> > cycle_extent;
+  if ( param.has("hypno-context") && param.yesno("hypno-context") && edf.timeline.epoched() )
+    {
+      const int ne = edf.timeline.num_total_epochs();
+      epoch_cycle.assign(ne,0);
+      for (int e=0; e<ne; e++)
+	for (int k=1; k<=8; k++)
+	  if ( edf.timeline.epoch_annotation("_NREMC_"+Helper::int2str(k),e) )
+	    { epoch_cycle[e]=k; break; }
+      for (int e=0; e<ne; e++) if ( epoch_cycle[e] )
+	{
+	  if ( cycle_extent.find(epoch_cycle[e]) == cycle_extent.end() )
+	    cycle_extent[epoch_cycle[e]] = std::make_pair(e,e);
+	  else
+	    {
+	      cycle_extent[epoch_cycle[e]].first = std::min(cycle_extent[epoch_cycle[e]].first,e);
+	      cycle_extent[epoch_cycle[e]].second = std::max(cycle_extent[epoch_cycle[e]].second,e);
+	    }
+	}
+    }
+
+  const std::vector<std::string> flabels = labels(nc,param);
+  const std::vector<std::string> fset = feature_set(param);
+  const bool raw = has_feature(fset,"RAW");
+  const bool context = has_feature(fset,"CONTEXT");
+  const bool geom = has_feature(fset,"GEOM");
+  const bool dyn = has_feature(fset,"DYN");
+
+  std::vector<double> baseline(nc,0);
+  std::vector<int> baseline_n(nc,0);
+  for (int r=0; r<nr; r++)
+    for (int c=0; c<nc; c++)
+      if ( finite(x[c][r]) ) { baseline[c] += x[c][r]; ++baseline_n[c]; }
+  for (int c=0; c<nc; c++) if ( baseline_n[c] ) baseline[c] /= baseline_n[c];
+
+  dpp_matrix_t mat;
+  mat.id = edf.id;
+  mat.time_sec.resize(nr);
+  mat.X.resize(nr);
+
+  for (int r=0; r<nr; r++)
+    {
+      const double t = tp[0][r] / (double)globals::tp_1sec;
+      mat.time_sec[r] = t;
+      std::vector<double> cur(nc), prev(nc), next(nc);
+      for (int c=0; c<nc; c++)
+        {
+          cur[c] = x[c][r];
+          prev[c] = r > 0 ? x[c][r-1] : std::numeric_limits<double>::quiet_NaN();
+          next[c] = r+1 < nr ? x[c][r+1] : std::numeric_limits<double>::quiet_NaN();
+        }
+
+      std::vector<double> row;
+      if ( raw ) row.insert(row.end(),cur.begin(),cur.end());
+
+      int epoch = epoch_at(edf,tp[0][r]);
+      std::string stage = "UNKNOWN";
+      int cycle = 0;
+      if ( epoch >= 0 )
+        {
+          if      ( edf.timeline.epoch_annotation("W",epoch) ) stage="W";
+          else if ( edf.timeline.epoch_annotation("N1",epoch) ) stage="N1";
+          else if ( edf.timeline.epoch_annotation("N2",epoch) ) stage="N2";
+          else if ( edf.timeline.epoch_annotation("N3",epoch) ) stage="N3";
+          else if ( edf.timeline.epoch_annotation("R",epoch) ) stage="R";
+          for (int k=1; k<=8; k++)
+            if ( edf.timeline.epoch_annotation("_NREMC_"+Helper::int2str(k),epoch) ) { cycle=k; break; }
+        }
+
+      double cycle_phase = std::numeric_limits<double>::quiet_NaN();
+      if ( cycle > 0 && epoch >= 0 && epoch < (int)epoch_cycle.size() )
+	{
+	  const std::pair<int,int> ex = cycle_extent[cycle];
+	  cycle_phase = ex.second > ex.first ? (double)(epoch-ex.first)/(double)(ex.second-ex.first) : 0;
+	  if ( cycle_phase < 0 ) cycle_phase = 0;
+	  if ( cycle_phase > 1 ) cycle_phase = 1;
+	}
+
+      if ( context )
+        {
+          row.push_back( nr > 1 ? (double)r/(double)(nr-1) : 0 );
+          row.push_back(stage=="W"); row.push_back(stage=="N1"); row.push_back(stage=="N2");
+          row.push_back(stage=="N3"); row.push_back(stage=="R"); row.push_back(stage=="UNKNOWN");
+          row.push_back(cycle);
+          row.push_back(cycle_phase);
+          int nv=0; for (int c=0;c<nc;c++) if (finite(cur[c])) ++nv;
+          row.push_back(nc>0 ? (double)nv/nc : 0);
+        }
+
+      const double cur_norm = norm(cur);
+      const double base_dist = safe_distance(cur,baseline);
+      const double base_cos = safe_cosine(cur,baseline);
+      const double prev_dist = safe_distance(cur,prev);
+      const double prev_cos = safe_cosine(cur,prev);
+      if ( geom )
+        { row.push_back(cur_norm); row.push_back(base_dist); row.push_back(base_cos); row.push_back(prev_dist); row.push_back(prev_cos); }
+
+      const double dt = r > 0 ? (tp[0][r]-tp[0][r-1])/(double)globals::tp_1sec : 0;
+      const double dt1 = r+1 < nr ? (tp[0][r+1]-tp[0][r])/(double)globals::tp_1sec : dt;
+      const double vel = dt > 0 ? prev_dist/dt : std::numeric_limits<double>::quiet_NaN();
+      const double next_dist = safe_distance(next,cur);
+      const double vel_next = dt1 > 0 ? next_dist/dt1 : std::numeric_limits<double>::quiet_NaN();
+      double turn = std::numeric_limits<double>::quiet_NaN();
+      if ( r > 0 && r+1 < nr )
+        {
+          std::vector<double> v1(nc),v2(nc);
+          for (int c=0;c<nc;c++) { v1[c]=cur[c]-prev[c]; v2[c]=next[c]-cur[c]; }
+          const double co=safe_cosine(v1,v2);
+          if ( finite(co) ) turn=std::acos(std::max(-1.0,std::min(1.0,co)));
+        }
+      if ( dyn )
+        { row.push_back(vel); row.push_back(finite(vel)&&finite(vel_next)?std::fabs(vel_next-vel)/std::max(dt1,1e-9):std::numeric_limits<double>::quiet_NaN()); row.push_back(finite(cur_norm)&&finite(norm(prev))?cur_norm-norm(prev):std::numeric_limits<double>::quiet_NaN()); row.push_back(turn); }
+
+      mat.X[r] = row;
+    }
+
+  if ( (int)mat.X[0].size() != (int)flabels.size() ) Helper::halt("internal DPP vector feature-label mismatch");
+
+  if ( param.has("data") ) dpp_io::save(param.value("data"),mat,(int)flabels.size(),false);
+
+  logger << "  DPP vector mode: " << nc << " channels, " << common_fs << " Hz, "
+         << nr << " observations, " << flabels.size() << " features\n";
+
+  if ( param.has("model") )
+    {
+      dpp_specs_t dummy_specs;
+      dpp_fit::apply(edf,param,dummy_specs,mat,NULL);
+    }
+  return true;
+}

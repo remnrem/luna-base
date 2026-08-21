@@ -17,13 +17,19 @@ endif
 #
 # Safe to change:
 # - These are the main knobs expected to be overridden by users or CI:
-#   `make LGBM=0`, `make LGBM_PATH=/opt/homebrew`, `make STATIC=1`, etc.
+#   `make LGBM=0`, `make LGBM_PATH=/opt/homebrew`, `make ORT=1`,
+#   `make ORT_PATH=$$HOME/onnxruntime/dist/cpu-shared`, `make STATIC=1`, etc.
 # Standard/internal:
 # - Defaults here should stay conservative and portable.
 ##############################################################################
 
 LGBM ?= 1
 LGBM_PATH ?= /opt/homebrew
+
+# ONNX Runtime is opt-in.  ORT_PATH should contain lib/ and include/,
+# matching the staged layout produced by the ONNX Runtime build script.
+ORT ?= 0
+ORT_PATH ?= $(HOME)/onnxruntime/dist/cpu-shared
 
 
 ##############################################################################
@@ -62,6 +68,13 @@ DEP_LIB += -L$(LGBM_PATH)/lib -L$(LGBM_PATH)
 endif
 endif
 
+ifeq ($(ORT),1)
+ifdef ORT_PATH
+DEP_INCLUDES += -I$(ORT_PATH)/include
+DEP_LIB += -L$(ORT_PATH)/lib
+endif
+endif
+
 
 ##############################################################################
 # Compiler Toolchain And Compile Flags
@@ -91,6 +104,10 @@ endif
 
 ifeq ($(LGBM),1)
 CXXFLAGS += -DHAS_LGBM
+endif
+
+ifeq ($(ORT),1)
+CXXFLAGS += -DHAS_ORT
 endif
 
 CFLAGS = -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION
@@ -150,11 +167,29 @@ endif
 endif
 endif
 
+ifeq ($(ORT),1)
+ifdef ORT_PATH
+ifeq ($(ARCH),MAC)
+DEP_LIB += -Wl,-rpath,@loader_path/../lib -Wl,-rpath,$(ORT_PATH)/lib
+else ifeq ($(ARCH),LINUX)
+DEP_LIB += -Wl,-rpath,'$$ORIGIN/../lib' -Wl,-rpath,$(ORT_PATH)/lib
+endif
+endif
+endif
+
 ifeq ($(LGBM),1)
 ifeq ($(ARCH),WINDOWS)
 DEP_LIB += -l:lib_lightgbm.dll
 else
 DEP_LIB += -l_lightgbm
+endif
+endif
+
+ifeq ($(ORT),1)
+ifeq ($(ARCH),WINDOWS)
+DEP_LIB += -l:onnxruntime.dll
+else
+DEP_LIB += -lonnxruntime
 endif
 endif
 
