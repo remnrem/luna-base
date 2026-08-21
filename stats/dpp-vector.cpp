@@ -28,8 +28,6 @@ extern logger_t logger;
 
 namespace {
 
-  bool finite( const double x ) { return std::isfinite( x ); }
-
   std::vector<std::string> feature_set( const param_t & param )
   {
     std::vector<std::string> f;
@@ -57,7 +55,7 @@ namespace {
     double ab = 0 , aa = 0 , bb = 0;
     const int n = std::min( a.size() , b.size() );
     for (int i=0; i<n; i++)
-      if ( finite(a[i]) && finite(b[i]) )
+      if ( std::isfinite(a[i]) && std::isfinite(b[i]) )
         { ab += a[i] * b[i]; aa += a[i] * a[i]; bb += b[i] * b[i]; }
     if ( aa <= 0 || bb <= 0 ) return std::numeric_limits<double>::quiet_NaN();
     return ab / std::sqrt( aa * bb );
@@ -68,7 +66,7 @@ namespace {
     double s = 0; int n = 0;
     const int m = std::min( a.size() , b.size() );
     for (int i=0; i<m; i++)
-      if ( finite(a[i]) && finite(b[i]) )
+      if ( std::isfinite(a[i]) && std::isfinite(b[i]) )
         { const double d = a[i] - b[i]; s += d*d; ++n; }
     return n > 0 ? std::sqrt( s ) : std::numeric_limits<double>::quiet_NaN();
   }
@@ -77,7 +75,7 @@ namespace {
   {
     double s = 0; int n = 0;
     for (int i=0; i<(int)x.size(); i++)
-      if ( finite(x[i]) ) { s += x[i] * x[i]; ++n; }
+      if ( std::isfinite(x[i]) ) { s += x[i] * x[i]; ++n; }
     return n > 0 ? std::sqrt(s) : std::numeric_limits<double>::quiet_NaN();
   }
 
@@ -176,7 +174,7 @@ bool dpp_vector::run( edf_t & edf , param_t & param )
   for (int c=0; c<nc; c++)
     {
       fs[c] = edf.header.sampling_freq( signals(c) );
-      if ( ! finite(fs[c]) || fs[c] <= 0 ) Helper::halt("DPP vector mode requires positive sampling rates");
+      if ( ! std::isfinite(fs[c]) || fs[c] <= 0 ) Helper::halt("DPP vector mode requires positive sampling rates");
       if ( c == 0 ) common_fs = fs[c];
       else if ( std::fabs(fs[c]-common_fs) > 1e-9 * std::max(1.0,common_fs) )
         Helper::halt("DPP vector mode requires all selected channels to have the same sampling rate");
@@ -232,7 +230,7 @@ bool dpp_vector::run( edf_t & edf , param_t & param )
   std::vector<int> baseline_n(nc,0);
   for (int r=0; r<nr; r++)
     for (int c=0; c<nc; c++)
-      if ( finite(x[c][r]) ) { baseline[c] += x[c][r]; ++baseline_n[c]; }
+      if ( std::isfinite(x[c][r]) ) { baseline[c] += x[c][r]; ++baseline_n[c]; }
   for (int c=0; c<nc; c++) if ( baseline_n[c] ) baseline[c] /= baseline_n[c];
 
   dpp_matrix_t mat;
@@ -285,7 +283,7 @@ bool dpp_vector::run( edf_t & edf , param_t & param )
           row.push_back(stage=="N3"); row.push_back(stage=="R"); row.push_back(stage=="UNKNOWN");
           row.push_back(cycle);
           row.push_back(cycle_phase);
-          int nv=0; for (int c=0;c<nc;c++) if (finite(cur[c])) ++nv;
+          int nv=0; for (int c=0;c<nc;c++) if (std::isfinite(cur[c])) ++nv;
           row.push_back(nc>0 ? (double)nv/nc : 0);
         }
 
@@ -308,10 +306,10 @@ bool dpp_vector::run( edf_t & edf , param_t & param )
           std::vector<double> v1(nc),v2(nc);
           for (int c=0;c<nc;c++) { v1[c]=cur[c]-prev[c]; v2[c]=next[c]-cur[c]; }
           const double co=safe_cosine(v1,v2);
-          if ( finite(co) ) turn=std::acos(std::max(-1.0,std::min(1.0,co)));
+          if ( std::isfinite(co) ) turn=std::acos(std::max(-1.0,std::min(1.0,co)));
         }
       if ( dyn )
-        { row.push_back(vel); row.push_back(finite(vel)&&finite(vel_next)?std::fabs(vel_next-vel)/std::max(dt1,1e-9):std::numeric_limits<double>::quiet_NaN()); row.push_back(finite(cur_norm)&&finite(norm(prev))?cur_norm-norm(prev):std::numeric_limits<double>::quiet_NaN()); row.push_back(turn); }
+        { row.push_back(vel); row.push_back(std::isfinite(vel)&&std::isfinite(vel_next)?std::fabs(vel_next-vel)/std::max(dt1,1e-9):std::numeric_limits<double>::quiet_NaN()); row.push_back(std::isfinite(cur_norm)&&std::isfinite(norm(prev))?cur_norm-norm(prev):std::numeric_limits<double>::quiet_NaN()); row.push_back(turn); }
 
       mat.X[r] = row;
     }

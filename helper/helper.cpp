@@ -2249,12 +2249,34 @@ std::string Helper::xsigs( const std::string & t )
 		      s2 = ss;
 		    }
 		  
-		  std::string term;
-		  for (int a=s1; a <= s2 ; a++ ) 
-		    {
-		      if ( a != s1 ) term += ",";
-		      term += Helper::int2str( a ) ;
-		    }
+	  std::string term;
+	  // Preserve zero-padding only from the first endpoint.  The second
+	  // endpoint is parsed numerically and its lexical width is deliberately
+	  // ignored: [01:10] is padded to width 2, whereas [1:010] remains
+	  // unpadded.  This also applies when the numeric range is in the first
+	  // bracket slot, e.g. [01:3][b].
+	  const std::string first_endpoint = num2[0];
+	  const bool first_negative = first_endpoint.size() > 0 && first_endpoint[0] == '-';
+	  const std::string first_digits = first_negative ? first_endpoint.substr(1) : first_endpoint;
+	  const bool zero_padded = first_digits.size() > 1 && first_digits[0] == '0';
+	  const int pad_width = zero_padded ? (int)first_digits.size() : 0;
+	  const auto format_range_value = [pad_width]( const int value )
+	    {
+	      std::string out = Helper::int2str( value );
+	      if ( pad_width == 0 ) return out;
+
+	      const bool negative = ! out.empty() && out[0] == '-';
+	      const std::string sign = negative ? "-" : "";
+	      std::string digits = negative ? out.substr(1) : out;
+	      if ( (int)digits.size() < pad_width )
+		digits = std::string( pad_width - digits.size() , '0' ) + digits;
+	      return sign + digits;
+	    };
+	  for (int a=s1; a <= s2 ; a++ )
+	    {
+	      if ( a != s1 ) term += ",";
+	      term += format_range_value( a ) ;
+	    }
 		  
 		  // add splice location
 		  splices[j] = k;

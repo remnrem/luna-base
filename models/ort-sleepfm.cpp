@@ -188,8 +188,6 @@ void proc_ort(edf_t &edf, param_t &param) {
   const char *selected = requested == "pooled_embedding" ? pooled.get() : sequence.get();
   const bool add_channels = param.has("add-channels");
   const bool no_output = param.has("no-output");
-  if (add_channels && requested != "sequence_embedding")
-    Helper::halt("SleepFM add-channels is available only for sequence_embedding; pooled embeddings are not emitted as EDF channels");
   const std::string channel_root = add_channels && !param.value("add-channels").empty()
     ? param.value("add-channels") : modality;
   const int output_interval = requested == "sequence_embedding" ? 5 : window_seconds;

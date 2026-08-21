@@ -7716,7 +7716,7 @@ void cmddefs_t::init()
   add_param( "ORT" , "modality" , "auto" , "Required SleepFM modality: BAS, RESP, EKG, or EMG; channel aliases are handled by Luna" );
   add_param( "ORT" , "step" , "300" , "Optional window step in seconds" );
   add_param( "ORT" , "output" , "pooled_embedding" , "SleepFM embedding output" );
-  add_param( "ORT" , "add-channels" , "" , "Add output embedding dimensions as EDF channels using this root (default: modality)" );
+  add_param( "ORT" , "add-channels" , "" , "Add output embedding dimensions as EDF channels using this root (default: modality); pooled_embedding requires EDF records compatible with 300-second outputs" );
   add_param( "ORT" , "no-output" , "" , "Do not emit embedding values to the ORT output database" );
   add_param( "ORT" , "threads" , "1" , "ONNX Runtime intra-op threads" );
   add_table( "ORT" , "WIN,OUT" , "ONNX Runtime output values" );
