@@ -32,6 +32,7 @@
 #include <set>
 #include <map>
 #include <utility>
+#include <memory>
 
 struct param_t;
 struct edf_t;
@@ -65,12 +66,15 @@ struct dpp_fit_t
   void load_corpus();
   void build_feature_labels();
   void attach_phenotypes();
+  void attach_covariates();
   void load_hypno_corpus();      // stage 4, only if stage_conditioned
   void flatten_and_split();
   void apply_row_weights();
   void train_booster();          // pooled (stage 3) path
   void train_stage_boosters();   // stage-conditioned (stage 4) path
   void save_bundle();
+  void parse_fit_spec();
+  void fit_model_set();
 
   // writes <root>.importance (pooled) / <root>.<stage>.importance
   // (stage-conditioned): full_labels paired with lg's gain- and
@@ -120,8 +124,26 @@ struct dpp_fit_t
   std::vector<std::string> full_labels;   // per-column labels, mat.X order
   int n_features;
   std::string phe_label;
+  // Optional subject-level covariates requested with covar=.  Loaded and
+  // retained for model-set fitting; missing values remain NaN for LightGBM.
+  std::vector<std::string> covariate_labels;
   std::set<std::string> validation_ids;
   std::map<std::string,double> phenotype;   // individual ID -> outcome, filled by attach_phenotypes()
+  std::map<std::string,std::map<std::string,double> > covariate; // ID -> label -> value (NaN = missing)
+
+  struct model_spec_t {
+    std::string id;
+    std::vector<std::string> covariates;
+    bool sleep;
+  };
+  struct contrast_spec_t {
+    std::string id;
+    std::string base;
+    std::string add;
+  };
+  bool model_set_mode;
+  std::vector<model_spec_t> model_specs;
+  std::vector<contrast_spec_t> contrast_specs;
 
   Eigen::MatrixXd Xtrain, Xvalid;
   std::vector<double> ytrain, yvalid;
@@ -138,6 +160,7 @@ struct dpp_fit_t
   // out-of-fold prediction back to a specific row in cross_validate()'s
   // .oof output; Xtrain has no equivalent since it's never written out
   std::vector<std::pair<std::string,double> > valid_row_key;
+  std::vector<std::pair<std::string,double> > train_row_key;
 
   lgbm_t lgbm;   // pooled (stage 3) booster
 

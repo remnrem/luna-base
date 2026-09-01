@@ -6904,6 +6904,8 @@ void cmddefs_t::init()
   add_param( "DPP" , "plv-gate-q" , "0.30" , "PLV low-amplitude gate: bottom quantile of the joint envelope to exclude (default 0.30)" );
   add_param( "DPP" , "plv-gate-abs" , "0.5" , "PLV low-amplitude gate: absolute threshold instead of a quantile (overrides plv-gate-q)" );
   add_param( "DPP" , "data" , "dpp1.dat" , "Also write a binary per-individual feature-matrix corpus file" );
+  add_param( "DPP" , "covar" , "AGE,SEX" , "Optional comma-delimited subject-level covariate labels for --dpp-fit; loaded from ID-keyed vars= files and passed to LightGBM with native missing-value handling" );
+  add_param( "DPP" , "fit-spec" , "models.dpp" , "Advanced --dpp-fit model/contrast specification file (MODEL and COMPARE lines; % comments allowed)" );
   add_param( "DPP" , "model" , "age_model" , "Apply a trained model (root of <root>.mod/<root>.dpp, from --dpp-fit) and attach the prediction as a new signal; requires the same sig=/spec=/windows=/... used to train it" );
   add_param( "DPP" , "label" , "DPP_AGE" , "Name for the new signal attached in model= apply mode (default DPP_Z)" );
   add_param( "DPP" , "hypno" , "hypno1.dat" , "Also write a binary per-individual hypnodensity corpus, row-aligned with data=, for --dpp-fit hypno= (stage-conditioned training)" );

@@ -46,6 +46,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iostream>
+#include <sstream>
 
 extern logger_t logger;
 
@@ -90,11 +91,45 @@ std::vector<std::string> dpp_fit::feature_labels( const dpp_specs_t & specs )
 }
 
 dpp_fit_t::dpp_fit_t( param_t & param )
-  : param(param) , n_features(0)
+  : param(param) , n_features(0) , model_set_mode(false)
 {
   out_root = param.requires( "out" );
   ensure_parent_dir_exists( out_root );
   phe_label = param.requires( "phe" );
+  if ( param.has( "covar" ) )
+    {
+      covariate_labels = Helper::parse( param.value( "covar" ) , "," );
+      for (int i=0; i<(int)covariate_labels.size(); i++)
+	{
+	  while ( ! covariate_labels[i].empty() &&
+		  std::isspace( (unsigned char)covariate_labels[i].front() ) )
+	    covariate_labels[i].erase( covariate_labels[i].begin() );
+	  while ( ! covariate_labels[i].empty() &&
+		  std::isspace( (unsigned char)covariate_labels[i].back() ) )
+	    covariate_labels[i].pop_back();
+	  if ( covariate_labels[i].empty() )
+	    Helper::halt( "covar= contains an empty covariate label" );
+	  if ( std::find( covariate_labels.begin() , covariate_labels.begin()+i ,
+			  covariate_labels[i] ) != covariate_labels.begin()+i )
+	    Helper::halt( "covar= contains duplicate covariate label " + covariate_labels[i] );
+	}
+    }
+  if ( param.has( "fit-spec" ) )
+    {
+      if ( param.has( "covar" ) )
+	Helper::halt( "covar= and fit-spec= are mutually exclusive" );
+      model_set_mode = true;
+      parse_fit_spec();
+    }
+  else if ( param.has( "covar" ) )
+    {
+      model_set_mode = true;
+      model_spec_t m;
+      m.id = "adjusted";
+      m.covariates = covariate_labels;
+      m.sleep = true;
+      model_specs.push_back( m );
+    }
   vector_mode = dpp_vector::enabled( param );
   two_level = dpp_twolevel::enabled( param );
   if ( two_level && ! vector_mode ) Helper::halt( "DPP two-level requires vector=T" );
@@ -103,12 +138,14 @@ dpp_fit_t::dpp_fit_t( param_t & param )
     Helper::halt( "DPP vector mode currently uses context features in the vector row and cannot use stage-conditioned hypno corpus fitting" );
   hypno_three_state = param.has( "hypno-three-state" ) ? param.yesno( "hypno-three-state" ) : false;
 
-  n_folds = param.has( "folds" ) ? param.requires_int( "folds" ) : 0;
+  n_folds = param.has( "folds" ) ? param.requires_int( "folds" ) : ( model_set_mode ? 5 : 0 );
   save_fold_models = param.has( "folds-save" ) ? param.yesno( "folds-save" ) : false;
 
   if ( n_folds > 0 && param.has( "validation" ) )
     Helper::halt( "folds= and validation= are mutually exclusive -- CV already "
-		 "produces a held-out prediction for every individual" );
+			 "produces a held-out prediction for every individual" );
+  if ( model_set_mode && param.has( "validation" ) )
+    Helper::halt( "fit-spec=/covar= model sets require grouped folds and do not use validation=" );
   if ( n_folds == 1 ) Helper::halt( "folds= must be at least 2" );
 
   // only meaningful during CV folds (each has its own validation set
@@ -135,17 +172,112 @@ dpp_fit_t::dpp_fit_t( param_t & param )
 // would double-free it) fixed alongside this.
 dpp_fit_t::~dpp_fit_t() { }
 
+void dpp_fit_t::parse_fit_spec()
+{
+  const std::string file = Helper::expand( param.requires( "fit-spec" ) );
+  std::ifstream IN( file.c_str() );
+  if ( ! IN.good() ) Helper::halt( "could not open fit-spec= " + file );
+
+  auto labels = []( const std::string & raw ) {
+    std::vector<std::string> x = Helper::parse( raw , "," );
+    for (std::string & s : x)
+      {
+	while ( ! s.empty() && std::isspace((unsigned char)s.front()) ) s.erase(s.begin());
+	while ( ! s.empty() && std::isspace((unsigned char)s.back()) ) s.pop_back();
+	if ( s.empty() ) Helper::halt( "fit-spec= contains an empty covariate label" );
+      }
+    return x;
+  };
+
+  std::string line;
+  int line_no = 0;
+  while ( std::getline( IN , line ) )
+    {
+      ++line_no;
+      const size_t comment = line.find('%');
+      if ( comment != std::string::npos ) line.erase(comment);
+      std::istringstream ss(line);
+      std::string directive, id;
+      if ( ! ( ss >> directive ) ) continue;
+      if ( ! ( ss >> id ) ) Helper::halt( "fit-spec= line " + Helper::int2str(line_no) + ": missing identifier" );
+
+      if ( directive == "MODEL" )
+	{
+	  model_spec_t m; m.id = id; m.sleep = false;
+	  std::string tok;
+	  while ( ss >> tok )
+	    {
+	      const size_t eq = tok.find('=');
+	      if ( eq == std::string::npos ) Helper::halt( "fit-spec= line " + Helper::int2str(line_no) + ": expected key=value" );
+	      const std::string key = tok.substr(0,eq), val = tok.substr(eq+1);
+	      if ( key == "covar" ) m.covariates = labels(val);
+	      else if ( key == "sleep" )
+		{
+		  if ( val == "T" || val == "1" ) m.sleep = true;
+		  else if ( val == "F" || val == "0" ) m.sleep = false;
+		  else Helper::halt( "fit-spec= line " + Helper::int2str(line_no) + ": sleep= must be T/F or 1/0" );
+		}
+	      else Helper::halt( "fit-spec= line " + Helper::int2str(line_no) + ": unknown MODEL option " + key );
+	    }
+	  for (const model_spec_t & z : model_specs)
+	    if ( z.id == m.id ) Helper::halt( "fit-spec= duplicate MODEL " + m.id );
+	  if ( ! m.sleep && m.covariates.empty() ) Helper::halt( "fit-spec= MODEL " + m.id + " has neither covariates nor sleep features" );
+	  model_specs.push_back(m);
+	}
+      else if ( directive == "COMPARE" )
+	{
+	  contrast_spec_t c; c.id = id; c.base = ""; c.add = "";
+	  std::string tok;
+	  while ( ss >> tok )
+	    {
+	      const size_t eq = tok.find('=');
+	      if ( eq == std::string::npos ) Helper::halt( "fit-spec= line " + Helper::int2str(line_no) + ": expected key=value" );
+	      const std::string key = tok.substr(0,eq), val = tok.substr(eq+1);
+	      if ( key == "base" ) c.base = val;
+	      else if ( key == "add" ) c.add = val;
+	      else Helper::halt( "fit-spec= line " + Helper::int2str(line_no) + ": unknown COMPARE option " + key );
+	    }
+	  if ( c.base == "" || c.add == "" || c.base == c.add ) Helper::halt( "fit-spec= line " + Helper::int2str(line_no) + ": invalid COMPARE models" );
+	  for (const contrast_spec_t & z : contrast_specs)
+	    if ( z.id == c.id ) Helper::halt( "fit-spec= duplicate COMPARE " + c.id );
+	  contrast_specs.push_back(c);
+	}
+      else Helper::halt( "fit-spec= line " + Helper::int2str(line_no) + ": expected MODEL or COMPARE" );
+    }
+  IN.close();
+  if ( model_specs.empty() ) Helper::halt( "fit-spec= contains no MODEL lines" );
+  for (const model_spec_t & m : model_specs)
+    for (const std::string & c : m.covariates)
+      if ( std::find(covariate_labels.begin(),covariate_labels.end(),c) == covariate_labels.end() )
+	covariate_labels.push_back(c);
+  for (const contrast_spec_t & c : contrast_specs)
+    {
+      bool base=false, add=false;
+      for (const model_spec_t & m : model_specs) { if (m.id==c.base) base=true; if (m.id==c.add) add=true; }
+      if ( !base || !add ) Helper::halt( "fit-spec= COMPARE " + c.id + " references an unknown model" );
+    }
+}
+
 void dpp_fit_t::fit()
 {
   if ( two_level )
     {
+      if ( model_set_mode )
+	Helper::halt( "fit-spec=/covar= model sets are currently supported only for pooled DPP fitting" );
       dpp_twolevel::fit( param );
       return;
     }
   load_corpus();
   build_feature_labels();
   attach_phenotypes();
+  attach_covariates();
   if ( stage_conditioned ) load_hypno_corpus();
+
+  if ( model_set_mode )
+    {
+      fit_model_set();
+      return;
+    }
 
   if ( n_folds > 0 )
     {
@@ -243,6 +375,144 @@ void dpp_fit_t::attach_phenotypes()
 	Helper::halt( "no phenotype " + phe_label + " found for individual " + individuals[i].id );
       phenotype[ individuals[i].id ] = y;
     }
+}
+
+void dpp_fit_t::attach_covariates()
+{
+  covariate.clear();
+  if ( covariate_labels.empty() ) return;
+
+  int n_numeric = 0;
+  for (int i=0; i<(int)individuals.size(); i++)
+    for (int c=0; c<(int)covariate_labels.size(); c++)
+      {
+	double x = std::numeric_limits<double>::quiet_NaN();
+	if ( cmd_t::pull_ivar( individuals[i].id , covariate_labels[c] , &x ) )
+	  { covariate[ individuals[i].id ][ covariate_labels[c] ] = x; ++n_numeric; }
+	else
+	  covariate[ individuals[i].id ][ covariate_labels[c] ] =
+	    std::numeric_limits<double>::quiet_NaN();
+      }
+
+  logger << "  loaded " << covariate_labels.size() << " covariate labels ("
+	 << n_numeric << " numeric subject values; missing/non-numeric retained as missing)\n";
+}
+
+void dpp_fit_t::fit_model_set()
+{
+  if ( stage_conditioned ) Helper::halt( "fit-spec= model sets do not support stage-conditioned DPP" );
+  if ( n_folds < 2 ) Helper::halt( "fit-spec= requires folds>=2" );
+
+  std::map<std::string,int> model_index;
+  for (int i=0; i<(int)model_specs.size(); i++) model_index[ model_specs[i].id ] = i;
+
+  struct result_t { std::map<std::string,double> pred; std::map<std::string,int> n; };
+  std::vector<result_t> results( model_specs.size() );
+
+  auto make_matrix = [&]( const model_spec_t & m , const Eigen::MatrixXd & base ,
+				 const std::vector<std::pair<std::string,double> > & keys ,
+				 std::vector<std::string> * labels )
+    {
+      const int nc = m.sleep ? base.cols() : 0;
+      const int nv = m.covariates.size();
+      Eigen::MatrixXd out( base.rows() , nc + nv );
+      labels->clear();
+      if ( m.sleep ) *labels = full_labels;
+      for (const std::string & c : m.covariates)
+	labels->push_back("COVAR." + c);
+      for (int r=0; r<base.rows(); r++)
+	{
+	  for (int c=0; c<nc; c++) out(r,c) = base(r,c);
+	  const std::string & id = keys[r].first;
+	  for (int j=0; j<nv; j++)
+	    {
+	      double x = std::numeric_limits<double>::quiet_NaN();
+	      std::map<std::string,std::map<std::string,double> >::const_iterator ii = covariate.find(id);
+	      if ( ii != covariate.end() )
+		{
+		  std::map<std::string,double>::const_iterator jj = ii->second.find(m.covariates[j]);
+		  if ( jj != ii->second.end() ) x = jj->second;
+		}
+	      // LightGBM handles NaN natively.  Do not impute from the full
+	      // cohort (or even from a training fold) and do not add a synthetic
+	      // missingness column here; the tree learner can choose its default
+	      // direction for each split.
+	      out(r,nc+j) = x;
+	    }
+	}
+      return out;
+    };
+
+  auto train = [&]( const model_spec_t & m , const Eigen::MatrixXd & tr , const Eigen::MatrixXd & va ,
+		    const std::vector<double> & yt , const std::vector<double> & yv ,
+		    const std::vector<float> & wt , const std::vector<float> & wv ,
+		    const std::vector<std::string> & labels )
+    {
+      std::unique_ptr<lgbm_t> lg(new lgbm_t());
+      if ( param.has("config") ) lg->load_config(param.value("config"));
+      lg->qt_mode = true;
+      lg->attach_training_matrix(tr);
+      if ( labels.size() == (size_t)tr.cols() ) lg->set_feature_names(labels);
+      lg->attach_training_qts(yt);
+      if ( va.rows() > 0 ) { lg->attach_validation_matrix(va); lg->attach_validation_qts(yv); }
+      lg->training_weights = wt; lg->apply_weights(lg->training,&lg->training_weights);
+      if ( va.rows() > 0 ) { lg->validation_weights = wv; lg->apply_weights(lg->validation,&lg->validation_weights); }
+      if ( param.has("iterations") ) lg->n_iterations = param.requires_int("iterations");
+      lg->early_stopping_rounds = early_stopping_rounds;
+      lg->create_booster(param.has("verbose") && param.yesno("verbose"));
+      return lg;
+    };
+
+  assign_folds();
+  for (int f=0; f<n_folds; f++)
+    {
+      validation_ids.clear();
+      for (std::map<std::string,int>::const_iterator ii=fold_assignment.begin(); ii!=fold_assignment.end(); ++ii)
+	if(ii->second==f) validation_ids.insert(ii->first);
+      if ( validation_ids.empty() ) continue;
+      flatten_and_split();
+      for (int mi=0; mi<(int)model_specs.size(); mi++)
+	{
+	  std::vector<std::string> labels;
+	  Eigen::MatrixXd tr=make_matrix(model_specs[mi],Xtrain,train_row_key,&labels);
+	  Eigen::MatrixXd va=make_matrix(model_specs[mi],Xvalid,valid_row_key,&labels);
+	  std::unique_ptr<lgbm_t> lg=train(model_specs[mi],tr,va,ytrain,yvalid,indiv_weight_train,indiv_weight_valid,labels);
+	  Eigen::MatrixXd p=lg->predict(va);
+	  for(int r=0;r<p.rows();r++){const std::string&id=valid_row_key[r].first;results[mi].pred[id]+=p(r,0);results[mi].n[id]++;}
+	}
+    }
+
+  std::ofstream CO(Helper::expand(out_root+".contrasts").c_str());
+  if(!CO.good()) Helper::halt("could not write "+out_root+".contrasts");
+  CO << "# DPP model-set contrasts\nNAME\tBASE\tADD\tN\tBASE_RMSE\tADD_RMSE\tDELTA_RMSE\tBASE_R2\tADD_R2\tDELTA_R2\n";
+  auto metrics = [&](int mi, const std::set<std::string> & ids) {
+    double sy=0,syy=0,sse=0; int n=0;
+    for(const std::string&id:ids){ if(!results[mi].n.count(id))continue; double y=phenotype[id],p=results[mi].pred[id]/results[mi].n[id]; sy+=y;syy+=y*y;sse+=(y-p)*(y-p);++n; }
+    const double rmse=n?std::sqrt(sse/n):std::numeric_limits<double>::quiet_NaN();
+    const double mean=n?sy/n:0, tss=syy-n*mean*mean;
+    const double r2=n&&tss>0?1-sse/tss:std::numeric_limits<double>::quiet_NaN();
+    return std::make_pair(rmse,r2);
+  };
+  for(const contrast_spec_t& c:contrast_specs){std::set<std::string>ids;for(auto&x:results[model_index[c.base]].pred)if(results[model_index[c.add]].pred.count(x.first))ids.insert(x.first);auto a=metrics(model_index[c.base],ids),b=metrics(model_index[c.add],ids);CO<<c.id<<"\t"<<c.base<<"\t"<<c.add<<"\t"<<ids.size()<<"\t"<<a.first<<"\t"<<b.first<<"\t"<<a.first-b.first<<"\t"<<a.second<<"\t"<<b.second<<"\t"<<b.second-a.second<<"\n";std::ofstream PO(Helper::expand(out_root+".contrast."+c.id+".subject").c_str());if(!PO.good())Helper::halt("could not write "+out_root+".contrast."+c.id+".subject");PO<<"ID\tY_TRUE\tP_BASE\tP_ADD\tSE_BASE\tSE_ADD\tSE_BASE_MINUS_ADD\n";for(const std::string&id:ids){double y=phenotype[id],pb=results[model_index[c.base]].pred[id]/results[model_index[c.base]].n[id],pa=results[model_index[c.add]].pred[id]/results[model_index[c.add]].n[id],eb=(y-pb)*(y-pb),ea=(y-pa)*(y-pa);PO<<id<<"\t"<<y<<"\t"<<pb<<"\t"<<pa<<"\t"<<eb<<"\t"<<ea<<"\t"<<eb-ea<<"\n";}PO.close();}
+  CO.close();
+
+  for (int mi=0; mi<(int)model_specs.size(); mi++)
+    {
+      std::ofstream OO(Helper::expand(out_root+"."+model_specs[mi].id+".oof.subject").c_str());
+      if ( !OO.good() ) Helper::halt("could not write "+out_root+"."+model_specs[mi].id+".oof.subject");
+      OO << "# DPP model-set subject-level out-of-fold predictions\n"
+         << "# model_id=" << model_specs[mi].id << "\n"
+         << "ID\tY_TRUE\tY_PRED\n";
+      for (std::map<std::string,double>::const_iterator ii=results[mi].pred.begin(); ii!=results[mi].pred.end(); ++ii)
+	OO << ii->first << "\t" << phenotype[ii->first] << "\t"
+	   << ii->second / results[mi].n[ii->first] << "\n";
+      OO.close();
+    }
+
+  validation_ids.clear(); flatten_and_split();
+  for(int mi=0;mi<(int)model_specs.size();mi++){
+    std::vector<std::string> labels; Eigen::MatrixXd tr=make_matrix(model_specs[mi],Xtrain,train_row_key,&labels); Eigen::MatrixXd empty(0,tr.cols()); std::vector<double> emptyy; std::vector<float> emptyw; std::unique_ptr<lgbm_t>lg=train(model_specs[mi],tr,empty,ytrain,emptyy,indiv_weight_train,emptyw,labels); std::string root=Helper::expand(out_root+"."+model_specs[mi].id);lg->save_model(root+".mod");std::ofstream M(root+".dpp");M<<"# DPP model manifest\n# model_id="<<model_specs[mi].id<<"\n# sleep="<<(model_specs[mi].sleep?"T":"F")<<"\n# covariates=";for(int j=0;j<(int)model_specs[mi].covariates.size();j++){if(j)M<<",";M<<model_specs[mi].covariates[j];}M<<"\n# missing=LIGHTGBM_NATIVE\n# feature_names_begin\n";for(auto&x:labels)M<<x<<"\n";M.close();}
+  logger << "  wrote " << model_specs.size() << " DPP model(s) and " << contrast_specs.size() << " contrast(s)\n";
 }
 
 void dpp_fit_t::load_hypno_corpus()
@@ -414,6 +684,7 @@ void dpp_fit_t::flatten_and_split()
   Xtrain = Eigen::MatrixXd::Constant( n_train_rows , n_features , NaN_value );
   ytrain.assign( n_train_rows , 0.0 );
   indiv_weight_train.assign( n_train_rows , 0.0f );
+  train_row_key.resize( n_train_rows );
   // Xvalid/yvalid/indiv_weight_valid/Hvalid must be reset to empty even
   // when n_valid_rows==0 (the common final-fit case, validation_ids
   // empty) -- flatten_and_split() is re-invoked once per cross_validate()
@@ -483,6 +754,7 @@ void dpp_fit_t::flatten_and_split()
 	      for (int c=0; c<n_features; c++) Xtrain( train_row , c ) = individuals[i].X[r][c];
 	      ytrain[ train_row ] = y;
 	      indiv_weight_train[ train_row ] = w;
+	      train_row_key[ train_row ] = std::make_pair( individuals[i].id , individuals[i].time_sec[r] );
 	      if ( stage_conditioned )
 		for (int s=0; s<n_stages; s++) Htrain( train_row , s ) = hmat->X[r][s];
 	      ++train_row;
@@ -1018,6 +1290,13 @@ void dpp_fit_t::save_bundle()
       O1 << "# DPP model manifest\n";
       O1 << "# model_file=" << model_file << "\n";
       O1 << "# phe=" << phe_label << "\n";
+      if ( ! covariate_labels.empty() )
+	{
+	  O1 << "# covariates=";
+	  for (int i=0; i<(int)covariate_labels.size(); i++)
+	    { if ( i ) O1 << ","; O1 << covariate_labels[i]; }
+	  O1 << "\n";
+	}
       O1 << "# mode=regression\n";
       if ( vector_mode )
 	{
@@ -1052,6 +1331,13 @@ void dpp_fit_t::save_bundle()
 
   O1 << "# DPP model manifest\n";
   O1 << "# phe=" << phe_label << "\n";
+  if ( ! covariate_labels.empty() )
+    {
+      O1 << "# covariates=";
+      for (int i=0; i<(int)covariate_labels.size(); i++)
+	{ if ( i ) O1 << ","; O1 << covariate_labels[i]; }
+      O1 << "\n";
+    }
   O1 << "# mode=stage-conditioned\n";
   O1 << "# stages=" << Helper::stringize( stage_labels ) << "\n";
   O1 << "# n_features=" << full_labels.size() << "\n";

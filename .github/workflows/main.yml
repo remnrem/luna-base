@@ -26,6 +26,7 @@ on:
 env:
   FFTW_VERSION: 3.3.10
   LIGHTGBM_REF: v4.6.0
+  ORT_REF: v1.29.0
   NATIVE_DEPS_MODE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native_deps_mode || 'luna' }}
 
 jobs:
@@ -135,7 +136,8 @@ jobs:
           path: |
             ~/LightGBM
             ~/fftw-${{ env.FFTW_VERSION }}
-          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-omp-on
+            ~/onnxruntime/dist/cpu-shared
+          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-ort-${{ env.ORT_REF }}-omp-on
       - name: Native deps cache status
         run: |
           echo "NATIVE_DEPS_MODE=${NATIVE_DEPS_MODE}"
@@ -169,19 +171,47 @@ jobs:
           make -j$(sysctl -n hw.ncpu)
           make install
           cd ${GITHUB_WORKSPACE}
+      - name: Build ONNX Runtime
+        if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
+        run: |
+          rm -rf ${HOME}/onnxruntime-src
+          git clone --branch ${ORT_REF} --depth 1 https://github.com/microsoft/onnxruntime ${HOME}/onnxruntime-src
+          cd ${HOME}/onnxruntime-src
+          python3 tools/ci_build/build.py \
+            --build_dir build/MacOS/ReleaseShared \
+            --config Release \
+            --build_shared_lib \
+            --skip_tests \
+            --parallel 0 \
+            --disable_contrib_ops \
+            --disable_ml_ops \
+            --no_telemetry \
+            --cmake_extra_defines onnxruntime_BUILD_UNIT_TESTS=OFF \
+            --target onnxruntime \
+            --cmake_generator "Unix Makefiles" \
+            --update \
+            --build
+          rm -rf ${HOME}/onnxruntime/dist/cpu-shared
+          mkdir -p ${HOME}/onnxruntime/dist/cpu-shared/lib ${HOME}/onnxruntime/dist/cpu-shared/include
+          cp build/MacOS/ReleaseShared/Release/libonnxruntime.dylib ${HOME}/onnxruntime/dist/cpu-shared/lib/
+          cp -R include/onnxruntime ${HOME}/onnxruntime/dist/cpu-shared/include/
+          install_name_tool -id '@rpath/libonnxruntime.dylib' \
+            ${HOME}/onnxruntime/dist/cpu-shared/lib/libonnxruntime.dylib
       - name: Make
         run: |
           [[ -e ${HOME}/LightGBM/lib_lightgbm.so ]] && cp ${HOME}/LightGBM/lib_lightgbm.so .
           [[ -e ${HOME}/LightGBM/lib_lightgbm.dylib ]] && cp ${HOME}/LightGBM/lib_lightgbm.dylib .
-          make -j$(sysctl -n hw.ncpu) ARCH=MAC FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_PATH=${HOME}/LightGBM
+          make -j$(sysctl -n hw.ncpu) ARCH=MAC FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_PATH=${HOME}/LightGBM ORT=1 ORT_PATH=${HOME}/onnxruntime/dist/cpu-shared
           if [[ "${{ needs.release-meta.outputs.enabled }}" == "true" ]]; then
             v="${{ needs.release-meta.outputs.version }}"
             mkdir luna-${v}
-            cp luna destrat behead lib_lightgbm.dylib luna-${v}/
+            cp luna destrat behead luna-${v}/
+            mkdir -p luna-${v}/lib
+            cp ${HOME}/onnxruntime/dist/cpu-shared/lib/libonnxruntime.dylib luna-${v}/lib/
             cd luna-${v}/
-            install_name_tool -add_rpath  @executable_path/. ./luna
-            install_name_tool -add_rpath  @executable_path/. ./destrat
-            install_name_tool -add_rpath  @executable_path/. ./behead
+            install_name_tool -add_rpath @executable_path/lib ./luna
+            install_name_tool -add_rpath @executable_path/lib ./destrat
+            install_name_tool -add_rpath @executable_path/lib ./behead
             otool -l ./luna
             cd ..
             tar cvzf mac-luna.tar.gz luna-${v}/
@@ -204,7 +234,8 @@ jobs:
           path: |
             ~/LightGBM
             ~/fftw-${{ env.FFTW_VERSION }}
-          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-omp-off
+            ~/onnxruntime/dist/cpu-shared
+          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-ort-${{ env.ORT_REF }}-omp-off
       - name: Native deps cache status
         run: |
           echo "NATIVE_DEPS_MODE=${NATIVE_DEPS_MODE}"
@@ -241,15 +272,46 @@ jobs:
           ./configure --prefix=$HOME/fftw-${FFTW_VERSION} CFLAGS="-arch arm64"
           make -j$(sysctl -n hw.ncpu)
           make install
+      - name: Build ONNX Runtime
+        if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
+        run: |
+          rm -rf ${HOME}/onnxruntime-src
+          git clone --branch ${ORT_REF} --depth 1 https://github.com/microsoft/onnxruntime ${HOME}/onnxruntime-src
+          cd ${HOME}/onnxruntime-src
+          python3 tools/ci_build/build.py \
+            --build_dir build/MacOS/ReleaseShared \
+            --config Release \
+            --build_shared_lib \
+            --skip_tests \
+            --parallel 0 \
+            --disable_contrib_ops \
+            --disable_ml_ops \
+            --no_telemetry \
+            --cmake_extra_defines onnxruntime_BUILD_UNIT_TESTS=OFF \
+            --target onnxruntime \
+            --cmake_generator "Unix Makefiles" \
+            --update \
+            --build
+          rm -rf ${HOME}/onnxruntime/dist/cpu-shared
+          mkdir -p ${HOME}/onnxruntime/dist/cpu-shared/lib ${HOME}/onnxruntime/dist/cpu-shared/include
+          cp build/MacOS/ReleaseShared/Release/libonnxruntime.dylib ${HOME}/onnxruntime/dist/cpu-shared/lib/
+          cp -R include/onnxruntime ${HOME}/onnxruntime/dist/cpu-shared/include/
+          install_name_tool -id '@rpath/libonnxruntime.dylib' \
+            ${HOME}/onnxruntime/dist/cpu-shared/lib/libonnxruntime.dylib
     
       - name: Final Build
         run: |
-          make -j$(sysctl -n hw.ncpu) ARCH=MAC LGBM=1 LGBM_PATH=${HOME}/LightGBM/ FFTW=$HOME/fftw-${FFTW_VERSION}
+          make -j$(sysctl -n hw.ncpu) ARCH=MAC LGBM=1 LGBM_PATH=${HOME}/LightGBM/ FFTW=$HOME/fftw-${FFTW_VERSION} ORT=1 ORT_PATH=${HOME}/onnxruntime/dist/cpu-shared
           if [[ "${{ needs.release-meta.outputs.enabled }}" == "true" ]]; then
             v="${{ needs.release-meta.outputs.version }}"
             mkdir luna-${v}
             cp luna destrat behead luna-${v}/
+            mkdir -p luna-${v}/lib
+            cp ${HOME}/onnxruntime/dist/cpu-shared/lib/libonnxruntime.dylib luna-${v}/lib/
             cd luna-${v}/
+            install_name_tool -add_rpath @executable_path/lib ./luna
+            install_name_tool -add_rpath @executable_path/lib ./destrat
+            install_name_tool -add_rpath @executable_path/lib ./behead
             otool -L ./luna
             cd ..
             tar cvzf macos-arm64-luna.tar.gz luna-${v}/
