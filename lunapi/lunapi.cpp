@@ -1164,7 +1164,6 @@ void lunapi_inst_t::drop()
   edf.id.clear();
   edf.filename.clear();
   edf.annot_files.clear();
-  edf.edf_annots.clear();
   edf.aoccur.clear();
   
   // track meta-data

@@ -3224,7 +3224,7 @@ void proc_force_edf( edf_t & edf , param_t & param )
 void proc_write( edf_t & edf , param_t & param )
 {
   
-  // write a .edfz and .edfz.idx
+  // write a self-contained .edfz
   const bool edfz = param.yesno( "edfz" );
   
   // add 'tag' to new EDF
@@ -3256,8 +3256,8 @@ void proc_write( edf_t & edf , param_t & param )
       filename += ".edf";
     }
 
-  // set .edf.gz as main EDFZ file extension
-  if ( edfz ) filename += ".gz";
+  // The Luna indexed container uses .edfz; .edf.gz remains the gzip format.
+  if ( edfz ) filename += ".edfz";
   
   //
   // optionally, allow directory change
@@ -3292,7 +3292,7 @@ void proc_write( edf_t & edf , param_t & param )
 	      if (stem[j] == globals::folder_delimiter) { v=j+1; break; }
 	    stem = stem.substr(v);
 	  }
-	  std::string ext = std::string(".edf") + (edfz ? ".gz" : "");
+	  std::string ext = edfz ? ".edfz" : ".edf";
 	  if ( param.has("edf-tag") )
 	    filename = outdir + stem + "-" + param.value("edf-tag") + ext;
 	  else

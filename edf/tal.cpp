@@ -24,6 +24,7 @@
 
 #include "defs/defs.h"
 #include "intervals/intervals.h"
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 
@@ -104,6 +105,10 @@ std::ostream & operator<<( std::ostream & out , const tal_t & t )
 std::string tal_t::export_annots() const
 {
   std::stringstream ss;
+  // EDFZ stores this serialized representation in its embedded index.
+  // Use round-trip-safe precision so that annotation times are not
+  // truncated by the stream's default six-significant-digit precision.
+  ss << std::setprecision( 17 );
   bool printed = false;
   //  std::cout << "ds = " << d.size() << "\n";
   for (int i=0; i<d.size(); i++)
@@ -191,7 +196,7 @@ void tal_t::decode( const std::string & str )
       if ( subs.size() < 1 ) continue;
 
       // time can optionally have a duration
-      std::vector<std::string> ts = Helper::char_split( subs[0] , '\x21' , NO_EMPTIES );
+      std::vector<std::string> ts = Helper::char_split( subs[0] , '\x15' , NO_EMPTIES );
       
       //std::cout << "ts size = " << ts.size() << "\n";
 
@@ -206,8 +211,8 @@ void tal_t::decode( const std::string & str )
       
       if ( ts.size() == 2 )
 	{
-	  if ( ! Helper::str2dbl( ts[0] , &onset ) )
-	    Helper::halt( "problem converting time-stamp, " + ts[0] );	  
+	  if ( ! Helper::str2dbl( ts[1] , &duration ) )
+	    Helper::halt( "problem converting duration, " + ts[1] );
 	}
       
       // time-stamp?
@@ -241,6 +246,3 @@ std::string tal_t::encode() const
 {
   return "";
 }
-
-
-

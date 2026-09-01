@@ -372,7 +372,6 @@ public:
   // for WRITE edfz , i.e. to store these in the index)
   //
 
-  std::map<int,std::string> edf_annots;
 
   bool has_edf_annots;
 
@@ -597,7 +596,7 @@ private:
 
 
   //
-  // Alternate buffer for EDFZ (BGZF)
+  // Alternate buffer for indexed EDFZ
   //
   
   edfz_t * edfz;

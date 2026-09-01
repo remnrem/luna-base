@@ -47,6 +47,15 @@ namespace {
     return std::find( f.begin() , f.end() , x ) != f.end();
   }
 
+  std::string time_mode( const param_t & param )
+  {
+    std::string x = param.has("vector-time") ? param.value("vector-time") : "RELATIVE";
+    for (char & c : x) c = (char)std::toupper((unsigned char)c);
+    if ( x != "RELATIVE" && x != "EDF" && x != "ONSET" )
+      Helper::halt("vector-time= must be RELATIVE, ONSET, or EDF");
+    return x;
+  }
+
   void add_label( std::vector<std::string> * l , const std::string & s )
   { l->push_back( s ); }
 
@@ -119,6 +128,7 @@ dpp_vector::layout_t dpp_vector::layout( const int embedding_dim , const param_t
 std::vector<std::string> dpp_vector::labels( const int n_channels , const param_t & param )
 {
   const std::vector<std::string> f = feature_set( param );
+  const std::string tm = time_mode( param );
   std::vector<std::string> l;
 
   if ( has_feature(f,"RAW") )
@@ -126,7 +136,8 @@ std::vector<std::string> dpp_vector::labels( const int n_channels , const param_
 
   if ( has_feature(f,"CONTEXT") )
     {
-      add_label(&l,"VEC.CONTEXT.TIME_FRAC");
+      add_label(&l,tm == "EDF" ? "VEC.CONTEXT.EDF_TIME_FRAC" :
+                  tm == "ONSET" ? "VEC.CONTEXT.ONSET_TIME_H" : "VEC.CONTEXT.RETAINED_FRAC");
       add_label(&l,"VEC.CONTEXT.STAGE_W");
       add_label(&l,"VEC.CONTEXT.STAGE_N1");
       add_label(&l,"VEC.CONTEXT.STAGE_N2");
@@ -170,6 +181,9 @@ bool dpp_vector::run( edf_t & edf , param_t & param )
   std::vector<std::vector<double> > x(nc);
   std::vector<std::vector<uint64_t> > tp(nc);
 
+  if ( param.has("hypno-context") && param.yesno("hypno-context") )
+    edf.timeline.ensure_epoched();
+
   double common_fs = 0;
   for (int c=0; c<nc; c++)
     {
@@ -179,7 +193,9 @@ bool dpp_vector::run( edf_t & edf , param_t & param )
       else if ( std::fabs(fs[c]-common_fs) > 1e-9 * std::max(1.0,common_fs) )
         Helper::halt("DPP vector mode requires all selected channels to have the same sampling rate");
 
-      slice_t w( edf , signals(c) , edf.timeline.wholetrace() );
+      // Pull the complete continuous trace and apply any epoch MASK below at
+      // the vector-row level; this avoids requiring EDF+D/RESTRUCTURE.
+      slice_t w( edf , signals(c) , edf.timeline.wholetrace(true) );
       x[c] = *w.pdata();
       tp[c] = *w.ptimepoints();
       if ( x[c].size() != tp[c].size() ) Helper::halt("DPP vector mode found invalid signal time points");
@@ -188,10 +204,55 @@ bool dpp_vector::run( edf_t & edf , param_t & param )
   for (int c=1; c<nc; c++)
     if ( tp[c] != tp[0] ) Helper::halt("DPP vector mode requires time-aligned selected channels");
 
+  // Index in the unmasked vector sequence.  It lets derived features detect
+  // a masked gap after the retained rows have been compacted.
+  std::vector<int> source_index( tp[0].size() );
+  for (int r=0; r<(int)source_index.size(); r++) source_index[r] = r;
+
+  // Vector observations are low-rate samples, so a normal Luna epoch MASK
+  // cannot be delegated to slice_t/wholetrace(): those operate on retained
+  // EDF records and otherwise require RE (RESTRUCTURE). Honor the current
+  // epoch mask explicitly here, before deriving context, geometry, or
+  // dynamics. This keeps the source EDF continuous and also prevents
+  // prev/next-derived features from crossing a masked region.
+  if ( edf.timeline.is_epoch_mask_set() )
+    {
+      std::vector<int> keep;
+      keep.reserve( tp[0].size() );
+      for (int r=0; r<(int)tp[0].size(); r++)
+        {
+          const int epoch = epoch_at( edf , tp[0][r] );
+          if ( epoch >= 0 && ! edf.timeline.masked_epoch( epoch ) )
+            keep.push_back( r );
+        }
+
+      const int n_before = tp[0].size();
+      for (int c=0; c<nc; c++)
+        {
+          std::vector<double> xx;
+          std::vector<uint64_t> tt;
+          xx.reserve( keep.size() );
+          tt.reserve( keep.size() );
+          for (int i : keep) { xx.push_back( x[c][i] ); tt.push_back( tp[c][i] ); }
+          x[c].swap( xx );
+          tp[c].swap( tt );
+        }
+
+      std::vector<int> kept_source_index;
+      kept_source_index.reserve( keep.size() );
+      for (int i : keep) kept_source_index.push_back( source_index[i] );
+      source_index.swap( kept_source_index );
+
+      logger << "  DPP vector mode: epoch MASK retained " << keep.size()
+             << " of " << n_before << " observations\n";
+      if ( keep.empty() )
+        {
+          Helper::halt( "DPP vector mode: no observations remain after the epoch MASK for " + edf.id );
+        }
+    }
+
   const int nr = tp[0].size();
   if ( nr == 0 ) { logger << "  *** no vector observations for DPP\n"; return true; }
-
-  if ( param.has("hypno-context") && param.yesno("hypno-context") ) edf.timeline.ensure_epoched();
 
   // Cache cycle extents in epoch coordinates so a low-rate vector sample
   // (including one sample per long EDF record) can still receive a stable
@@ -221,6 +282,9 @@ bool dpp_vector::run( edf_t & edf , param_t & param )
 
   const std::vector<std::string> flabels = labels(nc,param);
   const std::vector<std::string> fset = feature_set(param);
+  const std::string tm = time_mode(param);
+  const double time_origin = tm == "ONSET" && !tp[0].empty()
+    ? tp[0][0] / (double)globals::tp_1sec : 0;
   const bool raw = has_feature(fset,"RAW");
   const bool context = has_feature(fset,"CONTEXT");
   const bool geom = has_feature(fset,"GEOM");
@@ -246,8 +310,10 @@ bool dpp_vector::run( edf_t & edf , param_t & param )
       for (int c=0; c<nc; c++)
         {
           cur[c] = x[c][r];
-          prev[c] = r > 0 ? x[c][r-1] : std::numeric_limits<double>::quiet_NaN();
-          next[c] = r+1 < nr ? x[c][r+1] : std::numeric_limits<double>::quiet_NaN();
+          const bool prev_row = r > 0 && source_index[r] == source_index[r-1] + 1;
+          const bool next_row = r+1 < nr && source_index[r+1] == source_index[r] + 1;
+          prev[c] = prev_row ? x[c][r-1] : std::numeric_limits<double>::quiet_NaN();
+          next[c] = next_row ? x[c][r+1] : std::numeric_limits<double>::quiet_NaN();
         }
 
       std::vector<double> row;
@@ -278,7 +344,17 @@ bool dpp_vector::run( edf_t & edf , param_t & param )
 
       if ( context )
         {
-          row.push_back( nr > 1 ? (double)r/(double)(nr-1) : 0 );
+          double frac = nr > 1 ? (double)r/(double)(nr-1) : 0;
+          if ( tm == "EDF" )
+            {
+              const double edf_sec = edf.header.nr * edf.header.record_duration;
+              frac = edf_sec > 0 ? t / edf_sec : 0;
+              if ( frac < 0 ) frac = 0;
+              if ( frac > 1 ) frac = 1;
+            }
+          else if ( tm == "ONSET" )
+            frac = (t - time_origin) / 3600.0;
+          row.push_back( frac );
           row.push_back(stage=="W"); row.push_back(stage=="N1"); row.push_back(stage=="N2");
           row.push_back(stage=="N3"); row.push_back(stage=="R"); row.push_back(stage=="UNKNOWN");
           row.push_back(cycle);
@@ -295,13 +371,15 @@ bool dpp_vector::run( edf_t & edf , param_t & param )
       if ( geom )
         { row.push_back(cur_norm); row.push_back(base_dist); row.push_back(base_cos); row.push_back(prev_dist); row.push_back(prev_cos); }
 
-      const double dt = r > 0 ? (tp[0][r]-tp[0][r-1])/(double)globals::tp_1sec : 0;
-      const double dt1 = r+1 < nr ? (tp[0][r+1]-tp[0][r])/(double)globals::tp_1sec : dt;
+      const bool prev_row = r > 0 && source_index[r] == source_index[r-1] + 1;
+      const bool next_row = r+1 < nr && source_index[r+1] == source_index[r] + 1;
+      const double dt = prev_row ? (tp[0][r]-tp[0][r-1])/(double)globals::tp_1sec : 0;
+      const double dt1 = next_row ? (tp[0][r+1]-tp[0][r])/(double)globals::tp_1sec : dt;
       const double vel = dt > 0 ? prev_dist/dt : std::numeric_limits<double>::quiet_NaN();
       const double next_dist = safe_distance(next,cur);
       const double vel_next = dt1 > 0 ? next_dist/dt1 : std::numeric_limits<double>::quiet_NaN();
       double turn = std::numeric_limits<double>::quiet_NaN();
-      if ( r > 0 && r+1 < nr )
+      if ( prev_row && next_row )
         {
           std::vector<double> v1(nc),v2(nc);
           for (int c=0;c<nc;c++) { v1[c]=cur[c]-prev[c]; v2[c]=next[c]-cur[c]; }

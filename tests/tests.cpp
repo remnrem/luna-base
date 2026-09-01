@@ -1611,6 +1611,79 @@ static void test_write( lunapi_t * eng,
     std::remove( (tmp + ".edf").c_str() );
   } catch(std::exception & e) { record(R,"write/edf-round-trip",false,e.what(),V); }
 
+  // J1b — EDF+D timestamps and EDF+ annotations survive EDFZ round-trip
+  try {
+    const std::string tmp = temp_base_path("test_edfz_edfd");
+    const std::string filename = tmp + ".edfz";
+    edfz_t z;
+
+    bool wrote = z.open_for_writing( filename );
+    const auto field = [&]( const std::string & value, int n ) {
+      z.writestring( value, n );
+    };
+
+    // Two channels: one data channel and one EDF Annotations channel.
+    // Each record is one second; timestamps deliberately contain a gap.
+    field( "0", 8 );
+    field( "EDFZ test", 80 );
+    field( "Startdate EDF+D test", 80 );
+    field( "01.01.85", 8 );
+    field( "00.00.00", 8 );
+    field( "768", 8 );
+    field( "EDF+D", 44 );
+    field( "3", 8 );
+    field( "1", 8 );
+    field( "2", 4 );
+
+    field( "S1", 16 );
+    field( "EDF Annotations", 16 );
+    field( "", 80 ); field( "", 80 );
+    field( "uV", 8 ); field( "", 8 );
+    field( "-1", 8 ); field( "-1", 8 );
+    field( "1", 8 ); field( "1", 8 );
+    field( "-32768", 8 ); field( "-32768", 8 );
+    field( "32767", 8 ); field( "32767", 8 );
+    field( "", 80 ); field( "", 80 );
+    field( "1", 8 ); field( "32", 8 );
+    field( "", 32 ); field( "", 32 );
+
+    const int record_size = 2 + 64;
+    const std::vector<uint64_t> timestamps = { 0, 5, 6 };
+    for ( int r = 0; r < 3; ++r )
+    {
+      const std::string raw = r == 1
+        ? std::string( "5\x15" ) + "2\x14" + "EDFZ_Event" + "\x14\x00"
+        : std::string( 64, '\0' );
+      z.add_index( r, 0, timestamps[r] * globals::tp_1sec,
+                   std::vector<std::string>( 1, raw ) );
+      std::vector<byte_t> data( record_size, 0 );
+      z.write( data.data(), data.size() );
+    }
+    z.close();
+
+    auto p = eng->inst( "T_edfz_edfd" );
+    const bool attached = wrote && p->attach_edf( filename );
+    p->eval( "SEGMENTS" );
+    const auto events = p->fetch_annots( { "edf_annot" } );
+    const bool segments_ok = attached
+      && get_val( p, "SEGMENTS", "NSEGS" ) == 2
+      && get_val( p, "SEGMENTS", "NGAPS" ) == 1
+      && approx_equal( p->last_sec_original(), 7.0, 1e-9 );
+    const bool annots_ok = events.size() == 1
+      && approx_equal( std::get<1>( events[0] ), 5.0, 1e-9 )
+      && approx_equal( std::get<2>( events[0] ), 7.0, 1e-9 );
+    const bool pass = segments_ok && annots_ok;
+    std::ostringstream m;
+    m << "attached=" << attached
+      << " segments=" << get_val( p, "SEGMENTS", "NSEGS" )
+      << " gaps=" << get_val( p, "SEGMENTS", "NGAPS" )
+      << " annots=" << events.size();
+    record(R,"write/edfz-edfd-annot-round-trip", pass, m.str(), V);
+    std::remove( filename.c_str() );
+  } catch(std::exception & e) {
+    record(R,"write/edfz-edfd-annot-round-trip",false,e.what(),V);
+  }
+
   // J2 — write-annots round-trip: WRITE-ANNOTS then re-attach, count matches
   try {
     const std::string tmp = temp_base_path("test_annot");

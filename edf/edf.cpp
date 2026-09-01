@@ -66,7 +66,7 @@ edf_t::edf_t( annotation_set_t * a ) : timeline( this )
   timeline.annotations = a;
   endian = determine_endian();    
   file = NULL;  // uncompressed
-  edfz = NULL;  // legacy indexed BGZF
+  edfz = NULL;  // indexed EDFZ
   edfz2 = NULL; // unindexed gzstream
   init();
 } 
@@ -652,8 +652,8 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , edfz2_t * edfz2,
 {
 
   // file  --> implies uncompressed EDF
-  // edfz2 --> implies gzipped EDF (gzstream interface / always preloaded)
-  // edfz  --> implies BGZF EDF (legacy, phase out)
+  // edfz2 --> implies gzipped EDF (gzstream interface)
+  // edfz  --> implies indexed Luna EDFZ
   
   // only one of these must be set
   
@@ -1250,8 +1250,7 @@ bool edf_record_t::read( int r )
   // skip if already loaded?
   if ( edf->loaded( r ) ) return false;
 
-  // as we force preloads, we should never reach here if in unindexed EDFZ mode
-  // i.e. as that was preloaded
+  // The gzip-backed edfz2 path is preloaded; indexed EDFZ is read lazily.
   if ( edf->edfz2 != NULL ) Helper::halt( "internal error: EDFZ should have preloaded" );
   
   // allocate space in the buffer for a single record, and read from file
@@ -1273,10 +1272,10 @@ bool edf_record_t::read( int r )
       // and read it
       size_t rdsz = fread( p , 1, edf->record_size , edf->file );
     }
-  else // EDFZ (BGZF legacy only)
+  else // indexed EDFZ
     {
       if ( ! edf->edfz->read_record( r , p , edf->record_size ) ) 
-	return Helper::vmode_halt( "corrupt .edfz or .idx, on record " + Helper::int2str( r ) );
+	return Helper::vmode_halt( "corrupt .edfz chunk or index, on record " + Helper::int2str( r ) );
     }
 
   // which signals/channels do we actually want to read?
@@ -1968,19 +1967,14 @@ bool edf_t::attach( const std::string & f ,
   
   edfz2 = NULL;
   
-  bool edfz_mode = Helper::file_extension( filename , "edfz" )
-    || Helper::file_extension( filename , "edf.gz" ); 
-  
-  // keep old code, but force a pre-read all for EDFZ now, given inefficiencies
-  // and quirks w/ legacy BGZF
-  
-  const bool edfz2_mode = true;
+  const bool edfz_mode = Helper::file_extension( filename , "edfz" );
+  const bool edfz2_mode = Helper::file_extension( filename , "edf.gz" );
   
   //
   // Attach the file
   //
   
-  if ( ! edfz_mode ) 
+  if ( ! edfz_mode && ! edfz2_mode )
     {
       if ( ( file = LunaIO::fopen_utf8( filename , "rb" ) ) == NULL )
 	{
@@ -2008,12 +2002,12 @@ bool edf_t::attach( const std::string & f ,
 	  
 	  edfz = new edfz_t;
 	  
-	  // this also looks for the .idx, which sets the record size
+      // This validates the embedded index and obtains the record metadata.
 	  if ( ! edfz->open_for_reading( filename ) ) 
 	    {
 	      delete edfz;
 	      edfz = NULL;
-	      return Helper::vmode_halt( "could not open specified EDFZ (or .idx file): " + filename );
+	      return Helper::vmode_halt( "could not open specified EDFZ: " + filename );
 	    }
 	}
     }
@@ -2036,7 +2030,8 @@ bool edf_t::attach( const std::string & f ,
     }
   else
     {
-      // TODO: check EDFZ file. e.g. try reading the last record?
+      // Indexed EDFZ validates its preamble, embedded index and chunks while
+      // opening.  The gzip path remains a sequential stream.
     }
 
 
@@ -2115,8 +2110,6 @@ bool edf_t::attach( const std::string & f ,
   for (int s=0;s<header.ns_all;s++)
     record_size += 2 * header.n_samples_all[s] ; // 2 bytes each
 
-  // for legacy EDFZ(BGZF), we keep EDF record duration separate
-  
   if ( edfz && ! edfz2_mode ) 
     {
       if ( record_size != edfz->record_size )
@@ -2198,17 +2191,13 @@ bool edf_t::attach( const std::string & f ,
 
 
   //
-  // pre-load?  this will also read EDF+D timestamps (and so init_timeline() will 
-  // use cached record timestamps when calling timepoint_from_EDF() ;
-  // for new unindexed-EDFZ, always force a preload 
+  // Preload gzip and honor the explicit stream-read option for ordinary EDF.
+  // Indexed EDFZ keeps timestamps/annotations in its embedded index and can
+  // therefore read records lazily.
   //
   
-  if ( ( edfz_mode && edfz2_mode ) || globals::edf_stream_read ) 
+  if ( edfz2_mode || globals::edf_stream_read )
     {
-      // cannot stream BGZF-EDFZ
-      if ( edfz && ! edfz2_mode ) Helper::halt( "cannot preload EDFZ files currently" );
-
-      // EDF or unindexed-EDFZ
       stream_read();
     }
   
@@ -2535,15 +2524,36 @@ bool edf_header_t::write( FILE * file , const std::vector<int> & ch2slot )
 
 bool edf_header_t::write( edfz_t * edfz , const std::vector<int> & ch2slot )
 {
-  Helper::halt( "not supported, BGZF writing" );
-  return false;
+  const int ns2 = ch2slot.size();
+  const int nbytes_header2 = 256 + ns2 * 256;
+
+  edfz->writestring( version , 8 );
+  edfz->writestring( patient_id , 80 );
+  edfz->writestring( recording_info , 80 );
+  edfz->writestring( startdate , 8 );
+  edfz->writestring( starttime , 8 );
+  edfz->writestring( nbytes_header2 , 8 );
+  edfz->write( (byte_t*)reserved.data() , 44 );
+  edfz->writestring( nr , 8 );
+  edfz->writestring( record_duration , 8 );
+  edfz->writestring( ns2 , 4 );
+
+  for (int s=0;s<ns2;s++) edfz->writestring( label[ch2slot[s]], 16 );
+  for (int s=0;s<ns2;s++) edfz->writestring( transducer_type[ch2slot[s]], 80 );
+  for (int s=0;s<ns2;s++) edfz->writestring( phys_dimension[ch2slot[s]], 8 );
+  for (int s=0;s<ns2;s++) edfz->writestring( physical_min[ch2slot[s]], 8 );
+  for (int s=0;s<ns2;s++) edfz->writestring( physical_max[ch2slot[s]], 8 );
+  for (int s=0;s<ns2;s++) edfz->writestring( digital_min[ch2slot[s]], 8 );
+  for (int s=0;s<ns2;s++) edfz->writestring( digital_max[ch2slot[s]], 8 );
+  for (int s=0;s<ns2;s++) edfz->writestring( prefiltering[ch2slot[s]], 80 );
+  for (int s=0;s<ns2;s++) edfz->writestring( n_samples[ch2slot[s]], 8 );
+  for (int s=0;s<ns2;s++) edfz->writestring( signal_reserved[ch2slot[s]], 32 );
+
+  return true;
 }
 
 bool edf_header_t::write( edfz2_t * edfz , const std::vector<int> & ch2slot )
 {
-  
-  // note: cheat, uses old BGZF code below - so keep 'edfz' but really this
-  // will point to a edfz2_t object...
   
   // new number of channels (might be less than original)
 
@@ -2987,15 +2997,15 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
     }
 
   //
-  // .edfz and .edfz.idx
+  // Self-contained, indexed .edfz
   //
 
   else 
     {
 
-      edfz2_t edfz2;
+      edfz_t edfz;
 
-      if ( ! edfz2.open_for_writing( filename ) )
+      if ( ! edfz.open_for_writing( filename ) )
 	{
 	  logger << " ** could not open " << filename << " for writing **\n";
 	  return false;
@@ -3004,13 +3014,15 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
       
       if ( make_EDFC ) set_continuous();
 
-      // write header (as non-indexed EDFZ)
-      header.write( &edfz2 , ch2slot );
+      // Write the EDF header verbatim; the embedded index is finalized after
+      // all compressed record chunks have been written.
+      header.write( &edfz , ch2slot );
 
       if ( make_EDFC ) set_discontinuous();
 
       
       int r = timeline.first_record();
+      int output_record = 0;
       while ( r != -1 ) 
 	{
 	  
@@ -3023,69 +3035,43 @@ bool edf_t::write( const std::string & f , bool as_edfz , int write_as_edf , boo
 	    }
 	  
 
-	  // legacy stuff, only needed for BGZF
-	  if ( 0 )
+      std::vector<std::string> raw_annots;
+	  for ( int s2 = 0; s2 < ch2slot.size(); ++s2 )
 	    {
-	      // set index :
-	      // record -> offset into EDFZ and time-point	  
-	      //        -> string representation of EDF Annots
-	      
-	      // offset into file
-	      //int64_t offset = edfz.tell();	  
-	      
-	      // time-point offset
-	      //uint64_t tp = timeline.timepoint( r );
-	      
-	      // any annots
-	      //const std::string edf_annot_str = edf_annots[ r ] == "" ? "." : edf_annots[ r ] ;
-	      
-	      // write to the index
-	      //edfz.add_index( r , offset , timeline.timepoint( r ) , edf_annot_str  );
+	      const int s = ch2slot[s2];
+	      if ( ! header.is_annotation_channel( s ) ) continue;
+
+	      const std::vector<int16_t> & a = records.find(r)->second.data[s];
+      std::string raw_annot( 2 * header.n_samples[s] , '\0' );
+      for ( int j = 0; j < raw_annot.size() && j < a.size(); ++j )
+		raw_annot[j] = (char)a[j];
+      raw_annots.push_back( raw_annot );
 	    }
-	  
+	  // Records may retain their original record IDs after RE, but EDFZ
+	  // stores them contiguously in output order.  For EDF+D, use the
+	  // timestamp encoded in the source EDF time-track.  This is the
+	  // authoritative post-RE timestamp and preserves fractional starts
+	  // (e.g. 0.431641 s); timeline.timepoint(r) can be normalized after
+	  // restructuring and must not be used for the serialized EDFZ index.
+	  uint64_t output_tp = timeline.timepoint( r );
+	  if ( header.edfplus && ! header.continuous && file != NULL )
+	    output_tp = timepoint_from_EDF( r );
+	  edfz.add_index( output_record, 0, output_tp, raw_annots );
+
 	  // now write to the .edfz
-	  records.find(r)->second.write( &edfz2 , ch2slot );
+	  records.find(r)->second.write( &edfz , ch2slot );
 	  
 	  // next record
+	  ++output_record;
 	  r = timeline.next_record(r);
 	}
       
 
       //
-      // Write .idx (legacy)
-      //
-
-      if ( 0 )
-	{
-
-	  //logger << "  writing EDFZ index to " << filename << ".idx\n";
-	  
-	  // update record_size (e.g. if channels dropped)
-	  // at this point, we will have read all information in from
-	  // the existing 
-	  
-	  // int new_record_size = 0;
-	  
-	  // old
-	  // for (int s=0;s<header.ns;s++)
-	  // 	new_record_size += 2 * header.n_samples[s] ; // 2 bytes each                                                       
-	  
-	  // now allowing for dropped channels
-	  //for (int s2=0; s2<ns2; s2++)
-	  //{
-	  //const int s = ch2slot[s2];
-	  //new_record_size += 2 * header.n_samples[s] ; // 2 bytes each                                                       
-	  //}	  
-	  //edfz.write_index( new_record_size );
-
-	}
-      
-      
-      //
       // All done
       //
 
-      edfz2.close();
+      edfz.close();
 
 
     }
@@ -5595,7 +5581,7 @@ uint64_t edf_t::timepoint_from_EDF( int r )
   
   
   //
-  // for EDFZ, this will be stored in the .idx
+  // For indexed EDFZ, this is stored in the embedded index.
   //
 
   if ( file == NULL )

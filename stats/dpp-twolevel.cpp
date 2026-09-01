@@ -43,6 +43,15 @@ namespace {
     return g;
   }
 
+  std::string time_mode( const param_t & p )
+  {
+    std::string x = p.has("vector-time") ? p.value("vector-time") : "RELATIVE";
+    for (char & c : x) c = (char)std::toupper((unsigned char)c);
+    if ( x != "RELATIVE" && x != "EDF" && x != "ONSET" )
+      Helper::halt("vector-time= must be RELATIVE, ONSET, or EDF");
+    return x;
+  }
+
   bool has( const std::vector<std::string> & g , const std::string & x )
   { return std::find(g.begin(),g.end(),x) != g.end(); }
 
@@ -69,7 +78,8 @@ namespace {
                                     std::string("EARLY"),std::string("LATE"),std::string("EARLY_LATE"),
                                     std::string("NREM"),std::string("REM")}) z.push_back("L2.SCORE."+s);
     if (has(g,"TIME"))
-      for (const std::string & s : {std::string("MEAN_FRAC"),std::string("SD_FRAC"),
+      for (const std::string & s : {std::string(time_mode(p) == "EDF" ? "MEAN_EDF_FRAC" : time_mode(p) == "ONSET" ? "MEAN_ONSET_H" : "MEAN_RETAINED_FRAC"),
+                                    std::string(time_mode(p) == "EDF" ? "SD_EDF_FRAC" : time_mode(p) == "ONSET" ? "SD_ONSET_H" : "SD_RETAINED_FRAC"),
                                     std::string("DURATION_H"),std::string("VALID_FRAC")}) z.push_back("L2.TIME."+s);
     if (has(g,"GEOM"))
       {
@@ -88,6 +98,7 @@ namespace {
   {
     const int d=l.embedding_dim, n=(int)m.X.size();
     const std::vector<std::string> g=groups(p);
+    const std::string tm=time_mode(p);
     summary_t s;
     if (has(g,"STAGE") && !l.context)
       Helper::halt("DPP two-level STAGE summaries require CONTEXT in vector-features");
@@ -97,15 +108,24 @@ namespace {
     std::vector<double> score_nrem,score_rem,score_early,score_late, times, valid;
     std::vector<std::vector<double> > traj(9);
     double first_t=std::numeric_limits<double>::infinity(), last_t=-std::numeric_limits<double>::infinity();
+    for(int r=0;r<n;r++) if(real(m.time_sec[r])) { first_t=std::min(first_t,m.time_sec[r]); last_t=std::max(last_t,m.time_sec[r]); }
     for(int r=0;r<n;r++)
       {
         const std::vector<double> & row=m.X[r];
-        const double frac=l.context ? at(row,l.context_offset) : (n>1?(double)r/(n-1):0);
+        double frac=l.context ? at(row,l.context_offset) : (n>1?(double)r/(n-1):0);
+        double time_value=frac;
+        if ( tm == "ONSET" )
+          {
+            time_value = real(m.time_sec[r]) && std::isfinite(first_t)
+              ? (m.time_sec[r]-first_t)/3600.0 : std::numeric_limits<double>::quiet_NaN();
+            frac = first_t < last_t && real(m.time_sec[r])
+              ? (m.time_sec[r]-first_t)/(last_t-first_t) : 0;
+          }
         const bool early=real(frac)&&frac<0.5, late=real(frac)&&frac>=0.5;
         const bool nrem=l.context && (at(row,l.context_offset+2)>0.5 || at(row,l.context_offset+3)>0.5 || at(row,l.context_offset+4)>0.5);
         const bool rem=l.context && at(row,l.context_offset+5)>0.5;
         if (real(m.time_sec[r])) { first_t=std::min(first_t,m.time_sec[r]); last_t=std::max(last_t,m.time_sec[r]); }
-        if(real(frac)) times.push_back(frac);
+        if(real(time_value)) times.push_back(time_value);
         int nv=0;
         for(int j=0;j<d;j++)
           {
@@ -133,8 +153,14 @@ namespace {
       {
         auto mean=[](const std::vector<double>& a){double z=0;int n=0;for(double v:a)if(real(v)){z+=v;++n;}return n?z/n:std::numeric_limits<double>::quiet_NaN();};
         for(auto & a:traj){double m0=mean(a),z=0;int q=0;for(double v:a)if(real(v)){z+=(v-m0)*(v-m0);++q;}s.x.push_back(m0);s.x.push_back(q>1?std::sqrt(z/(q-1)):q?0:std::numeric_limits<double>::quiet_NaN());}
-        double path=0;for(int r=1;r<n;r++){double z=0;int q=0;for(int j=0;j<d;j++){double a=at(m.X[r],l.raw_offset+j),b=at(m.X[r-1],l.raw_offset+j);if(real(a)&&real(b)){z+=(a-b)*(a-b);++q;}}if(q)path+=std::sqrt(z);}
-        double ea=0,la=0;int ne=0,nl=0;for(int r=0;r<n;r++){double frac=l.context?at(m.X[r],l.context_offset):(n>1?(double)r/(n-1):0);if(frac<.5){for(int j=0;j<d;j++)ea+=at(m.X[r],l.raw_offset+j);++ne;}else{for(int j=0;j<d;j++)la+=at(m.X[r],l.raw_offset+j);++nl;}}s.x.push_back(path);s.x.push_back(ne&&nl?std::fabs(ea/ne-la/nl):std::numeric_limits<double>::quiet_NaN());
+        // Do not bridge masked gaps when summarizing trajectory length. The
+        // corpus retains actual timestamps, so a gap is conservatively
+        // identified as a step larger than 1.5 times the smallest observed
+        // positive step (the normal vector stream is regularly sampled).
+        double nominal_dt=std::numeric_limits<double>::infinity();
+        for(int r=1;r<n;r++){double dt=m.time_sec[r]-m.time_sec[r-1];if(dt>0)nominal_dt=std::min(nominal_dt,dt);}
+        double path=0;for(int r=1;r<n;r++){double dt=m.time_sec[r]-m.time_sec[r-1];bool adjacent=std::isfinite(nominal_dt)&&dt<=1.5*nominal_dt+1e-9;if(!adjacent)continue;double z=0;int q=0;for(int j=0;j<d;j++){double a=at(m.X[r],l.raw_offset+j),b=at(m.X[r-1],l.raw_offset+j);if(real(a)&&real(b)){z+=(a-b)*(a-b);++q;}}if(q)path+=std::sqrt(z);}
+        double ea=0,la=0;int ne=0,nl=0;for(int r=0;r<n;r++){double frac=l.context?at(m.X[r],l.context_offset):(n>1?(double)r/(n-1):0);if(tm=="ONSET") frac=first_t<last_t&&real(m.time_sec[r])?(m.time_sec[r]-first_t)/(last_t-first_t):0;if(frac<.5){for(int j=0;j<d;j++)ea+=at(m.X[r],l.raw_offset+j);++ne;}else{for(int j=0;j<d;j++)la+=at(m.X[r],l.raw_offset+j);++nl;}}s.x.push_back(path);s.x.push_back(ne&&nl?std::fabs(ea/ne-la/nl):std::numeric_limits<double>::quiet_NaN());
       }
     return s;
   }
@@ -175,6 +201,31 @@ namespace {
   void write_importance(lgbm_t&lg,const std::string&f,const std::vector<std::string>&labels){std::ofstream O(f.c_str());std::vector<double>v=lg.feature_importance(1);for(int i=0;i<(int)v.size();i++)O<<(i<(int)labels.size()?labels[i]:"F"+Helper::int2str(i+1))<<"\t"<<v[i]<<"\n";}
 
   std::string join_groups(const std::vector<std::string>&g){std::string s;for(auto&x:g){if(!s.empty())s+=",";s+=x;}return s;}
+
+  void warn_stage_availability( const std::vector<dpp_matrix_t> & d ,
+                                const dpp_vector::layout_t & l ,
+                                const std::vector<std::string> & g )
+  {
+    if ( ! l.context ) return;
+    int nrem=0, rem=0;
+    for (const dpp_matrix_t & m : d)
+      for (const std::vector<double> & row : m.X)
+        {
+          if ( at(row,l.context_offset+2) > 0.5 ||
+               at(row,l.context_offset+3) > 0.5 ||
+               at(row,l.context_offset+4) > 0.5 ) ++nrem;
+          if ( at(row,l.context_offset+5) > 0.5 ) ++rem;
+        }
+
+    if ( has(g,"STAGE") && nrem == 0 )
+      logger << "  *** warning: no retained NREM rows; L2.STAGE.NREM.* features will be missing\n";
+    if ( has(g,"STAGE") && rem == 0 )
+      logger << "  *** warning: no retained REM rows; L2.STAGE.REM.* features will be missing\n";
+    if ( has(g,"SCORE") && nrem == 0 )
+      logger << "  *** warning: no retained NREM rows; L2.SCORE.NREM will be missing\n";
+    if ( has(g,"SCORE") && rem == 0 )
+      logger << "  *** warning: no retained REM rows; L2.SCORE.REM will be missing\n";
+  }
 }
 
 bool dpp_twolevel::enabled(const param_t&p){return p.has("two-level")&&p.yesno("two-level");}
@@ -183,14 +234,16 @@ void dpp_twolevel::fit(param_t&p)
 {
   std::vector<std::string> files=p.has("files")?p.strvector("files"):std::vector<std::string>{p.requires("data")};
   std::vector<dpp_matrix_t>d=dpp_io::load_files(files,-1);if(d.empty())Helper::halt("DPP two-level: no corpus data");
+  for(const dpp_matrix_t & m:d) if(m.X.empty()) Helper::halt("DPP two-level: individual "+m.id+" has zero retained vector rows after masking");
   const int nf=d[0].X[0].size(), ed=p.has("embedding-dim")?p.requires_int("embedding-dim"):128;for(auto&m:d)for(auto&r:m.X)if((int)r.size()!=nf)Helper::halt("DPP two-level: inconsistent Level-1 feature count");
   const dpp_vector::layout_t l=dpp_vector::layout(ed,p);if(l.raw_offset<0||l.raw_offset+ed>nf)Helper::halt("DPP two-level requires RAW embedding columns");
   const std::vector<std::string> labels=summary_labels(ed,p),g=groups(p);std::vector<int>all(d.size());std::iota(all.begin(),all.end(),0);
+  warn_stage_availability(d,l,g);
   int outer=p.has("outer-folds")?p.requires_int("outer-folds"):5, inner=p.has("inner-folds")?p.requires_int("inner-folds"):5;if(outer<2||inner<2||d.size()<3)Helper::halt("DPP two-level requires at least three subjects and outer-folds/inner-folds >=2");outer=std::min(outer,(int)d.size());if((int)d.size()<2*outer)outer=(int)d.size();
   auto outer_f=split_folds(d,all,outer);std::ofstream OO(Helper::expand(p.requires("out")+".outer-oof").c_str());OO<<"ID\tY\tP\n";
   for(auto&test:outer_f){std::set<int>ts(test.begin(),test.end());std::vector<int>tr;for(int i:all)if(!ts.count(i))tr.push_back(i);auto inn=split_folds(d,tr,inner);std::map<std::string,std::vector<double>> oof;for(auto&h:inn){std::set<int>hs(h.begin(),h.end());std::vector<int>it;for(int i:tr)if(!hs.count(i))it.push_back(i);auto lg=train_local(d,it,p,nf);auto q=predict_local(*lg,d,h,nf);oof.insert(q.begin(),q.end());}std::vector<summary_t> su(d.size());for(int i:tr)su[i]=summarize_clean(d[i],oof[d[i].id],l,p);auto l2=train_subject(su,tr,d,p,labels);auto lg=train_local(d,tr,p,nf);auto q=predict_local(*lg,d,test,nf);for(int i:test){su[i]=summarize_clean(d[i],q[d[i].id],l,p);double yy;cmd_t::pull_ivar(d[i].id,p.requires("phe"),&yy);OO<<d[i].id<<"\t"<<yy<<"\t"<<predict_subject(*l2,su[i])<<"\n";}}
   OO.close();
-  auto inn=split_folds(d,all,inner);std::map<std::string,std::vector<double>>oof;for(auto&h:inn){std::set<int>hs(h.begin(),h.end());std::vector<int>it;for(int i:all)if(!hs.count(i))it.push_back(i);auto lg=train_local(d,it,p,nf);auto q=predict_local(*lg,d,h,nf);oof.insert(q.begin(),q.end());}std::vector<summary_t>su(d.size());for(int i:all)su[i]=summarize_clean(d[i],oof[d[i].id],l,p);auto l2=train_subject(su,all,d,p,labels);auto lg=train_local(d,all,p,nf);const std::string root=Helper::expand(p.requires("out"));lg->save_model(root+".l1.mod");l2->save_model(root+".l2.mod");std::vector<std::string>l1labels;for(int i=0;i<nf;i++)l1labels.push_back("VEC.F"+Helper::int2str(i+1));write_importance(*lg,root+".l1.importance",l1labels);write_importance(*l2,root+".l2.importance",labels);std::ofstream M(root+".dpp");M<<"# DPP model manifest\n# mode=two-level\n# vector=T\n# embedding_dim="<<ed<<"\n# l1_features="<<nf<<"\n# level2_features="<<join_groups(g)<<"\n# n_features="<<labels.size()<<"\n# feature_names_begin\n";for(auto&x:labels)M<<x<<"\n";M.close();logger<<"  wrote two-level DPP bundle: "<<root<<".l1.mod and "<<root<<".l2.mod ("<<labels.size()<<" Level-2 features)\n";
+  auto inn=split_folds(d,all,inner);std::map<std::string,std::vector<double>>oof;for(auto&h:inn){std::set<int>hs(h.begin(),h.end());std::vector<int>it;for(int i:all)if(!hs.count(i))it.push_back(i);auto lg=train_local(d,it,p,nf);auto q=predict_local(*lg,d,h,nf);oof.insert(q.begin(),q.end());}std::vector<summary_t>su(d.size());for(int i:all)su[i]=summarize_clean(d[i],oof[d[i].id],l,p);auto l2=train_subject(su,all,d,p,labels);auto lg=train_local(d,all,p,nf);const std::string root=Helper::expand(p.requires("out"));lg->save_model(root+".l1.mod");l2->save_model(root+".l2.mod");std::vector<std::string>l1labels;for(int i=0;i<nf;i++)l1labels.push_back("VEC.F"+Helper::int2str(i+1));write_importance(*lg,root+".l1.importance",l1labels);write_importance(*l2,root+".l2.importance",labels);std::ofstream M(root+".dpp");M<<"# DPP model manifest\n# mode=two-level\n# vector=T\n# vector-time="<<time_mode(p)<<"\n# embedding_dim="<<ed<<"\n# l1_features="<<nf<<"\n# level2_features="<<join_groups(g)<<"\n# n_features="<<labels.size()<<"\n# feature_names_begin\n";for(auto&x:labels)M<<x<<"\n";M.close();logger<<"  wrote two-level DPP bundle: "<<root<<".l1.mod and "<<root<<".l2.mod ("<<labels.size()<<" Level-2 features)\n";
 }
 
 void dpp_twolevel::apply(edf_t&edf,param_t&p,const dpp_matrix_t&m)

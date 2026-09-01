@@ -44,6 +44,7 @@
 #include <limits>
 #include <cmath>
 #include <algorithm>
+#include <cctype>
 #include <iostream>
 
 extern logger_t logger;
@@ -1018,7 +1019,13 @@ void dpp_fit_t::save_bundle()
       O1 << "# model_file=" << model_file << "\n";
       O1 << "# phe=" << phe_label << "\n";
       O1 << "# mode=regression\n";
-      if ( vector_mode ) O1 << "# vector=T\n";
+      if ( vector_mode )
+	{
+	  std::string vector_time = param.has("vector-time") ? param.value("vector-time") : "RELATIVE";
+	  for (char & c : vector_time) c = (char)std::toupper((unsigned char)c);
+	  O1 << "# vector=T\n";
+	  O1 << "# vector-time=" << vector_time << "\n";
+	}
       O1 << "# n_features=" << full_labels.size() << "\n";
       O1 << "# feature_names_begin\n";
       for (int i=0; i<(int)full_labels.size(); i++) O1 << full_labels[i] << "\n";
@@ -1072,6 +1079,7 @@ namespace {
   struct manifest_t
   {
     std::string mode;
+    std::string vector_time;
     std::vector<std::string> stages;
     std::map<std::string,double> calib_a, calib_b;
     std::vector<std::string> feature_labels;
@@ -1081,6 +1089,7 @@ namespace {
   {
     manifest_t m;
     m.mode = "regression";
+    m.vector_time = "RELATIVE";
 
     std::ifstream IN1( manifest_file.c_str() );
     while ( 1 )
@@ -1093,6 +1102,7 @@ namespace {
 	if ( line[0] == '#' )
 	  {
 	    if ( line.find( "# mode=" ) == 0 ) m.mode = line.substr( 7 );
+	    else if ( line.find( "# vector-time=" ) == 0 ) m.vector_time = line.substr( 14 );
 	    else if ( line.find( "# stages=" ) == 0 ) m.stages = Helper::parse( line.substr( 9 ) , "," );
 	    else if ( line.find( "# calib." ) == 0 )
 	      {
@@ -1131,6 +1141,16 @@ void dpp_fit::apply( edf_t & edf , param_t & param , const dpp_specs_t & specs ,
   if ( ! Helper::fileExists( manifest_file ) ) Helper::halt( "could not find " + manifest_file );
 
   const manifest_t manifest = read_manifest( manifest_file );
+  if ( param.has("vector") && param.yesno("vector") )
+    {
+      std::string requested = param.has("vector-time") ? param.value("vector-time") : "RELATIVE";
+      for (char & c : requested) c = (char)std::toupper((unsigned char)c);
+      if ( requested != "RELATIVE" && requested != "ONSET" && requested != "EDF" )
+	Helper::halt( "vector-time= must be RELATIVE, ONSET, or EDF" );
+      if ( requested != manifest.vector_time )
+	Helper::halt( "DPP model=: vector-time mismatch: model=" + manifest.vector_time +
+		      " requested=" + requested );
+    }
   if ( manifest.mode == "two-level" )
     {
       dpp_twolevel::apply( edf , param , mat );

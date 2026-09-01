@@ -6008,7 +6008,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
   
   if ( ! globals::skip_edf_annots ) 
     logger << "  extracting 'EDF Annotations' track "
-	   << ( edfz == NULL ? "from EDF+" : "from EDFZ .idx" )
+	   << ( edfz == NULL ? "from EDF+" : "from embedded EDFZ index" )
 	   << "\n";  
   else
     logger << "  extracting only EDF+D time-track 'EDF Annotations' track\n";  
@@ -6042,7 +6042,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
   //
   // when reading a typical EDF+ we need to read from disk
   // but when reading a compressed EDF+, the annotations will
-  // already be duplicated in the .idx, and so we can pull
+  // already be duplicated in the embedded index, and so we can pull
   // directly from that, which is much quicker
   //
 
@@ -6055,14 +6055,21 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
       int r = edf.timeline.first_record();
       while ( r != -1 )
 	{
-	  std::string s = edfz->get_annots( r );
-
-	  if ( s == "." )
+	  const std::vector<std::string> raw_annots = edfz->get_annots( r );
+	  int annotation_channel = 0;
+	  for ( int s0 = 0; s0 < edf.header.ns; ++s0 )
 	    {
-	      // skip to next record
-	      r = edf.timeline.next_record( r );
-	      continue;
-	    }
+	      if ( ! edf.header.is_annotation_channel( s0 ) ) continue;
+
+	      tal_t t( &edf, s0, r );
+	      if ( annotation_channel < raw_annots.size() )
+		t.decode( raw_annots[ annotation_channel ] );
+	      else
+		t = edf.tal( s0 , r );
+	      ++annotation_channel;
+	      std::string s = t.export_annots();
+
+	      if ( s == "." ) continue;
 
 	  // quoted, comma-delimited
 	  // "onset|dur|text","onset|dur|text"
@@ -6074,14 +6081,14 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 	      edf.has_edf_annots = true;
 	      
 	      std::vector<std::string> tok2 = Helper::parse( Helper::unquote( tok[j] ) , "|" );
-	      if ( tok2.size() < 3 ) Helper::halt( "bad format for EDF .idx annots (vec-len):\n" + tok[j] );
+	      if ( tok2.size() < 3 ) Helper::halt( "bad format for EDFZ annotations (vec-len):\n" + tok[j] );
 	      
 	      double onset = 0, dur = 0;
 	      if ( ! Helper::str2dbl( tok2[0] , &onset ) )
-		Helper::halt( "bad format for EDF .idx annots (onset):\n" + tok[j]  );
+		Helper::halt( "bad format for EDFZ annotations (onset):\n" + tok[j]  );
 
 	      if ( ! Helper::str2dbl( tok2[1] , &dur ) )
-		Helper::halt( "bad format for EDF .idx annots (dur):\n" + tok[j]  );
+		Helper::halt( "bad format for EDFZ annotations (dur):\n" + tok[j]  );
 	      
 	      std::string txt = tok2[2];
 	      
@@ -6166,6 +6173,8 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 	    }
 
 	  
+	    }
+
 	  // next record
 	  r = edf.timeline.next_record( r );		
 	}
@@ -6191,11 +6200,6 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 	    {	      
 	      
 	      tal_t t = edf.tal( s , r );
-	      
-	      // store (for use if WRITE edfz is later called,
-	      //  i.e. to populate the .idx)
-	      
-	      edf.edf_annots[ r ] = t.export_annots();
 	      
 	      //std::cout << " edf-annot s,r = " << s << " " << r << "\n" << t << "\n";
 	      

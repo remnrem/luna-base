@@ -6878,6 +6878,7 @@ void cmddefs_t::init()
   add_param( "DPP" , "sig" , "C3" , "Signal(s) to featurize (zero-config default mode)" );
   add_param( "DPP" , "vector" , "F" , "Treat selected signals as already-windowed, time-aligned vector observations; supports fractional sampling rates" );
   add_param( "DPP" , "vector-features" , "RAW,CONTEXT,GEOM,DYN" , "Vector-mode feature groups: RAW, CONTEXT, GEOM, DYN" );
+  add_param( "DPP" , "vector-time" , "RELATIVE" , "Vector-mode time context: RELATIVE=position within retained rows; ONSET=elapsed hours from first retained row; EDF=elapsed position from EDF start" );
   add_param( "DPP" , "hypno-context" , "F" , "Add vector-mode stage/cycle context from the existing epoched hypnogram" );
   add_param( "DPP" , "two-level" , "F" , "--dpp-fit vector mode: fit a cross-fitted local (row-level) model followed by a subject-level summary model" );
   add_param( "DPP" , "embedding-dim" , "128" , "--dpp-fit two-level: number of raw embedding columns at the start of each vector row" );
