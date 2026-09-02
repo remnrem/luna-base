@@ -115,7 +115,7 @@ int epoch_at(edf_t &edf, const uint64_t tp) {
 } // namespace
 
 bool dpp_vector::enabled(const param_t &param) {
-  return param.has("vector") && param.yesno("vector");
+  return !(param.has("classic") && param.yesno("classic"));
 }
 
 dpp_vector::layout_t dpp_vector::layout(const int embedding_dim,
@@ -201,8 +201,18 @@ bool dpp_vector::run(edf_t &edf, param_t &param) {
   std::vector<std::vector<double>> x(nc);
   std::vector<std::vector<uint64_t>> tp(nc);
 
-  if (param.has("hypno-context") && param.yesno("hypno-context"))
+  if (!param.has("hypno-context") || param.yesno("hypno-context")) {
     edf.timeline.ensure_epoched();
+
+    const bool has_hypno = edf.timeline.epoch_annotation("W") ||
+                           edf.timeline.epoch_annotation("N1") ||
+                           edf.timeline.epoch_annotation("N2") ||
+                           edf.timeline.epoch_annotation("N3") ||
+                           edf.timeline.epoch_annotation("R");
+    if (!has_hypno)
+      Helper::halt("DPP vector mode requires HYPNO output when "
+                   "hypno-context=T");
+  }
 
   double common_fs = 0;
   for (int c = 0; c < nc; c++) {
@@ -290,7 +300,7 @@ bool dpp_vector::run(edf_t &edf, param_t &param) {
   // sampling rates match.
   std::vector<int> epoch_cycle;
   std::map<int, std::pair<int, int>> cycle_extent;
-  if (param.has("hypno-context") && param.yesno("hypno-context") &&
+  if ((!param.has("hypno-context") || param.yesno("hypno-context")) &&
       edf.timeline.epoched()) {
     const int ne = edf.timeline.num_total_epochs();
     epoch_cycle.assign(ne, 0);

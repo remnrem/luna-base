@@ -854,7 +854,7 @@ void warn_stage_availability(const std::vector<dpp_matrix_t> &d,
 } // namespace
 
 bool dpp_twolevel::enabled(const param_t &p) {
-  return p.has("vector") && p.yesno("vector") &&
+  return !(p.has("classic") && p.yesno("classic")) &&
          (p.has("two-level") ? p.yesno("two-level") : true);
 }
 

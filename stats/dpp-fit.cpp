@@ -157,7 +157,7 @@ dpp_fit_t::dpp_fit_t(param_t &param)
   vector_mode = dpp_vector::enabled(param);
   two_level = dpp_twolevel::enabled(param);
   if (two_level && !vector_mode)
-    Helper::halt("DPP two-level requires vector=T");
+    Helper::halt("DPP two-level is unavailable in classic mode");
   stage_conditioned = param.has("hypno") || param.has("hypno-files");
   if ((vector_mode || two_level) && stage_conditioned)
     Helper::halt(
@@ -1684,7 +1684,7 @@ void dpp_fit::apply(edf_t &edf, param_t &param, const dpp_specs_t &specs,
     Helper::halt("could not find " + manifest_file);
 
   const manifest_t manifest = read_manifest(manifest_file);
-  if (param.has("vector") && param.yesno("vector")) {
+  if (dpp_vector::enabled(param)) {
     std::string requested =
         param.has("vector-time") ? param.value("vector-time") : "RELATIVE";
     for (char &c : requested)
@@ -1718,7 +1718,7 @@ void dpp_fit::apply(edf_t &edf, param_t &param, const dpp_specs_t &specs,
   // both to actually recompute features on the new recording, and as the
   // cross-check that it matches what the model was trained on
   std::vector<std::string> expected;
-  if (param.has("vector") && param.yesno("vector")) {
+  if (dpp_vector::enabled(param)) {
     expected.resize(mat.X.empty() ? 0 : mat.X[0].size());
     for (int i = 0; i < (int)expected.size(); i++)
       expected[i] = "VEC.F" + Helper::int2str(i + 1);
@@ -1824,7 +1824,7 @@ void dpp_fit::apply(edf_t &edf, param_t &param, const dpp_specs_t &specs,
     Helper::halt("DPP model=: cannot attach a signal to a discontinuous EDF");
 
   double step_sec = param.has("step") ? param.requires_dbl("step") : 30;
-  if (param.has("vector") && param.yesno("vector")) {
+  if (dpp_vector::enabled(param)) {
     // Normally infer the vector spacing from adjacent observations.  A
     // long-record EDF may legitimately contain only one vector sample per
     // record; in that case the record duration is the only available

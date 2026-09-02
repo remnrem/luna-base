@@ -5543,7 +5543,6 @@ static void test_dpp_fit( lunapi_t * eng,
     param.add( "outcome", "quantitative" );
     param.add( "fit-spec", specfile );
     param.add( "out", base + "_model" );
-    param.add( "vector", "T" );
     param.add( "two-level", "T" );
     param.add( "embedding-dim", "1" );
     param.add( "vector-features", "RAW" );
