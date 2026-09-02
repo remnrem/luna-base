@@ -42,6 +42,8 @@
 #include "stats/dpp-spec.h"
 #include "stats/dpp-filter.h"
 #include "stats/dpp-fit.h"
+#include "stats/dpp-evaluation.h"
+#include "db/db.h"
 
 #include <cmath>
 #include <cstdio>
@@ -3539,6 +3541,68 @@ static void test_sigdyn( lunapi_t * eng,
 // Group U: DPP (dynamic phenotype projection, stage 2 feature engine)
 // ============================================================
 
+static void test_dpp_evaluation( lunapi_t *,
+                                 std::vector<test_result_t> & results,
+                                 const bool verbose )
+{
+  using namespace dpp_evaluation;
+  const std::vector<double> y = { 0.0, 1.0, 1.0, 0.0 };
+  const std::vector<double> p = { 0.1, 0.8, 0.6, 0.2 };
+
+  record( results, "dpp-evaluation/rmse", approx_equal( rmse( y, p ), 0.25, 1e-12 ),
+          "RMSE against hand calculation", verbose );
+  record( results, "dpp-evaluation/r2", approx_equal( r2( { 1.0, 2.0, 3.0 }, { 1.0, 2.0, 2.0 } ), 0.5, 1e-12 ),
+          "R2 against hand calculation", verbose );
+  record( results, "dpp-evaluation/brier", approx_equal( brier_score( y, p ), 0.0625, 1e-12 ),
+          "Brier score against hand calculation", verbose );
+  record( results, "dpp-evaluation/log-loss", approx_equal( log_loss( y, p ),
+          -( std::log( 0.9 ) + std::log( 0.8 ) + std::log( 0.6 ) + std::log( 0.8 ) ) / 4.0, 1e-12 ),
+          "log loss against hand calculation", verbose );
+  record( results, "dpp-evaluation/auc-with-ties", approx_equal( auc( y, { 0.1, 0.8, 0.8, 0.8 } ), 0.75, 1e-12 ),
+          "rank AUC handles tied scores", verbose );
+
+  const prediction_metrics_t binary = evaluate_predictions( y, p, true );
+  const prediction_metrics_t quantitative = evaluate_predictions( { 1.0, 2.0, 3.0 }, { 1.0, 2.0, 2.0 }, false );
+  record( results, "dpp-evaluation/binary-summary", binary.n == 4 && std::isnan( binary.r2 ) &&
+          std::isfinite( binary.brier ) && std::isfinite( binary.log_loss ) && std::isfinite( binary.auc ),
+          "binary summary exposes only binary metrics", verbose );
+  record( results, "dpp-evaluation/quantitative-summary", quantitative.n == 3 &&
+          approx_equal( quantitative.r2, 0.5, 1e-12 ) && std::isnan( quantitative.brier ),
+          "quantitative summary exposes R2", verbose );
+
+  const std::vector<double> null_binary( y.size(), 0.5 );
+  const prediction_metrics_t null_summary = evaluate_predictions( y, null_binary, true );
+  const auc_chance_test_result_t auc_test = auc_chance_permutation_test( y, p, 2000, 20260901 );
+  const auc_chance_test_result_t auc_test_again = auc_chance_permutation_test( y, p, 2000, 20260901 );
+  record( results, "dpp-evaluation/synthetic-binary-null", approx_equal( null_summary.brier, 0.25, 1e-12 ) &&
+          approx_equal( null_summary.log_loss, std::log( 2.0 ), 1e-12 ) &&
+          approx_equal( null_summary.auc, 0.5, 1e-12 ),
+          "prevalence null has expected binary metrics", verbose );
+  record( results, "dpp-evaluation/auc-versus-chance", approx_equal( auc_test.difference_from_chance, 0.5, 1e-12 ) &&
+          auc_test.p_value == auc_test_again.p_value && auc_test.p_value > 0.0,
+          "AUC chance permutation is deterministic", verbose );
+
+  const std::vector<double> loss_a = { 1.0, 2.0, 3.0, 4.0 };
+  const std::vector<double> loss_b = { 0.0, 1.0, 2.0, 2.0 };
+  const double mean_difference = paired_mean_loss_difference( loss_a, loss_b );
+  const paired_test_result_t t = paired_t_test( loss_a, loss_b );
+  const permutation_test_result_t permutation = paired_permutation_test( loss_a, loss_b, 2000, 17 );
+  const permutation_test_result_t permutation_again = paired_permutation_test( loss_a, loss_b, 2000, 17 );
+  record( results, "dpp-evaluation/paired-mean-loss-difference", approx_equal( mean_difference, 1.25, 1e-12 ),
+          "paired A-minus-B loss difference", verbose );
+  record( results, "dpp-evaluation/paired-t-test", t.n == 4 && approx_equal( t.mean_difference, 1.25, 1e-12 ) &&
+          approx_equal( t.standard_deviation, 0.5, 1e-12 ) &&
+          approx_equal( t.statistic, 5.0, 1e-12 ) &&
+          approx_equal( t.p_value, 0.0153924, 2e-5 ),
+          "paired t statistic and two-sided p value", verbose );
+  record( results, "dpp-evaluation/deterministic-permutation", permutation.n == 4 &&
+          permutation.extreme_permutations == permutation_again.extreme_permutations &&
+          permutation.p_value == permutation_again.p_value && permutation.p_value > 0.0,
+          "seeded paired sign-flip test is reproducible", verbose );
+  record( results, "dpp-evaluation/missing-values", approx_equal( rmse( { 1.0, std::numeric_limits<double>::quiet_NaN() }, { 1.0, 2.0 } ), 0.0, 1e-12 ),
+          "finite paired rows are retained", verbose );
+}
+
 static void test_dpp( lunapi_t * eng,
 		      std::vector<test_result_t> & R, bool V )
 {
@@ -4440,7 +4504,7 @@ static void test_dpp_fit( lunapi_t * eng,
     auto p = make_inst( eng, sig, 100, 6, 10, "X", "T_dppfit_apply" );
 
     // matching spec: should attach DPP_Z with genuine (non-sentinel-only) values
-    p->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model" );
+    p->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model dynamic=DPP_Z" );
     bool has_sig = p->has_channels( { "DPP_Z" } )[0];
     p->eval( "STATS sig=DPP_Z" );
     double smin = get_val( p , "STATS" , "MIN" );
@@ -4449,7 +4513,7 @@ static void test_dpp_fit( lunapi_t * eng,
     // mismatched spec: must halt, not silently attach a bogus signal
     auto p2 = make_inst( eng, sig, 100, 6, 10, "X", "T_dppfit_apply_mismatch" );
     bool halted = false;
-    try { p2->eval( "DPP spec=" + mismatch_specfile + " step=10 qc=F model=" + base + "_model" ); }
+    try { p2->eval( "DPP spec=" + mismatch_specfile + " step=10 qc=F model=" + base + "_model dynamic=DPP_Z" ); }
     catch ( std::exception & ) { halted = true; }
 
     bool pass = has_sig && Helper::realnum(smin) && Helper::realnum(smax) && smax > smin && halted;
@@ -4491,7 +4555,7 @@ static void test_dpp_fit( lunapi_t * eng,
 
     auto sig = make_sine( 100, 60.0, 10.0, 1.0 );
     auto p = make_inst( eng, sig, 100, 6, 10, "X", "T_dppfit_sigdyn" );
-    p->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model" );
+    p->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model dynamic=DPP_Z" );
     bool has_sig = p->has_channels( { "DPP_Z" } )[0];
 
     p->eval( "EPOCH dur=10 & SIGDYN sig=DPP_Z epoch-stats=F hypno-annot=F" );
@@ -4584,7 +4648,7 @@ static void test_dpp_fit( lunapi_t * eng,
     pw->insert_signal( "PP_W" , std::vector<double>( 60 , 1.0 ) , 1 );
     pw->insert_signal( "PP_R" , std::vector<double>( 60 , 0.0 ) , 1 );
     pw->insert_signal( "PP_NR" , std::vector<double>( 60 , 0.0 ) , 1 );
-    pw->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model hypno-prefix=PP hypno-three-state=T" );
+    pw->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model dynamic=DPP_Z hypno-prefix=PP hypno-three-state=T" );
     pw->eval( "STATS sig=DPP_Z" );
     const double z_w = get_val( pw , "STATS" , "MEAN" );
 
@@ -4595,7 +4659,7 @@ static void test_dpp_fit( lunapi_t * eng,
     pn->insert_signal( "PP_W" , std::vector<double>( 60 , 0.0 ) , 1 );
     pn->insert_signal( "PP_R" , std::vector<double>( 60 , 0.0 ) , 1 );
     pn->insert_signal( "PP_NR" , std::vector<double>( 60 , 1.0 ) , 1 );
-    pn->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model hypno-prefix=PP hypno-three-state=T" );
+    pn->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model dynamic=DPP_Z hypno-prefix=PP hypno-three-state=T" );
     pn->eval( "STATS sig=DPP_Z" );
     const double z_nr = get_val( pn , "STATS" , "MEAN" );
 
@@ -4703,7 +4767,7 @@ static void test_dpp_fit( lunapi_t * eng,
     p->insert_signal( "PP_W" , std::vector<double>( 60 , 0.0 ) , 1 );
     p->insert_signal( "PP_R" , std::vector<double>( 60 , 0.0 ) , 1 );
     p->insert_signal( "PP_NR" , std::vector<double>( 60 , 0.0 ) , 1 );
-    p->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model hypno-prefix=PP hypno-three-state=T" );
+    p->eval( "DPP spec=" + specfile + " step=10 qc=F model=" + base + "_model dynamic=DPP_Z hypno-prefix=PP hypno-three-state=T" );
     p->eval( "STATS sig=DPP_Z" );
     const double smin = get_val( p , "STATS" , "MIN" );
     const double smax = get_val( p , "STATS" , "MAX" );
@@ -5446,6 +5510,85 @@ static void test_dpp_fit( lunapi_t * eng,
 			    << "; Xtrain.rows()=" << fit.Xtrain.rows() << " (exp " << n_total_rows << ", full corpus)";
     record(R,"dpp-fit/cv-derived-calibration-and-iterations-stage-conditioned", pass, m.str(), V);
   } catch(std::exception & e){ record(R,"dpp-fit/cv-derived-calibration-and-iterations-stage-conditioned",false,e.what(),V); }
+
+  // X12 -- standard database output for two-level model evaluation.  The
+  // evaluation and feature-importance results are sent through the normal
+  // -o database; only fitted model bundles are written as sidecar files.
+  try {
+    const std::string base = temp_base_path("test_dppfit_output");
+    const std::string corpus = base + ".dat";
+    const std::string phenofile = base + ".pheno";
+    const std::string specfile = base + ".spec";
+    const std::string dbfile = base + ".db";
+    std::ofstream ph( phenofile.c_str() ); ph << "ID\tY\n";
+    bool first = true;
+    for ( int i = 0; i < 6; ++i )
+      {
+        dpp_matrix_t m; m.id = "OUT" + std::to_string(i);
+        for ( int r = 0; r < 3; ++r )
+          { m.time_sec.push_back( (r+1) * 30.0 ); m.X.push_back( { (double)i + 0.01 * r } ); }
+        dpp_io::save( corpus, m, 1, !first );
+        first = false;
+        ph << m.id << "\t" << i << "\n";
+      }
+    ph.close();
+    { std::ofstream sp( specfile.c_str() );
+      sp << "MODEL base sleep=T\nMODEL add sleep=T\n"
+         << "COMPARE change base=base add=add\n"; }
+    cmd_t::attach_ivars( phenofile );
+
+    param_t param;
+    param.add( "data", corpus );
+    param.add( "phe", "Y" );
+    param.add( "outcome", "quantitative" );
+    param.add( "fit-spec", specfile );
+    param.add( "out", base + "_model" );
+    param.add( "vector", "T" );
+    param.add( "two-level", "T" );
+    param.add( "embedding-dim", "1" );
+    param.add( "vector-features", "RAW" );
+    param.add( "level2-features", "BASE" );
+    param.add( "outer-folds", "3" );
+    param.add( "inner-folds", "2" );
+    param.add( "l1-iterations", "3" );
+    param.add( "l2-iterations", "3" );
+
+    eng->output_attach( dbfile );
+    writer.cmd( "DPP-FIT", 1, "" );
+    dpp_fit_t fit( param );
+    fit.fit();
+    eng->output_close();
+
+    const retval_t dumped = writer_t::dump_to_retval( dbfile );
+    auto has_var = [&]( const std::string & factor, const std::string & variable ) {
+      for ( const auto & command : dumped.data )
+        if ( command.first.name == "DPP-FIT" )
+          for ( const auto & table : command.second )
+            if ( table.first.factors.count( factor ) )
+              for ( const auto & value : table.second )
+                if ( value.first.name == variable ) return true;
+      return false;
+    };
+    const bool strata_ok = has_var( "DPP_MODEL", "N" )
+      && has_var( "DPP_NULL", "N" )
+      && has_var( "DPP_CONTRAST", "N" );
+    const bool variables_ok = has_var( "DPP_MODEL", "R2" )
+      && has_var( "DPP_NULL", "DELTA_R2" )
+      && has_var( "DPP_CONTRAST", "PAIRED_T_P" )
+      && has_var( "DPP_CONTRAST", "PERM_P" );
+    const bool importance_ok = has_var( "IMPORTANCE", "GAIN" )
+      && has_var( "IMPORTANCE", "SPLIT" )
+      && has_var( "FEATURE", "GAIN" )
+      && has_var( "FEATURE", "SPLIT" );
+    const bool no_sidecars = !Helper::fileExists( Helper::expand( base + "_model.base.outer-oof" ) )
+      && !Helper::fileExists( Helper::expand( base + "_model.add.outer-oof" ) )
+      && !Helper::fileExists( Helper::expand( base + "_model.base.l2.importance" ) )
+      && !Helper::fileExists( Helper::expand( base + "_model.add.l2.importance" ) );
+    const bool pass = strata_ok && variables_ok && importance_ok && no_sidecars;
+    std::ostringstream m; m << "strata_ok=" << strata_ok << " variables_ok=" << variables_ok
+                            << " importance_ok=" << importance_ok << " no_sidecars=" << no_sidecars;
+    record(R,"dpp-fit/standard-database-output-strata", pass, m.str(), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/standard-database-output-strata",false,e.what(),V); }
 }
 
 #endif
@@ -5489,6 +5632,7 @@ void proc_tests( const std::string & group, const bool verbose )
   RUN("segsrv",   test_segsrv)
   RUN("plm",      test_plm)
   RUN("sigdyn",   test_sigdyn)
+  RUN("dpp-evaluation", test_dpp_evaluation)
   RUN("dpp",      test_dpp)
 #ifdef HAS_LGBM
   RUN("dpp-fit",  test_dpp_fit)

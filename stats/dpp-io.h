@@ -22,9 +22,9 @@
 #ifndef __LUNA_DPP_IO_H__
 #define __LUNA_DPP_IO_H__
 
+#include <fstream>
 #include <string>
 #include <vector>
-#include <fstream>
 
 // Per-individual DPP feature-matrix binary I/O -- same headerless,
 // self-delimiting, cat-concatenable technique as pops/io.cpp (bwrite:
@@ -38,33 +38,35 @@
 //   ID (string) | N_ROWS (int) | N_FEATURES (int) |
 //   N_ROWS x [ TIME (double) | N_FEATURES x VALUE (double, NaN = missing) ]
 
-struct dpp_matrix_t
-{
+struct dpp_matrix_t {
   std::string id;
-  std::vector<double> time_sec;              // one per row
-  std::vector<std::vector<double> > X;        // [row][col]
+  std::vector<double> time_sec;       // one per row
+  std::vector<std::vector<double>> X; // [row][col]
 };
 
 namespace dpp_io {
 
-  // append (or create) one individual's matrix in 'f'; 'n_features' is
-  // passed explicitly (not inferred from X) so an individual with zero
-  // valid rows can still be written with the correct schema
-  void save( const std::string & f , const dpp_matrix_t & m , int n_features , bool append );
+// append (or create) one individual's matrix in 'f'; 'n_features' is
+// passed explicitly (not inferred from X) so an individual with zero
+// valid rows can still be written with the correct schema
+void save(const std::string &f, const dpp_matrix_t &m, int n_features,
+          bool append);
 
-  // read all individuals from 'f'; halts if any individual's column count
-  // doesn't match 'expected_n_features' (pass -1 to skip the check)
-  std::vector<dpp_matrix_t> load( const std::string & f , int expected_n_features = -1 );
-  std::vector<dpp_matrix_t> load_files( const std::vector<std::string> & files , int expected_n_features = -1 );
+// read all individuals from 'f'; halts if any individual's column count
+// doesn't match 'expected_n_features' (pass -1 to skip the check)
+std::vector<dpp_matrix_t> load(const std::string &f,
+                               int expected_n_features = -1);
+std::vector<dpp_matrix_t> load_files(const std::vector<std::string> &files,
+                                     int expected_n_features = -1);
 
-  // low-level primitives (mirrors pops_indiv_t::bwrite/bread_*)
-  void bwrite( std::ofstream & O , const std::string & s );
-  void bwrite( std::ofstream & O , int i );
-  void bwrite( std::ofstream & O , double d );
-  std::string bread_str( std::ifstream & I );
-  int bread_int( std::ifstream & I );
-  double bread_dbl( std::ifstream & I );
+// low-level primitives (mirrors pops_indiv_t::bwrite/bread_*)
+void bwrite(std::ofstream &O, const std::string &s);
+void bwrite(std::ofstream &O, int i);
+void bwrite(std::ofstream &O, double d);
+std::string bread_str(std::ifstream &I);
+int bread_int(std::ifstream &I);
+double bread_dbl(std::ifstream &I);
 
-}
+} // namespace dpp_io
 
 #endif

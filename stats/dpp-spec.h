@@ -22,10 +22,10 @@
 #ifndef __LUNA_DPP_SPEC_H__
 #define __LUNA_DPP_SPEC_H__
 
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
-#include <set>
-#include <map>
 
 // DPP's feature-spec grammar, modeled on pops_spec_t/pops_specs_t
 // (pops/spec.h) but generalized for: (a) an explicit window-length
@@ -37,64 +37,60 @@
 // features, since DPP stage 2 has no SVD/smoothing/final-column-selection
 // concept yet (every specified feature is always computed and output).
 
-enum dpp_feature_t
-  {
-    DPP_PSD ,       // canonical-band log power (delta, theta, alpha, sigma,
-                    // beta) -- natural log, unconditional, matching POPS's
-                    // own POPS_BANDS feature convention
-    DPP_SLOPE ,     // spectral slope/aperiodic exponent
-    DPP_HJORTH ,    // log(activity), mobility, complexity -- activity only
-                    // is log-transformed, matching POPS's convention
-    DPP_SKEW ,
-    DPP_KURTOSIS ,
-    DPP_MSE ,       // sample entropy
-    DPP_ENVELOPE ,  // filter-Hilbert magnitude summary (mean/SD/CV)
-    DPP_PLV ,       // phase-locking value between two (channel,band) inputs --
-                    // cross-channel, within-band only (both sides must
-                    // resolve to the same band); cross-band phase-phase
-                    // "coupling" is deliberately not supported -- it does
-                    // not measure what SO-spindle-style coupling studies
-                    // actually want (phase-amplitude coupling, see DPP_PAC)
-    DPP_COH ,       // coherence between two channels
-    DPP_PSI ,       // phase slope index between two channels
-    DPP_CATCH22 ,   // catch22 (or catch24) canonical time-series characteristics
-    DPP_PAC         // phase-amplitude coupling: band[0] = phase source,
-                    // band[1] = amplitude source (ch[0]/ch[1] are typically
-                    // the same channel, e.g. slow-oscillation/spindle
-                    // coupling, but need not be). Normalized mean-vector-
-                    // length (Canolty et al. 2006 style) + preferred phase,
-                    // computed directly per window (no surrogate/permutation
-                    // testing -- this is a fast ML feature, not a
-                    // significance test; contrast dsp/pac.h's pac_t, which
-                    // is a CWT+1000-surrogate whole-recording tool, wrong
-                    // shape entirely for a per-window rolling feature).
-                    // Exactly one channel pair per line (no multi-pair
-                    // crossing like PLV/COH/PSI allow)
-  };
+enum dpp_feature_t {
+  DPP_PSD,    // canonical-band log power (delta, theta, alpha, sigma,
+              // beta) -- natural log, unconditional, matching POPS's
+              // own POPS_BANDS feature convention
+  DPP_SLOPE,  // spectral slope/aperiodic exponent
+  DPP_HJORTH, // log(activity), mobility, complexity -- activity only
+              // is log-transformed, matching POPS's convention
+  DPP_SKEW,
+  DPP_KURTOSIS,
+  DPP_MSE,      // sample entropy
+  DPP_ENVELOPE, // filter-Hilbert magnitude summary (mean/SD/CV)
+  DPP_PLV,      // phase-locking value between two (channel,band) inputs --
+                // cross-channel, within-band only (both sides must
+                // resolve to the same band); cross-band phase-phase
+                // "coupling" is deliberately not supported -- it does
+                // not measure what SO-spindle-style coupling studies
+                // actually want (phase-amplitude coupling, see DPP_PAC)
+  DPP_COH,      // coherence between two channels
+  DPP_PSI,      // phase slope index between two channels
+  DPP_CATCH22,  // catch22 (or catch24) canonical time-series characteristics
+  DPP_PAC       // phase-amplitude coupling: band[0] = phase source,
+                // band[1] = amplitude source (ch[0]/ch[1] are typically
+                // the same channel, e.g. slow-oscillation/spindle
+                // coupling, but need not be). Normalized mean-vector-
+                // length (Canolty et al. 2006 style) + preferred phase,
+                // computed directly per window (no surrogate/permutation
+                // testing -- this is a fast ML feature, not a
+                // significance test; contrast dsp/pac.h's pac_t, which
+                // is a CWT+1000-surrogate whole-recording tool, wrong
+                // shape entirely for a per-window rolling feature).
+                // Exactly one channel pair per line (no multi-pair
+                // crossing like PLV/COH/PSI allow)
+};
 
 // a named bandpass definition, used both to pre-filter for ENVELOPE/PLV
 // (via the causal padded-filter path, stats/dpp-filter.h) and, for
 // COH/PSI, purely as a convenient named (lwr,upr) range for post-hoc
 // band-summarizing an already-computed cross-spectrum (no filtering
 // applied in that case)
-struct dpp_filter_t
-{
+struct dpp_filter_t {
   std::string name;
   double lwr, upr;
   double ripple; // Kaiser ripple (default 0.02)
   double tw;     // transition width, Hz (default 1)
 };
 
-struct dpp_channel_t
-{
+struct dpp_channel_t {
   std::string ch;
   bool has_prefilter;
   double prefilter_lwr, prefilter_upr;
-  dpp_channel_t() : has_prefilter(false), prefilter_lwr(0), prefilter_upr(0) { }
+  dpp_channel_t() : has_prefilter(false), prefilter_lwr(0), prefilter_upr(0) {}
 };
 
-struct dpp_spec_t
-{
+struct dpp_spec_t {
   std::string block;
   dpp_feature_t ftr;
 
@@ -109,10 +105,10 @@ struct dpp_spec_t
   // dpp_spec_t per crossed window length
   double window_sec;
 
-  std::map<std::string,std::string> arg;
+  std::map<std::string, std::string> arg;
 
-  bool has( const std::string & key ) const;
-  double narg( const std::string & key ) const;
+  bool has(const std::string &key) const;
+  double narg(const std::string &key) const;
 
   // number of output columns for this feature type
   int cols() const;
@@ -123,30 +119,29 @@ struct dpp_spec_t
   std::string label_root() const;
 };
 
-struct dpp_specs_t
-{
-  dpp_specs_t() : default_window_sec(0) , default_step_sec(0) { }
+struct dpp_specs_t {
+  dpp_specs_t() : default_window_sec(0), default_step_sec(0) {}
 
-  void read( const std::string & f );
+  void read(const std::string &f);
   void init();
 
   // zero-config default: PSD (canonical bands) + SLOPE + HJORTH,
   // independently for each channel in 'channels', at a single window/step
-  void init_default( const std::vector<std::string> & channels );
+  void init_default(const std::vector<std::string> &channels);
 
   // CLI-inline shorthand: extend/override init_default()'s spec without a
   // file -- windows=, filters=name:lo-hi,..., features=PSD,HJORTH,...,
   // prefilter=lo-hi (applied to every channel already declared)
-  void apply_inline_overrides( const std::string & windows_arg ,
-				const std::string & filters_arg ,
-				const std::string & features_arg ,
-				const std::string & prefilter_arg );
+  void apply_inline_overrides(const std::string &windows_arg,
+                              const std::string &filters_arg,
+                              const std::string &features_arg,
+                              const std::string &prefilter_arg);
 
-  static std::map<std::string,dpp_feature_t> lab2ftr;
-  static std::map<dpp_feature_t,std::string> ftr2lab;
+  static std::map<std::string, dpp_feature_t> lab2ftr;
+  static std::map<dpp_feature_t, std::string> ftr2lab;
 
-  std::map<std::string,dpp_channel_t> chs;
-  std::map<std::string,dpp_filter_t> filters;
+  std::map<std::string, dpp_channel_t> chs;
+  std::map<std::string, dpp_filter_t> filters;
   std::vector<dpp_spec_t> specs;
 
   double default_window_sec;
@@ -155,11 +150,14 @@ struct dpp_specs_t
   bool loaded() const { return specs.size() != 0; }
 
   // does 'ch' exist (as a declared channel)?
-  bool has_channel( const std::string & ch ) const { return chs.find( ch ) != chs.end(); }
+  bool has_channel(const std::string &ch) const {
+    return chs.find(ch) != chs.end();
+  }
 
   // does 'name' exist (as a declared filter band)?
-  bool has_filter( const std::string & name ) const { return filters.find( name ) != filters.end(); }
-
+  bool has_filter(const std::string &name) const {
+    return filters.find(name) != filters.end();
+  }
 };
 
 #endif

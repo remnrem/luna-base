@@ -5129,13 +5129,44 @@ void proc_drop_signals( edf_t & edf , param_t & param )
   std::set<std::string> keeps, drops;
   std::vector<std::string> picks; // order matters here
 
-  if ( param.has( "keep" ) ) keeps = param.strset( "keep" );
+  if ( param.has( "keep" ) )
+    {
+      const std::vector<std::string> patterns = param.strvector( "keep" );
+
+      for (int p=0; p<patterns.size(); p++)
+	{
+	  signal_list_t selected = edf.header.signal_list( patterns[p] );
+
+	  for (int s=0; s<selected.size(); s++)
+	    keeps.insert( selected.label( s ) );
+	}
+    }
 
   if ( param.has( "keep" ) && param.has( "req" ) ) 
     Helper::halt( "cannot specify both keep and req" );
 
   bool req = param.has( "req" ) ;
-  if ( param.has( "req" ) ) keeps = param.strset( "req" );
+  if ( param.has( "req" ) )
+    {
+      const std::vector<std::string> patterns = param.strvector( "req" );
+
+      for (int p=0; p<patterns.size(); p++)
+	{
+	  signal_list_t selected = edf.header.signal_list( patterns[p] );
+
+	  if ( selected.size() == 0 )
+	    {
+	      logger << "  *** could not find requested signal: "
+		     << patterns[p] << "\n";
+	      logger << "  *** quitting for this individual\n";
+	      globals::problem = true;
+	      return;
+	    }
+
+	  for (int s=0; s<selected.size(); s++)
+	    keeps.insert( selected.label( s ) );
+	}
+    }
 
   bool pick = param.has( "pick" );
   if ( pick && req ) Helper::halt( "cannot specify pick and req together" );
@@ -5148,7 +5179,18 @@ void proc_drop_signals( edf_t & edf , param_t & param )
   if ( edf.header.has_signal( pick_rename ) )
     Helper::halt( "rename choice already exists" );
   
-  if ( param.has( "drop" ) ) drops = param.strset( "drop" );
+  if ( param.has( "drop" ) )
+    {
+      const std::vector<std::string> patterns = param.strvector( "drop" );
+
+      for (int p=0; p<patterns.size(); p++)
+	{
+	  signal_list_t selected = edf.header.signal_list( patterns[p] );
+
+	  for (int s=0; s<selected.size(); s++)
+	    drops.insert( selected.label( s ) );
+	}
+    }
   
   if ( param.has( "keep" ) && param.has( "drop" ) )
     Helper::halt( "can only specify keep or drop with SIGNALS" );
@@ -5220,20 +5262,7 @@ void proc_drop_signals( edf_t & edf , param_t & param )
 	  // is this signal on the keep list?
 	  if ( keeps.find( label ) == keeps.end() )
 	    {
-	      
-	      // or, does this signal have an alias that is on the keep list?
-	      if ( cmd_t::label_aliases.find( label ) != cmd_t::label_aliases.end() )
-		{
-		  //std::cout << " has alias " << cmd_t::label_aliases[ label ]  << "\n";
-		  if ( keeps.find( cmd_t::label_aliases[ label ] ) == keeps.end() )
-		    {
-		      //std::cout << "drps " << label << "\n";
-		      drops.insert( label );
-		      // OR ?? drops.insert( cmd_t::label_aliases[ label ] ) ; should be equiv.
-		    }
-		}
-	      else
-		drops.insert( label );
+	      drops.insert( label );
 	    }
 	  
 	} // next signal

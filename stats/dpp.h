@@ -25,13 +25,12 @@
 struct edf_t;
 struct param_t;
 
-namespace dsptools
-{
-  // DPP stage 2: generic multiscale feature-extraction over trailing,
-  // causal, fixed-length windows -- see stats/dpp-spec.h / dpp-filter.h /
-  // dpp-io.h for the spec grammar, filtering, and binary-corpus I/O this
-  // orchestrates. No train=/model= modes yet (stage 3).
-  void dpp( edf_t & edf , param_t & param );
-}
+namespace dsptools {
+// DPP stage 2: generic multiscale feature-extraction over trailing,
+// causal, fixed-length windows -- see stats/dpp-spec.h / dpp-filter.h /
+// dpp-io.h for the spec grammar, filtering, and binary-corpus I/O this
+// orchestrates. No train=/model= modes yet (stage 3).
+void dpp(edf_t &edf, param_t &param);
+} // namespace dsptools
 
 #endif

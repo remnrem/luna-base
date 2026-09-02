@@ -22,9 +22,9 @@
 #ifndef __LUNA_DPP_HYPNO_H__
 #define __LUNA_DPP_HYPNO_H__
 
+#include <cstdint>
 #include <string>
 #include <vector>
-#include <cstdint>
 
 struct edf_t;
 
@@ -46,25 +46,27 @@ struct edf_t;
 
 namespace dpp_hypno {
 
-  // canonical stage label lists, matching pops/posteriors.cpp's
-  // posterior_labels() exactly
-  std::vector<std::string> stage_labels( bool three_state );
+// canonical stage label lists, matching pops/posteriors.cpp's
+// posterior_labels() exactly
+std::vector<std::string> stage_labels(bool three_state);
 
-  struct lookup_t
-  {
-    // halts if any required PP_<label> channel is missing from the EDF
-    lookup_t( edf_t & edf , const std::string & prefix , bool three_state );
+struct lookup_t {
+  // halts if any required PP_<label> channel is missing from the EDF
+  lookup_t(edf_t &edf, const std::string &prefix, bool three_state);
 
-    // nearest-timepoint PP_s value for each stage, in labels order
-    std::vector<double> at( uint64_t t_tp ) const;
+  // nearest-timepoint PP_s value for each stage, in labels order
+  std::vector<double> at(uint64_t t_tp) const;
 
-    std::vector<std::string> labels;
+  std::vector<std::string> labels;
 
-  private:
-    struct trace_t { std::vector<double> raw; std::vector<uint64_t> tp; };
-    std::vector<trace_t> traces; // parallel to labels
+private:
+  struct trace_t {
+    std::vector<double> raw;
+    std::vector<uint64_t> tp;
   };
+  std::vector<trace_t> traces; // parallel to labels
+};
 
-}
+} // namespace dpp_hypno
 
 #endif

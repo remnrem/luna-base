@@ -72,7 +72,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -80,7 +80,7 @@ jobs:
           install: zip mingw-w64-x86_64-cmake git gcc mingw-w64-x86_64-toolchain mingw-w64-x86_64-zlib mingw-w64-x86_64-fftw
       - name: Cache native deps
         id: cache-native
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/LightGBM
@@ -110,7 +110,7 @@ jobs:
           cd build
           /mingw64/bin/cmake.exe -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release ..
           mingw32-make.exe -j4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: |
           mingw32-make.exe -j${NUMBER_OF_PROCESSORS:-4} ARCH=WINDOWS LGBM=1 LGBM_PATH=${HOME}/LightGBM FFTW=${HOME}/native-deps/windows-fftw
           if [[ "${{ needs.release-meta.outputs.enabled }}" == "true" ]]; then
@@ -119,7 +119,7 @@ jobs:
             cp *.exe ${HOME}/native-deps/windows-fftw/bin/libfftw3-3.dll ${HOME}/LightGBM/lib_lightgbm.dll /mingw64/bin/libgcc_s_seh-1.dll /mingw64/bin/libgomp-1.dll /mingw64/bin/libwinpthread-1.dll luna-${v}/
             zip -r win-luna.zip luna-${v}
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: needs.release-meta.outputs.enabled == 'true'
         with:
           name: win-luna.zip
@@ -128,10 +128,10 @@ jobs:
     needs: release-meta
     runs-on: macos-15-intel
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Cache native deps
         id: cache-native
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/LightGBM
@@ -216,7 +216,7 @@ jobs:
             cd ..
             tar cvzf mac-luna.tar.gz luna-${v}/
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: needs.release-meta.outputs.enabled == 'true'
         with:
           name: mac-luna.tar.gz
@@ -226,10 +226,10 @@ jobs:
       needs: release-meta
       runs-on: macos-14              
       steps:
-      - uses: actions/checkout@v4 
+      - uses: actions/checkout@v5
       - name: Cache native deps
         id: cache-native
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/LightGBM
@@ -317,7 +317,7 @@ jobs:
             tar cvzf macos-arm64-luna.tar.gz luna-${v}/
           fi
     
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: needs.release-meta.outputs.enabled == 'true'
         with:
           name: macos-arm64-luna.tar.gz
@@ -326,10 +326,10 @@ jobs:
   linux-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Cache native deps
         id: cache-native
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/LightGBM
@@ -371,8 +371,8 @@ jobs:
     needs: [release-meta, linux-build, macos-build, windows-build, macos-arm64-build]
     if: needs.release-meta.outputs.enabled == 'true'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v8
         id: download
         with:
           path: .
