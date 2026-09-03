@@ -50,7 +50,7 @@ ged_input_mode_t ged_input_mode_from_str( const std::string & );
 struct ged_t
 {
 
-  ged_t() : n_S(0), n_R(0), largest_idx(-1), solved(false) { }
+  ged_t() : largest_idx(-1), n_S(0), n_R(0), solved(false) { }
 
   // Entry point 1: provide raw data matrices (centers + computes covariance internally)
   void data( const Eigen::MatrixXd & Sd , const Eigen::MatrixXd & Rd );

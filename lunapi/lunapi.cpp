@@ -849,17 +849,20 @@ void lunapi_t::write_db( const std::string & path,
                          const std::string & file,
                          const rtables_return_t & tables )
 {
+  if ( !path.empty() ) Helper::deleteFile( path );
+
   writer.clear();
   writer.attach( path );
   writer.set_types();
 
-  int cmd_number = 1;
-  std::map<std::string,int> command_numbers;
+  int cmd_number = 0;
+  for ( auto const & cc : writer.commands )
+    cmd_number = std::max( cmd_number , cc.second.cmd_number );
   for ( auto const & cc : tables )
     {
-      const auto found_cmd = command_numbers.find( cc.first );
-      if ( found_cmd == command_numbers.end() )
-        command_numbers[ cc.first ] = cmd_number++;
+      const int this_cmd_number = ++cmd_number;
+      writer.cmd( cc.first, this_cmd_number, "" );
+      writer.level( cc.first, "_" + cc.first );
       for ( auto const & ss : cc.second )
         {
           const std::string & cmd = cc.first;
@@ -869,7 +872,7 @@ void lunapi_t::write_db( const std::string & path,
           if ( cols.empty() || data.size() != cols.size() ) continue;
 
           std::vector<std::string> factors;
-          if ( strata != "." )
+          if ( strata != "." && strata != "BL" )
             {
               std::stringstream in( strata );
               std::string factor;
@@ -877,7 +880,6 @@ void lunapi_t::write_db( const std::string & path,
                 if ( ! factor.empty() ) factors.push_back( factor );
             }
 
-          writer.cmd( cmd, command_numbers[ cmd ], "" );
           const int nrows = data[0].size();
           for ( int r = 0; r < nrows; ++r )
             {
@@ -909,12 +911,15 @@ void lunapi_t::write_db( const std::string & path,
                   else if ( std::holds_alternative<std::string>( v ) )
                     writer.value( cols[c], std::get<std::string>( v ) );
                 }
-              writer.unlevel();
+              for ( const auto & factor : factors ) writer.unlevel( factor );
             }
         }
+      writer.unlevel( "_" + cc.first );
     }
   writer.commit();
-  writer.close();
+  writer.use_retval( NULL );
+  writer.clear();
+  writer.set_types();
 }
 
 void lunapi_t::output_plaintext( const std::string & path )
