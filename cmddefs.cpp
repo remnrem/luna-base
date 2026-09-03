@@ -119,7 +119,7 @@ void cmddefs_t::init()
   // base URL
   //
 
-  url_root = "https://zzz.nyspi.org/luna/ref/";
+  url_root = "https://zzz-luna.org/luna/ref/";
 
 
   //
@@ -6917,7 +6917,7 @@ void cmddefs_t::init()
   add_param( "DPP" , "folds" , "5" , "--dpp-fit: run K-fold individual-level cross-validation, writing out-of-fold predictions to <out>.oof (evaluation only; the saved bundle is still trained on the entire corpus). Mutually exclusive with validation=" );
   add_param( "DPP" , "fold-file" , "folds.txt" , "--dpp-fit: explicit ID/fold-index assignment (two columns), overriding folds='s default sorted-round-robin assignment" );
   add_param( "DPP" , "folds-save" , "T" , "--dpp-fit: also save each fold's booster(s) to <out>.foldN.mod (default F -- fold models are normally ephemeral)" );
-  add_param( "DPP" , "early-stopping-rounds" , "20" , "--dpp-fit: early-stopping patience during folds= cross-validation (default 20 if folds= is set, else disabled); the resulting per-fold iteration counts are median-aggregated and applied to the final, full-corpus fit's own iteration count (no effect without folds=)" );
+  add_param( "DPP" , "early-stopping-rounds" , "20" , "--dpp-fit: early-stopping patience; classic pooled/stage fits use it during folds= CV (default 20 with folds=), while two-level uses deterministic subject-disjoint internal validation (default disabled unless explicitly set); 0 disables stopping" );
 
   add_table( "DPP" , "SEC,VAR" , "Feature value(s) at each output time" );
   add_var( "DPP" , "SEC,VAR" , "V" , "Feature value (or V1..Vk for multi-column features, e.g. PSD's 5 log-power bands)" );

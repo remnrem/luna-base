@@ -5568,13 +5568,15 @@ static void test_dpp_fit( lunapi_t * eng,
                 if ( value.first.name == variable ) return true;
       return false;
     };
-    const bool strata_ok = has_var( "DPP_MODEL", "N" )
-      && has_var( "DPP_NULL", "N" )
-      && has_var( "DPP_CONTRAST", "N" );
-    const bool variables_ok = has_var( "DPP_MODEL", "R2" )
-      && has_var( "DPP_NULL", "DELTA_R2" )
-      && has_var( "DPP_CONTRAST", "PAIRED_T_P" )
-      && has_var( "DPP_CONTRAST", "PERM_P" );
+    const bool strata_ok = has_var( "MODEL", "N" )
+      && has_var( "NULL", "N" )
+      && has_var( "CONTRAST", "N" );
+    const bool variables_ok = has_var( "MODEL", "R2" )
+      && has_var( "NULL", "DELTA_R2" )
+      && has_var( "CONTRAST", "PAIRED_T_P" )
+      && has_var( "CONTRAST", "PERM_P" )
+      && has_var( "OOF", "PREDICTED" )
+      && has_var( "OOF", "OBSERVED" );
     const bool importance_ok = has_var( "IMPORTANCE", "GAIN" )
       && has_var( "IMPORTANCE", "SPLIT" )
       && has_var( "FEATURE", "GAIN" )
@@ -5588,6 +5590,56 @@ static void test_dpp_fit( lunapi_t * eng,
                             << " importance_ok=" << importance_ok << " no_sidecars=" << no_sidecars;
     record(R,"dpp-fit/standard-database-output-strata", pass, m.str(), V);
   } catch(std::exception & e){ record(R,"dpp-fit/standard-database-output-strata",false,e.what(),V); }
+
+  // X13 -- two-level early stopping uses subject-level validation only for
+  // temporary fits, preserves complete outer coverage, and writes compatible
+  // deployment bundles for both outcome types.
+  try {
+    auto run = [&](const std::string &base, const std::string &outcome,
+                   double hi_y) {
+      const std::string corpus = base + ".dat";
+      const std::string phenofile = base + ".pheno";
+      std::ofstream ph(phenofile.c_str());
+      ph << "ID\tY\n";
+      bool first = true;
+      for (int i = 0; i < 6; i++) {
+        dpp_matrix_t m;
+        m.id = "TL" + std::to_string(i) + "_" + outcome;
+        const double y = i % 2 ? hi_y : 0.0;
+        ph << m.id << "\t" << y << "\n";
+        for (int r = 0; r < 4; r++) {
+          m.time_sec.push_back((r + 1) * 30.0);
+          m.X.push_back({(double)i + 0.01 * r});
+        }
+        dpp_io::save(corpus, m, 1, !first);
+        first = false;
+      }
+      ph.close();
+      const std::string conf = base + ".conf";
+      { std::ofstream cf(conf.c_str());
+        cf << "verbosity=-1\nmin_data_in_leaf=1\nnum_leaves=7\n"; }
+      cmd_t::attach_ivars(phenofile);
+      param_t p;
+      p.add("data", corpus); p.add("phe", "Y"); p.add("outcome", outcome);
+      p.add("out", base + "_model"); p.add("config", conf);
+      p.add("vector-features", "RAW"); p.add("embedding-dim", "1");
+      p.add("level2-features", "BASE"); p.add("outer-folds", "3");
+      p.add("inner-folds", "2"); p.add("l1-iterations", "20");
+      p.add("l2-iterations", "20"); p.add("early-stopping-rounds", "2");
+      dpp_fit_t fit(p);
+      fit.fit();
+      return Helper::fileExists(Helper::expand(base + "_model.l1.mod")) &&
+             Helper::fileExists(Helper::expand(base + "_model.l2.mod")) &&
+             Helper::fileExists(Helper::expand(base + "_model.dpp"));
+    };
+    const std::string qbase = temp_base_path("test_dppfit_twolevel_q");
+    const std::string bbase = temp_base_path("test_dppfit_twolevel_b");
+    const bool qok = run(qbase, "quantitative", 10.0);
+    const bool bok = run(bbase, "binary", 1.0);
+    record(R, "dpp-fit/two-level-early-stopping-quantitative-and-binary",
+           qok && bok, "quantitative_bundle=" + std::string(qok ? "T" : "F") +
+                            " binary_bundle=" + std::string(bok ? "T" : "F"), V);
+  } catch(std::exception & e){ record(R,"dpp-fit/two-level-early-stopping-quantitative-and-binary",false,e.what(),V); }
 }
 
 #endif

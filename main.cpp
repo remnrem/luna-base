@@ -240,7 +240,7 @@ int main(int argc , char ** argv )
     "primary usage: luna [sample-list|EDF] [n1] [n2] [id=ID] [@param-file] \n"
     "                    [sig=s1,s2] [var1=val1] [-o out.db] [-s COMMANDS] [< command-file]\n"
     "\n"
-    "                 url: http://zzz.nyspi.org/luna/\n\n"
+    "                 url: http://zzz-luna.org/luna/\n\n"
     "                help: luna -h [domain|COMMAND]\n"
     "         search help: luna -hs term\n"
     " verbose domain help: luna -hv domain\n";

@@ -38,6 +38,7 @@
 #include "stats/dpp-fit.h"
 #include "stats/dpp-io.h"
 #include "stats/dpp-vector.h"
+#include "miscmath/miscmath.h"
 
 #include <algorithm>
 #include <cctype>
@@ -451,6 +452,30 @@ std::vector<std::vector<int>> split_folds(const std::vector<dpp_matrix_t> &d,
   return f;
 }
 
+// Deterministic subject-level holdout used only for selecting a booster
+// length.  The caller must pass a pool that already excludes its prediction
+// subjects (and, for outer fits, the outer test subjects).
+void split_internal_subjects(const std::vector<dpp_matrix_t> &d,
+                             const std::vector<int> &ids,
+                             std::vector<int> *train,
+                             std::vector<int> *valid) {
+  train->clear();
+  valid->clear();
+  if (ids.size() < 2) {
+    *train = ids;
+    return;
+  }
+  const std::vector<int> x = sorted_indices(d, ids);
+  const int nv = std::max(1, std::min((int)x.size() - 1,
+                                      (int)x.size() / 5));
+  for (int i = 0; i < (int)x.size(); i++)
+    (i < nv ? valid : train)->push_back(x[i]);
+}
+
+int bounded_iteration(const int best, const int maximum) {
+  return std::max(1, std::min(maximum, best > 0 ? best : maximum));
+}
+
 std::string lgbm_setting(const lgbm_t &lg, const std::string &key,
                          const std::string &def) {
   std::istringstream in(lg.params);
@@ -526,7 +551,7 @@ void emit_metrics(const std::string &level, const std::vector<double> &y,
   const bool bin = pmt.value("outcome", true) == "BINARY";
   const dpp_evaluation::prediction_metrics_t m =
       dpp_evaluation::evaluate_predictions(y, p, bin);
-  writer.level(level, "DPP_MODEL");
+  writer.level(level, "MODEL");
   writer.value("N", (int)m.n);
   writer.value("RMSE", m.rmse);
   if (bin) {
@@ -535,7 +560,7 @@ void emit_metrics(const std::string &level, const std::vector<double> &y,
     writer.value("AUC", m.auc);
   } else
     writer.value("R2", m.r2);
-  writer.unlevel("DPP_MODEL");
+  writer.unlevel("MODEL");
 }
 
 double mean_outcome(const std::vector<dpp_matrix_t> &d,
@@ -604,7 +629,7 @@ void emit_null_metrics(const std::string &level, const std::vector<double> &y,
   prediction_losses(y, prediction, binary, false, &model_loss);
   prediction_losses(y, null_prediction, binary, false, &null_loss);
 
-  writer.level(level, "DPP_NULL");
+  writer.level(level, "NULL");
   writer.value("N", (int)model.n);
   if (binary) {
     writer.value("MODEL_BRIER", model.brier);
@@ -636,7 +661,7 @@ void emit_null_metrics(const std::string &level, const std::vector<double> &y,
   }
   if (!binary)
     write_loss_test("RMSE", null_loss, model_loss);
-  writer.unlevel("DPP_NULL");
+  writer.unlevel("NULL");
 }
 
 void configure_lgbm(lgbm_t &lg, const param_t &p, const std::string &level) {
@@ -668,9 +693,10 @@ void configure_lgbm(lgbm_t &lg, const param_t &p, const std::string &level) {
   lg.params = out;
 }
 
-std::unique_ptr<lgbm_t> train_local(const std::vector<dpp_matrix_t> &d,
-                                    const std::vector<int> &ids,
-                                    const param_t &p, int nf) {
+std::unique_ptr<lgbm_t> train_local(
+    const std::vector<dpp_matrix_t> &d, const std::vector<int> &ids,
+    const param_t &p, int nf, const std::vector<int> *valid_ids = nullptr,
+    int fixed_iterations = 0, int early_rounds = 0) {
   int nr = 0;
   std::vector<int> counts;
   for (int i : ids) {
@@ -715,11 +741,57 @@ std::unique_ptr<lgbm_t> train_local(const std::vector<dpp_matrix_t> &d,
   lg->attach_training_qts(y);
   lg->training_weights = w;
   lg->apply_weights(lg->training, &lg->training_weights);
-  lg->n_iterations =
+  const int maximum =
       p.has("l1-iterations") ? p.requires_int("l1-iterations") : 100;
+  if (valid_ids && !valid_ids->empty()) {
+    int vr = 0;
+    for (int i : *valid_ids)
+      for (const auto &r : d[i].X)
+        if (usable(r))
+          ++vr;
+    if (!vr)
+      Helper::halt("DPP two-level: no usable Level-1 validation rows");
+    Eigen::MatrixXd VX(vr, nf);
+    std::vector<double> vy(vr);
+    std::vector<float> vw(vr);
+    int vz = 0;
+    for (int i : *valid_ids) {
+      double yy;
+      if (!cmd_t::pull_ivar(d[i].id, p.requires("phe"), &yy))
+        Helper::halt("no phenotype " + p.requires("phe") + " for " + d[i].id);
+      int count = 0;
+      for (const auto &r : d[i].X)
+        if (usable(r))
+          ++count;
+      for (const auto &r : d[i].X)
+        if (usable(r)) {
+          for (int c = 0; c < nf; c++)
+            VX(vz, c) = c < (int)r.size() ? r[c]
+                                         : std::numeric_limits<double>::quiet_NaN();
+          vy[vz] = yy;
+          vw[vz] = count ? 1.0f / count : 0;
+          ++vz;
+        }
+    }
+    lg->attach_validation_matrix(VX);
+    lg->attach_validation_qts(vy);
+    lg->validation_weights = vw;
+    lg->apply_weights(lg->validation, &lg->validation_weights);
+  }
+  lg->n_iterations = fixed_iterations > 0 ? fixed_iterations : maximum;
+  lg->early_stopping_rounds =
+      (fixed_iterations > 0 || !valid_ids || valid_ids->empty()) ? 0
+                                                                  : early_rounds;
   log_degenerate_features("Level-1", X, labels);
+  logger << "  DPP two-level Level-1 stopping: "
+         << (lg->early_stopping_rounds > 0 ? "enabled" : "disabled")
+         << ", max_iterations=" << maximum
+         << ", validation_subjects=" << (valid_ids ? valid_ids->size() : 0)
+         << ", training_subjects=" << ids.size() << "\n";
   log_booster_settings("Level-1", *lg, nr, nf, lg->n_iterations);
   lg->create_booster(p.has("verbose") && p.yesno("verbose"));
+  logger << "  DPP two-level Level-1 selected iterations="
+         << bounded_iteration(lg->best_iteration, maximum) << "\n";
   return lg;
 }
 
@@ -742,11 +814,56 @@ predict_local(lgbm_t &lg, const std::vector<dpp_matrix_t> &d,
   return out;
 }
 
+std::map<std::string, std::vector<double>> crossfit_local(
+    const std::vector<dpp_matrix_t> &d, const std::vector<int> &ids,
+    const param_t &p, int nf, int inner, int early_rounds,
+    std::vector<int> *selected) {
+  std::map<std::string, std::vector<double>> out;
+  selected->clear();
+  auto folds = split_folds(d, ids, inner);
+  for (const auto &h : folds) {
+    std::set<int> hs(h.begin(), h.end());
+    std::vector<int> available;
+    for (int i : ids)
+      if (!hs.count(i))
+        available.push_back(i);
+    if (early_rounds <= 0) {
+      auto lg = train_local(d, available, p, nf);
+      auto q = predict_local(*lg, d, h, nf);
+      out.insert(q.begin(), q.end());
+      continue;
+    }
+    std::vector<int> fit_ids, valid_ids;
+    split_internal_subjects(d, available, &fit_ids, &valid_ids);
+    auto probe = train_local(d, fit_ids, p, nf, &valid_ids, 0, early_rounds);
+    const int maximum =
+        p.has("l1-iterations") ? p.requires_int("l1-iterations") : 100;
+    const int it = bounded_iteration(probe->best_iteration, maximum);
+    selected->push_back(it);
+    auto lg = train_local(d, available, p, nf, nullptr, it, 0);
+    auto q = predict_local(*lg, d, h, nf);
+    out.insert(q.begin(), q.end());
+  }
+  return out;
+}
+
+int median_iteration(const std::vector<int> &x, const int maximum) {
+  if (x.empty())
+    return std::max(1, maximum);
+  std::vector<double> z;
+  for (int v : x)
+    z.push_back((double)bounded_iteration(v, maximum));
+  return bounded_iteration((int)std::lround(MiscMath::median(z)), maximum);
+}
+
 std::unique_ptr<lgbm_t> train_subject(const std::vector<summary_t> &s,
                                       const std::vector<int> &ids,
                                       const std::vector<dpp_matrix_t> &d,
                                       const param_t &p,
-                                      const std::vector<std::string> &labels) {
+                                      const std::vector<std::string> &labels,
+                                      const std::vector<int> *valid_ids = nullptr,
+                                      int fixed_iterations = 0,
+                                      int early_rounds = 0) {
   if (ids.empty())
     Helper::halt("DPP two-level: no subjects for Level-2 training");
   int nf = s[ids[0]].x.size();
@@ -769,11 +886,37 @@ std::unique_ptr<lgbm_t> train_subject(const std::vector<summary_t> &s,
   lg->attach_training_qts(y);
   if ((int)labels.size() == nf)
     lg->set_feature_names(labels);
-  log_degenerate_features("Level-2", X, labels);
-  lg->n_iterations =
+  const int maximum =
       p.has("l2-iterations") ? p.requires_int("l2-iterations") : 100;
+  if (valid_ids && !valid_ids->empty()) {
+    Eigen::MatrixXd VX(valid_ids->size(), nf);
+    std::vector<double> vy(valid_ids->size());
+    for (int r = 0; r < (int)valid_ids->size(); r++) {
+      const int i = (*valid_ids)[r];
+      VX.row(r) = Eigen::Map<const Eigen::RowVectorXd>(s[i].x.data(), nf);
+      if (!cmd_t::pull_ivar(d[i].id, p.requires("phe"), &vy[r]))
+        Helper::halt("missing Level-2 validation phenotype");
+    }
+    lg->attach_validation_matrix(VX);
+    lg->attach_validation_qts(vy);
+    std::vector<float> vw(valid_ids->size(), 1.0f);
+    lg->validation_weights = vw;
+    lg->apply_weights(lg->validation, &lg->validation_weights);
+  }
+  log_degenerate_features("Level-2", X, labels);
+  lg->n_iterations = fixed_iterations > 0 ? fixed_iterations : maximum;
+  lg->early_stopping_rounds =
+      (fixed_iterations > 0 || !valid_ids || valid_ids->empty()) ? 0
+                                                                  : early_rounds;
+  logger << "  DPP two-level Level-2 stopping: "
+         << (lg->early_stopping_rounds > 0 ? "enabled" : "disabled")
+         << ", max_iterations=" << maximum
+         << ", validation_subjects=" << (valid_ids ? valid_ids->size() : 0)
+         << ", training_subjects=" << ids.size() << "\n";
   log_booster_settings("Level-2", *lg, ids.size(), nf, lg->n_iterations);
   lg->create_booster(p.has("verbose") && p.yesno("verbose"));
+  logger << "  DPP two-level Level-2 selected iterations="
+         << bounded_iteration(lg->best_iteration, maximum) << "\n";
   return lg;
 }
 
@@ -895,37 +1038,50 @@ void dpp_twolevel::fit(param_t &p) {
   if ((int)d.size() < 2 * outer)
     outer = (int)d.size();
   auto outer_f = split_folds(d, all, outer);
+  const int es = p.has("early-stopping-rounds")
+                     ? p.requires_int("early-stopping-rounds")
+                     : 0;
+  if (es < 0)
+    Helper::halt("early-stopping-rounds must be non-negative");
+  std::vector<std::string> outer_id;
+  std::vector<int> outer_fold;
   std::vector<double> outer_y, outer_p, outer_null;
-  for (auto &test : outer_f) {
+  std::vector<int> outer_l2_selected;
+  for (int f = 0; f < (int)outer_f.size(); f++) {
+    auto &test = outer_f[f];
     std::set<int> ts(test.begin(), test.end());
     std::vector<int> tr;
     for (int i : all)
       if (!ts.count(i))
         tr.push_back(i);
     const double fold_null = mean_outcome(d, tr, p);
-    auto inn = split_folds(d, tr, inner);
-    std::map<std::string, std::vector<double>> oof;
-    for (auto &h : inn) {
-      std::set<int> hs(h.begin(), h.end());
-      std::vector<int> it;
-      for (int i : tr)
-        if (!hs.count(i))
-          it.push_back(i);
-      auto lg = train_local(d, it, p, nf);
-      auto q = predict_local(*lg, d, h, nf);
-      oof.insert(q.begin(), q.end());
-    }
+    std::vector<int> l1_selected;
+    std::map<std::string, std::vector<double>> oof =
+        crossfit_local(d, tr, p, nf, inner, es, &l1_selected);
     std::vector<summary_t> su(d.size());
     for (int i : tr)
       su[i] = summarize_clean(d[i], oof[d[i].id], l, p);
-    auto l2 = train_subject(su, tr, d, p, labels);
-    auto lg = train_local(d, tr, p, nf);
+    const int l1_max =
+        p.has("l1-iterations") ? p.requires_int("l1-iterations") : 100;
+    const int l1_iter = median_iteration(l1_selected, l1_max);
+    std::vector<int> l2_fit, l2_valid;
+    int l2_iter = p.has("l2-iterations") ? p.requires_int("l2-iterations") : 100;
+    if (es > 0) {
+      split_internal_subjects(d, tr, &l2_fit, &l2_valid);
+      auto probe = train_subject(su, l2_fit, d, p, labels, &l2_valid, 0, es);
+      l2_iter = bounded_iteration(probe->best_iteration, l2_iter);
+      outer_l2_selected.push_back(l2_iter);
+    }
+    auto l2 = train_subject(su, tr, d, p, labels, nullptr, l2_iter, 0);
+    auto lg = train_local(d, tr, p, nf, nullptr, l1_iter, 0);
     auto q = predict_local(*lg, d, test, nf);
     for (int i : test) {
       su[i] = summarize_clean(d[i], q[d[i].id], l, p);
       double yy;
       cmd_t::pull_ivar(d[i].id, p.requires("phe"), &yy);
       double pp = predict_subject(*l2, su[i]);
+      outer_id.push_back(d[i].id);
+      outer_fold.push_back(f + 1);
       outer_y.push_back(yy);
       outer_p.push_back(pp);
       outer_null.push_back(fold_null);
@@ -933,23 +1089,41 @@ void dpp_twolevel::fit(param_t &p) {
   }
   emit_metrics("OUTER_OOF", outer_y, outer_p, p);
   emit_null_metrics("OUTER_OOF_NULL", outer_y, outer_p, outer_null, p);
-  auto inn = split_folds(d, all, inner);
-  std::map<std::string, std::vector<double>> oof;
-  for (auto &h : inn) {
-    std::set<int> hs(h.begin(), h.end());
-    std::vector<int> it;
-    for (int i : all)
-      if (!hs.count(i))
-        it.push_back(i);
-    auto lg = train_local(d, it, p, nf);
-    auto q = predict_local(*lg, d, h, nf);
-    oof.insert(q.begin(), q.end());
+
+  writer.id(".", ".");
+  for (int i = 0; i < (int)outer_id.size(); i++) {
+    writer.id(outer_id[i], ".");
+    writer.level("OUTER_OOF", "OOF");
+    writer.value("OBSERVED", outer_y[i]);
+    writer.value("PREDICTED", outer_p[i]);
+    writer.value("NULL_PREDICTED", outer_null[i]);
+    writer.value("OUTER_FOLD", outer_fold[i]);
+    writer.unlevel("OOF");
   }
+  writer.id(".", ".");
+
+  std::vector<int> l1_selected;
+  std::map<std::string, std::vector<double>> oof =
+      crossfit_local(d, all, p, nf, inner, es, &l1_selected);
   std::vector<summary_t> su(d.size());
   for (int i : all)
     su[i] = summarize_clean(d[i], oof[d[i].id], l, p);
-  auto l2 = train_subject(su, all, d, p, labels);
-  auto lg = train_local(d, all, p, nf);
+  const int l1_max =
+      p.has("l1-iterations") ? p.requires_int("l1-iterations") : 100;
+  const int l1_iter = median_iteration(l1_selected, l1_max);
+  std::vector<int> l2_fit, l2_valid;
+  int l2_iter = p.has("l2-iterations") ? p.requires_int("l2-iterations") : 100;
+  if (es > 0) {
+    if (!outer_l2_selected.empty())
+      l2_iter = median_iteration(outer_l2_selected, l2_iter);
+    else {
+      split_internal_subjects(d, all, &l2_fit, &l2_valid);
+      auto probe = train_subject(su, l2_fit, d, p, labels, &l2_valid, 0, es);
+      l2_iter = bounded_iteration(probe->best_iteration, l2_iter);
+    }
+  }
+  auto l2 = train_subject(su, all, d, p, labels, nullptr, l2_iter, 0);
+  auto lg = train_local(d, all, p, nf, nullptr, l1_iter, 0);
   const std::string root = Helper::expand(p.requires("out"));
   lg->save_model(root + ".l1.mod");
   l2->save_model(root + ".l2.mod");
@@ -1001,6 +1175,11 @@ void dpp_twolevel::fit_model_set(param_t &p) {
   std::iota(all.begin(), all.end(), 0);
   int outer = p.has("outer-folds") ? p.requires_int("outer-folds") : 5;
   int inner = p.has("inner-folds") ? p.requires_int("inner-folds") : 5;
+  const int es = p.has("early-stopping-rounds")
+                     ? p.requires_int("early-stopping-rounds")
+                     : 0;
+  if (es < 0)
+    Helper::halt("early-stopping-rounds must be non-negative");
   if (outer < 2 || inner < 2 || d.size() < 3)
     Helper::halt("DPP two-level fit-spec requires at least three subjects and "
                  "outer-folds/inner-folds >=2");
@@ -1009,6 +1188,7 @@ void dpp_twolevel::fit_model_set(param_t &p) {
     outer = (int)d.size();
   std::vector<std::map<std::string, double>> pred(specs.size());
   std::vector<std::map<std::string, double>> null_pred(specs.size());
+  std::vector<std::vector<int>> l2_selected(specs.size());
   auto model_param = [&](const dpp_fit_t::model_spec_t &m) {
     param_t q = p;
     q.add("covar", join_covars(m.covariates));
@@ -1031,7 +1211,20 @@ void dpp_twolevel::fit_model_set(param_t &p) {
           for (int i : tr)
             su[i] = summarize_clean(d[i], {}, l, q);
         std::vector<std::string> labs = summary_labels(ed, q);
-        auto l2 = train_subject(su, tr, d, q, labs);
+        int l2_iter = q.has("l2-iterations") ? q.requires_int("l2-iterations") : 100;
+        if (es > 0) {
+          if (write_models && !l2_selected[&m - &specs[0]].empty())
+            l2_iter = median_iteration(l2_selected[&m - &specs[0]], l2_iter);
+          else {
+            std::vector<int> l2_fit, l2_valid;
+            split_internal_subjects(d, tr, &l2_fit, &l2_valid);
+            auto probe = train_subject(su, l2_fit, d, q, labs, &l2_valid, 0, es);
+            l2_iter = bounded_iteration(probe->best_iteration, l2_iter);
+            if (!write_models)
+              l2_selected[&m - &specs[0]].push_back(l2_iter);
+          }
+        }
+        auto l2 = train_subject(su, tr, d, q, labs, nullptr, l2_iter, 0);
         for (int i : te) {
           summary_t s =
               m.sleep ? summarize_clean(d[i], test_local.at(d[i].id), l, q)
@@ -1064,25 +1257,19 @@ void dpp_twolevel::fit_model_set(param_t &p) {
       if (!ts.count(i))
         tr.push_back(i);
     const double fold_null = mean_outcome(d, tr, p);
-    auto inn = split_folds(d, tr, inner);
     std::map<std::string, std::vector<double>> coof;
     bool need_sleep = false;
     for (const auto &m : specs)
       need_sleep |= m.sleep;
+    std::vector<int> l1_selected;
     if (need_sleep)
-      for (const auto &h : inn) {
-        std::set<int> hs(h.begin(), h.end());
-        std::vector<int> it;
-        for (int i : tr)
-          if (!hs.count(i))
-            it.push_back(i);
-        auto lg = train_local(d, it, p, nf);
-        auto z = predict_local(*lg, d, h, nf);
-        coof.insert(z.begin(), z.end());
-      }
+      coof = crossfit_local(d, tr, p, nf, inner, es, &l1_selected);
     std::map<std::string, std::vector<double>> test_local;
     if (need_sleep) {
-      auto lg = train_local(d, tr, p, nf);
+      const int l1_max =
+          p.has("l1-iterations") ? p.requires_int("l1-iterations") : 100;
+      auto lg = train_local(d, tr, p, nf, nullptr,
+                            median_iteration(l1_selected, l1_max), 0);
       test_local = predict_local(*lg, d, te, nf);
     }
     for (const auto &m : specs) {
@@ -1104,6 +1291,23 @@ void dpp_twolevel::fit_model_set(param_t &p) {
     emit_metrics(specs[mi].id, yy, pp, p);
     emit_null_metrics(specs[mi].id + "_NULL", yy, pp, nn, p);
   }
+  // Preserve subject-level outer-OOF records for every model in a fit-spec
+  // run.  These are paired by subject for contrasts and are written through
+  // the normal database stream, just like the single-model path.
+  writer.id(".", ".");
+  for (int mi = 0; mi < (int)specs.size(); mi++)
+    for (const auto &z : pred[mi]) {
+      double y;
+      if (!cmd_t::pull_ivar(z.first, p.requires("phe"), &y))
+        continue;
+      writer.id(z.first, ".");
+      writer.level(specs[mi].id, "OOF");
+      writer.value("OBSERVED", y);
+      writer.value("PREDICTED", z.second);
+      writer.value("NULL_PREDICTED", null_pred[mi].at(z.first));
+      writer.unlevel("OOF");
+    }
+  writer.id(".", ".");
   for (const auto &c : contrasts) {
     int bi = -1, ai = -1;
     for (int i = 0; i < (int)specs.size(); ++i) {
@@ -1148,7 +1352,7 @@ void dpp_twolevel::fit_model_set(param_t &p) {
         dpp_evaluation::paired_t_test(base_loss, add_loss);
     const dpp_evaluation::permutation_test_result_t paired_permutation =
         dpp_evaluation::paired_permutation_test(base_loss, add_loss);
-    writer.level(c.id, "DPP_CONTRAST");
+    writer.level(c.id, "CONTRAST");
     writer.value("N", (int)mb.n);
     writer.value("BASE_RMSE", mb.rmse);
     writer.value("ADD_RMSE", ma.rmse);
@@ -1171,28 +1375,21 @@ void dpp_twolevel::fit_model_set(param_t &p) {
     writer.value("PAIRED_T", paired_t.statistic);
     writer.value("PAIRED_T_P", paired_t.p_value);
     writer.value("PERM_P", paired_permutation.p_value);
-    writer.unlevel("DPP_CONTRAST");
+    writer.unlevel("CONTRAST");
   }
   for (const auto &m : specs) {
     std::vector<int> none;
     std::map<std::string, std::vector<double>> coof;
     bool need = m.sleep;
-    if (need) {
-      auto inn = split_folds(d, all, inner);
-      for (const auto &h : inn) {
-        std::set<int> hs(h.begin(), h.end());
-        std::vector<int> it;
-        for (int i : all)
-          if (!hs.count(i))
-            it.push_back(i);
-        auto lg = train_local(d, it, p, nf);
-        auto z = predict_local(*lg, d, h, nf);
-        coof.insert(z.begin(), z.end());
-      }
-    }
+    std::vector<int> l1_selected;
+    if (need)
+      coof = crossfit_local(d, all, p, nf, inner, es, &l1_selected);
     const std::string root = Helper::expand(p.requires("out") + "." + m.id);
     if (need) {
-      auto lg = train_local(d, all, p, nf);
+      const int l1_max =
+          p.has("l1-iterations") ? p.requires_int("l1-iterations") : 100;
+      auto lg = train_local(d, all, p, nf, nullptr,
+                            median_iteration(l1_selected, l1_max), 0);
       lg->save_model(root + ".l1.mod");
       emit_importance(m.id, *lg, vector_labels(p, nf));
     }

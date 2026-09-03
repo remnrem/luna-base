@@ -124,6 +124,12 @@ public:
   void output_plaintext( const std::string & path );
   void output_close();
 
+  // Write a set of return tables using the native Luna database writer.
+  void write_db( const std::string & path,
+                 const std::string & id,
+                 const std::string & file,
+                 const rtables_return_t & tables );
+
   //
   // Import/read helper functions
   //

@@ -844,6 +844,79 @@ void lunapi_t::output_attach( const std::string & path )
   writer.attach( path );
 }
 
+void lunapi_t::write_db( const std::string & path,
+                         const std::string & id,
+                         const std::string & file,
+                         const rtables_return_t & tables )
+{
+  writer.clear();
+  writer.attach( path );
+  writer.set_types();
+
+  int cmd_number = 1;
+  std::map<std::string,int> command_numbers;
+  for ( auto const & cc : tables )
+    {
+      const auto found_cmd = command_numbers.find( cc.first );
+      if ( found_cmd == command_numbers.end() )
+        command_numbers[ cc.first ] = cmd_number++;
+      for ( auto const & ss : cc.second )
+        {
+          const std::string & cmd = cc.first;
+          const std::string & strata = ss.first;
+          const std::vector<std::string> & cols = std::get<0>( ss.second );
+          const rtable_data_t & data = std::get<1>( ss.second );
+          if ( cols.empty() || data.size() != cols.size() ) continue;
+
+          std::vector<std::string> factors;
+          if ( strata != "." )
+            {
+              std::stringstream in( strata );
+              std::string factor;
+              while ( std::getline( in, factor, '_' ) )
+                if ( ! factor.empty() ) factors.push_back( factor );
+            }
+
+          writer.cmd( cmd, command_numbers[ cmd ], "" );
+          const int nrows = data[0].size();
+          for ( int r = 0; r < nrows; ++r )
+            {
+              std::string row_id = id;
+              if ( ! data[0][r].valueless_by_exception() &&
+                   std::holds_alternative<std::string>( data[0][r] ) )
+                row_id = std::get<std::string>( data[0][r] );
+              writer.id( row_id, file );
+
+              const int factor_offset = row_id == id ? 1 : 1;
+              for ( int f = 0; f < (int)factors.size() && factor_offset + f < (int)cols.size(); ++f )
+                {
+                  const auto & v = data[factor_offset + f][r];
+                  if ( std::holds_alternative<std::string>( v ) )
+                    writer.level( std::get<std::string>( v ), factors[f] );
+                  else if ( std::holds_alternative<int>( v ) )
+                    writer.level( std::get<int>( v ), factors[f] );
+                  else if ( std::holds_alternative<double>( v ) )
+                    writer.level( std::get<double>( v ), factors[f] );
+                }
+
+              for ( int c = factor_offset + factors.size(); c < (int)cols.size(); ++c )
+                {
+                  const auto & v = data[c][r];
+                  if ( std::holds_alternative<double>( v ) )
+                    writer.value( cols[c], std::get<double>( v ) );
+                  else if ( std::holds_alternative<int>( v ) )
+                    writer.value( cols[c], std::get<int>( v ) );
+                  else if ( std::holds_alternative<std::string>( v ) )
+                    writer.value( cols[c], std::get<std::string>( v ) );
+                }
+              writer.unlevel();
+            }
+        }
+    }
+  writer.commit();
+  writer.close();
+}
+
 void lunapi_t::output_plaintext( const std::string & path )
 {
   _file_output_path = path;
