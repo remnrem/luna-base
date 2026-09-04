@@ -5450,7 +5450,7 @@ void cmddefs_t::init()
 
   add_param( "HILBERT" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
   add_param( "HILBERT" , "f" , "0.5,4" , "Lower and upper transition frequencies" );
-  add_param( "HILBERT" , "ripple" , "0.02" , "FIR filter ripple (as proportion)" );
+  add_param( "HILBERT" , "ripple" , "0.01" , "FIR filter ripple (as proportion)" );
   add_param( "HILBERT" , "tw" , "0.5" , "Transition width (in Hz)" );
   add_param( "HILBERT" , "tag" , "v1" , "Optional tag to be added to new signals" );
   add_param( "HILBERT" , "phase" , "" , "As well as magnitude, generate signal with instantaneous phase" );
@@ -6709,45 +6709,8 @@ void cmddefs_t::init()
   add_cmd( "interval" , "SIGDYN" , "Temporal dynamics of a signal" );
   add_url( "SIGDYN" , "dynamics/#sigdyn" );
   add_verb( "SIGDYN" ,
-            "Summarizes the temporal dynamics of any existing epoched or\n"
-            "continuous signal (e.g. SpO2, heart rate, an EEG power channel,\n"
-            "a posterior-probability trace) in a way that is comparable\n"
-            "across individuals. Three complementary views, all optional:\n"
-            "\n"
-            "  1) CH / CH,SS / CH,SS,STABLE / CH,C / CH,SS,C : simple N/MEAN/\n"
-            "     SD/MIN/MAX/RANGE of the per-epoch signal mean, overall and\n"
-            "     stratified by sleep stage, local stage stability (STABLE:\n"
-            "     STABLE/TRANS, as HDSTATS), and/or NREM cycle;\n"
-            "\n"
-            "  2) CH,VAR,QD(,Q) : whole-recording trend/decile/NREM-cycle\n"
-            "     summary, via the same engine as EPDYN's dynam= submodule\n"
-            "     (e.g. as used by PSD) -- all 'dynam-*' parameters documented\n"
-            "     for EPDYN apply here too;\n"
-            "\n"
-            "  3) CH,ANNOT(,SEC) : annotation/hypnogram-anchored peri-event\n"
-            "     averaging (a superset of MEANS' M/S/L/R), auto-seeded from\n"
-            "     HYPNO's landmark/cycle/transition annotations (from a prior\n"
-            "     'HYPNO annot=' run) and/or any annot= annotation class. Each\n"
-            "     instance contributes to a given SEC bin only if it has\n"
-            "     complete coverage of that bin's full sample range (no\n"
-            "     partial/thinned bins); an instance near the start/end of the\n"
-            "     recording or a discontinuity simply forms fewer bins, rather\n"
-            "     than being dropped outright, and the ANNOT summary row is\n"
-            "     still built from whichever bins/instances are complete.\n"
-            "     require-full=T instead requires an instance's whole window to\n"
-            "     be available (strict, all-or-nothing per instance). SEC\n"
-            "     offsets are always exactly k*inc (.. -2*inc -inc 0 inc 2*inc\n"
-            "     ..), symmetric about a 0 anchor; anchor= (start/middle/\n"
-            "     end, default start) picks where in an annotation instance's\n"
-            "     own interval that anchor sits (irrelevant for a 0-duration/\n"
-            "     point instance), and bin-align= (start/middle/end, default\n"
-            "     middle) picks which part of each bin sits at its labeled\n"
-            "     offset. w= sets the half-window (default 60s, symmetric\n"
-            "     +/-w); two comma-separated values (w=pre,post) instead give\n"
-            "     an asymmetric window, e.g. w=30,90 for -30s to +90s. bin=/\n"
-            "     inc= set the SEC bin width/step (inc < bin overlaps, default\n"
-            "     inc = bin, tiled); min-n= drops sparse offsets/anchors\n"
-            "     entirely." );
+            "Summarizes signal dynamics overall, by stage/cycle, around\n"
+            "annotations, and optionally on a normalized HYPNO-night template." );
   add_param( "SIGDYN" , "sig" , "SpO2" , "One or more signals to summarize" );
   add_param( "SIGDYN" , "epoch-stats" , "F" , "Disable simple stage/cycle/stability-stratified descriptive statistics (default T)" );
   add_param( "SIGDYN" , "stable-flank" , "1" , "Number of flanking epochs on each side that must share the same stage for an epoch to be considered STABLE" );
@@ -6763,6 +6726,7 @@ void cmddefs_t::init()
   add_param( "SIGDYN" , "bin" , "10" , "Bin width in seconds for CH,ANNOT,SEC (default: native per-sample resolution)" );
   add_param( "SIGDYN" , "inc" , "5" , "Step between bins in seconds; requires bin=; < bin overlaps, > bin gaps (default: = bin)" );
   add_param( "SIGDYN" , "require-full" , "T" , "Require an instance's entire window to be available, rather than allowing partial contributions (default F)" );
+  add_param( "SIGDYN" , "norm-night" , "T" , "Emit a normalized HYPNO-night template (C0_PRE_W, per-cycle NREM quintiles/REM, pooled C4+, CE_POST_W) when HYPNO annotations are present (default T; use F to disable)" );
 
   add_table( "SIGDYN" , "CH" , "Overall (all epochs) descriptive statistics of the per-epoch signal mean" );
   add_var( "SIGDYN" , "CH" , "N" , "Number of epochs" );
@@ -6816,6 +6780,16 @@ void cmddefs_t::init()
   add_var( "SIGDYN" , "CH,ANNOT,SEC" , "M" , "Mean aligned signal value" );
   add_var( "SIGDYN" , "CH,ANNOT,SEC" , "SD" , "SD of aligned signal values" );
   add_var( "SIGDYN" , "CH,ANNOT,SEC" , "MD" , "Median aligned signal value" );
+
+  add_table( "SIGDYN" , "CH,NH" , "Signal summaries on the normalized HYPNO-night template (optional norm-night=T)" );
+  add_var( "SIGDYN" , "CH,NH" , "C" , "Canonical cycle group (0, 1, 2, 3, or 4 for C4+)" );
+  add_var( "SIGDYN" , "CH,NH" , "PHASE" , "Canonical phase (PRE_W, NREM, or REM)" );
+  add_var( "SIGDYN" , "CH,NH" , "Q" , "NREM quintile (1-5; zero for PRE_W/REM)" );
+  add_var( "SIGDYN" , "CH,NH" , "DUR" , "Duration of contributing epochs in seconds" );
+  add_var( "SIGDYN" , "CH,NH" , "MEAN" , "Mean of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,NH" , "SD" , "SD of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,NH" , "MIN" , "Minimum per-epoch signal mean" );
+  add_var( "SIGDYN" , "CH,NH" , "MAX" , "Maximum per-epoch signal mean" );
 
   //
   // DPP
@@ -6877,7 +6851,7 @@ void cmddefs_t::init()
             "the entire corpus regardless." );
   add_param( "DPP" , "sig" , "C3" , "Signal(s) to featurize (zero-config default mode)" );
   add_param( "DPP" , "classic" , "F" , "Use the traditional signal-window feature extraction path instead of vector observations" );
-  add_param( "DPP" , "vector-features" , "RAW,CONTEXT,GEOM,DYN" , "Vector-mode feature groups: RAW, CONTEXT, GEOM, DYN" );
+  add_param( "DPP" , "vector-features" , "EMBEDDING,HYPNOGRAM,EMBEDDING_GEOMETRY,EMBEDDING_DYNAMICS" , "Vector-mode feature groups: EMBEDDING, DSP, HYPNOGRAM, EMBEDDING_GEOMETRY, EMBEDDING_DYNAMICS" );
   add_param( "DPP" , "vector-time" , "RELATIVE" , "Vector-mode time context: RELATIVE=position within retained rows; ONSET=elapsed hours from first retained row; EDF=elapsed position from EDF start" );
   add_param( "DPP" , "hypno-context" , "T" , "Add vector-mode stage/cycle context from the existing epoched hypnogram" );
   add_param( "DPP" , "two-level" , "T" , "--dpp-fit vector mode: fit a cross-fitted local (row-level) model followed by a subject-level summary model; use two-level=F explicitly for direct row-level fitting" );
@@ -6890,6 +6864,7 @@ void cmddefs_t::init()
   add_param( "DPP" , "l1-config" , "" , "--dpp-fit two-level: Level-1 LightGBM config; overrides config=, otherwise uses scale-aware built-in defaults" );
   add_param( "DPP" , "l2-config" , "" , "--dpp-fit two-level: Level-2 LightGBM config; overrides config=, otherwise uses scale-aware built-in defaults" );
   add_param( "DPP" , "spec" , "feats.dpp" , "Feature-specification file (required for connectivity/filtering/multiple windows)" );
+  add_param( "DPP" , "dsp-sig" , "" , "Vector-mode DSP: raw signal(s) used by spec= when DSP is included in vector-features=" );
   add_param( "DPP" , "windows" , "30,60,300" , "Window length(s) in seconds (default 30)" );
   add_param( "DPP" , "step" , "30" , "Output step in seconds, independent of window length (default 30)" );
   add_param( "DPP" , "show-features" , "T" , "Emit the interactive SEC x VAR feature table via the normal output/db mechanism (default F -- off, since a cohort-level data=/hypno= corpus-writing run has no use for it, and without an explicit -o it would otherwise print the full table to stdout for every individual)" );

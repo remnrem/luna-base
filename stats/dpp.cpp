@@ -60,6 +60,14 @@
 extern writer_t writer;
 extern logger_t logger;
 
+// Set only during the vector-mode DSP bridge.  This keeps the existing
+// classic extractor as the single implementation while allowing it to return
+// an aligned matrix without a temporary on-disk corpus.
+namespace dpp_classic {
+static dpp_matrix_t *capture_target = NULL;
+static const std::vector<double> *capture_times = NULL;
+}
+
 // DPP stage 2 feature-extraction engine. Reuses existing computational
 // primitives throughout (PWELCH, spectral_slope_helper, MiscMath::hjorth/
 // skewness/kurtosis/clipped/flat/outliers, mse_t, hilbert_t, ipc_t,
@@ -350,7 +358,10 @@ void dsptools::dpp(edf_t &edf, param_t &param) {
   if (has_spec_file) {
     specs.read(param.value("spec"));
   } else {
-    signal_list_t sl = edf.header.signal_list(param.requires("sig"), true);
+    const std::string sig = param.has("dsp-sig")
+                                ? param.requires("dsp-sig")
+                                : param.requires("sig");
+    signal_list_t sl = edf.header.signal_list(sig, true);
     if (sl.size() == 0) {
       logger << "  *** no signals selected for DPP\n";
       return;
@@ -613,9 +624,49 @@ void dsptools::dpp(edf_t &edf, param_t &param) {
   // main loop
   //
 
-  for (double t = step_sec; t <= duration_sec; t += step_sec) {
+  std::vector<double> output_times;
+  if (dpp_classic::capture_times)
+    output_times = *dpp_classic::capture_times;
+  else
+    for (double t = step_sec; t <= duration_sec; t += step_sec)
+      output_times.push_back(t);
 
-    const uint64_t t_tp = (uint64_t)std::llround(t * globals::tp_1sec);
+  const bool aligned_capture = dpp_classic::capture_times != NULL;
+  double nominal_capture_step = 0;
+  if (aligned_capture && output_times.size() > 1) {
+    for (size_t i = 1; i < output_times.size(); i++) {
+      const double d = output_times[i] - output_times[i - 1];
+      if (d > 0) {
+        nominal_capture_step = d;
+        break;
+      }
+    }
+    if (nominal_capture_step <= 0)
+      Helper::halt("DPP vector/DSP alignment requires increasing timestamps");
+    for (const dpp_spec_t &s : specs.specs)
+      if (std::fabs(s.window_sec - nominal_capture_step) > 1e-6)
+        Helper::halt("merged vector/DSP mode requires each DSP window to match "
+                     "the vector interval (set windows= to the vector step)");
+  }
+
+  for (size_t output_index = 0; output_index < output_times.size();
+       output_index++) {
+    const double t = output_times[output_index];
+    bool capture_interval_ok = true;
+    if (aligned_capture) {
+      capture_interval_ok = output_index + 1 < output_times.size();
+      if (capture_interval_ok) {
+        const double dt = output_times[output_index + 1] - t;
+        capture_interval_ok = dt > 0 &&
+                              dt <= 1.5 * nominal_capture_step + 1e-6;
+      }
+    }
+
+    const double feature_time = aligned_capture && capture_interval_ok
+                                    ? output_times[output_index + 1]
+                                    : t;
+    const uint64_t t_tp =
+        (uint64_t)std::llround(feature_time * globals::tp_1sec);
 
     win_cache.clear();
 
@@ -655,6 +706,12 @@ void dsptools::dpp(edf_t &edf, param_t &param) {
       const dpp_spec_t &spec = specs.specs[si];
       const int ncol = spec.cols();
       std::vector<double> vals(ncol, std::numeric_limits<double>::quiet_NaN());
+
+      if (aligned_capture && !capture_interval_ok) {
+        for (int k = 0; k < ncol; k++)
+          row_vals.push_back(vals[k]);
+        continue;
+      }
 
       const std::string spec_label =
           spec.label_root() + ".w" + Helper::dbl2str(spec.window_sec);
@@ -986,6 +1043,12 @@ void dsptools::dpp(edf_t &edf, param_t &param) {
     }
   }
 
+  if (dpp_classic::capture_target) {
+    *dpp_classic::capture_target = mat;
+    dpp_classic::capture_target = NULL;
+    return;
+  }
+
   if (write_binary)
     dpp_io::save(param.value("data"), mat, n_features_total, false);
 
@@ -1000,4 +1063,20 @@ void dsptools::dpp(edf_t &edf, param_t &param) {
     Helper::halt("LGBM support not compiled in");
 #endif
   }
+}
+
+bool dpp_classic::extract(edf_t &edf, param_t &param,
+                          const std::vector<double> &times,
+                          dpp_matrix_t *out) {
+  if (!out)
+    return false;
+  param_t q = param;
+  q.add_hidden("dpp-classic-capture", "T");
+  dpp_classic::capture_target = out;
+  dpp_classic::capture_times = &times;
+  dsptools::dpp(edf, q);
+  const bool ok = !out->X.empty() || !out->time_sec.empty();
+  dpp_classic::capture_target = NULL;
+  dpp_classic::capture_times = NULL;
+  return ok;
 }

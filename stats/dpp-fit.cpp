@@ -404,7 +404,7 @@ void dpp_fit_t::build_feature_labels() {
     if ((int)full_labels.size() != n_features) {
       full_labels.clear();
       for (int i = 0; i < n_features; i++)
-        full_labels.push_back("VEC.F" + Helper::int2str(i + 1));
+        full_labels.push_back("VEC.EMBEDDING.F" + Helper::int2str(i + 1));
     }
     return;
   }
@@ -1721,7 +1721,7 @@ void dpp_fit::apply(edf_t &edf, param_t &param, const dpp_specs_t &specs,
   if (dpp_vector::enabled(param)) {
     expected.resize(mat.X.empty() ? 0 : mat.X[0].size());
     for (int i = 0; i < (int)expected.size(); i++)
-      expected[i] = "VEC.F" + Helper::int2str(i + 1);
+      expected[i] = "VEC.EMBEDDING.F" + Helper::int2str(i + 1);
   } else
     expected = dpp_fit::feature_labels(specs);
   if (manifest.feature_labels.size() != expected.size())

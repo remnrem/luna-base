@@ -679,6 +679,13 @@ bool StratOutDBase::release()
   sql.finalise( stmt_lookup_value_by_strata);
   sql.finalise( stmt_lookup_value_by_strata_and_timepoint);
   sql.finalise( stmt_count_values );
+  sql.finalise( stmt_lookup_value_by_null_strata);
+  sql.finalise( stmt_enumerate);
+  sql.finalise( stmt_enumerate_null_strata);
+  sql.finalise( stmt_dump_vars_by_strata);
+  sql.finalise( stmt_count_strata);
+  sql.finalise( stmt_match_vars);
+  sql.finalise( stmt_match_cmds);
   return true;
 }
 

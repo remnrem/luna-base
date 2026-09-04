@@ -131,6 +131,153 @@ namespace {
     return is_cycle_marker( name );
   }
 
+  struct normalized_segment_t
+  {
+    std::string label;
+    int cycle;
+    std::string phase;
+    int quintile;
+    std::vector<int> epochs;
+  };
+
+  // Build a deliberately conservative, plotting-oriented sleep template
+  // from HYPNO's epoch annotations.  NREM quintiles are rank-based within
+  // the NREM epochs of each cycle, so N3 is not required and missing REM is
+  // harmless.  Cycles 4 and later share the C4P template position.
+  std::vector<normalized_segment_t> normalized_segments(
+      const std::vector<std::string> & stage,
+      const std::vector<int> & cycle )
+  {
+    std::vector<normalized_segment_t> out;
+
+    std::vector<int> pre_w;
+    bool seen_sleep = false;
+    for (int e=0; e<(int)stage.size(); e++)
+      {
+        const bool sleep = stage[e] == "N1" || stage[e] == "N2" ||
+          stage[e] == "N3" || stage[e] == "NREM4" || stage[e] == "R";
+        if ( sleep ) seen_sleep = true;
+        else if ( ! seen_sleep && stage[e] == "W" ) pre_w.push_back( e );
+      }
+
+    if ( ! pre_w.empty() )
+      {
+        normalized_segment_t s;
+        s.label = "C0_PRE_W"; s.cycle = 0; s.phase = "PRE_W";
+        s.quintile = 0; s.epochs = pre_w;
+        out.push_back( s );
+      }
+
+    std::vector<int> post_w;
+    bool seen_sleep_from_end = false;
+    for (int e=(int)stage.size()-1; e>=0; e--)
+      {
+        const bool sleep = stage[e] == "N1" || stage[e] == "N2" ||
+          stage[e] == "N3" || stage[e] == "NREM4" || stage[e] == "R";
+        if ( sleep ) seen_sleep_from_end = true;
+        else if ( ! seen_sleep_from_end && stage[e] == "W" ) post_w.push_back( e );
+      }
+    std::reverse( post_w.begin() , post_w.end() );
+
+    std::map<int,std::vector<int> > nrem, rem;
+    for (int e=0; e<(int)stage.size(); e++)
+      {
+        if ( cycle[e] < 1 ) continue;
+        if ( stage[e] == "N1" || stage[e] == "N2" ||
+             stage[e] == "N3" || stage[e] == "NREM4" )
+          nrem[ cycle[e] ].push_back( e );
+        else if ( stage[e] == "R" )
+          rem[ cycle[e] ].push_back( e );
+      }
+
+    std::set<int> cycles;
+    for (std::map<int,std::vector<int> >::const_iterator i=nrem.begin(); i!=nrem.end(); ++i)
+      cycles.insert( i->first );
+    for (std::map<int,std::vector<int> >::const_iterator i=rem.begin(); i!=rem.end(); ++i)
+      cycles.insert( i->first );
+
+    for (std::set<int>::const_iterator ci=cycles.begin(); ci!=cycles.end(); ++ci)
+      {
+        const int c = *ci;
+        const int cg_num = c >= 4 ? 4 : c;
+        const std::string cg = c >= 4 ? "C4P" : "C" + Helper::int2str( c );
+        std::map<int,std::vector<int> >::const_iterator ni = nrem.find( c );
+        if ( ni != nrem.end() && ! ni->second.empty() )
+          {
+            const int n = ni->second.size();
+            for (int q=0; q<5; q++)
+              {
+                const int lo = ( q * n ) / 5;
+                const int hi = ( (q + 1) * n ) / 5;
+                if ( hi <= lo ) continue;
+
+                normalized_segment_t s;
+                s.cycle = cg_num; s.phase = "NREM"; s.quintile = q + 1;
+                s.label = cg + "_NREM_Q" + Helper::int2str( q + 1 );
+                s.epochs.assign( ni->second.begin() + lo , ni->second.begin() + hi );
+                out.push_back( s );
+              }
+          }
+
+        std::map<int,std::vector<int> >::const_iterator ri = rem.find( c );
+        if ( ri != rem.end() && ! ri->second.empty() )
+          {
+            normalized_segment_t s;
+            s.cycle = cg_num; s.phase = "REM"; s.quintile = 0;
+            s.label = cg + "_REM";
+            s.epochs = ri->second;
+            out.push_back( s );
+          }
+      }
+
+    // Complete the canonical template even when a cycle/phase is absent.
+    // These empty definitions are retained so cohort output has a stable
+    // set of NH levels and can be plotted without reconstructing missing
+    // rows downstream.
+    std::set<std::string> present;
+    for (std::vector<normalized_segment_t>::const_iterator si=out.begin(); si!=out.end(); ++si)
+      present.insert( si->label );
+
+    if ( present.find( "C0_PRE_W" ) == present.end() )
+      {
+        normalized_segment_t s;
+        s.label = "C0_PRE_W"; s.cycle = 0; s.phase = "PRE_W"; s.quintile = 0;
+        out.push_back( s );
+      }
+
+    for (int c=1; c<=4; c++)
+      {
+        const std::string cg = c == 4 ? "C4P" : "C" + Helper::int2str( c );
+        for (int q=1; q<=5; q++)
+          {
+            const std::string label = cg + "_NREM_Q" + Helper::int2str( q );
+            if ( present.find( label ) == present.end() )
+              {
+                normalized_segment_t s;
+                s.label = label; s.cycle = c; s.phase = "NREM"; s.quintile = q;
+                out.push_back( s );
+              }
+          }
+        const std::string rlabel = cg + "_REM";
+        if ( present.find( rlabel ) == present.end() )
+          {
+            normalized_segment_t s;
+            s.label = rlabel; s.cycle = c; s.phase = "REM"; s.quintile = 0;
+            out.push_back( s );
+          }
+      }
+
+    if ( present.find( "CE_POST_W" ) == present.end() )
+      {
+        normalized_segment_t s;
+        s.label = "CE_POST_W"; s.cycle = 0; s.phase = "POST_W"; s.quintile = 0;
+        s.epochs = post_w;
+        out.push_back( s );
+      }
+
+    return out;
+  }
+
   // nearest-sample index in 'tp' for time-point 't' (tp assumed sorted ascending)
   int nearest_sample( const std::vector<uint64_t> & tp , uint64_t t )
   {
@@ -282,6 +429,7 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
   {
     logger << "  SIGDYN options:\n"
 	   << "    epoch-stats  = " << ( ( param.has("epoch-stats") ? param.yesno("epoch-stats") : true ) ? "T" : "F" ) << "\n"
+	   << "    norm-night   = " << ( ( param.has("norm-night") ? param.yesno("norm-night") : true ) ? "T" : "F" ) << "\n"
 	   << "    stable-flank = " << ( param.has("stable-flank") ? param.value("stable-flank") : "1" ) << "\n"
 	   << "    annot        = " << ( param.has("annot") ? param.value("annot") : "." ) << "\n"
 	   << "    hypno-annot  = " << ( ( param.has("hypno-annot") ? param.yesno("hypno-annot") : true ) ? "T" : "F" ) << "\n"
@@ -610,6 +758,127 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
   else
     {
       logger << "  *** data not epoched, skipping SIGDYN whole-recording trend/decile analysis (mode 1)\n";
+    }
+
+
+  //
+  // ---------------- Normalized HYPNO night ----------------
+  //
+  // A plotting-oriented coordinate system: pre-sleep wake, then NREM
+  // quintiles and (when present) REM for C1, C2, C3 and pooled C4+.
+  // This is intentionally annotation-driven and does not require N3,
+  // REM in every cycle, or pre-sleep wake.  Empty/degenerate components
+  // are omitted rather than causing SIGDYN to fail.
+  //
+
+  if ( ( ! param.has("norm-night") || param.yesno("norm-night") ) && edf.timeline.epoched() )
+    {
+      std::vector<int> epoch_idx;
+      std::vector<std::string> stage;
+      std::vector<int> cycle;
+      bool any_hypno = false;
+
+      edf.timeline.first_epoch();
+      while ( 1 )
+        {
+          const int epoch = edf.timeline.next_epoch();
+          if ( epoch == -1 ) break;
+          epoch_idx.push_back( epoch );
+
+          std::string stg = "";
+          if      ( edf.timeline.epoch_annotation( "W" , epoch ) ) stg = "W";
+          else if ( edf.timeline.epoch_annotation( "N1" , epoch ) ) stg = "N1";
+          else if ( edf.timeline.epoch_annotation( "N2" , epoch ) ) stg = "N2";
+          else if ( edf.timeline.epoch_annotation( "N3" , epoch ) ) stg = "N3";
+          else if ( edf.timeline.epoch_annotation( "NREM4" , epoch ) ) stg = "NREM4";
+          else if ( edf.timeline.epoch_annotation( "R" , epoch ) ) stg = "R";
+          if ( ! stg.empty() ) any_hypno = true;
+          stage.push_back( stg );
+
+          int c = 0;
+          for (int k=1; k<=8; k++)
+            if ( edf.timeline.epoch_annotation( "_NREMC_" + Helper::int2str(k) , epoch ) )
+              { c = k; any_hypno = true; break; }
+          cycle.push_back( c );
+        }
+
+      if ( ! any_hypno )
+        logger << "  *** SIGDYN norm-night=T but no HYPNO stage/cycle annotations found: skipping\n";
+      else
+        {
+          const std::vector<normalized_segment_t> segs =
+            normalized_segments( stage , cycle );
+
+          if ( segs.empty() )
+            logger << "  *** SIGDYN normalized HYPNO night has no usable segments: skipping\n";
+          else
+            {
+              logger << "  SIGDYN normalized HYPNO night: " << segs.size()
+                     << " segment definitions\n";
+
+              for (int s=0; s<ns; s++)
+                {
+                  if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+
+                  writer.level( signals.label(s) , globals::signal_strat );
+
+                  // C4+ can contain multiple actual cycles.  Combine those
+                  // observations into the same canonical segment label.
+                  std::map<std::string,std::vector<int> > epochs_by_label;
+                  std::map<std::string,normalized_segment_t> meta;
+                  for (int j=0; j<(int)segs.size(); j++)
+                    {
+                      epochs_by_label[ segs[j].label ].insert(
+                        epochs_by_label[ segs[j].label ].end(),
+                        segs[j].epochs.begin(), segs[j].epochs.end() );
+                      meta[ segs[j].label ] = segs[j];
+                    }
+
+                  for (std::map<std::string,std::vector<int> >::const_iterator si=epochs_by_label.begin();
+                       si!=epochs_by_label.end(); ++si)
+                    {
+                      long long n = 0;
+                      double sum = 0, sumsq = 0, mn = 0, mx = 0, dur = 0;
+                      for (std::vector<int>::const_iterator ei=si->second.begin(); ei!=si->second.end(); ++ei)
+                        {
+                          const interval_t interval = edf.timeline.epoch( epoch_idx[*ei] );
+                          const slice_t slice( edf , signals(s) , interval );
+                          const std::vector<double> * d = slice.pdata();
+                          if ( d->empty() ) continue;
+                          const double v = MiscMath::mean( *d );
+                          if ( n == 0 ) mn = mx = v;
+                          else { if ( v < mn ) mn = v; if ( v > mx ) mx = v; }
+                          ++n; sum += v; sumsq += v*v;
+                          dur += interval.duration_sec();
+                        }
+                      const normalized_segment_t & m = meta[ si->first ];
+                      const double mean = n > 0 ? sum / n : 0;
+                      double sd = 0;
+                      if ( n > 1 )
+                        {
+                          sd = ( sumsq - n * mean * mean ) / ( n - 1 );
+                          sd = std::sqrt( sd > 0 ? sd : 0 );
+                        }
+
+                      writer.level( si->first , "NH" );
+                      writer.value( "C" , m.cycle );
+                      writer.value( "PHASE" , m.phase );
+                      writer.value( "Q" , m.quintile );
+                      writer.value( "DUR" , dur );
+                      if ( n > 0 )
+                        {
+                          writer.value( "MEAN" , mean );
+                          writer.value( "SD" , sd );
+                          writer.value( "MIN" , mn );
+                          writer.value( "MAX" , mx );
+                        }
+                      writer.unlevel( "NH" );
+                    }
+
+                  writer.unlevel( globals::signal_strat );
+                }
+            }
+        }
     }
 
 

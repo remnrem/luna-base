@@ -155,7 +155,7 @@ summary_t summarize(const dpp_matrix_t &m, const std::vector<double> &score,
   summary_t s;
   if (has(g, "STAGE") && !l.context)
     Helper::halt(
-        "DPP two-level STAGE summaries require CONTEXT in vector-features");
+        "DPP two-level STAGE summaries require HYPNOGRAM in vector-features");
 
   std::vector<std::vector<double>> raw(d), early_raw(d), late_raw(d),
       nrem_raw(d), rem_raw(d);
@@ -541,7 +541,7 @@ std::vector<std::string> vector_labels(const param_t &p, const int nf) {
   if ((int)x.size() != nf) {
     x.clear();
     for (int i = 0; i < nf; i++)
-      x.push_back("VEC.F" + Helper::int2str(i + 1));
+      x.push_back("VEC.EMBEDDING.F" + Helper::int2str(i + 1));
   }
   return x;
 }
@@ -1024,7 +1024,7 @@ void dpp_twolevel::fit(param_t &p) {
         Helper::halt("DPP two-level: inconsistent Level-1 feature count");
   const dpp_vector::layout_t l = dpp_vector::layout(ed, p);
   if (l.raw_offset < 0 || l.raw_offset + ed > nf)
-    Helper::halt("DPP two-level requires RAW embedding columns");
+    Helper::halt("DPP two-level requires EMBEDDING columns");
   const std::vector<std::string> labels = summary_labels(ed, p), g = groups(p);
   std::vector<int> all(d.size());
   std::iota(all.begin(), all.end(), 0);
@@ -1170,7 +1170,7 @@ void dpp_twolevel::fit_model_set(param_t &p) {
         Helper::halt("DPP two-level: inconsistent Level-1 feature count");
   const dpp_vector::layout_t l = dpp_vector::layout(ed, p);
   if (l.raw_offset < 0 || l.raw_offset + ed > nf)
-    Helper::halt("DPP two-level requires RAW embedding columns");
+    Helper::halt("DPP two-level requires EMBEDDING columns");
   std::vector<int> all(d.size());
   std::iota(all.begin(), all.end(), 0);
   int outer = p.has("outer-folds") ? p.requires_int("outer-folds") : 5;
@@ -1398,6 +1398,7 @@ void dpp_twolevel::fit_model_set(param_t &p) {
   }
   logger << "  wrote " << specs.size() << " two-level DPP model(s) and "
          << contrasts.size() << " contrast(s)\n";
+  writer.unlevel();
 }
 
 void dpp_twolevel::apply(edf_t &edf, param_t &p, const dpp_matrix_t &m) {

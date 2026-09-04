@@ -22,8 +22,11 @@
 #ifndef __LUNA_DPP_H__
 #define __LUNA_DPP_H__
 
+#include <vector>
+
 struct edf_t;
 struct param_t;
+struct dpp_matrix_t;
 
 namespace dsptools {
 // DPP stage 2: generic multiscale feature-extraction over trailing,
@@ -32,5 +35,9 @@ namespace dsptools {
 // orchestrates. No train=/model= modes yet (stage 3).
 void dpp(edf_t &edf, param_t &param);
 } // namespace dsptools
+
+namespace dpp_classic {
+bool extract(edf_t &, param_t &, const std::vector<double> &, dpp_matrix_t *);
+} // namespace dpp_classic
 
 #endif

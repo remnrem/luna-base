@@ -2440,6 +2440,31 @@ std::string Helper::incexc( const std::string & xx )
 }
 
 
+static bool split_list_reference( const std::string & x , std::string * name , std::string * index )
+{
+  const std::string::size_type p = x.find( '(' );
+  if ( p == std::string::npos || p == 0 || x.size() < p + 2 || x[x.size()-1] != ')' ) return false;
+
+  int depth = 0;
+  for (std::string::size_type i=p; i<x.size(); ++i)
+    {
+      if ( x[i] == '(' ) ++depth;
+      else if ( x[i] == ')' )
+	{
+	  --depth;
+	  if ( depth == 0 && i != x.size()-1 ) return false;
+	  if ( depth < 0 ) return false;
+	}
+    }
+
+  if ( depth != 0 ) return false;
+
+  *name = x.substr( 0 , p );
+  *index = x.substr( p + 1 , x.size() - p - 2 );
+  return true;
+}
+
+
 void Helper::swap_in_variables( std::string * t , std::map<std::string,std::string> * vars , const bool allow_missing , const bool silent )
 {
 
@@ -2616,7 +2641,40 @@ void Helper::swap_in_variables( std::string * t , std::map<std::string,std::stri
 		  s += ( val ? "1" : "0" );
 		  break;
 		}
-  	      else if ( vars->find( varname ) == vars->end() )
+	      else
+		{
+		  // List extraction: ${name(index)}.  Resolve nested variables in
+		  // the reference first, then use 1-based indexing into the
+		  // comma-delimited value.  This is deliberately read-only: indexed
+		  // assignment is not supported.
+		  std::string list_name, list_index;
+		  if ( split_list_reference( varname , &list_name , &list_index ) )
+		    {
+		      Helper::swap_in_variables( &list_index , vars , allow_missing , silent );
+
+		      int index = 0;
+		      if ( ! Helper::str2int( Helper::trim( list_index ) , &index ) || index < 1 )
+			Helper::halt( "list index in ${" + varname + "} must be a positive integer" );
+
+		      std::map<std::string,std::string>::const_iterator v = vars->find( list_name );
+		      if ( v == vars->end() )
+			{
+			  if ( ! allow_missing )
+			    Helper::halt( "variable ${" + list_name + "} was not specified" );
+			  s += ".";
+			  break;
+			}
+
+		      const std::vector<std::string> values = Helper::parse( v->second , "," );
+		      if ( index > (int)values.size() )
+			Helper::halt( "list index " + Helper::int2str(index) + " out of range for ${" + list_name + "}" );
+
+		      s += values[index-1];
+		      break;
+		    }
+		}
+
+	      if ( vars->find( varname ) == vars->end() )
 		{
 		  if ( ! allow_missing ) 
 		    Helper::halt( "variable ${" + varname + "} was not specified" );

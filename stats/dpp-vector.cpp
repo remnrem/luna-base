@@ -5,6 +5,7 @@
 //    --------------------------------------------------------------------
 
 #include "stats/dpp-vector.h"
+#include "stats/dpp.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"
@@ -33,7 +34,8 @@ std::vector<std::string> feature_set(const param_t &param) {
   if (param.has("vector-features"))
     f = param.strvector("vector-features");
   else
-    f = {"RAW", "CONTEXT", "GEOM", "DYN"};
+    f = {"EMBEDDING", "HYPNOGRAM", "EMBEDDING_GEOMETRY",
+         "EMBEDDING_DYNAMICS"};
 
   for (int i = 0; i < (int)f.size(); i++)
     for (int j = 0; j < (int)f[i].size(); j++)
@@ -115,7 +117,8 @@ int epoch_at(edf_t &edf, const uint64_t tp) {
 } // namespace
 
 bool dpp_vector::enabled(const param_t &param) {
-  return !(param.has("classic") && param.yesno("classic"));
+  return !(param.has("classic") && param.yesno("classic")) &&
+         !param.has("dpp-classic-capture");
 }
 
 dpp_vector::layout_t dpp_vector::layout(const int embedding_dim,
@@ -123,10 +126,10 @@ dpp_vector::layout_t dpp_vector::layout(const int embedding_dim,
   const std::vector<std::string> f = feature_set(param);
   layout_t l;
   l.embedding_dim = embedding_dim;
-  l.raw = has_feature(f, "RAW");
-  l.context = has_feature(f, "CONTEXT");
-  l.geom = has_feature(f, "GEOM");
-  l.dyn = has_feature(f, "DYN");
+  l.raw = has_feature(f, "EMBEDDING");
+  l.context = has_feature(f, "HYPNOGRAM");
+  l.geom = has_feature(f, "EMBEDDING_GEOMETRY");
+  l.dyn = has_feature(f, "EMBEDDING_DYNAMICS");
   int o = 0;
   l.raw_offset = l.raw ? o : -1;
   if (l.raw)
@@ -149,38 +152,60 @@ std::vector<std::string> dpp_vector::labels(const int n_channels,
   const std::string tm = time_mode(param);
   std::vector<std::string> l;
 
-  if (has_feature(f, "RAW"))
+  if (has_feature(f, "EMBEDDING"))
     for (int i = 0; i < n_channels; i++)
-      add_label(&l, "VEC.RAW.V" + Helper::int2str(i + 1));
+      add_label(&l, "VEC.EMBEDDING.V" + Helper::int2str(i + 1));
 
-  if (has_feature(f, "CONTEXT")) {
-    add_label(&l, tm == "EDF"     ? "VEC.CONTEXT.EDF_TIME_FRAC"
-                  : tm == "ONSET" ? "VEC.CONTEXT.ONSET_TIME_H"
-                                  : "VEC.CONTEXT.RETAINED_FRAC");
-    add_label(&l, "VEC.CONTEXT.STAGE_W");
-    add_label(&l, "VEC.CONTEXT.STAGE_N1");
-    add_label(&l, "VEC.CONTEXT.STAGE_N2");
-    add_label(&l, "VEC.CONTEXT.STAGE_N3");
-    add_label(&l, "VEC.CONTEXT.STAGE_R");
-    add_label(&l, "VEC.CONTEXT.STAGE_UNKNOWN");
-    add_label(&l, "VEC.CONTEXT.CYCLE");
-    add_label(&l, "VEC.CONTEXT.CYCLE_PHASE");
-    add_label(&l, "VEC.CONTEXT.VALID_DIM_FRAC");
+  if (has_feature(f, "HYPNOGRAM")) {
+    add_label(&l, tm == "EDF"     ? "VEC.HYPNOGRAM.EDF_TIME_FRAC"
+                  : tm == "ONSET" ? "VEC.HYPNOGRAM.ONSET_TIME_H"
+                                  : "VEC.HYPNOGRAM.RETAINED_FRAC");
+    add_label(&l, "VEC.HYPNOGRAM.STAGE_W");
+    add_label(&l, "VEC.HYPNOGRAM.STAGE_N1");
+    add_label(&l, "VEC.HYPNOGRAM.STAGE_N2");
+    add_label(&l, "VEC.HYPNOGRAM.STAGE_N3");
+    add_label(&l, "VEC.HYPNOGRAM.STAGE_R");
+    add_label(&l, "VEC.HYPNOGRAM.STAGE_UNKNOWN");
+    add_label(&l, "VEC.HYPNOGRAM.CYCLE");
+    add_label(&l, "VEC.HYPNOGRAM.CYCLE_PHASE");
+    add_label(&l, "VEC.HYPNOGRAM.VALID_DIM_FRAC");
   }
 
-  if (has_feature(f, "GEOM")) {
-    add_label(&l, "VEC.GEOM.NORM");
-    add_label(&l, "VEC.GEOM.BASELINE_DIST");
-    add_label(&l, "VEC.GEOM.BASELINE_COS");
-    add_label(&l, "VEC.GEOM.PREV_DIST");
-    add_label(&l, "VEC.GEOM.PREV_COS");
+  if (has_feature(f, "EMBEDDING_GEOMETRY")) {
+    add_label(&l, "VEC.EMBEDDING_GEOMETRY.NORM");
+    add_label(&l, "VEC.EMBEDDING_GEOMETRY.BASELINE_DIST");
+    add_label(&l, "VEC.EMBEDDING_GEOMETRY.BASELINE_COS");
+    add_label(&l, "VEC.EMBEDDING_GEOMETRY.PREV_DIST");
+    add_label(&l, "VEC.EMBEDDING_GEOMETRY.PREV_COS");
   }
 
-  if (has_feature(f, "DYN")) {
-    add_label(&l, "VEC.DYN.VELOCITY");
-    add_label(&l, "VEC.DYN.ACCELERATION");
-    add_label(&l, "VEC.DYN.NORM_DELTA");
-    add_label(&l, "VEC.DYN.TURN_ANGLE");
+  if (has_feature(f, "EMBEDDING_DYNAMICS")) {
+    add_label(&l, "VEC.EMBEDDING_DYNAMICS.VELOCITY");
+    add_label(&l, "VEC.EMBEDDING_DYNAMICS.ACCELERATION");
+    add_label(&l, "VEC.EMBEDDING_DYNAMICS.NORM_DELTA");
+    add_label(&l, "VEC.EMBEDDING_DYNAMICS.TURN_ANGLE");
+  }
+
+  if (has_feature(f, "DSP")) {
+    dpp_specs_t specs;
+    if (param.has("spec"))
+      specs.read(param.value("spec"));
+    else {
+      const std::vector<std::string> channels = param.strvector("dsp-sig");
+      if (channels.empty())
+        Helper::halt("vector-features=DSP requires spec= or dsp-sig=");
+      specs.init_default(channels);
+      specs.apply_inline_overrides(
+          param.has("windows") ? param.value("windows") : "",
+          param.has("filters") ? param.value("filters") : "",
+          param.has("features") ? param.value("features") : "",
+          param.has("prefilter") ? param.value("prefilter") : "");
+    }
+    int n = 0;
+    for (const dpp_spec_t &s : specs.specs)
+      n += s.cols();
+    for (int j = 0; j < n; j++)
+      add_label(&l, "DPP.DSP.F" + Helper::int2str(j + 1));
   }
 
   return l;
@@ -323,15 +348,16 @@ bool dpp_vector::run(edf_t &edf, param_t &param) {
       }
   }
 
-  const std::vector<std::string> flabels = labels(nc, param);
+  std::vector<std::string> flabels = labels(nc, param);
   const std::vector<std::string> fset = feature_set(param);
   const std::string tm = time_mode(param);
   const double time_origin =
       tm == "ONSET" && !tp[0].empty() ? tp[0][0] / (double)globals::tp_1sec : 0;
-  const bool raw = has_feature(fset, "RAW");
-  const bool context = has_feature(fset, "CONTEXT");
-  const bool geom = has_feature(fset, "GEOM");
-  const bool dyn = has_feature(fset, "DYN");
+  const bool raw = has_feature(fset, "EMBEDDING");
+  const bool context = has_feature(fset, "HYPNOGRAM");
+  const bool geom = has_feature(fset, "EMBEDDING_GEOMETRY");
+  const bool dyn = has_feature(fset, "EMBEDDING_DYNAMICS");
+  const bool dsp = has_feature(fset, "DSP");
 
   std::vector<double> baseline(nc, 0);
   std::vector<int> baseline_n(nc, 0);
@@ -478,6 +504,25 @@ bool dpp_vector::run(edf_t &edf, param_t &param) {
     }
 
     mat.X[r] = row;
+  }
+
+  if (dsp) {
+    dpp_matrix_t classic;
+    if (!dpp_classic::extract(edf, param, mat.time_sec, &classic))
+      Helper::halt("DPP vector mode: failed to extract DSP features");
+    if (classic.time_sec.size() != mat.time_sec.size())
+      Helper::halt("DPP vector mode DSP/vector row-count mismatch; use the "
+                   "same step= as the vector sampling interval");
+    for (int r = 0; r < nr; r++) {
+      if (std::fabs(classic.time_sec[r] - mat.time_sec[r]) > 1e-6)
+        Helper::halt("DPP vector mode DSP/vector time-grid mismatch at row " +
+                     Helper::int2str(r) + "; use the same step= as the vector "
+                     "sampling interval");
+      mat.X[r].insert(mat.X[r].end(), classic.X[r].begin(), classic.X[r].end());
+    }
+    logger << "  DPP vector mode: appended "
+           << (classic.X.empty() ? 0 : classic.X[0].size())
+           << " DSP feature columns on the aligned vector grid\n";
   }
 
   if ((int)mat.X[0].size() != (int)flabels.size())

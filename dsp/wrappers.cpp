@@ -132,23 +132,28 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
   
   const int ns = signals.size();
   
-  bool use_kaiser = param.has( "tw" );
-
   bool use_file = param.has( "file" );
 
   bool use_fixed = param.has( "order" );
 
+  // A supplied frequency band is sufficient to request the default Kaiser
+  // FIR filter.  tw=/ripple= remain optional overrides.
+  bool use_kaiser = !use_file && !use_fixed &&
+    ( param.has( "f" ) || param.has( "bandpass" ) || param.has( "tw" ) );
+
   bool no_filter = ! ( use_kaiser || use_file || use_fixed );
 
-  if ( ! no_filter ) 
+  if ( use_kaiser || use_fixed )
     if ( ! ( param.has( "f" ) || param.has( "bandpass" ) ) )
       Helper::halt( "requires 'f' or 'bandpass'" );
   
-  std::vector<double> frqs = param.dblvector( param.has( "f" ) ? "f" : "bandpass" );
+  std::vector<double> frqs;
+  if ( param.has( "f" ) || param.has( "bandpass" ) )
+    frqs = param.dblvector( param.has( "f" ) ? "f" : "bandpass" );
 
-  double ripple = use_kaiser ? param.requires_dbl( "ripple" ) : 0 ;
+  double ripple = use_kaiser ? ( param.has( "ripple" ) ? param.requires_dbl( "ripple" ) : 0.01 ) : 0 ;
 
-  double tw = use_kaiser ? param.requires_dbl( "tw" ) : 0 ;
+  double tw = use_kaiser ? ( param.has( "tw" ) ? param.requires_dbl( "tw" ) : 0.5 ) : 0 ;
 
   int order = use_fixed ? param.requires_int( "order" ) : 0;
 
@@ -167,6 +172,20 @@ void dsptools::hilbert( edf_t & edf , param_t & param )
   bool return_ifrq = param.has( "ifrq" );
   
   std::string tag = param.has( "tag" ) ? "_" + param.value( "tag" ) : "" ; 
+
+  // Report the common filter configuration once, rather than repeating it
+  // for every channel below.
+  logger << "  ";
+  if ( use_kaiser )
+    logger << "FIR band-pass " << frqs[0] << "-" << frqs[1]
+           << " Hz (ripple=" << ripple << ", transition=" << tw << " Hz)\n";
+  else if ( use_fixed )
+    logger << "fixed-order FIR band-pass " << frqs[0] << "-" << frqs[1]
+           << " Hz (order=" << order << ")\n";
+  else if ( use_file )
+    logger << "external FIR coefficients (file=" << fir_file << ")\n";
+  else
+    logger << "none; input assumed already band-limited\n";
 
   for (int s=0;s<ns;s++)
     {

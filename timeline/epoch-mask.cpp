@@ -1196,7 +1196,7 @@ void timeline_t::retain_epochs( const std::set<std::string> & labels )
   // adjust by up to 'n' epochs
   
   first = first > n ? first - n : 0 ; 
-  last = (last + n ) < ne ? last + ne : ne - 1 ;
+  last = (last + n ) < ne ? last + n : ne - 1 ;
 
   if ( no_matches ) logger << "  did not find any matching epochs, masking all epochs\n";
   else logger << "  retaining from epoch " << first 
