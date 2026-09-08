@@ -116,6 +116,7 @@ luna: main.o $(OBJS)
 
 # Auto-generated header dependency files produced by `-MMD -MP`.
 -include $(DEPS)
+-include utils/reader2.d
 
 ifeq ($(ARCH),MAC)
 $(SHARED_LIB): $(OBJS)
@@ -142,7 +143,8 @@ libluna.a: $(OBJS)
 static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a
 	$(CXX) -static -static-libgcc -static-libstdc++ -o luna-static $^
 
-destrat: utils/reader.o libluna.a
+# The original utils/reader.cpp is retained as reference source only.
+destrat: utils/reader2.o libluna.a
 	$(CXX) -o $@ $^ -L. $(LDFLAGS) $(DEP_LIB)
 
 regional: utils/region-annotate.o
@@ -176,7 +178,7 @@ simassoc: utils/simassoc.o libluna.a
 # - `clean` should continue removing generated build artifacts only.
 ##############################################################################
 
-.PHONY: all clean libluna static test test-verbose
+.PHONY: all clean libluna static test test-verbose test-destrat test-destrat2
 
 test: luna
 	./luna __LUNA_TESTS__ all
@@ -184,8 +186,14 @@ test: luna
 test-verbose: luna
 	./luna __LUNA_TESTS__ all verbose
 
+test-destrat: destrat
+	python3 tests/test_destrat2.py
+
+# Compatibility alias for the existing test command; builds only destrat.
+test-destrat2: test-destrat
+
 clean:
-	-$(RM) $(TARGETS) regional tocol cgi-mapper dmerge simassoc \
+	-$(RM) $(TARGETS) destrat2 regional tocol cgi-mapper dmerge simassoc \
 		libluna.dylib libluna.so libluna.a luna-static main.o \
 		$(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))
 	-$(RM) utils/*.o utils/*.d utils/*~
