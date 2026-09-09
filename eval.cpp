@@ -1695,12 +1695,26 @@ void proc_runpops( edf_t & edf , param_t & param )
   
   // edger=Y/N  (default Y)
   // filter=Y/N (default Y)
- 
 
-  // main signal (currently, either 1 or 2) 
+  // required POPS library (defaults to s2); determined up front since it
+  // drives model-specific handling below (hard-coded per model, per the
+  // agreed pattern -- add another branch here as new models are added)
+  const std::string pops_lib = param.has( "lib" ) ? param.requires( "lib" ) : "s2";
+  const bool is_hyp1 = pops_lib == "hyp1";
+
+  // main signal (currently, either 1 or 2 for s2; up to 10 for hyp1)
   signal_list_t signals = edf.header.signal_list( param.requires( "sig" ) );
   if ( signals.size() == 0 ) Helper::halt( "no signals found matching " + param.value( "sig" ) );
-  
+
+  if ( is_hyp1 && signals.size() > 10 )
+    {
+      logger << "  ** warning: hyp1 supports at most 10 channels, using only the first 10 of "
+	     << signals.size() << " given\n";
+      std::string first10;
+      for (int s=0; s<10; s++) { if (s) first10 += ","; first10 += signals.label(s); }
+      signals = edf.header.signal_list( first10 );
+    }
+
   const int ns = signals.size();
   // use [x][y] format for sig specification
   
@@ -1736,11 +1750,8 @@ void proc_runpops( edf_t & edf , param_t & param )
   // ignore extant staging?
   const bool ignore_obs_staging = param.has( "ignore-obs" ) ? param.yesno( "ignore-obs" ) : false ;
   
-  // required POPS library (defaults to s2)
-  const std::string pops_lib = param.has( "lib" ) ? param.requires( "lib" ) : "s2";
-  
   // optional path
-  const std::string pops_path = param.has( "path" ) ? param.value( "path" ) : "." ; 
+  const std::string pops_path = param.has( "path" ) ? param.value( "path" ) : "." ;
 
   const int posterior_resolution =
     param.has( "resolution" ) ? param.requires_int( "resolution" ) : 30;
@@ -1755,94 +1766,113 @@ void proc_runpops( edf_t & edf , param_t & param )
   const bool do_edger  = param.has( "edger" ) ? param.yesno( "edger" ) : true;
 
 
-  // xsigs handles
-  
-  std::string allsigs = Helper::xsigs( "[" + slab + "][_F]" );
-  std::string allzigs = Helper::xsigs( "[" + slab + "][_F_N]" );				      
-  
-  //
-  // copy signal (do not alter original)
-  //
-  
-  logger << "  ------------------------------------------------------------\n"
-	 << "  making copies of original signals (appending _F)\n";
+  // xsigs handles: a temporary '_F' copy is only actually needed when
+  // there's something to do to it (re-referencing, or the classical s2
+  // filter/resample pipeline); hyp1 with no ref= has nothing to do before
+  // handing channels to SFM (which resamples with anti-aliasing and
+  // standardizes internally, and was not trained on filtered input), so
+  // it aliases straight to the original channels -- no copy, nothing to
+  // clean up afterwards either.
+  const bool made_copy = ( ! is_hyp1 ) || do_reref;
+  const std::string tag = made_copy ? "_F" : "";
 
-  param_t copy_param;
-  copy_param.add( "sig" , slab );
-  copy_param.add( "tag" , "_F" );
-  proc_copy_signal( edf , copy_param );
+  std::string allsigs = tag.empty() ? slab : Helper::xsigs( "[" + slab + "][" + tag + "]" );
+  std::string allzigs = Helper::xsigs( "[" + slab + "][_F_N]" );
 
-    
-  //
-  // referencing?
-  //
-
-  if ( do_reref )
+  if ( made_copy )
     {
-      logger << "  ------------------------------------------------------------\n"
-	     << "  re-rereferncing signals\n";
+      //
+      // copy signal (do not alter original)
+      //
 
-      for (int s=0; s<ns; s++)
+      logger << "  ------------------------------------------------------------\n"
+	     << "  making copies of original signals (appending _F)\n";
+
+      param_t copy_param;
+      copy_param.add( "sig" , slab );
+      copy_param.add( "tag" , "_F" );
+      proc_copy_signal( edf , copy_param );
+
+      //
+      // referencing?
+      //
+
+      if ( do_reref )
 	{
-	  param_t reref_param;
-	  reref_param.add( "sig" , signals.label(s) + "_F" );
-	  reref_param.add( "ref" , refs[s] );
-	  proc_reference( edf , reref_param );
+	  logger << "  ------------------------------------------------------------\n"
+		 << "  re-rereferncing signals\n";
+
+	  for (int s=0; s<ns; s++)
+	    {
+	      param_t reref_param;
+	      reref_param.add( "sig" , signals.label(s) + "_F" );
+	      reref_param.add( "ref" , refs[s] );
+	      proc_reference( edf , reref_param );
+	    }
 	}
     }
 
-  //
-  // resample if needed (fixed 128 Hz)
-  //
-
-  logger << "  ------------------------------------------------------------\n"
-	 << "  resampling " << allsigs << " to 128 Hz if needed\n";
-  
-  param_t resample_param;
-  resample_param.add( "sig" , allsigs );
-  resample_param.add( "sr" , "128" );
-  proc_resample( edf , resample_param );
-  
-  //
-  // filter
-  //
-
-  if ( do_filter )
+  if ( ! is_hyp1 )
     {
-      logger << "  ------------------------------------------------------------\n"
-	     << "  bandpass filtering signals\n";
-      
-      param_t filter_param;
-      filter_param.add( "sig" , allsigs );
-      filter_param.add( "bandpass" , "0.3,35" );
-      filter_param.add( "tw" , "0.2" );
-      filter_param.add( "ripple" , "0.01" );
-      proc_filter( edf , filter_param );
+      //
+      // resample if needed (fixed 128 Hz)
+      //
 
+      logger << "  ------------------------------------------------------------\n"
+	     << "  resampling " << allsigs << " to 128 Hz if needed\n";
+
+      param_t resample_param;
+      resample_param.add( "sig" , allsigs );
+      resample_param.add( "sr" , "128" );
+      proc_resample( edf , resample_param );
+
+      //
+      // filter
+      //
+
+      if ( do_filter )
+	{
+	  logger << "  ------------------------------------------------------------\n"
+		 << "  bandpass filtering signals\n";
+
+	  param_t filter_param;
+	  filter_param.add( "sig" , allsigs );
+	  filter_param.add( "bandpass" , "0.3,35" );
+	  filter_param.add( "tw" , "0.2" );
+	  filter_param.add( "ripple" , "0.01" );
+	  proc_filter( edf , filter_param );
+	}
+    }
+  else if ( param.has( "filter" ) )
+    {
+      logger << "  ** note: filter= has no effect for hyp1 -- SleepFM was not trained on "
+	     << "bandpass-filtered input, and does its own anti-aliased resampling and "
+	     << "per-window normalization internally\n";
     }
 
   //
-  // copy signal
-  //
-  
-  logger << "  ------------------------------------------------------------\n"
-	 << "  making time-domain normalized signals\n";
-  
-  param_t copy2_param;
-  copy2_param.add( "sig" , allsigs );
-  copy2_param.add( "tag" , "_N" );
-  proc_copy_signal( edf , copy2_param );
-  
-  //
-  // normalize 
+  // copy + time-domain normalize signal (skipped for hyp1: SFM does its
+  // own per-window standardization internally, so a second whole-signal,
+  // per-epoch standardization ahead of it would be redundant)
   //
 
-  param_t norm_param;
-  norm_param.add( "sig" , allzigs );
-  norm_param.add( "epoch" );
-  norm_param.add( "winsor" , "0.002" );
-  proc_standardize( edf , norm_param );
-  
+  if ( ! is_hyp1 )
+    {
+      logger << "  ------------------------------------------------------------\n"
+	     << "  making time-domain normalized signals\n";
+
+      param_t copy2_param;
+      copy2_param.add( "sig" , allsigs );
+      copy2_param.add( "tag" , "_N" );
+      proc_copy_signal( edf , copy2_param );
+
+      param_t norm_param;
+      norm_param.add( "sig" , allzigs );
+      norm_param.add( "epoch" );
+      norm_param.add( "winsor" , "0.002" );
+      proc_standardize( edf , norm_param );
+    }
+
   //
   // optional edger tool (on filtered signal only)
   //
@@ -1875,16 +1905,35 @@ void proc_runpops( edf_t & edf , param_t & param )
   pops_param.add( "path" , pops_path );
   pops_param.add( "lib" , pops_lib );
   pops_param.add( "cache" , "ec1" );
-  pops_param.add( "alias" , "CEN,ZEN|" + signals.label(0) + "_F," + signals.label(0) + "_F_N" );
-  // equiv channels
-  if ( ns > 1 )
+  if ( is_hyp1 )
     {
-      std::string eq = "CEN,ZEN";
-      
-      for (int s=1; s<ns; s++)
-	eq += "|" + signals.label(s) + "_F," + signals.label(s) + "_F_N";
-      
-      pops_param.add( "equiv" , eq );
+      // Z0,Z1,...|<ch0>[_F],<ch1>[_F],... -- one alias= call, POPS-internal
+      // format (pri,pri2|sec,sec2), matching pops_opt_t::aliases as
+      // consumed when the hyp1.ftr 'CH Z0,Z1,...' group is read. Aliases
+      // straight to the original channels when no copy was made (tag=="").
+      std::string pri, sec;
+      for (int s=0; s<ns; s++)
+	{
+	  if ( s ) { pri += ","; sec += ","; }
+	  pri += "Z" + Helper::int2str( s );
+	  sec += signals.label(s) + tag;
+	}
+      pops_param.add( "alias" , pri + "|" + sec );
+      // no 'equiv' block -- that mechanism is COH-specific to the s2 path
+    }
+  else
+    {
+      pops_param.add( "alias" , "CEN,ZEN|" + signals.label(0) + "_F," + signals.label(0) + "_F_N" );
+      // equiv channels
+      if ( ns > 1 )
+	{
+	  std::string eq = "CEN,ZEN";
+
+	  for (int s=1; s<ns; s++)
+	    eq += "|" + signals.label(s) + "_F," + signals.label(s) + "_F_N";
+
+	  pops_param.add( "equiv" , eq );
+	}
     }
 
   if ( ignore_obs_staging )
@@ -1899,6 +1948,8 @@ void proc_runpops( edf_t & edf , param_t & param )
     pops_param.add( "add-nrem123" , param.value( "add-nrem123" ) );
   if ( param.has( "add-nrem" ) )
     pops_param.add( "add-nrem" , param.value( "add-nrem" ) );
+  if ( param.has( "smooth-pp" ) )
+    pops_param.add( "smooth-pp" , param.value( "smooth-pp" ) );
 
   if ( opt_args != "" )
     {
@@ -1942,15 +1993,20 @@ void proc_runpops( edf_t & edf , param_t & param )
 
   
   //
-  // drop signals
+  // drop signals (only if a temporary copy was actually made -- when
+  // hyp1 aliased straight to the original channels, allsigs *is* the
+  // original 'sig=' list, and must never be dropped)
   //
 
-  logger << "  ------------------------------------------------------------\n"
-	 << "  cleaning up temporary signals\n";
-  
-  param_t drop_param;
-  drop_param.add( "drop" , allsigs + "," + allzigs );
-  proc_drop_signals( edf , drop_param );
+  if ( made_copy )
+    {
+      logger << "  ------------------------------------------------------------\n"
+	     << "  cleaning up temporary signals\n";
+
+      param_t drop_param;
+      drop_param.add( "drop" , allsigs + "," + allzigs );
+      proc_drop_signals( edf , drop_param );
+    }
 
     
 #else

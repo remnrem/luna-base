@@ -112,13 +112,43 @@ void pops_specs_t::read( const std::string & f )
         {	  
 	  if ( tok.size() < 4 )
             Helper::halt( "expecing: CH label {label2} {label3} ... SR UNIT" );
-	  
+
 	  // last two entries must be sample rate & unit
           int sr ;
           if ( ! Helper::str2int( tok[tok.size()-2] , &sr ) )
             Helper::halt( "bad format: " + line );
-	  
+
 	  std::string unit = tok[ tok.size()-1 ];
+
+	  //
+	  // special case: 'CH A,B,C ... SR UNIT' (comma-delimited, no space)
+	  // declares an *optional* group of independent channels, 0-N of
+	  // which may be present in a given recording (e.g. a variable-
+	  // montage EEG set); unlike normal CH declarations, none of these
+	  // being found does not halt processing. Does not support trailing
+	  // per-channel aliases (those apply to a single canonical channel,
+	  // which an optional group -- by definition multiple channels --
+	  // does not have).
+	  //
+
+	  if ( tok[1].find( ',' ) != std::string::npos )
+	    {
+	      if ( tok.size() != 4 )
+		Helper::halt( "CH A,B,C,... group declaration does not take aliases: " + line );
+
+	      std::vector<std::string> opt_labels = Helper::parse( tok[1] , "," );
+	      for (int i=0; i<opt_labels.size(); i++)
+		{
+		  const std::string & label = opt_labels[i];
+		  if ( label.empty() ) continue;
+		  // per-channel aliases still come from the command line (e.g.
+		  // alias=Z0,Z1|C3,C4), same lookup as the normal CH path
+		  const std::set<std::string> & aliases = pops_opt_t::aliases[ label ];
+		  chs[ label ] = pops_channel_t( label , aliases , sr , unit , true );
+		}
+
+	      continue;
+	    }
 
 	  std::string primary_label = tok[1] ;
 
@@ -145,9 +175,9 @@ void pops_specs_t::read( const std::string & f )
 	      for (int i=2;i<tok.size()-2;i++)
 		aliases.insert( tok[i] );
 	    }
-	  
+
 	  chs[ primary_label ] = pops_channel_t( primary_label , aliases , sr , unit ) ;
-	  
+
           // next line
 	  continue;
         }
@@ -261,6 +291,17 @@ void pops_specs_t::read( const std::string & f )
 	      checker.insert( ftr + "::" + paired_label );
 	      	      
 	    }
+	  // special case: SFM takes 1-10 comma-delimited channels; unlike other
+	  // features these are not required to be pre-declared via 'CH', as a
+	  // given recording may legitimately supply only a subset of them
+	  // (SleepFM's channel-agnostic BAS branch tolerates this)
+	  else if ( ftr == "SFM" && tok2.size() == 1 )
+	    {
+	      std::vector<std::string> tok3 = Helper::parse( tok2[0] , "," );
+	      if ( tok3.size() < 1 || tok3.size() > 10 )
+		Helper::halt( "SFM expects 1 to 10 comma-delimited channels: " + line );
+	      tchs.push_back( tok2[0] );
+	    }
 	  // add as channel
 	  else if ( tok2.size() == 1 )
 	    {
@@ -362,6 +403,22 @@ void pops_specs_t::read( const std::string & f )
 	  spec.ftr = lab2ftr[ Helper::toupper( ftr ) ];
 	  spec.ch = tchs[c];
 	  spec.arg = targs;
+
+	  // SFM: same channel list can back up to 4 distinct blocks
+	  // (tokens/epoch-pool/window-pool/position). Use just the requested
+	  // output= as the fcmap/ftr2ch2col key (and hence the printed
+	  // column label) rather than the full channel list -- keeps labels
+	  // short and readable. NB: this assumes one SFM channel-list/model
+	  // config per spec file (true of every config used so far); two
+	  // *different* SFM configs sharing the same output= within one file
+	  // would collide here.
+	  if ( spec.ftr == POPS_SFM )
+	    {
+	      spec.arg[ "sig" ] = tchs[c]; // preserve the real channel list for indiv.cpp
+	      std::map<std::string,std::string>::const_iterator oo = targs.find( "output" );
+	      spec.ch = oo != targs.end() ? oo->second : "tokens";
+	    }
+
 	  fcmap[ spec.ftr ][ spec.ch ] = spec;
 	  specs.push_back( spec );
 	}
@@ -439,6 +496,7 @@ void pops_specs_t::init()
   lab2ftr[ "MEAN" ] = POPS_MEAN;
   lab2ftr[ "OUTLIERS" ] = POPS_EPOCH_OUTLIER;
   lab2ftr[ "COVAR" ] = POPS_COVAR;
+  lab2ftr[ "SFM" ] = POPS_SFM;
 
   lab2ftr[ "TIME" ] = POPS_TIME;
   lab2ftr[ "SMOOTH" ] = POPS_SMOOTH;
@@ -470,6 +528,7 @@ void pops_specs_t::init()
   ftr2lab[ POPS_MEAN ] = "MEAN";
   ftr2lab[ POPS_EPOCH_OUTLIER ] = "OUTLIERS";
   ftr2lab[ POPS_COVAR ] = "COVAR";
+  ftr2lab[ POPS_SFM ] = "SFM";
 
   ftr2lab[ POPS_TIME ] = "TIME";  
   ftr2lab[ POPS_SMOOTH ] = "SMOOTH";
@@ -514,7 +573,27 @@ void pops_specs_t::check_args()
   for (int i=0; i<specs.size(); i++)
     {
       pops_spec_t & spec = specs[i];
-      
+
+      // guard: classical (non-SFM) feature types were not written to
+      // tolerate an absent channel -- their per-epoch computation loop
+      // simply skips channels missing from a given recording, which would
+      // silently leave that feature's X1 columns at their zero-initialized
+      // default (indistinguishable from a genuinely-computed zero) rather
+      // than flagging/NaN-filling them. Rather than risk that, halt loudly:
+      // optional (comma-group) channels are only supported for SFM, whose
+      // own feature computation NaN-fills unavailable rows explicitly.
+      if ( spec.ftr != pops_feature_t::POPS_SFM && spec.ch != "." )
+	{
+	  std::vector<std::string> chlist = Helper::parse( spec.ch , "," );
+	  for (int c=0; c<chlist.size(); c++)
+	    {
+	      std::map<std::string,pops_channel_t>::const_iterator cc = chs.find( chlist[c] );
+	      if ( cc != chs.end() && cc->second.optional )
+		Helper::halt( ftr2lab[ spec.ftr ] + " on " + chlist[c]
+			      + ": optional (comma-group) CH channels are only supported for SFM features" );
+	    }
+	}
+
       if ( spec.ftr == pops_feature_t::POPS_LOGPSD ||
 	   spec.ftr == pops_feature_t::POPS_RELPSD ||
 	   spec.ftr == pops_feature_t::POPS_CVPSD )
@@ -618,6 +697,24 @@ void pops_specs_t::check_args()
 	    Helper::halt( ftr2lab[ pops_feature_t::POPS_SVD ] + " requires 'nc' arg" );
 	  if ( spec.arg.find( "file" ) == spec.arg.end() )
 	    Helper::halt( ftr2lab[ pops_feature_t::POPS_SVD ] + " requires 'file' arg" );
+	}
+
+      // SFM
+      if ( spec.ftr == pops_feature_t::POPS_SFM )
+	{
+	  if ( spec.arg.find( "output" ) == spec.arg.end() )
+	    spec.arg[ "output" ] = "tokens";
+	  const std::string & o = spec.arg[ "output" ];
+	  if ( o != "tokens" && o != "epoch-pool" && o != "window-pool" && o != "position" )
+	    Helper::halt( "SFM output= must be one of tokens, epoch-pool, window-pool, position" );
+	  if ( spec.arg.find( "modality" ) == spec.arg.end() )
+	    spec.arg[ "modality" ] = "BAS";
+	  if ( spec.arg.find( "lib" ) == spec.arg.end() )
+	    spec.arg[ "lib" ] = "sleepfm_model_base";
+	  if ( spec.arg.find( "path" ) == spec.arg.end() )
+	    spec.arg[ "path" ] = ".";
+	  if ( spec.arg.find( "step" ) == spec.arg.end() )
+	    spec.arg[ "step" ] = "300";
 	}
 
       // OUTLIERS
@@ -947,6 +1044,18 @@ int pops_spec_t::cols( int * t )
   if ( ftr == POPS_SVD )
     {
       size = narg( "nc" );
+      *t += size;
+      return size;
+    }
+
+  // SFM: 6 x 128 tokens (30s epoch / 5s token), or 128 for the two pooled
+  // views, or 2 for the past/future context-seconds position block
+  if ( ftr == POPS_SFM )
+    {
+      const std::string & o = arg[ "output" ]; // check_args() has already defaulted this
+      if ( o == "tokens" )       size = 6 * 128;
+      else if ( o == "position" ) size = 2;
+      else                        size = 128; // epoch-pool, window-pool
       *t += size;
       return size;
     }

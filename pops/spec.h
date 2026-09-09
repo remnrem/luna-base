@@ -48,7 +48,8 @@ enum pops_feature_t
     POPS_C22 ,  
     POPS_MEAN ,
     POPS_COVAR ,     // from ivars
-    
+    POPS_SFM ,       // SleepFM embedding-derived features (see pops/sfm.h)
+
     // level 2 features
     POPS_TIME ,          // level 2 features
     POPS_SMOOTH , 
@@ -99,19 +100,21 @@ struct pops_spec_t {
 
 struct pops_channel_t {
 
-  pops_channel_t( const std::string & ch , 
-		  const std::set<std::string> & aliases , 
-		  const int sr , 
-		  const std::string unit )
-  : ch(ch), aliases(aliases), sr(sr) , unit(unit)
-  { } 
-  
+  pops_channel_t( const std::string & ch ,
+		  const std::set<std::string> & aliases ,
+		  const int sr ,
+		  const std::string unit ,
+		  const bool optional = false )
+  : ch(ch), aliases(aliases), sr(sr) , unit(unit) , optional(optional)
+  { }
+
   pops_channel_t() {
     ch = "";
     sr = 0;
     aliases.clear();
     unit = "uV";
-  } 
+    optional = false;
+  }
 
   // main label
   std::string ch;
@@ -119,6 +122,12 @@ struct pops_channel_t {
   std::set<std::string> aliases;
   int sr;
   std::string unit;
+
+  // if true (only set via a comma-delimited 'CH A,B,C ... SR UNIT' group
+  // declaration), this channel is one of a set where 0-N may be present in
+  // any given recording -- unlike a normal CH declaration, its absence does
+  // not halt processing
+  bool optional;
 
   bool match( const std::string & s , std::string * label ) const
   {

@@ -230,24 +230,66 @@ void pops_t::make_level2_library( param_t & param )
     {
                                     
       std::vector<std::string> pp = pops_t::specs.col_label;
+      std::vector<std::string> bb = pops_t::specs.col_block;
+
+      // group missing columns by block; when every column in a block has
+      // the same missing-count, that's the normal/expected pattern (e.g. a
+      // block that gets NaN-filled together for the same unavailable rows,
+      // such as SFM's trailing-window epochs) -- report it once rather than
+      // once per column. Only fall back to full per-column detail when a
+      // block's columns disagree, since that's the pattern actually worth
+      // flagging in full.
+      std::map<std::string, std::vector<int> > block_missing_cols;
+      std::map<std::string, std::set<int> > block_counts;
+
       std::map<int,int>::const_iterator cc = missing_vars.cols.begin();
       while ( cc != missing_vars.cols.end() )
 	{
-	  logger  << "  ** warning: " << pp[cc->first ] << " has " << cc->second << " missing values\n";
+	  const std::string & block = bb[ cc->first ];
+	  block_missing_cols[ block ].push_back( cc->first );
+	  block_counts[ block ].insert( cc->second );
 	  ++cc;
 	}
-      
+
+      std::map<std::string, std::vector<int> >::const_iterator bi = block_missing_cols.begin();
+      while ( bi != block_missing_cols.end() )
+	{
+	  const std::vector<int> & fcols = bi->second;
+	  if ( block_counts[ bi->first ].size() == 1 )
+	    logger << "  ** warning: " << bi->first << " (" << fcols.size() << " cols) each have "
+		   << missing_vars.cols[ fcols[0] ] << " missing values\n";
+	  else
+	    for (int i=0; i<(int)fcols.size(); i++)
+	      logger << "  ** warning: " << pp[ fcols[i] ] << " has " << missing_vars.cols[ fcols[i] ] << " missing values\n";
+	  ++bi;
+	}
+
+      // as above: collapse to one line per individual when every affected
+      // epoch has the same missing-count (the normal pattern -- e.g. N
+      // trailing epochs each fully NaN-filled); only list epochs
+      // individually when counts differ within an individual.
       const int nt = Istart.size();
       for (int i=0; i<nt; i++)
 	{
-	  for (int e = Istart[i] ; e <= Iend[i] ; e++) 
-	    {
+	  int n_affected = 0;
+	  std::set<int> counts_seen;
+	  for (int e = Istart[i] ; e <= Iend[i] ; e++)
+	    if ( missing_vars.rows.find( e ) != missing_vars.rows.end() )
+	      {
+		++n_affected;
+		counts_seen.insert( missing_vars.rows[e] );
+	      }
+
+	  if ( n_affected == 0 ) continue;
+
+	  if ( counts_seen.size() == 1 )
+	    logger << "  ** warning: " << I[ i ] << " has " << n_affected
+		   << " epoch(s) with " << *counts_seen.begin() << " missing value(s) each\n";
+	  else
+	    for (int e = Istart[i] ; e <= Iend[i] ; e++)
 	      if ( missing_vars.rows.find( e ) != missing_vars.rows.end() )
-		{
-		  logger << "  ** warning: " << I[ i ]  
-			 << " has an epoch with " << missing_vars.rows[e] << " missing value(s)\n";		  
-		}
-	    }
+		logger << "  ** warning: " << I[ i ]
+		       << " has an epoch with " << missing_vars.rows[e] << " missing value(s)\n";
 	}
     }
 
@@ -389,7 +431,8 @@ void pops_t::make_level2_library( param_t & param )
 // derive level 2 stats (from pops_t::specs)
 //
 
-void pops_t::level2( const bool training , const bool quiet )
+void pops_t::level2( const bool training , const bool quiet ,
+		      std::map<std::string,Eigen::VectorXd> * svd_ref_mean )
 {
   
   // go through all level2 blocks in order
@@ -644,16 +687,19 @@ void pops_t::level2( const bool training , const bool quiet )
 	  const std::string wvfile = pops_t::update_filepath( spec.arg[ "file" ] );
 	  
 	  // copy to a temporary
-	  Eigen::MatrixXd D = Eigen::MatrixXd::Zero( ne , nfrom );	  
+	  Eigen::MatrixXd D = Eigen::MatrixXd::Zero( ne , nfrom );
 	  for (int j=0; j<nfrom; j++) D.col(j) = X1.col( from_cols[j] ) ;
-	  
-	  // mean-center (within each individual)
-	  for (int i=0; i<ni; i++)
-	    eigen_ops::scale( D.middleRows( Istart[i] , Iend[i] - Istart[i] + 1 ) , true , false );
-	  
+
 	  // trainer SVD
 	  if ( training )
 	    {
+	      // mean-center (within each individual) -- always computed fresh:
+	      // training is a single batch fit over all trainers, so there is
+	      // no repeat-call consistency concern here (unlike target mode
+	      // below).
+	      for (int i=0; i<ni; i++)
+		eigen_ops::scale( D.middleRows( Istart[i] , Iend[i] - Istart[i] + 1 ) , true , false );
+
 	      Eigen::BDCSVD<Eigen::MatrixXd> svd( D , Eigen::ComputeThinU | Eigen::ComputeThinV );
 	      Eigen::MatrixXd U = svd.matrixU();
 	      Eigen::MatrixXd V1 = svd.matrixV();
@@ -682,8 +728,39 @@ void pops_t::level2( const bool training , const bool quiet )
 	    }
 	  else
 	    {
-	      // projection of target 
-	      
+	      // projection of target
+
+	      // Mean-center using a *cached* per-individual reference mean if
+	      // one already exists for this SVD block, rather than always
+	      // re-estimating it fresh from this call's own epochs. This
+	      // matters because pops_indiv_t::level2() (hence this code) can
+	      // be called repeatedly for the same individual -- POPS
+	      // resolution=5 calls it once per 5s-shifted stride, each with a
+	      // slightly different epoch subset. Without caching, each stride
+	      // would independently estimate and remove a slightly different
+	      // "this individual's mean", injecting a spurious stride-locked
+	      // (hence exactly-epoch-length-periodic) offset into every
+	      // projected feature once the strides are interleaved back into
+	      // one output stream -- purely a computation artifact, unrelated
+	      // to physiology or model training. Caching the *first* call's
+	      // mean (whichever stride/pass happens to run first) and reusing
+	      // it for the individual's later calls keeps every stride
+	      // self-consistent, matching what a single, non-strided pass
+	      // would have computed.
+	      if ( ni != 1 )
+		Helper::halt( "internal error: SVD target-mode projection expects a single individual" );
+
+	      if ( svd_ref_mean != NULL )
+		{
+		  if ( svd_ref_mean->find( wvfile ) == svd_ref_mean->end() )
+		    (*svd_ref_mean)[ wvfile ] = D.colwise().mean().transpose();
+		  D.array().rowwise() -= (*svd_ref_mean)[ wvfile ].transpose().array();
+		}
+	      else
+		{
+		  eigen_ops::scale( D , true , false );
+		}
+
 	      if ( V.find( wvfile ) == V.end() ) // do once
 		{
 
@@ -712,7 +789,7 @@ void pops_t::level2( const bool training , const bool quiet )
 		  
 		  V[ wvfile ] = V0;
 		  W[ wvfile ] = W0;
-		}	    
+		}
 
 	      //
 	      // line-up
@@ -720,20 +797,20 @@ void pops_t::level2( const bool training , const bool quiet )
 
 	      if ( D.cols() != V[wvfile].rows() )
 		Helper::halt( "projection file does not align with number of features - please check this has not been swapped/modified\n" + wvfile );
-	      
+
 	      //
-	      // project 
+	      // project
 	      //
-	      
+
 	      Eigen::MatrixXd U_proj = D * V[ wvfile ] * W[ wvfile ];
-	      
+
 	      // copy back
-	      for (int j=0; j<nto; j++) 
+	      for (int j=0; j<nto; j++)
 		X1.col( to_cols[j] ) = U_proj.col(j);
 
 	    }
 	}
-      
+
       //
       // TIME 
       //
@@ -921,7 +998,7 @@ void pops_t::from_single_target( const pops_indiv_t & indiv )
 {
   X1 = indiv.X1;
   S = indiv.S;
-  E = indiv.E;  
+  E = indiv.E;
   Istart.resize( 1 , 0 );
   Iend.resize( 1 , S.size() - 1 );
 }

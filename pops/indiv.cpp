@@ -24,6 +24,7 @@
 #include "pops/indiv.h"
 #include "pops/posteriors.h"
 #include "pops/options.h"
+#include "pops/sfm.h"
 
 #include "param.h"
 #include "helper/helper.h"
@@ -963,9 +964,15 @@ void pops_indiv_t::level1( edf_t & edf )
 	}
 
       // still no match?
-      if ( slot == -1 ) 
-	Helper::halt( "could not find " + ss->first + " (or any specified aliases)" );
-      
+      if ( slot == -1 )
+	{
+	  // optional channels (from a comma-delimited 'CH A,B,C ... SR UNIT'
+	  // group) are allowed to be absent -- just skip, unlike a normal
+	  // (mandatory) CH declaration
+	  if ( ss->second.optional ) { ++ss; continue; }
+	  Helper::halt( "could not find " + ss->first + " (or any specified aliases)" );
+	}
+
       if ( edf.header.is_annotation_channel( slot ) )
 	Helper::halt( "cannot specificy annotation channel: " + ss->first );
       
@@ -1031,8 +1038,11 @@ void pops_indiv_t::level1( edf_t & edf )
   std::set<int> cohchs;
   std::map<std::pair<int,int>, std::string > cohpairs;
   
-  const int ns = pops_t::specs.ns;
-  
+  // NB: bound by signals.size() (channels actually resolved for *this*
+  // recording), not pops_t::specs.ns (total declared in the spec file) --
+  // an optional CH group may leave signals.size() < specs.ns
+  const int ns = signals.size();
+
   for (int s1 = 0 ; s1 < ns; s1++ )
     for (int s2 = 0 ; s2< ns; s2++ )
       if ( s1 != s2 ) 
@@ -1777,6 +1787,67 @@ void pops_indiv_t::level1( edf_t & edf )
     }
 
   //
+  // SleepFM (SFM) embedding features, if requested: computed once per
+  // distinct channel-list/model config (independent of the spectral-feature
+  // loop above), then scattered into whichever of the four SFM blocks
+  // (tokens/epoch-pool/window-pool/position) reference that config. Must
+  // run before row-pruning below, as it indexes X1 rows via E[].
+  //
+
+#ifndef HAS_ORT
+  for (int i=0; i<pops_t::specs.specs.size(); i++)
+    if ( pops_t::specs.specs[i].ftr == pops_feature_t::POPS_SFM )
+      Helper::halt( "spec file requests SFM features but this build was not compiled with ORT support (rebuild with ORT=1)" );
+#else
+  {
+    std::set<std::string> sfm_done;
+    for (int i=0; i<pops_t::specs.specs.size(); i++)
+      {
+	const pops_spec_t & spec = pops_t::specs.specs[i];
+	if ( spec.ftr != pops_feature_t::POPS_SFM ) continue;
+
+	const std::string sig_list = spec.arg.find( "sig" )->second;
+	const std::string modality = spec.arg.find( "modality" )->second;
+	const std::string path     = spec.arg.find( "path" )->second;
+	const std::string lib      = spec.arg.find( "lib" )->second;
+	int step_sec = 300;
+	if ( ! Helper::str2int( spec.arg.find( "step" )->second , &step_sec ) )
+	  Helper::halt( "bad SFM step= value" );
+
+	const std::string group_key = sig_list + "|" + modality + "|" + path + "|" + lib + "|" + Helper::int2str( step_sec );
+	if ( sfm_done.find( group_key ) != sfm_done.end() ) continue;
+	sfm_done.insert( group_key );
+
+	// build the resolved-channel subset for this SFM block from the
+	// general 'signals' list already resolved above (respects
+	// pops_opt_t::aliases, e.g. Z0 -> C3_F) -- do NOT re-resolve names
+	// against the raw EDF header here, which knows nothing of that
+	// alias mapping
+	std::vector<std::string> sig_candidates = Helper::parse( sig_list , "," );
+	signal_list_t sfm_signals;
+	for (int c=0; c<signals.size(); c++)
+	  for (int j=0; j<(int)sig_candidates.size(); j++)
+	    if ( signals.label(c) == sig_candidates[j] )
+	      { sfm_signals.add( signals(c) , signals.label(c) ); break; }
+
+	pops_sfm_result_t sfm = pops_sfm_t::run( edf , sfm_signals , modality , path , lib , step_sec , E );
+
+	static const char * sfm_outputs[4] = { "tokens" , "epoch-pool" , "window-pool" , "position" };
+	for (int k=0; k<4; k++)
+	  {
+	    const std::string ch = sfm_outputs[k];
+	    if ( ! pops_t::specs.has( pops_feature_t::POPS_SFM , ch ) ) continue;
+	    std::vector<int> cc = pops_t::specs.cols( pops_feature_t::POPS_SFM , ch );
+	    const Eigen::MatrixXd & src = k==0 ? sfm.tokens : k==1 ? sfm.epoch_pool : k==2 ? sfm.window_pool : sfm.position;
+	    for (int e=0; e<ne; e++)
+	      for (int j=0; j<(int)cc.size(); j++)
+		X1( e , cc[j] ) = src( e , j );
+	  }
+      }
+  }
+#endif
+
+  //
   // Prune out bad rows
   //
 
@@ -1823,26 +1894,27 @@ void pops_indiv_t::level1( edf_t & edf )
 }
 
 
-void pops_indiv_t::level2( const bool quiet_mode )
+void pops_indiv_t::level2( const bool quiet_mode ,
+			    std::map<std::string,Eigen::VectorXd> * svd_ref_mean )
 {
 
   // co-opt pops_t::level2() to do this (i.e. same
-  // code as used for trainers.   the only difference is 
-  // that the SVD W/V will be read from the file, and a 
+  // code as used for trainers.   the only difference is
+  // that the SVD W/V will be read from the file, and a
   // project done
-  
+
   // need to set up duplicates in pops_t and hen copy back
   // bit of a kludge, but this is better than using
   // a duplicated copy of core level 2 features (i.e. if
   // we add stuff
 
-  // expand X1 to include space for level-2 features          
+  // expand X1 to include space for level-2 features
 
   X1.conservativeResize( Eigen::NoChange , pops_t::specs.na );
 
   pops_t pops;
   pops.from_single_target( *this );
-  pops.level2( false , quiet_mode ); // false --> not training sample
+  pops.level2( false , quiet_mode , svd_ref_mean ); // false --> not training sample
   pops.copy_back( this );
 
 }

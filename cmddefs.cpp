@@ -4234,6 +4234,7 @@ void cmddefs_t::init()
   add_param( "POPS" , "predict-coda" , "" , "POPS-CODA: stage-2-only rescoring with the model resolved as <lib>.coda.mod (default lib=s2); uses posteriors= file if given, otherwise reads attached EDF posterior channels (default PP_W/PP_R/PP_N1/PP_N2/PP_N3 or PP_NR)" );
   add_param( "POPS" , "resolution" , "30|5" , "Posterior stream resolution: 30-second epochs (default) or 5-second stride/native posterior rows" );
   add_param( "POPS" , "emit-pp" , "" , "Emit PP_* posterior channels/signals to the in-memory EDF using the active stream (stage-1 unless CODA rescoring is requested)" );
+  add_param( "POPS" , "smooth-pp" , "T" , "resolution=5 only: apply the 7-tap symmetric output-smoothing kernel that cancels any exactly-epoch-period ripple in the combined posterior stream (default T; set F for diagnostic comparison)" );
   add_param( "POPS" , "posterior-channels" , "E|CODA|BOTH" , "Add posterior channels to the in-memory EDF after scoring: stage-1 POPS (E), CODA, or BOTH; requires one 30s EDF record per epoch and skips any channel that already exists" );
   add_param( "POPS" , "posterior-prefix" , "PP or PP,CP" , "Prefix for emitted posterior output; one token applies to both, or give STG1_PREFIX,CODA_PREFIX to separate stage-1 and CODA channel sets" );
   add_param( "POPS" , "coda-config" , "coda.conf" , "POPS-CODA: LightGBM config file for CODA training (default: built-in)" );
@@ -4484,25 +4485,37 @@ void cmddefs_t::init()
   add_verb( "RUN-POPS" ,
             "Run the standard Luna POPS preprocessing and scoring pipeline in one "
             "command.\n\n"
-            "RUN-POPS copies the requested signals, optionally re-references them, "
-            "resamples to 128 Hz, band-pass filters, normalizes, optionally runs "
-            "EDGER, and then invokes POPS with the assembled temporary signals.\n\n"
+            "For lib=s2 (and other classical POPS models), RUN-POPS copies the "
+            "requested signals, optionally re-references them, resamples to 128 Hz, "
+            "band-pass filters, normalizes, optionally runs EDGER, and then invokes "
+            "POPS with the assembled temporary signals.\n\n"
+            "For lib=hyp1 (SleepFM-embedding features), RUN-POPS instead maps up to "
+            "10 sig= channels onto the model's Z0..Z9 slots (warning and truncating "
+            "if more than 10 are given); optional re-referencing (ref=) still applies "
+            "to a temporary copy first, but resampling, filtering, and normalization "
+            "are skipped -- SleepFM does its own anti-aliased resampling and "
+            "per-window standardization internally and was not trained on filtered "
+            "input, so filter= has no effect for this model. When no ref= is given, "
+            "channels are aliased straight to the original signals with no temporary "
+            "copy made at all. As further models are added, RUN-POPS will gain one "
+            "hard-coded branch per model along these lines.\n\n"
             "Resolution=5 keeps the standard 30-second staging summaries but also "
             "supports a 5-second posterior stream for PP_* emission / HDSTATS by "
-            "running staggered 30-second POPS windows every 5 seconds. Edge regions "
-            "are filled by zero-order hold and marked with an annotation. Requires "
-            "a 5-class model; EDGER is disabled by default in this mode (set edger=T "
-            "to override)." );
-  add_param( "RUN-POPS" , "sig" , "C3,C4" , "Primary EEG signal(s)" );
+            "running staggered 30-second POPS windows every 5 seconds (for lib=hyp1, "
+            "SleepFM's own 300-second embedding windows are phase-shifted in step, "
+            "6 offsets covering all 5-second strides). Edge regions are filled by "
+            "zero-order hold and marked with an annotation. Requires a 5-class model." );
+  add_param( "RUN-POPS" , "sig" , "C3,C4" , "Primary EEG signal(s) (up to 10, for lib=hyp1)" );
   add_param( "RUN-POPS" , "ref" , "M2,M1" , "Reference signal(s), matching sig length" );
   add_param( "RUN-POPS" , "args" , "trim=10 3-class" , "Additional arguments passed to POPS" );
   add_param( "RUN-POPS" , "ignore-obs" , "F" , "Ignore existing observed staging" );
-  add_param( "RUN-POPS" , "lib" , "s2" , "POPS library root" );
+  add_param( "RUN-POPS" , "lib" , "s2" , "POPS library root (e.g. currently s2 or hyp1)" );
   add_param( "RUN-POPS" , "path" , "." , "Base path for POPS resources" );
-  add_param( "RUN-POPS" , "filter" , "T" , "Band-pass filter copied signals before POPS" );
-  add_param( "RUN-POPS" , "edger" , "T" , "Run EDGER on the copied signals (default F in resolution=5 mode)" );
+  add_param( "RUN-POPS" , "filter" , "T" , "Band-pass filter copied signals before POPS (no effect for lib=hyp1)" );
+  add_param( "RUN-POPS" , "edger" , "T" , "Run EDGER on the copied signals" );
   add_param( "RUN-POPS" , "resolution" , "30|5" , "Posterior stream resolution: 30-second epochs (default) or 5-second stride/native posterior rows" );
   add_param( "RUN-POPS" , "emit-pp" , "" , "Emit PP_* posterior channels/signals to the in-memory EDF using the active stream (stage-1 unless CODA rescoring is requested)" );
+  add_param( "RUN-POPS" , "smooth-pp" , "T" , "resolution=5 only: apply the 7-tap symmetric output-smoothing kernel that cancels any exactly-epoch-period ripple in the combined posterior stream (default T; set F for diagnostic comparison)" );
   add_param( "RUN-POPS" , "prefix" , "PP" , "Channel prefix for emitted posterior output signals" );
   add_param( "RUN-POPS" , "add-nrem123" , "T" , "Add individual N1/N2/N3 posterior channels when emitting 5-second PP signals" );
   add_param( "RUN-POPS" , "add-nrem" , "F" , "Add summed NR=N1+N2+N3 posterior channel when emitting 5-second PP signals" );
@@ -7692,7 +7705,7 @@ void cmddefs_t::init()
             "tensor shapes, modality/channel rules, and output semantics are implemented by Luna. "
             "Build Luna with ORT=1 to enable this command." );
   add_param( "ORT" , "path" , "." , "Base path for SleepFM model resources" );
-  add_param( "ORT" , "lib" , "sleepfm" , "SleepFM model root (without .onnx extension)" );
+  add_param( "ORT" , "lib" , "sleepfm_base_model" , "SleepFM model root (without .onnx extension)" );
   add_param( "ORT" , "sig" , "EEG" , "Input signal selection" );
   add_param( "ORT" , "modality" , "auto" , "Required SleepFM modality: BAS, RESP, EKG, or EMG; channel aliases are handled by Luna" );
   add_param( "ORT" , "step" , "300" , "Optional window step in seconds" );

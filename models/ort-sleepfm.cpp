@@ -28,6 +28,8 @@
 #include "helper/logger.h"
 #include "db/db.h"
 #include "models/ort-common.h"
+#include "models/sleepfm-normalize.h"
+#include "dsp/resample.h"
 
 #ifdef HAS_ORT
 #include <onnxruntime/core/session/onnxruntime_cxx_api.h>
@@ -66,39 +68,22 @@ static std::string join_path(const std::string &path, const std::string &root) {
   return path + "/" + root;
 }
 
-static std::vector<float> resample(const std::vector<double> &x, double from, double to, int n) {
-  std::vector<float> y(n, 0);
-  if (x.empty()) return y;
-  for (int i = 0; i < n; ++i) {
-    const double at = i * from / to;
-    const int j = std::min<int>(static_cast<int>(at), x.size() - 1);
-    const int k = std::min<int>(j + 1, x.size() - 1);
-    const double a = x[j], b = x[k], f = at - j;
-    y[i] = std::isfinite(a) && std::isfinite(b)
-      ? static_cast<float>(a + f * (b - a))
-      : std::numeric_limits<float>::quiet_NaN();
-  }
-  return y;
-}
-
-static void standardize(std::vector<float> *x) {
-  double sum = 0, sum2 = 0;
-  int n = 0;
-  for (float v : *x) {
-    if (!std::isfinite(v)) Helper::halt("SleepFM input contains non-finite samples");
-    sum += v;
-    sum2 += v * v;
-    ++n;
-  }
-  if (!n) Helper::halt("SleepFM input contains no samples");
-  const double mean = sum / n;
-  const double var = std::max(0.0, sum2 / n - mean * mean);
-  const double sd = std::sqrt(var);
-  for (float &v : *x) {
-    v -= static_cast<float>(mean);
-    if (sd > 0) v /= static_cast<float>(sd);
-    if (!std::isfinite(v)) Helper::halt("SleepFM preprocessing produced non-finite data");
-  }
+// proper sinc-based resampling (libsamplerate, via Luna's existing
+// dsptools::resample) rather than naive linear interpolation, so that
+// downsampling is correctly anti-aliased -- matching SleepFM's own
+// training-data preprocessing, which applies a low-pass filter before
+// downsampling whenever the source rate exceeds the 128 Hz target
+// (sleepfm/preprocessing/preprocessing.py: filter_signal(), butter(4,
+// ..., btype='low') + filtfilt, applied iff rate > resample_rate).
+// dsptools::resample() is a no-op when rates already match, and its sinc
+// converter anti-aliases on downsampling and is artifact-free on
+// upsampling -- matching that conditional-filter behavior without needing
+// to replicate it explicitly.
+static std::vector<double> resample(const std::vector<double> &x, double from, double to, int n) {
+  if (x.empty()) return std::vector<double>(n, 0);
+  std::vector<double> y = dsptools::resample(&x, from, to, SRC_SINC_BEST_QUALITY);
+  y.resize(n, 0.0); // guarantee exact length, as dsptools::resample_channel() itself does
+  return y; // normalize before conversion to the model's float32 input
 }
 
 }
@@ -117,7 +102,7 @@ void proc_ort(edf_t &edf, param_t &param) {
 
   const std::string model_root = join_path(
     param.has("path") ? Helper::expand(param.value("path")) : ".",
-    param.has("lib") ? Helper::expand(param.value("lib")) : "sleepfm");
+    param.has("lib") ? Helper::expand(param.value("lib")) : "sleepfm_model_base");
   const std::string model = normalize_model_path(model_root);
   std::ifstream model_file(model);
   if (!model_file) Helper::halt("SleepFM ONNX model missing: " + model);
@@ -152,7 +137,7 @@ void proc_ort(edf_t &edf, param_t &param) {
   } else {
     logger << "input signal rate already matches target (no resampling needed); ";
   }
-  logger << "standardized within each window\n"
+  logger << "standardized per channel over the whole recording\n"
          << "    windowing: " << n_windows << " complete " << window_seconds
          << "s windows, step=" << requested_step << "s\n"
          << "    input: " << window_samples << " samples/channel; unused slots zero-padded\n";
@@ -217,6 +202,7 @@ void proc_ort(edf_t &edf, param_t &param) {
 
   const uint64_t win = window_seconds * globals::tp_1sec;
   const uint64_t step = requested_step * globals::tp_1sec;
+  const auto normalization = sleepfm_preprocessing::recording_normalization(edf, signals, sample_rate);
   Ort::MemoryInfo mem = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
   int w = 0;
   for (uint64_t start = 0; start + win <= edf.timeline.last_time_point_tp; start += step, ++w) {
@@ -226,8 +212,8 @@ void proc_ort(edf_t &edf, param_t &param) {
     for (int c = 0; c < max_channels; ++c) mask[c] = true;
     for (int c = 0; c < signals.size(); ++c) {
       slice_t sl(edf, signals(c), iv);
-      std::vector<float> z = resample(*sl.pdata(), edf.header.sampling_freq(signals(c)), sample_rate, window_samples);
-      standardize(&z);
+      std::vector<double> z = resample(*sl.pdata(), edf.header.sampling_freq(signals(c)), sample_rate, window_samples);
+      normalization[c].apply(&z);
       std::copy(z.begin(), z.end(), x.begin() + static_cast<size_t>(c) * window_samples);
       mask[c] = false;
     }

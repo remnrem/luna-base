@@ -266,6 +266,18 @@ int main(int argc , char ** argv )
   bool any_opt = false; // either -x, -l, -d or -r/-c : otherwise do summary
 
   std::set<std::string> args_rvar, args_cvar, args_ind, args_var;
+  std::set<std::string> warned_ambiguous_specs;
+
+  // A slash introduces a level-qualified factor request, whose suffix is
+  // already comma-delimited (e.g. STG/N2,N3).  Consequently, only expand a
+  // comma-separated command-line list when the token has no slash; otherwise
+  // preserving it as one request avoids changing that established syntax.
+  const auto option_list = []( const std::string & arg )
+    {
+      if ( arg.find( '/' ) != std::string::npos )
+        return std::vector<std::string>{ arg };
+      return Helper::parse( arg , "," );
+    };
   
   for (int i=1;i<argc;i++)
     {
@@ -353,17 +365,23 @@ int main(int argc , char ** argv )
 	    }
 	  
 	  else if ( mode == 'R' ) 
-	    { 
-	      if ( args_cvar.find( argv[i] ) != args_cvar.end() ) 
-		Helper::halt( "cannot have factor as both row and col stratifier " + std::string( argv[i] ) );
-	      args_rvar.insert( argv[i] );
+	    {
+	      for ( const auto & item : option_list( argv[i] ) )
+	        {
+	          if ( args_cvar.find( item ) != args_cvar.end() )
+	            Helper::halt( "cannot have factor as both row and col stratifier " + item );
+	          args_rvar.insert( item );
+	        }
 	    }
 	  
 	  else if ( mode == 'C' ) 
 	    {
-	      if ( args_rvar.find( argv[i] ) != args_rvar.end() ) 
-		Helper::halt( "cannot have factor as both row and col stratifier " + std::string( argv[i] ) );
-	      args_cvar.insert( argv[i] );
+	      for ( const auto & item : option_list( argv[i] ) )
+	        {
+	          if ( args_rvar.find( item ) != args_rvar.end() )
+	            Helper::halt( "cannot have factor as both row and col stratifier " + item );
+	          args_cvar.insert( item );
+	        }
 	    }
 	  
 	  else if ( mode == 'S' ) 
@@ -383,7 +401,7 @@ int main(int argc , char ** argv )
 
 	  else if ( mode == 'V' ) 
 	    {
-	      vars.insert( argv[i] );
+	      for ( const auto & item : option_list( argv[i] ) ) vars.insert( item );
 	    }
 	  
 	  else if ( mode == 'I' ) 
@@ -548,7 +566,33 @@ int main(int argc , char ** argv )
           writer.index();
         }
       else
-        open_reader_database( databases[d] );
+	open_reader_database( databases[d] );
+
+      // A factor/level request can legally have slash-containing levels (for
+      // example, ANNOT/apnea/obstructive,apnea/central).  Warn only when a
+      // comma-delimited component also begins with a factor that exists in
+      // this database: that is the common accidental form
+      // STG/N2,N3,CH/Cz,Fz, which is otherwise interpreted as STG levels.
+      const auto warn_ambiguous_comma_list = [&]( const std::string & spec , const char option )
+	{
+	  const size_t slash = spec.find( '/' );
+	  if ( slash == std::string::npos ) return;
+	  const std::vector<std::string> levels = Helper::parse( spec.substr( slash + 1 ) , "," );
+	  for ( const auto & level : levels )
+	    {
+	      const size_t nested_slash = level.find( '/' );
+	      if ( nested_slash == std::string::npos ) continue;
+	      const std::string possible_factor = level.substr( 0 , nested_slash );
+	      if ( writer.factors_idmap.find( possible_factor ) == writer.factors_idmap.end() ) continue;
+	      const std::string warning_key = std::string( 1 , option ) + ":" + spec;
+	      if ( warned_ambiguous_specs.insert( warning_key ).second )
+		std::cerr << "warning : " << option << " " << spec
+			  << " is interpreted as levels of " << spec.substr( 0 , slash )
+			  << "; separate factor requests with spaces (e.g. -" << option
+			  << " STG/N2,N3 CH/Cz,Fz)\n";
+	      return;
+	    }
+	};
 
       bool unavailable_factors = false;
 
@@ -559,6 +603,7 @@ int main(int argc , char ** argv )
       std::set<std::string>::const_iterator rr = args_rvar.begin();
       while ( rr != args_rvar.end() )
 	{
+	  warn_ambiguous_comma_list( *rr , 'r' );
 	  std::vector<std::string> tok = Helper::parse( *rr , "/" );
 	  std::string s = tok[0];
 	  if ( writer.factors_idmap.find( s ) == writer.factors_idmap.end() && s != "E" && s != "T" ) 
@@ -574,6 +619,7 @@ int main(int argc , char ** argv )
       std::set<std::string>::const_iterator cc = args_cvar.begin();
       while ( cc != args_cvar.end() )
 	{
+	  warn_ambiguous_comma_list( *cc , 'c' );
 	  std::vector<std::string> tok = Helper::parse( *cc , "/" );
 	  std::string s = tok[0];
 	  if ( writer.factors_idmap.find( s ) == writer.factors_idmap.end() && s != "E" && s != "T" ) 

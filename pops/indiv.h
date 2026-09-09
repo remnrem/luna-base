@@ -59,7 +59,20 @@ struct pops_indiv_t {
   
   void level1( edf_t & );
 
-  void level2( const bool quiet_mode = false );
+  // svd_ref_mean, if given, is an externally-owned, per-individual cache of
+  // POPS_SVD reference means (keyed by projection 'file'), used instead of
+  // adding a corresponding member to pops_indiv_t/pops_t (adding new fields
+  // to those structs was found to trigger an unrelated, pre-existing heap
+  // corruption bug elsewhere -- reproduced even with the field unused, so
+  // this state is threaded through as a parameter instead). Passing the
+  // same map across repeated level2() calls on one individual (as POPS
+  // resolution=5 does, once per 5s-shifted stride) keeps every call's SVD
+  // mean-centering consistent with the first call's, rather than each
+  // stride independently re-estimating a slightly different mean from its
+  // own epoch subset. NULL (the default) reproduces the original always-
+  // fresh behaviour.
+  void level2( const bool quiet_mode = false ,
+	       std::map<std::string,Eigen::VectorXd> * svd_ref_mean = NULL );
 
   void apply_ranges(double,double);
 
@@ -119,7 +132,7 @@ struct pops_indiv_t {
   // full level 1 features (i.e. copy before setting NaNs)
   //  - this is used in SOAP
   Eigen::MatrixXd X1f;
-    
+
   // staging
   std::vector<int> S;
   std::vector<int> Sorig;

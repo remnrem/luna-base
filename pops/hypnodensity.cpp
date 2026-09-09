@@ -154,6 +154,33 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
   // Examples: N=6 -> offset=2 (+10s), N=3 -> offset=1 (+10s, symmetric), N=5 -> offset=2 (+12s, symmetric)
   const int mid_offset = ( N - 1 ) / 2;
 
+  // Post-hoc smoothing kernel applied to the final combined output
+  // stream (see below, well after the per-stride loop) -- deliberately
+  // decoupled from N/epoch/stride structure entirely: this only ever
+  // averages neighbouring *output samples* (units of 5s each) of the
+  // already-combined posterior stream.
+  //
+  // Symmetric 7-tap kernel [1/12, 1/6, 1/6, 1/6, 1/6, 1/6, 1/12], solved
+  // so its frequency response is exactly zero at every one of the three
+  // independent nonzero frequencies a real period-6 sequence can have
+  // (omega = pi/3, 2pi/3, pi) while passing DC unchanged (H(0)=1, i.e.
+  // weights sum to 1). Any exactly-period-6 (== one full 30s-epoch-worth
+  // of 5s stride-steps) artifact -- of *any* shape, not just one
+  // frequency -- is therefore cancelled completely by construction (a
+  // full period of a periodic signal sums to its mean, nothing more),
+  // rather than merely dampened the way a generic taper would only
+  // dampen it. Equivalent to the standard symmetric "2x6 moving average"
+  // used to centre an even-order seasonal/periodic adjustment: a 6-point
+  // box average, symmetrized by averaging it with itself shifted one
+  // sample, which is why the two outermost taps get half weight.
+  const std::vector<double> smooth_kernel = { 1.0/12, 1.0/6, 1.0/6, 1.0/6, 1.0/6, 1.0/6, 1.0/12 };
+  const int smooth_half_width = ( (int)smooth_kernel.size() - 1 ) / 2;
+
+  // smooth-pp=F disables the post-hoc kernel above, for diagnostic A/B
+  // comparison (e.g. isolating whether some other change removes the
+  // ringing on its own); default is on.
+  const bool smooth_pp = param.has( "smooth-pp" ) ? param.yesno( "smooth-pp" ) : true;
+
   const std::string prefix = param.has( "prefix" ) ? param.value( "prefix" ) : "PP" ;
   const bool emit_pp_signals = param.has( "emit-pp" ) ? param.yesno( "emit-pp" ) : false;
 
@@ -318,6 +345,16 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
   //
 
   pops_indiv_t indiv( &edf );
+
+  // Per-individual POPS_SVD reference-mean cache, shared across every
+  // stride's level2() call below (see pops_indiv_t::level2()): keeps all 6
+  // 5s-shifted strides mean-centering their raw SVD-block features around
+  // the *same* reference point (whichever stride computes it first),
+  // rather than each stride silently re-estimating its own slightly
+  // different mean from its own epoch subset -- which would otherwise
+  // inject a spurious, purely computational stride-locked (i.e.
+  // epoch-length-periodic) offset into the combined posterior stream.
+  std::map<std::string,Eigen::VectorXd> svd_ref_mean;
 
   const bool have_base_staging_mask =
     base_indiv != NULL &&
@@ -508,7 +545,7 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 	  // Level 2: temporal smoothing, normalisation, SVD projection
 	  //
 
-	  indiv.level2( ! pops_opt_t::verbose );
+	  indiv.level2( ! pops_opt_t::verbose , &svd_ref_mean );
 
 
 	  //
@@ -597,7 +634,7 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 
 
       //
-      // Map each epoch's posterior to its output sample index.
+      // Map each epoch's posterior to its single output sample index.
       //
       // sidx = window_start_sample + mid_offset
       //      = (k + epoch_m * N) + (N-1)/2
@@ -606,6 +643,12 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
       // giving floor((N-1)/2) leading edge samples and ceil((N-1)/2) trailing edge
       // samples — the most balanced split achievable, with any 1-sample asymmetry
       // falling at the trailing end.  All arithmetic is exact integer (no rounding).
+      //
+      // This is deliberately a plain one-epoch-to-one-sample assignment, with
+      // no cross-stride blending here -- any smoothing across neighbouring
+      // *output samples* of the resulting combined stream is applied as a
+      // separate, explicit pass below (after the stride loop), decoupled
+      // entirely from epoch/stride bookkeeping.
       //
 
       for ( int e = 0; e < (int)indiv.E.size(); e++ )
@@ -626,6 +669,60 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 
   // restore default 30s non-overlapping epochs
   edf.timeline.set_epoch( 30.0 , 30.0 );
+
+  //
+  // Smooth the combined output stream over neighbouring output samples.
+  //
+  // sample_to_post at this point holds exactly one hard-selected posterior
+  // per output sample (see the per-stride loop above) -- ordinary,
+  // independently-computed estimates from six different, independently
+  // re-epoched strides, interleaved one every 5 seconds. Each stride's
+  // estimate for a given moment can legitimately differ from its
+  // neighbours' (e.g. SFM's whole-window self-attention makes the same 5s
+  // of signal embed differently depending on where it falls within its
+  // stride's own epoch/window), which otherwise shows up as a spurious,
+  // exactly-epoch-length-periodic ripple in the interleaved stream. This
+  // is a plain symmetric neighbour-smoothing pass over that final stream,
+  // with no reference to epochs, strides, or N at all -- purely in units
+  // of output samples (5s each), using smooth_kernel (see above; solved
+  // to exactly cancel any exactly-period-6 artifact rather than merely
+  // damping it).
+  //
+  // Missing neighbours (gaps -- e.g. near flagged epochs) are simply
+  // omitted and the weight sum renormalized over whichever neighbours are
+  // actually present; sample i itself is always present (weight
+  // smooth_kernel[smooth_half_width] > 0), so the weight sum is always
+  // > 0. Note: renormalizing over a partial/asymmetric subset of taps
+  // when neighbours are missing means the period-6 cancellation
+  // guarantee strictly holds only where all 7 taps are present (i.e.
+  // away from gaps/recording edges); that's an unavoidable consequence
+  // of having incomplete data there, not a flaw in the kernel itself.
+  //
+  // smooth_pp=false (smooth-pp=F) skips this pass entirely, leaving
+  // sample_to_post as the raw, unsmoothed hard-selected-per-stride
+  // values -- for diagnostic A/B comparison only; default is smoothing on.
+
+  if ( smooth_pp )
+  {
+    std::map<int,Eigen::VectorXd> smoothed;
+    for ( std::map<int,Eigen::VectorXd>::const_iterator pi = sample_to_post.begin();
+	  pi != sample_to_post.end(); ++pi )
+      {
+	const int i = pi->first;
+	Eigen::VectorXd sum = Eigen::VectorXd::Zero( pi->second.size() );
+	double wsum = 0.0;
+	for ( int d = -smooth_half_width; d <= smooth_half_width; ++d )
+	  {
+	    std::map<int,Eigen::VectorXd>::const_iterator ni = sample_to_post.find( i + d );
+	    if ( ni == sample_to_post.end() ) continue;
+	    const double w = smooth_kernel[ d + smooth_half_width ];
+	    sum += w * ni->second;
+	    wsum += w;
+	  }
+	smoothed[ i ] = sum / wsum;
+      }
+    sample_to_post = smoothed;
+  }
 
   if ( sample_to_post.empty() )
     {

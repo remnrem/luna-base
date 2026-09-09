@@ -77,7 +77,10 @@ struct pops_t {
   
   // derive level 2 stats (from pops_t::specs)
   // this is also co-opted by prediction mode 
-  void level2( const bool training = true , const bool quiet = false );
+  // svd_ref_mean: see pops_indiv_t::level2() for why this exists (only
+  // meaningful, and only used, when training is false)
+  void level2( const bool training = true , const bool quiet = false ,
+	       std::map<std::string,Eigen::VectorXd> * svd_ref_mean = NULL );
 
   // test mean differences by stage (overall, and within person)
   void stage_association();
@@ -129,8 +132,8 @@ struct pops_t {
 
   Eigen::MatrixXd X1;
   std::map<std::string,Eigen::MatrixXd> V; // when reading in level2 SVD scoring
-  std::map<std::string,Eigen::MatrixXd> W;  
-  
+  std::map<std::string,Eigen::MatrixXd> W;
+
   std::vector<int> S;
   std::vector<int> E;
   std::vector<int> Istart, Iend;
