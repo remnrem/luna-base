@@ -1801,6 +1801,10 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
               writer.value( "PRF" , ( ne_total - n_pred_valid_stage1 ) * epoch_to_min );
               writer.value( "PR1" , ( ne_total - n_pred_valid_stage1 ) * epoch_to_min );
               writer.unlevel( globals::stage_strat );
+
+              logger << "  [stage-1] kappa = " << stats5_stage1.kappa
+                     << "; 3-class kappa = " << stats3_stage1.kappa
+                     << " (n = " << obs_stage1.size() << " epochs)\n";
             }
           else
             {
@@ -1838,6 +1842,10 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
               writer.value( "PRF" , ( ne_total - n_pred_valid_stage1 ) * epoch_to_min );
               writer.value( "PR1" , ( ne_total - n_pred_valid_stage1 ) * epoch_to_min );
               writer.unlevel( globals::stage_strat );
+
+              logger << "  [stage-1] kappa = " << stats3_stage1.kappa
+                     << "; 3-class kappa = " << stats3_stage1.kappa
+                     << " (n = " << obs_stage1.size() << " epochs)\n";
             }
 
           if ( stratify_coda )
@@ -2031,7 +2039,7 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
       writer.value( "PR1" , ( ne_total - n_pred_valid ) * epoch_to_min );
       writer.unlevel( globals::stage_strat );
 
-      logger << "  kappa = " << stats5.kappa
+      logger << "  [CODA] kappa = " << stats5.kappa
              << "; 3-class kappa = " << stats3.kappa
              << " (n = " << obs.size() << " epochs)\n";
       logger << "  Confusion matrix:\n";
@@ -2184,7 +2192,7 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
       writer.value( "PR1" , ( ne_total - n_pred_valid ) * epoch_to_min );
       writer.unlevel( globals::stage_strat );
 
-      logger << "  kappa = " << stats3.kappa
+      logger << "  [CODA] kappa = " << stats3.kappa
              << "; 3-class kappa = " << stats3.kappa
              << " (n = " << obs.size() << " epochs)\n";
       logger << "  Confusion matrix:\n";
