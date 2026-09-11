@@ -4071,6 +4071,60 @@ void edf_t::reference( const signal_list_t & signals0 ,
 }
 
 
+void edf_t::make_reference( const signal_list_t & refs ,
+			    const std::string & new_channel ,
+			    const bool verbose )
+{
+  const int nr = refs.size();
+  if ( nr == 0 ) Helper::halt( "no valid ref channels specified" );
+  if ( header.has_signal( new_channel ) )
+    Helper::halt( new_channel + " already exists in the EDF" );
+
+  // A sample-wise average requires identical samples per EDF record.
+  const int np_ref = header.n_samples[ refs(0) ];
+  for (int r=1; r<nr; r++)
+    if ( header.n_samples[ refs(r) ] != np_ref )
+      Helper::halt( "all references must have similar sampling rates" );
+
+  if ( verbose )
+    {
+      logger << "  making " << new_channel << " as the negative average of";
+      for (int r=0; r<nr; r++) logger << " " << header.label[ refs(r) ];
+      logger << "\n";
+    }
+
+  std::vector<double> data;
+  int rec = timeline.first_record();
+  while ( rec != -1 )
+    {
+      ensure_loaded( rec );
+      edf_record_t & record = records.find(rec)->second;
+
+      std::vector<std::vector<double> > refdata;
+      for (int r=0; r<nr; r++) refdata.push_back( record.get_pdata( refs(r) ) );
+
+      for (int i=0; i<np_ref; i++)
+        {
+          double avg = 0;
+          for (int r=0; r<nr; r++) avg += refdata[r][i];
+          data.push_back( -avg / (double)nr );
+        }
+      rec = timeline.next_record(rec);
+    }
+
+  const int source = refs(0);
+  // Let add_signal derive a physical range from the newly calculated data:
+  // the negative mean need not fit in any individual reference's range.
+  add_signal( new_channel, header.sampling_freq(source), data );
+
+  // Match the source signal's descriptive metadata, as copy_signal() does.
+  const int created = header.signal( new_channel );
+  header.transducer_type[created] = header.transducer_type[source];
+  header.phys_dimension[created] = header.phys_dimension[source];
+  header.prefiltering[created] = header.prefiltering[source];
+}
+
+
 bool edf_t::load_annotations( const std::string & f0 )
 {
 

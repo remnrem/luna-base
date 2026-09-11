@@ -26,6 +26,8 @@
 #include "edf/slice.h"
 #include "stats/eigen_ops.h"
 
+#include <map>
+
 
 void dsptools::standardize( edf_t & edf , param_t & param )
 {
@@ -102,6 +104,28 @@ void dsptools::standardize( edf_t & edf , param_t & param )
   Eigen::MatrixXd & X = mslice.nonconst_data_ref();
   const int rows = X.rows();
   const int cols = X.cols();
+
+  //
+  // If normalizing by epoch, keep a map from the EDF's sample indices to
+  // rows in the whole-trace buffer.  Epochs need not start at time zero or
+  // span the entire EDF (e.g. EPOCH align, masked epochs, or EDF+D data), so
+  // their transformed samples cannot safely be copied back with a simple
+  // sequential cursor.
+  //
+
+  std::map<int,int> smp2row;
+
+  if ( by_epoch )
+    {
+      slice_t whole_slice( edf , signals(0) , edf.timeline.wholetrace() , 1 , false , true );
+      const std::vector<int> * whole_smps = whole_slice.psmps();
+
+      if ( whole_smps->size() != rows )
+	Helper::halt( "internal error in standardize(): whole-trace sample map does not match data" );
+
+      for (int i=0; i<rows; i++)
+	smp2row[ (*whole_smps)[i] ] = i;
+    }
   
   
   //
@@ -110,7 +134,7 @@ void dsptools::standardize( edf_t & edf , param_t & param )
 
   int ne = by_epoch ? edf.timeline.first_epoch() : 1 ;
   
-  // for sample updates
+  // for whole-trace sample updates
   int r = 0;
 
   while ( 1 )
@@ -139,12 +163,33 @@ void dsptools::standardize( edf_t & edf , param_t & param )
       
       // update X
       const int trows = T.rows();      
-      for (int i=0; i<trows; i++)
+      if ( by_epoch )
 	{
-	  for (int j=0; j<cols; j++)
-	    X(r,j) = T(i,j);
-	  // next row of X
-	  ++r;
+	  slice_t epoch_slice( edf , signals(0) , interval , 1 , false , true );
+	  const std::vector<int> * epoch_smps = epoch_slice.psmps();
+
+	  if ( epoch_smps->size() != trows )
+	    Helper::halt( "internal error in standardize(): epoch sample map does not match data" );
+
+	  for (int i=0; i<trows; i++)
+	    {
+	      std::map<int,int>::const_iterator ii = smp2row.find( (*epoch_smps)[i] );
+	      if ( ii == smp2row.end() ) continue;
+
+	      for (int j=0; j<cols; j++)
+		X(ii->second,j) = T(i,j);
+	    }
+	  // If epochs overlap, this deliberately leaves the last processed
+	  // epoch's normalized value at shared samples.
+	}
+      else
+	{
+	  for (int i=0; i<trows; i++)
+	    {
+	      for (int j=0; j<cols; j++)
+		X(r,j) = T(i,j);
+	      ++r;
+	    }
 	}
       
       // done?
@@ -194,4 +239,3 @@ void dsptools::rolling_standardize( edf_t & edf , param_t & param )
     }
    
 }
-

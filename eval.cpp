@@ -5467,6 +5467,29 @@ void proc_adjust( edf_t & edf , param_t & param )
 // REFERENCE : re-reference tracks
 void proc_reference( edf_t & edf , param_t & param )
 {
+  // make= is a separate mode: construct the implicit recording reference
+  // from one or more channels that share it, without changing those inputs.
+  if ( param.has( "make" ) )
+    {
+      if ( param.has( "sig" ) )
+	Helper::halt( "cannot specify both sig and make with REFERENCE" );
+      if ( param.has( "new" ) || param.has( "pairwise" ) || param.has( "sr" ) )
+	Helper::halt( "new, pairwise and sr cannot be used with make in REFERENCE" );
+
+      const std::vector<std::string> labels = param.strvector( "make" );
+      if ( labels.size() != 1 || labels[0] == "" )
+	Helper::halt( "expecting a single label for make" );
+
+      const std::string refstr = param.requires( "ref" );
+      signal_list_t references;
+      if ( refstr != "." ) references = edf.header.signal_list( refstr );
+      if ( refstr == "." || references.size() == 0 )
+	Helper::halt( "no valid ref channels specified" );
+
+      edf.make_reference( references, labels[0] );
+      return;
+    }
+
   std::string sigstr = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( sigstr );
 
@@ -5506,6 +5529,11 @@ void proc_reference( edf_t & edf , param_t & param )
 // Remove reference
 void proc_dereference( edf_t & edf , param_t & param )
 {
+  // make= constructs an implicit reference from recorded signals; that is
+  // distinct from DEREFERENCE, where ref= is the signal to add back.
+  if ( param.has( "make" ) )
+    Helper::halt( "make cannot be used with DEREFERENCE; use REFERENCE ref=... make=... first" );
+
   std::string sigstr = param.requires( "sig" );
   signal_list_t signals = edf.header.signal_list( sigstr );
   

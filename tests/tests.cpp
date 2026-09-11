@@ -525,7 +525,49 @@ static void test_signal( lunapi_t * eng,
     record(R,"signal/update-signal", sd_before > 0.1 && approx_equal(sd_after,0.0,1e-6), m.str(), V);
   } catch(std::exception & e) { record(R,"signal/update-signal",false,e.what(),V); }
 
-  // A6 — direct SSA reconstruction should sum back to the original series
+  // A6 — REFERENCE make= derives the negative mean reference without
+  // modifying the source channels; ordinary REFERENCE remains subtraction.
+  try {
+    auto p = eng->inst("T_reference_make");
+    p->empty_edf("T_reference_make", 1, 3, "01.01.85", "22.00.00");
+    const std::vector<double> a1 = { 2, 4, 6 };
+    const std::vector<double> a2 = { 4, 8, 12 };
+    const std::vector<double> c3 = { 10, 20, 30 };
+    p->insert_signal("A1", a1, 1);
+    p->insert_signal("A2", a2, 1);
+    p->insert_signal("C3", c3, 1);
+    p->eval("REFERENCE ref=A1,A2 make=FPz & REFERENCE sig=C3 ref=A1,A2");
+
+    const Eigen::MatrixXd made = std::get<1>( p->data( { "FPz" }, {}, false ) );
+    const Eigen::MatrixXd sources = std::get<1>( p->data( { "A1", "A2" }, {}, false ) );
+    const Eigen::MatrixXd reref = std::get<1>( p->data( { "C3" }, {}, false ) );
+    const bool mean_ok = made.rows() == 3 && made.cols() == 1
+      && approx_equal(made(0,0), -3, 1e-3) && approx_equal(made(1,0), -6, 1e-3)
+      && approx_equal(made(2,0), -9, 1e-3);
+    const bool sources_ok = sources.rows() == 3 && sources.cols() == 2
+      && approx_equal(sources(0,0), 2, 1e-3) && approx_equal(sources(2,0), 6, 1e-3)
+      && approx_equal(sources(0,1), 4, 1e-3) && approx_equal(sources(2,1), 12, 1e-3);
+    const bool legacy_ok = reref.rows() == 3 && reref.cols() == 1
+      && approx_equal(reref(0,0), 7, 1e-3) && approx_equal(reref(1,0), 14, 1e-3)
+      && approx_equal(reref(2,0), 21, 1e-3);
+    record(R, "signal/reference-make-negative-mean", mean_ok && sources_ok && legacy_ok,
+           "FPz=[-3,-6,-9] sources unchanged; C3=[7,14,21]", V);
+  } catch(std::exception & e) { record(R,"signal/reference-make-negative-mean",false,e.what(),V); }
+
+  // A7 — the single-reference form is simply the negated source signal.
+  try {
+    auto p = eng->inst("T_reference_make_single");
+    p->empty_edf("T_reference_make_single", 1, 3, "01.01.85", "22.00.00");
+    p->insert_signal("A1", std::vector<double>{ 2, 4, 6 }, 1);
+    p->eval("REFERENCE ref=A1 make=FPz");
+    const Eigen::MatrixXd made = std::get<1>( p->data( { "FPz" }, {}, false ) );
+    const bool ok = made.rows() == 3 && made.cols() == 1
+      && approx_equal(made(0,0), -2, 1e-3) && approx_equal(made(1,0), -4, 1e-3)
+      && approx_equal(made(2,0), -6, 1e-3);
+    record(R, "signal/reference-make-single", ok, "FPz=[-2,-4,-6]", V);
+  } catch(std::exception & e) { record(R,"signal/reference-make-single",false,e.what(),V); }
+
+  // A8 — direct SSA reconstruction should sum back to the original series
   try {
     const int sr = 64;
     const double dur = 8.0;

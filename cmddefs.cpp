@@ -2206,9 +2206,11 @@ void cmddefs_t::init()
 	    "REFERENCE subtracts one or more reference channels from the target signals.\n"
 	    "\n"
 	    "It can either update signals in place or create new referenced channels, and pairwise mode\n"
-	    "supports one-to-one referencing across matching signal/reference lists." );
+	    "supports one-to-one referencing across matching signal/reference lists.  With make=, it instead\n"
+	    "creates one channel equal to the negative average of ref= channels." );
   add_param( "REFERENCE" , "sig" , "C3,C4" , "List of signals to re-reference" );
   add_param( "REFERENCE" , "ref" , "A1,A2" , "Signal(s) providing the reference [required]" );
+  add_param( "REFERENCE" , "make" , "FPz" , "Create one channel as the negative average of ref= signals" );
   add_param( "REFERENCE" , "new" , "C3_A2" , "Create new referenced channel(s) with these label(s)" );
   add_param( "REFERENCE" , "pairwise" , "" , "Apply references pairwise across sig and ref lists" );
   add_param( "REFERENCE" , "sr" , "200" , "Sampling rate for newly created referenced channels" );
@@ -5370,12 +5372,32 @@ void cmddefs_t::init()
 
   add_param( "IRASA" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
   add_param( "IRASA" , "lwr" , "1" ,   "Lower frequency range" );
-  add_param( "IRASA" , "upr" , "20" ,   "Upper frequency range" );
+  add_param( "IRASA" , "upr" , "30" ,   "Upper frequency range" );
   add_param( "IRASA" , "h-min" , "1.05" , "Minimum h" );
   add_param( "IRASA" , "h-max" , "1.95" , "Maximum h" );
-  add_param( "IRASA" , "h-cnt" , "17" , "Number of h steps (min-max)" );
-  add_param( "IRASA" , "dB" , "" , "Decibel scale output" );
-  add_param( "IRASA" , "epoch" , "" , "Report per-epoch statistics" );
+  add_param( "IRASA" , "h-cnt" , "19" , "Number of h steps (min-max)" );
+  add_param( "IRASA" , "segment-sec" , "4" , "Welch segment length in seconds" );
+  add_param( "IRASA" , "segment-overlap" , "2" , "Welch segment overlap in seconds" );
+  add_param( "IRASA" , "segment-mean" , "" , "Use mean rather than median across Welch segments" );
+  add_param( "IRASA" , "epoch-mean" , "" , "Use mean rather than median across epochs" );
+  add_param( "IRASA" , "no-window" , "" , "Do not window Welch segments" );
+  add_param( "IRASA" , "hann" , "" , "Use a Hann window" );
+  add_param( "IRASA" , "hamming" , "" , "Use a Hamming window (default)" );
+  add_param( "IRASA" , "tukey50" , "" , "Use a Tukey(50%) window" );
+  add_param( "IRASA" , "fast" , "" , "Use fast linear resampling" );
+  add_param( "IRASA" , "band" , "yes" , "Report complete standard band-power summaries within lwr/upr (use band=no to disable)" );
+  add_param( "IRASA" , "slow" , "0.5-1" , "Override the slow-wave band" );
+  add_param( "IRASA" , "delta" , "1-4" , "Override the delta band" );
+  add_param( "IRASA" , "theta" , "4-8" , "Override the theta band" );
+  add_param( "IRASA" , "alpha" , "8-12" , "Override the alpha band" );
+  add_param( "IRASA" , "sigma" , "12-15" , "Override the sigma band" );
+  add_param( "IRASA" , "slow-sigma" , "10-13" , "Override the slow-sigma band" );
+  add_param( "IRASA" , "fast-sigma" , "13-15" , "Override the fast-sigma band" );
+  add_param( "IRASA" , "beta" , "15-30" , "Override the beta band" );
+  add_param( "IRASA" , "gamma" , "30-50" , "Override the gamma band" );
+  add_param( "IRASA" , "total" , "0.5-50" , "Override the TOTAL band" );
+  add_param( "IRASA" , "dB" , "" , "Report APER in dB, plus PER_DB (when positive) and PER_EXCESS_DB" );
+  add_param( "IRASA" , "epoch" , "" , "Report per-epoch spectral statistics" );
   
   add_table( "IRASA" , "CH" , "Whole-night, per-channel stats" );
   add_var( "IRASA" , "CH" , "SPEC_SLOPE" , "Spectral slope" );
@@ -5387,15 +5409,33 @@ void cmddefs_t::init()
   add_var( "IRASA" , "CH,E" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
   add_var( "IRASA" , "CH,E" , "SPEC_SLOPE_RSQ" , "Spectral slope R-sq" );
 
-  add_table( "IRASA" , "CH,F" , "Whole-night, per-channel stats" );
-  add_var( "IRASA" , "CH,F" , "APER" , "Aperiodic PSD component" );
-  add_var( "IRASA" , "CH,F" , "PER" , "Periodic PSD component" );
-  add_var( "IRASA" , "CH,F" , "LOGF" , "Log-transformed frequency" );
+  add_table( "IRASA" , "CH,B" , "Whole-night, per-channel IRASA band power" );
+  add_var( "IRASA" , "CH,B" , "PSD" , "Original PSD band power" );
+  add_var( "IRASA" , "CH,B" , "APER" , "Aperiodic component band power" );
+  add_var( "IRASA" , "CH,B" , "PER" , "Signed periodic residual band power, PSD minus APER (linear output)" );
+  add_var( "IRASA" , "CH,B" , "PER_DB" , "Periodic residual band power in dB (dB output; only when positive)" );
+  add_var( "IRASA" , "CH,B" , "PER_EXCESS_DB" , "Band-level periodic excess: 10log10(PSD / APER) (dB output)" );
 
-  add_table( "IRASA" , "CH,E,F" , "Epoch-level, per-channel stats" );
-  add_var( "IRASA" , "CH,E,F" , "APER" , "Aperiodic PSD component" );
-  add_var( "IRASA" , "CH,E,F" , "PER" , "Periodic PSD component" );
-  add_var( "IRASA" , "CH,E,F" , "LOGF" , "Log-transformed frequency" );
+  add_table( "IRASA" , "CH,B,E" , "Epoch-level, per-channel IRASA band power" );
+  add_var( "IRASA" , "CH,B,E" , "PSD" , "Original PSD band power" );
+  add_var( "IRASA" , "CH,B,E" , "APER" , "Aperiodic component band power" );
+  add_var( "IRASA" , "CH,B,E" , "PER" , "Signed periodic residual band power, PSD minus APER (linear output)" );
+  add_var( "IRASA" , "CH,B,E" , "PER_DB" , "Periodic residual band power in dB (dB output; only when positive)" );
+  add_var( "IRASA" , "CH,B,E" , "PER_EXCESS_DB" , "Band-level periodic excess: 10log10(PSD / APER) (dB output)" );
+
+  add_table( "IRASA" , "CH,F" , "Whole-night, per-channel spectral components" );
+  add_var( "IRASA" , "CH,F" , "APER" , "Aperiodic PSD component (dB with dB)" );
+  add_var( "IRASA" , "CH,F" , "PER" , "Periodic residual PSD component, PSD minus APER (linear output)" );
+  add_var( "IRASA" , "CH,F" , "PER_DB" , "Periodic residual PSD component in dB (dB output; only when positive)" );
+  add_var( "IRASA" , "CH,F" , "PER_EXCESS_DB" , "Periodic excess relative to APER: 10log10(PSD / APER) (dB output)" );
+  add_var( "IRASA" , "CH,F" , "LOGF" , "Natural-log frequency (dB output)" );
+
+  add_table( "IRASA" , "CH,E,F" , "Epoch-level, per-channel spectral components" );
+  add_var( "IRASA" , "CH,E,F" , "APER" , "Aperiodic PSD component (dB with dB)" );
+  add_var( "IRASA" , "CH,E,F" , "PER" , "Periodic residual PSD component, PSD minus APER (linear output)" );
+  add_var( "IRASA" , "CH,E,F" , "PER_DB" , "Periodic residual PSD component in dB (dB output; only when positive)" );
+  add_var( "IRASA" , "CH,E,F" , "PER_EXCESS_DB" , "Periodic excess relative to APER: 10log10(PSD / APER) (dB output)" );
+  add_var( "IRASA" , "CH,E,F" , "LOGF" , "Natural-log frequency (dB output)" );
   set_compressed( "IRASA" , tfac_t( "CH,E,F" ) );
 
   //

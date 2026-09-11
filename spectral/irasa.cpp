@@ -25,6 +25,7 @@
 #include "edf/slice.h"
 #include "dsp/resample.h"
 #include "fftw/fftwrap.h"
+#include "fftw/bandaid.h"
 #include "dynamics/qdynam.h"
 
 #include "helper/helper.h"
@@ -57,10 +58,13 @@ void irasa_wrapper( edf_t & edf , param_t & param )
 
   const double h_min = param.has( "h-min" ) ? param.requires_dbl( "h-min" ) : 1.05;
   const double h_max = param.has( "h-max" ) ? param.requires_dbl( "h-max" ) : 1.95;
-  const int    h_cnt = param.has( "h-steps" ) ? param.requires_dbl( "h-steps" ) : 19;
+  const int    h_cnt = param.has( "h-cnt" ) ? param.requires_dbl( "h-cnt" )
+    : ( param.has( "h-steps" ) ? param.requires_dbl( "h-steps" ) : 19 );
   
-  const double f_lwr = param.has( "min" ) ? param.requires_dbl( "min" ) : 1 ;
-  const double f_upr = param.has( "max" ) ? param.requires_dbl( "max" ) : 30 ;
+  const double f_lwr = param.has( "lwr" ) ? param.requires_dbl( "lwr" )
+    : ( param.has( "min" ) ? param.requires_dbl( "min" ) : 1 );
+  const double f_upr = param.has( "upr" ) ? param.requires_dbl( "upr" )
+    : ( param.has( "max" ) ? param.requires_dbl( "max" ) : 30 );
   
   const bool average_adj = false;
   const double segment_sec = param.has( "segment-sec" ) ? param.requires_dbl( "segment-sec" ) : 4 ;
@@ -70,6 +74,24 @@ void irasa_wrapper( edf_t & edf , param_t & param )
   
   const bool logout = param.has( "dB" );
   const bool epoch_lvl_output = param.has( "epoch" );
+
+  // Match PSD: report the standard bands unless explicitly disabled, and
+  // apply its standard per-command band-definition overrides.
+  const bool band_output = param.has( "band" ) ? param.yesno( "band" ) : true;
+  bandaid_t band_settings;
+  band_settings.define_bands( param );
+  double max_band_upr = 0;
+  int n_complete_bands = 0;
+  for (std::vector<frequency_band_t>::const_iterator bi = band_settings.bands.begin();
+       bi != band_settings.bands.end(); ++bi)
+    if ( globals::freq_band.find( *bi ) != globals::freq_band.end()
+         && globals::freq_band[ *bi ].first >= f_lwr
+         && globals::freq_band[ *bi ].second <= f_upr )
+      {
+	++n_complete_bands;
+	if ( globals::freq_band[ *bi ].second > max_band_upr )
+	  max_band_upr = globals::freq_band[ *bi ].second;
+	}
   
   window_function_t window_function = WINDOW_HAMMING;	   
   if      ( param.has( "no-window" ) ) window_function = WINDOW_NONE;
@@ -100,6 +122,7 @@ void irasa_wrapper( edf_t & edf , param_t & param )
   for (int s=0; s<ns; s++)
     {
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
+
       if ( fmax > Fs[s] / 2.0 )
 	{
 	  logger << "  for " << signals.label(s) << ", Nyquist = " << Fs[s] / 2.0
@@ -141,6 +164,13 @@ void irasa_wrapper( edf_t & edf , param_t & param )
 
       if ( edf.header.is_annotation_channel( signals(s) ) ) continue;
 
+      const bool bands_defined = band_output
+        && n_complete_bands > 0 && Fs[s] >= 2 * max_band_upr;
+      if ( band_output && ! bands_defined )
+        logger << "  skipping IRASA band-level output for " << signals.label(s)
+               << ": SR=" << Fs[s] << "Hz insufficient for configured bands up to "
+               << max_band_upr << "Hz\n";
+
       writer.level( signals.label(s) , globals::signal_strat );
 
       //
@@ -158,7 +188,7 @@ void irasa_wrapper( edf_t & edf , param_t & param )
       //
 
       irasa_t irasa( edf , param, *d , Fs[s] , edf.timeline.epoch_length(), ne, h_min, h_max, h_cnt , f_lwr, f_upr ,
-		     segment_sec , overlap_sec , converter , epoch_lvl_output , logout , slope_range , slope_outlier ,
+		     segment_sec , overlap_sec , converter , epoch_lvl_output , bands_defined && epoch_lvl_output , logout , slope_range , slope_outlier ,
 		     window_function , segment_median , epoch_median , cache , cache_epochs , silent , calc_dynamics );
       
 
@@ -176,7 +206,16 @@ void irasa_wrapper( edf_t & edf , param_t & param )
 		writer.value( "LOGF" , log( irasa.frq[f] ) );
 	      
 	      writer.value( "APER" , irasa.aperiodic[f] );
-	      writer.value( "PER" , irasa.periodic[f] );	      
+	      if ( logout )
+		{
+		  // The periodic residual can be non-positive, so its dB power is
+		  // only defined when the raw residual is strictly positive.
+		  if ( irasa.periodic_raw[f] > 0 )
+		    writer.value( "PER_DB" , 10 * log10( irasa.periodic_raw[f] ) );
+		  writer.value( "PER_EXCESS_DB" , irasa.periodic[f] );
+		}
+	      else
+		writer.value( "PER" , irasa.periodic[f] );
 	    }
 	  
 	  if ( cache_data )
@@ -187,6 +226,47 @@ void irasa_wrapper( edf_t & edf , param_t & param )
 	  
 	}
       writer.unlevel( globals::freq_strat );
+
+      // Integrate the raw IRASA component spectra using the same helper as PSD.
+      // The periodic component is deliberately signed: clipping negative residual
+      // bins would bias the band estimate upwards.
+      if ( bands_defined )
+	{
+	  bandaid_t aper_bands, per_bands, psd_bands;
+	  aper_bands.calc_bandpower( irasa.frq , irasa.aperiodic_raw );
+	  per_bands.calc_bandpower( irasa.frq , irasa.periodic_raw );
+	  psd_bands.calc_bandpower( irasa.frq , irasa.original_raw );
+
+	  for (std::vector<frequency_band_t>::const_iterator bi = aper_bands.bands.begin();
+	       bi != aper_bands.bands.end(); ++bi)
+	    {
+	      const freq_range_t & range = globals::freq_band[ *bi ];
+	      if ( range.first < f_lwr || range.second > f_upr ) continue;
+	      const double aper = aper_bands.fetch( *bi );
+	      const double per = per_bands.fetch( *bi );
+	      const double psd = psd_bands.fetch( *bi );
+
+	      writer.level( globals::band( *bi ) , globals::band_strat );
+	      if ( ! silent )
+		{
+		  if ( logout )
+		    {
+		      if ( psd > 0 ) writer.value( "PSD" , 10 * log10( psd ) );
+		      if ( aper > 0 ) writer.value( "APER" , 10 * log10( aper ) );
+		      if ( per > 0 ) writer.value( "PER_DB" , 10 * log10( per ) );
+		      if ( psd > 0 && aper > 0 )
+			writer.value( "PER_EXCESS_DB" , 10 * log10( psd / aper ) );
+		    }
+		  else
+		    {
+		      writer.value( "PSD" , psd );
+		      writer.value( "APER" , aper );
+		      writer.value( "PER" , per );
+		    }
+		}
+	    }
+	  writer.unlevel( globals::band_strat );
+	}
 
       //
       // spectral slope?
@@ -221,6 +301,7 @@ irasa_t::irasa_t( edf_t & edf ,
 		  const double overlap_sec ,
 		  const int converter, 
 		  const bool epoch_lvl_output ,
+		  const bool epoch_band_output ,
 		  const bool logout ,
 		  const std::vector<double> & slope_range , 
 		  const double slope_outlier ,
@@ -269,7 +350,7 @@ irasa_t::irasa_t( edf_t & edf ,
   // track epoch level stats, to get mean/median at the end
   //
   
-  std::vector<std::vector<double> > apers, apers_raw, pers;
+  std::vector<std::vector<double> > apers, apers_raw, pers, pers_raw, psds_raw;
 
   //
   // dynamics?
@@ -401,12 +482,16 @@ irasa_t::irasa_t( edf_t & edf ,
 	  n = frq.size();
 	  
 	  periodic.resize( n );
+	  periodic_raw.resize( n );
 	  aperiodic.resize( n );
 	  aperiodic_raw.resize( n );
+	  original_raw.resize( n );
 
 	  apers.resize( n );
 	  apers_raw.resize( n );
 	  pers.resize( n );
+	  pers_raw.resize( n );
+	  psds_raw.resize( n );
 	}
       
       //
@@ -419,8 +504,8 @@ irasa_t::irasa_t( edf_t & edf ,
       if ( epoch_lvl_output || cache_epochs )
 	writer.epoch( edf.timeline.display_epoch( epoch ) );
 
-      // get main statistics for this epoch
-      std::vector<double> aper_spectrum, aper_frq;
+	  // get main statistics for this epoch
+	  std::vector<double> aper_spectrum, per_spectrum, psd_spectrum, aper_frq;
 
       for (int i=0; i<pwelch.psd.size() ; i++)
 	{
@@ -449,12 +534,14 @@ irasa_t::irasa_t( edf_t & edf ,
 		  
 		  writer.level( pwelch.freq[ i ] , globals::freq_strat );
 		  
-		  if ( epoch_lvl_output ) 
-		    {
-		      
-		      // for epoch-level slope (below) [ always raw PSD ]
-		      aper_frq.push_back( pwelch.freq[ i ] );
-		      aper_spectrum.push_back( aper );
+		  if ( epoch_lvl_output )
+			{
+
+			  // for epoch-level slope (below) [ always raw PSD ]
+			  aper_frq.push_back( pwelch.freq[ i ] );
+			  aper_spectrum.push_back( aper );
+			  per_spectrum.push_back( per );
+			  psd_spectrum.push_back( pwelch.psd[ i ] );
 		  
 		      if ( ! silent ) 
 			{
@@ -462,8 +549,10 @@ irasa_t::irasa_t( edf_t & edf ,
 			    {
 			      if ( okay )
 				{
-				  writer.value( "PER" , log_per );
-				  writer.value( "APER" , log_aper );			    
+				  if ( per > 0 )
+				    writer.value( "PER_DB" , 10 * log10( per ) );
+				  writer.value( "PER_EXCESS_DB" , log_per );
+				  writer.value( "APER" , log_aper );
 				}
 			    }
 			  else
@@ -510,12 +599,16 @@ irasa_t::irasa_t( edf_t & edf ,
 		      apers_raw[ cnt ].push_back( aper );
 		      pers[ cnt ].push_back( log_per );
 		    }
+		  pers_raw[ cnt ].push_back( per );
+		  psds_raw[ cnt ].push_back( pwelch.psd[ i ] );
 		}
 	      else
 		{
 		  apers[ cnt ].push_back( aper ); 
 		  apers_raw[ cnt ].push_back( aper );
 		  pers[ cnt ].push_back( per ) ;
+		  pers_raw[ cnt ].push_back( per );
+		  psds_raw[ cnt ].push_back( pwelch.psd[ i ] );
 		}
 	      
 	      ++cnt;
@@ -525,6 +618,44 @@ irasa_t::irasa_t( edf_t & edf ,
       
       if ( epoch_lvl_output || cache_epochs || calc_dynamics )
 	writer.unlevel( globals::freq_strat );
+
+      if ( epoch_band_output )
+	{
+	  bandaid_t aper_bands, per_bands, psd_bands;
+	  aper_bands.calc_bandpower( aper_frq , aper_spectrum );
+	  per_bands.calc_bandpower( aper_frq , per_spectrum );
+	  psd_bands.calc_bandpower( aper_frq , psd_spectrum );
+
+	  for (std::vector<frequency_band_t>::const_iterator bi = aper_bands.bands.begin();
+	       bi != aper_bands.bands.end(); ++bi)
+	    {
+	      const freq_range_t & range = globals::freq_band[ *bi ];
+	      if ( range.first < f_lwr || range.second > f_upr ) continue;
+	      const double aper = aper_bands.fetch( *bi );
+	      const double per = per_bands.fetch( *bi );
+	      const double psd = psd_bands.fetch( *bi );
+
+	      writer.level( globals::band( *bi ) , globals::band_strat );
+	      if ( ! silent )
+		{
+		  if ( logout )
+		    {
+		      if ( psd > 0 ) writer.value( "PSD" , 10 * log10( psd ) );
+		      if ( aper > 0 ) writer.value( "APER" , 10 * log10( aper ) );
+		      if ( per > 0 ) writer.value( "PER_DB" , 10 * log10( per ) );
+		      if ( psd > 0 && aper > 0 )
+			writer.value( "PER_EXCESS_DB" , 10 * log10( psd / aper ) );
+		    }
+		  else
+		    {
+		      writer.value( "PSD" , psd );
+		      writer.value( "APER" , aper );
+		      writer.value( "PER" , per );
+		    }
+		}
+	    }
+	  writer.unlevel( globals::band_strat );
+	}
       
 
       //
@@ -553,8 +684,10 @@ irasa_t::irasa_t( edf_t & edf ,
   for (int i=0; i<n; i++)
     {
       periodic[i] = epoch_median ? MiscMath::median( pers[i] ) : MiscMath::mean( pers[i] );
+      periodic_raw[i] = epoch_median ? MiscMath::median( pers_raw[i] ) : MiscMath::mean( pers_raw[i] );
       aperiodic[i] = epoch_median ? MiscMath::median( apers[i] ) : MiscMath::mean( apers[i] );
       aperiodic_raw[i] = epoch_median ? MiscMath::median( apers_raw[i] ) : MiscMath::mean( apers_raw[i] );
+      original_raw[i] = epoch_median ? MiscMath::median( psds_raw[i] ) : MiscMath::mean( psds_raw[i] );
     }
 
   //
@@ -565,7 +698,3 @@ irasa_t::irasa_t( edf_t & edf ,
     qd.proc_all();
   
 }
-
-
-
-

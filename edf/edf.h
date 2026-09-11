@@ -536,6 +536,11 @@ public:
 		  const bool dereference = false ,
 		  const bool verbose = true );
 
+  // Create a signal representing the negative average of reference channels.
+  void make_reference( const signal_list_t & refs ,
+		       const std::string & new_channel ,
+		       const bool verbose = true );
+
   void combine( param_t & param );
   
   void guess_canonicals( param_t & , bool make_signals );
