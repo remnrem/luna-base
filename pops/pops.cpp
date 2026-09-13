@@ -382,6 +382,15 @@ void pops_t::make_level2_library( param_t & param )
     lgbm.n_iterations = param.requires_int( "iterations" );
   else if ( param.has( "iter" ) ) 
     lgbm.n_iterations = param.requires_int( "iter" );
+
+  // Stop after this many consecutive non-improving validation-loss iterations.
+  // A value of zero disables early stopping.
+  if ( param.has( "early-stopping" ) )
+    lgbm.early_stopping_rounds = param.requires_int( "early-stopping" );
+  else if ( ! lgbm.has_config_early_stopping )
+    lgbm.early_stopping_rounds = 10;
+  if ( lgbm.early_stopping_rounds < 0 )
+    Helper::halt( "early-stopping must be non-negative" );
   
   
   //  
@@ -1943,6 +1952,3 @@ void pops_t::stage_association()
 
 
 #endif
-
-
-

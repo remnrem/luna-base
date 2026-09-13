@@ -1178,12 +1178,18 @@ void pops_coda_t::train_model( const std::string & config_file ,
 
   // Set up LightGBM config
   if ( config_file == "." || config_file == "" )
-    lgbm.params = coda_default_params( nc , n_iterations );
+    {
+      lgbm.params = coda_default_params( nc , n_iterations );
+      lgbm.has_config_early_stopping = false;
+    }
   else
     lgbm.load_config( Helper::expand( config_file ) );
 
   lgbm.n_iterations = n_iterations;
-  lgbm.early_stopping_rounds = 10;
+  if ( opt.early_stopping_rounds_set || ! lgbm.has_config_early_stopping )
+    lgbm.early_stopping_rounds = opt.early_stopping_rounds;
+  if ( lgbm.early_stopping_rounds < 0 )
+    Helper::halt( "POPS-CODA: early-stopping must be non-negative" );
 
   // Attach training data
   lgbm.attach_training_matrix( X_train );

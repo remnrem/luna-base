@@ -62,7 +62,9 @@ struct lgbm_t {
   void load_config( const std::string & config_file )
   {
     qt_mode = false;
-    params = parse_config( config_file );
+    has_config_early_stopping = false;
+    params = parse_config( config_file , &early_stopping_rounds ,
+                           &has_config_early_stopping );
   }
 
   // owns raw LightGBM handles (freed in reset()/~lgbm_t()) -- an implicit
@@ -79,7 +81,8 @@ struct lgbm_t {
       has_training( rhs.has_training ), training( rhs.training ), training_weights( std::move( rhs.training_weights ) ),
       has_validation( rhs.has_validation ), validation( rhs.validation ), validation_weights( std::move( rhs.validation_weights ) ),
       qt_mode( rhs.qt_mode ), fastconfig( rhs.fastconfig ),
-      n_iterations( rhs.n_iterations ), early_stopping_rounds( rhs.early_stopping_rounds ), best_iteration( rhs.best_iteration )
+      n_iterations( rhs.n_iterations ), early_stopping_rounds( rhs.early_stopping_rounds ),
+      has_config_early_stopping( rhs.has_config_early_stopping ), best_iteration( rhs.best_iteration )
   {
     rhs.has_booster = rhs.has_training = rhs.has_validation = false;
   }
@@ -94,7 +97,8 @@ struct lgbm_t {
 	has_training = rhs.has_training; training = rhs.training; training_weights = std::move( rhs.training_weights );
 	has_validation = rhs.has_validation; validation = rhs.validation; validation_weights = std::move( rhs.validation_weights );
 	qt_mode = rhs.qt_mode; fastconfig = rhs.fastconfig;
-	n_iterations = rhs.n_iterations; early_stopping_rounds = rhs.early_stopping_rounds; best_iteration = rhs.best_iteration;
+	n_iterations = rhs.n_iterations; early_stopping_rounds = rhs.early_stopping_rounds;
+	has_config_early_stopping = rhs.has_config_early_stopping; best_iteration = rhs.best_iteration;
 	rhs.has_booster = rhs.has_training = rhs.has_validation = false;
       }
     return *this;
@@ -190,7 +194,11 @@ struct lgbm_t {
   // Helpers
   //
 
-  static std::string parse_config( const std::string & f );
+  // Reads the Luna wrapper-only `early_stopping=N` setting separately, so it
+  // is not forwarded to the LightGBM C API.
+  static std::string parse_config( const std::string & f ,
+                                   int * early_stopping_rounds = NULL ,
+                                   bool * has_early_stopping = NULL );
 
   static int rows( DatasetHandle d );
 
@@ -264,6 +272,7 @@ struct lgbm_t {
   
   int n_iterations;
   int early_stopping_rounds = 0; // 0 = disabled; set before create_booster()
+  bool has_config_early_stopping = false;
   int best_iteration = 0;        // set by create_booster(); used by save_model()
 
 };
@@ -332,4 +341,3 @@ struct lgbm_label_t {
 #endif
 #endif
   
-

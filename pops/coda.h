@@ -55,6 +55,8 @@ class pops_coda_t {
     int    context_epochs       = 20;   // half-window in epochs (10 min at 30 s)
     double row_duration_sec     = 30.0; // spacing between posterior rows
     int    min_subject_contiguous_epochs = 0; // require at least this many contiguous valid rows to include a subject
+    int    early_stopping_rounds = 10; // validation-loss patience; 0 disables
+    bool   early_stopping_rounds_set = false; // command/API override of config
     std::vector<int> min_stage_minutes = {5};  // per-stage minimums in W,R,N1,N2,N3 order; size-1 applies to all
     double min_stage1_kappa     = -1.0; // optional minimum 5-class K threshold; <0 disables
     double min_stage1_kappa3    = -1.0; // optional minimum 3-class K3 threshold; <0 disables

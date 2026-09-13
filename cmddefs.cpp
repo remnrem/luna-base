@@ -4241,6 +4241,7 @@ void cmddefs_t::init()
   add_param( "POPS" , "posterior-prefix" , "PP or PP,CP" , "Prefix for emitted posterior output; one token applies to both, or give STG1_PREFIX,CODA_PREFIX to separate stage-1 and CODA channel sets" );
   add_param( "POPS" , "coda-config" , "coda.conf" , "POPS-CODA: LightGBM config file for CODA training (default: built-in)" );
   add_param( "POPS" , "coda-iter" , "200" , "POPS-CODA: number of LightGBM iterations for CODA training (default 200)" );
+  add_param( "POPS" , "early-stopping" , "10" , "POPS / POPS-CODA: validation-loss patience in boosting rounds (default 10; 0 disables early stopping); overrides early_stopping=N in the LightGBM config file" );
   add_param( "POPS" , "coda-context" , "20" , "POPS-CODA: context window in epochs (default 20)" );
   add_param( "POPS" , "coda-min-contiguous" , "0" , "POPS-CODA: require at least this many contiguous valid epochs to include a subject in CODA training (default 0 = no filter)" );
   add_param( "POPS" , "coda-min-stage-minutes" , "5" , "POPS-CODA: minimum minutes per stage before including a subject in training; single value (e.g. 5) applies to all stages, or comma-separated W,R,N1,N2,N3 values (e.g. 5,10,3,5,15) for per-stage thresholds (default 5)" );

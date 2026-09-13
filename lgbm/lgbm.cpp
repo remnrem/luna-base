@@ -807,7 +807,9 @@ Eigen::MatrixXd lgbm_t::SHAP_values( const Eigen::MatrixXd & X , const int final
 
 
 
-std::string lgbm_t::parse_config( const std::string & f )
+std::string lgbm_t::parse_config( const std::string & f ,
+                                  int * early_stopping_rounds ,
+                                  bool * has_early_stopping )
 {
   
   std::string s;
@@ -823,12 +825,31 @@ std::string lgbm_t::parse_config( const std::string & f )
     {
       std::string line;
       Helper::safe_getline( IN1 , line );
-      if ( IN1.bad() || IN1.eof() ) break;
+      if ( IN1.bad() ) break;
+      // safe_getline() can set eof after returning a final, non-empty line
+      // without a trailing newline; that line is still a valid config entry.
+      if ( IN1.eof() && line == "" ) break;
       if ( line == "" ) continue;
       if ( line[0] == '#' ) continue;
 
       // remove spaces
       line.erase(remove(line.begin(), line.end(), ' '), line.end());      
+
+      // Luna implements early stopping in its own C-API training loop, so
+      // consume this wrapper-only config entry rather than forwarding it to
+      // LightGBM.  The underscore spelling mirrors the rest of the config.
+      const std::string::size_type eq = line.find( '=' );
+      const std::string key = eq == std::string::npos ? "" : line.substr( 0 , eq );
+      if ( key == "early_stopping" )
+	{
+	  int rounds = 0;
+	  if ( eq == std::string::npos ||
+	       ! Helper::str2int( line.substr( eq + 1 ) , &rounds ) || rounds < 0 )
+	    Helper::halt( "early_stopping in LightGBM config must be a non-negative integer" );
+	  if ( early_stopping_rounds != NULL ) *early_stopping_rounds = rounds;
+	  if ( has_early_stopping != NULL ) *has_early_stopping = true;
+	  continue;
+	}
       s += line + " ";
     }
   IN1.close();
@@ -1078,6 +1099,7 @@ bool lgbm_t::add_block_weights( DatasetHandle d ,
 void lgbm_t::load_pops_default_config()
 {
 
+  has_config_early_stopping = false;
   params = 
     "boosting_type=gbdt "
     "objective=multiclass "
@@ -1094,7 +1116,4 @@ void lgbm_t::load_pops_default_config()
 
    
 #endif
-
-
-
 

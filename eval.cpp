@@ -2053,6 +2053,13 @@ void proc_pops( edf_t & edf , param_t & param )
         coda.opt.min_stage1_kappa3 = param.requires_dbl( "coda-min-kappa3" );
       if ( param.has( "coda-valid-n" ) )
         coda.opt.random_validation_subjects = param.requires_int( "coda-valid-n" );
+      if ( param.has( "early-stopping" ) )
+        {
+          coda.opt.early_stopping_rounds = param.requires_int( "early-stopping" );
+          coda.opt.early_stopping_rounds_set = true;
+        }
+      if ( coda.opt.early_stopping_rounds < 0 )
+        Helper::halt( "early-stopping must be non-negative" );
       if ( param.has( "coda-weights" ) )
         coda.opt.class_weights = param.dblvector( "coda-weights" );
       if ( param.has( "coda-no-future" ) )
