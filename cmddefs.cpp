@@ -8253,6 +8253,21 @@ void cmddefs_t::init()
   add_param( "AROUSALS" , "emg-rise-min-dur" , "1.0" , "REM only: minimum duration in seconds of a qualifying chin-EMG rise" );
   add_param( "AROUSALS" , "emg-rise-buffer" , "2.0" , "REM only: temporal tolerance in seconds used when checking whether a chin-EMG rise overlaps an EEG candidate" );
 
+  add_param( "AROUSALS" , "spindle" , "F" , "Detect NR sigma-band spindles and suppress (veto) any arousal candidate whose duration is mostly spanned by one; NR only" );
+  add_param( "AROUSALS" , "spindle-annot" , "" , "Also emit confirmed spindles used by the spindle veto as a QC-style annotation; empty/T uses class 'spindle_veto', otherwise value is used as the class label; implies spindle detection runs even if spindle=F" );
+  add_param( "AROUSALS" , "spindle-f-lwr" , "10" , "Lower edge in Hz of the sigma band used for spindle detection" );
+  add_param( "AROUSALS" , "spindle-f-upr" , "16" , "Upper edge in Hz of the sigma band used for spindle detection" );
+  add_param( "AROUSALS" , "spindle-min-dur" , "0.5" , "Minimum duration in seconds for a candidate spindle" );
+  add_param( "AROUSALS" , "spindle-max-dur" , "3.0" , "Maximum duration in seconds for a candidate spindle" );
+  add_param( "AROUSALS" , "spindle-env-th" , "2.5" , "Sigma-band envelope threshold (robust NR z-score) for seeding a candidate spindle" );
+  add_param( "AROUSALS" , "spindle-min-cycles" , "5" , "Minimum number of oscillatory cycles required within a candidate spindle" );
+  add_param( "AROUSALS" , "spindle-cv-th" , "0.20" , "Maximum coefficient of variation of cycle-to-cycle period allowed within a candidate spindle" );
+  add_param( "AROUSALS" , "spindle-inband-frac" , "0.8" , "Minimum fraction of a candidate spindle's instantaneous frequency samples that must fall within the sigma band" );
+  add_param( "AROUSALS" , "spindle-selectivity-th" , "1.0" , "Minimum log-power contrast of the sigma band over flanking theta/low-beta bands required for a candidate spindle" );
+  add_param( "AROUSALS" , "spindle-merge-gap" , "0.25" , "Merge confirmed spindles separated by less than this many seconds" );
+  add_param( "AROUSALS" , "spindle-frac" , "0.3" , "Minimum fraction of an arousal candidate's duration that must be spanned by confirmed spindle(s) for the spindle veto to suppress it" );
+  add_param( "AROUSALS" , "spindle-min-channels" , "0" , "Number of EEG channels that must independently confirm a spindle for it to count; 0 = automatic majority vote (ceil(nchan/2), e.g. 1 of 2, 2 of 3, 2 of 4)" );
+
   add_table( "AROUSALS" , "SS" , "Per-stage (NREM/REM) overall arousal summary" );
   add_var( "AROUSALS" , "SS" , "MINS" , "Total analyzed duration in minutes for this stage" );
   add_var( "AROUSALS" , "SS" , "N" , "Number of all detected arousals in this stage" );
@@ -8267,6 +8282,8 @@ void cmddefs_t::init()
   add_var( "AROUSALS" , "SS" , "N_ART" , "Number of detected high-delta-rise artifact mask runs in this stage" );
   add_var( "AROUSALS" , "SS" , "AI_ART" , "Artifact-event index per hour" );
   add_var( "AROUSALS" , "SS" , "N_SUPPRESSED" , "Number of candidate arousal events suppressed by artifact or REM EMG-confirmation failure in this stage" );
+  add_var( "AROUSALS" , "SS" , "N_SUPPRESSED_SPINDLE" , "Number of candidate arousal events suppressed by the NR spindle veto (spindle=T only)" );
+  add_var( "AROUSALS" , "SS" , "AI_SUPPRESSED_SPINDLE" , "Spindle-veto-suppressed candidate event index per hour (spindle=T only)" );
   add_var( "AROUSALS" , "SS" , "AI_SUPPRESSED" , "Artifact-suppressed candidate event index per hour" );
   add_var( "AROUSALS" , "SS" , "N_MAN" , "All manual annotation event count for this stage" );
   add_var( "AROUSALS" , "SS" , "AI_MAN" , "All manual annotation event index per hour" );
@@ -8303,6 +8320,8 @@ void cmddefs_t::init()
   add_var( "AROUSALS" , "SS" , "VCAND_PROP_PRESLEEP_OK" , "Verbose: proportion of raw candidates retained by pre-sleep requirement" );
   add_var( "AROUSALS" , "SS" , "VCAND_N_ARTIFACT_BLOCKED" , "Verbose: candidates blocked as high-delta-rise artifact" );
   add_var( "AROUSALS" , "SS" , "VCAND_PROP_ARTIFACT_BLOCKED" , "Verbose: proportion of raw candidates blocked as artifact" );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_SPINDLE_BLOCKED" , "Verbose, spindle=T only: candidates blocked by the NR spindle veto" );
+  add_var( "AROUSALS" , "SS" , "VCAND_PROP_SPINDLE_BLOCKED" , "Verbose, spindle=T only: proportion of raw candidates blocked by the NR spindle veto" );
   add_var( "AROUSALS" , "SS" , "VCAND_N_REM_EMG_CONFIRMED" , "Verbose, REM only: candidates confirmed by concurrent chin-EMG rise" );
   add_var( "AROUSALS" , "SS" , "VCAND_PROP_REM_EMG_CONFIRMED" , "Verbose, REM only: proportion of raw candidates confirmed by EMG" );
   add_var( "AROUSALS" , "SS" , "VCAND_N_REM_EMG_REJECTED" , "Verbose, REM only: candidates rejected for lacking concurrent chin-EMG rise" );

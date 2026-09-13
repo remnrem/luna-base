@@ -72,6 +72,25 @@ struct arousals2_params_t {
   double pre_sleep_sec = 10.0;
   double emg_rise_min_dur = 1.0;
   double emg_rise_buffer = 2.0;
+
+  // NR spindle veto: suppress arousal candidates that mostly coincide with
+  // a genuine sigma-band oscillatory burst (as opposed to a broadband/noise
+  // sigma bump); see arousals2_t::detect_spindles()
+  bool spindle_veto = false;
+  bool spindle_annot_on = false;
+  std::string spindle_annot = "spindle_veto";
+  double spindle_f_lwr = 10.0;
+  double spindle_f_upr = 16.0;
+  double spindle_min_dur = 0.5;
+  double spindle_max_dur = 3.0;
+  double spindle_env_th = 2.5;
+  int    spindle_min_cycles = 5;
+  double spindle_cv_th = 0.20;
+  double spindle_inband_frac = 0.8;
+  double spindle_selectivity_th = 1.0;
+  double spindle_merge_gap = 0.25;
+  double spindle_frac = 0.3;
+  int    spindle_min_channels = 0; // 0 = auto: max(2, ceil(nchan/2))
 };
 
 struct arousals2_t {
@@ -107,6 +126,20 @@ struct arousals2_t {
   Eigen::VectorXd calc_eeg_ftrs( const Eigen::MatrixXd & X , FFT & fftseg );
   Eigen::VectorXd calc_emg_ftrs( const Eigen::MatrixXd & X , const std::vector<double> & thr );
 
+  // Standalone NR spindle detector used to veto arousal candidates that are
+  // mostly a spindle: given the EEG channels and the same NR/REM state
+  // sequence used elsewhere in this class, detects sigma-band (spindle_f_lwr
+  // - spindle_f_upr) oscillatory bursts in NR, requires multi-channel
+  // consensus, and returns the confirmed spindle intervals (absolute time).
+  // If annot_label is non-empty, also writes them as a QC-style annotation.
+  std::set<interval_t> detect_spindles( edf_t & edf ,
+                                        const signal_list_t & eeg_signals ,
+                                        const std::vector<int> & state ,
+                                        const std::vector<double> & sec ,
+                                        const double epoch_inc ,
+                                        const arousals2_params_t & p ,
+                                        const std::string & annot_label );
+
   Eigen::MatrixXd process_ftr_matrix( Eigen::MatrixXd * Xeeg ,
                                       Eigen::MatrixXd * Xemg ,
                                       const std::vector<int> & st ,
@@ -125,6 +158,7 @@ struct arousals2_t {
   event_heuristic( const std::vector<std::vector<std::vector<Eigen::VectorXd> > > & X ,
                    const std::vector<std::vector<std::vector<double> > > & tt ,
                    const std::vector<std::vector<std::vector<double> > > & eeg_artifact ,
+                   const std::set<interval_t> & spindles ,
                    const arousals2_params_t & p );
 
   void add_channels( const std::vector<std::vector<std::vector<Eigen::VectorXd> > > & X ,

@@ -28,6 +28,7 @@
 #include "miscmath/miscmath.h"
 #include "fftw/fftwrap.h"
 #include "dsp/spline.h"
+#include "dsp/hilbert.h"
 
 #include "helper/logger.h"
 #include "db/db.h"
@@ -508,6 +509,51 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   if ( param.has( "emg-rise-min-dur" ) ) hp.emg_rise_min_dur = param.requires_dbl( "emg-rise-min-dur" );
   if ( param.has( "emg-rise-buffer" )  ) hp.emg_rise_buffer  = param.requires_dbl( "emg-rise-buffer" );
 
+  hp.spindle_veto = param.yesno( "spindle" , false , true );
+  hp.spindle_annot_on = param.has( "spindle-annot" );
+  if ( hp.spindle_annot_on && ! param.empty( "spindle-annot" ) )
+    hp.spindle_annot = param.value( "spindle-annot" );
+  if ( ( hp.spindle_veto || hp.spindle_annot_on ) && ns_eeg == 0 )
+    Helper::halt( "spindle veto/annotation requires an EEG channel" );
+  if ( param.has( "spindle-f-lwr" )        ) hp.spindle_f_lwr        = param.requires_dbl( "spindle-f-lwr" );
+  if ( param.has( "spindle-f-upr" )        ) hp.spindle_f_upr        = param.requires_dbl( "spindle-f-upr" );
+  if ( param.has( "spindle-min-dur" )      ) hp.spindle_min_dur      = param.requires_dbl( "spindle-min-dur" );
+  if ( param.has( "spindle-max-dur" )      ) hp.spindle_max_dur      = param.requires_dbl( "spindle-max-dur" );
+  if ( param.has( "spindle-env-th" )       ) hp.spindle_env_th       = param.requires_dbl( "spindle-env-th" );
+  if ( param.has( "spindle-min-cycles" )   ) hp.spindle_min_cycles   = param.requires_int( "spindle-min-cycles" );
+  if ( param.has( "spindle-cv-th" )        ) hp.spindle_cv_th        = param.requires_dbl( "spindle-cv-th" );
+  if ( param.has( "spindle-inband-frac" )  ) hp.spindle_inband_frac  = param.requires_dbl( "spindle-inband-frac" );
+  if ( param.has( "spindle-selectivity-th" ) ) hp.spindle_selectivity_th = param.requires_dbl( "spindle-selectivity-th" );
+  if ( param.has( "spindle-merge-gap" )    ) hp.spindle_merge_gap    = param.requires_dbl( "spindle-merge-gap" );
+  if ( param.has( "spindle-frac" )         ) hp.spindle_frac         = param.requires_dbl( "spindle-frac" );
+  if ( param.has( "spindle-min-channels" ) ) hp.spindle_min_channels = param.requires_int( "spindle-min-channels" );
+
+  if ( hp.spindle_veto || hp.spindle_annot_on )
+    {
+      if ( ! std::isfinite( hp.spindle_f_lwr ) || ! std::isfinite( hp.spindle_f_upr ) ||
+           ! std::isfinite( hp.spindle_min_dur ) || ! std::isfinite( hp.spindle_max_dur ) ||
+           ! std::isfinite( hp.spindle_env_th ) || ! std::isfinite( hp.spindle_cv_th ) ||
+           ! std::isfinite( hp.spindle_inband_frac ) || ! std::isfinite( hp.spindle_selectivity_th ) ||
+           ! std::isfinite( hp.spindle_merge_gap ) || ! std::isfinite( hp.spindle_frac ) )
+        Helper::halt( "invalid non-finite spindle-detection parameter" );
+      if ( hp.spindle_f_lwr <= 0 || hp.spindle_f_upr <= hp.spindle_f_lwr )
+        Helper::halt( "invalid spindle-f-lwr/spindle-f-upr" );
+      if ( hp.spindle_min_dur <= 0 || hp.spindle_max_dur <= hp.spindle_min_dur )
+        Helper::halt( "invalid spindle-min-dur/spindle-max-dur" );
+      if ( hp.spindle_min_cycles < 1 )
+        Helper::halt( "spindle-min-cycles must be >= 1" );
+      if ( hp.spindle_cv_th <= 0 )
+        Helper::halt( "spindle-cv-th must be > 0" );
+      if ( hp.spindle_inband_frac <= 0 || hp.spindle_inband_frac > 1 )
+        Helper::halt( "spindle-inband-frac must be > 0 and <= 1" );
+      if ( hp.spindle_merge_gap < 0 )
+        Helper::halt( "spindle-merge-gap must be >= 0" );
+      if ( hp.spindle_frac <= 0 || hp.spindle_frac > 1 )
+        Helper::halt( "spindle-frac must be > 0 and <= 1" );
+      if ( hp.spindle_min_channels < 0 )
+        Helper::halt( "spindle-min-channels must be >= 0" );
+    }
+
   if ( ! std::isfinite( hp.eeg_tilt_rise_th ) || ! std::isfinite( hp.eeg_fast_rise_th ) ||
        ! std::isfinite( hp.eeg_tilt_rise_th_nrem ) || ! std::isfinite( hp.eeg_tilt_rise_th_rem ) ||
        ! std::isfinite( hp.eeg_fast_rise_th_nrem ) || ! std::isfinite( hp.eeg_fast_rise_th_rem ) ||
@@ -582,6 +628,15 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   build_ftr_matrix( edf , eeg_signals , emg_signals , Xeeg , Xemg ,
                     &state , &seq , &sec , wake_bridge , epoch_inc );
 
+  // Standalone NR spindle detector: run before the arousal candidate pipeline
+  // since it operates directly on the raw EEG and the NR/REM state sequence,
+  // not on the per-window feature matrix built below. If requested, it also
+  // writes the confirmed spindle intervals as a QC-style annotation.
+  std::set<interval_t> spindles;
+  if ( hp.spindle_veto || hp.spindle_annot_on )
+    spindles = detect_spindles( edf , eeg_signals , state , sec , epoch_inc , hp ,
+                                hp.spindle_annot_on ? hp.spindle_annot : "" );
+
   Eigen::MatrixXd Xftr = process_ftr_matrix( &Xeeg , &Xemg , state , seq , sec , hp );
   Xeeg.resize(0,0);
   Xemg.resize(0,0);
@@ -595,7 +650,8 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   // when no derived channels were requested.
   add_channels( X , tt , add_chs ? ch_prefix : "" , eeg_signals , epoch_win , &eeg_artifact );
 
-  std::map<std::string,std::set<interval_t> > anns = event_heuristic( X , tt , eeg_artifact , hp );
+  std::map<std::string,std::set<interval_t> > anns =
+    event_heuristic( X , tt , eeg_artifact , hp.spindle_veto ? spindles : std::set<interval_t>() , hp );
   if ( event_root != "arousal" )
     {
       std::map<std::string,std::set<interval_t> > renamed;
@@ -1386,10 +1442,305 @@ void arousals2_t::add_channels( const std::vector<std::vector<std::vector<Eigen:
     }
 }
 
+
+// ---------------------------------------------------------------------
+// NR spindle detector, used to veto arousal candidates that are mostly a
+// spindle rather than a genuine arousal.  This is intentionally standalone:
+// a single call, given the EEG channels and the NR/REM state sequence
+// already computed by build_ftr_matrix(), does everything -- per-channel
+// sigma-band burst detection with oscillatory validation, multi-channel
+// consensus, and (optionally) annotation output -- and just returns the
+// confirmed spindle intervals for the caller to use as an overlap veto.
+//
+// This is deliberately biased towards specificity over sensitivity (the
+// worst case is calling a genuine arousal a spindle): amplitude crossing
+// alone is only a candidate seed; a candidate must also show a clean, fairly
+// regular run of oscillatory cycles in-band, a narrowband spectral contrast
+// against flanking bands, and (when more than one EEG channel is given)
+// agreement across a majority of channels, before it counts as a confirmed
+// spindle.
+std::set<interval_t> arousals2_t::detect_spindles( edf_t & edf ,
+                                                    const signal_list_t & eeg_signals ,
+                                                    const std::vector<int> & state ,
+                                                    const std::vector<double> & sec ,
+                                                    const double epoch_inc ,
+                                                    const arousals2_params_t & p ,
+                                                    const std::string & annot_label )
+{
+  std::set<interval_t> spindles;
+
+  const int ns_eeg = eeg_signals.size();
+  if ( ns_eeg == 0 || sr <= 0 ) return spindles;
+
+  const double eps = 1e-12;
+
+  // 1) Contiguous NR runs, using the exact same NR/wake-bridge state sequence
+  //    (and the same discontinuity rule) as build_ftr_matrix(), so the
+  //    spindle veto sees the identical definition of "NR" as the rest of
+  //    arousal detection.
+  std::vector<std::pair<double,double> > nr_runs;
+  {
+    const int n = (int)state.size();
+    int i = 0;
+    while ( i < n )
+      {
+        if ( state[i] != 0 ) { ++i; continue; }
+        int j = i;
+        while ( j + 1 < n && state[j+1] == 0 && sec[j+1] - sec[j] <= 1.5 * epoch_inc ) ++j;
+        nr_runs.push_back( std::make_pair( sec[i] - 0.5 * epoch_inc , sec[j] + 0.5 * epoch_inc ) );
+        i = j + 1;
+      }
+  }
+  if ( nr_runs.empty() ) return spindles;
+
+  // 2) Load each EEG channel's raw trace once.
+  std::vector<std::unique_ptr<slice_t> > slices( ns_eeg );
+  std::vector<const std::vector<double> *> raw( ns_eeg );
+  std::vector<const std::vector<uint64_t> *> raw_tp( ns_eeg );
+  for (int s=0; s<ns_eeg; s++)
+    {
+      slices[s].reset( new slice_t( edf , eeg_signals(s) , edf.timeline.wholetrace() ) );
+      raw[s] = slices[s]->pdata();
+      raw_tp[s] = slices[s]->ptimepoints();
+    }
+
+  const double pad_sec = 1.0; // filter edge padding, trimmed off before use
+  const double fir_ripple = 0.02, fir_tw = 1.0; // matches SPINDLES bandpass defaults
+  // flanking control bands for the spectral-selectivity check
+  const double flank1_lwr = 4.0, flank1_upr = 8.0;   // theta
+  const double flank2_lwr = 20.0, flank2_upr = 30.0; // low-beta
+
+  // single-channel candidates cannot be cross-checked against other
+  // channels, so require a somewhat cleaner burst to compensate
+  const bool single_channel = ns_eeg == 1;
+  const double env_th = p.spindle_env_th + ( single_channel ? 0.5 : 0.0 );
+  const int min_cycles = p.spindle_min_cycles + ( single_channel ? 1 : 0 );
+
+  // per-channel confirmed candidate intervals (absolute tp, half-open)
+  std::vector<std::vector<interval_t> > confirmed( ns_eeg );
+
+  for (int s=0; s<ns_eeg; s++)
+    {
+      const std::vector<double> & x = *raw[s];
+      const std::vector<uint64_t> & tpv = *raw_tp[s];
+
+      std::vector<std::vector<double> > run_env( nr_runs.size() );
+      std::vector<std::vector<double> > run_sig( nr_runs.size() );
+      std::vector<std::vector<double> > run_raw( nr_runs.size() );
+      std::vector<std::vector<double> > run_ifreq( nr_runs.size() );
+      std::vector<std::vector<uint64_t> > run_tp( nr_runs.size() );
+      std::vector<double> pooled_env;
+
+      for (size_t r=0; r<nr_runs.size(); r++)
+        {
+          const uint64_t true_t0 = (uint64_t)std::llround( nr_runs[r].first  * globals::tp_1sec );
+          const uint64_t true_t1 = (uint64_t)std::llround( nr_runs[r].second * globals::tp_1sec );
+          const uint64_t pad_t0 = (uint64_t)std::llround( std::max( 0.0 , nr_runs[r].first - pad_sec ) * globals::tp_1sec );
+          const uint64_t pad_t1 = (uint64_t)std::llround( ( nr_runs[r].second + pad_sec ) * globals::tp_1sec );
+
+          std::vector<uint64_t>::const_iterator lo = std::lower_bound( tpv.begin() , tpv.end() , pad_t0 );
+          std::vector<uint64_t>::const_iterator hi = std::upper_bound( tpv.begin() , tpv.end() , pad_t1 );
+          const int n = (int)( hi - lo );
+          if ( n < sr ) continue; // too short to filter meaningfully
+
+          const size_t off = lo - tpv.begin();
+          std::vector<double> seg( x.begin() + off , x.begin() + off + n );
+
+          hilbert_t h( seg , sr , p.spindle_f_lwr , p.spindle_f_upr , fir_ripple , fir_tw );
+          const std::vector<double> * mag = h.magnitude();
+          const std::vector<double> * sigf = h.signal();
+          const std::vector<double> ifreq = h.instantaneous_frequency( sr );
+
+          for (int k=0; k<n; k++)
+            {
+              const uint64_t tpk = tpv[ off + k ];
+              if ( tpk < true_t0 || tpk >= true_t1 ) continue;
+              run_env[r].push_back( (*mag)[k] );
+              run_sig[r].push_back( (*sigf)[k] );
+              run_raw[r].push_back( seg[k] );
+              run_ifreq[r].push_back( k < (int)ifreq.size() ? ifreq[k] : ( ifreq.empty() ? 0.0 : ifreq.back() ) );
+              run_tp[r].push_back( tpk );
+            }
+          pooled_env.insert( pooled_env.end() , run_env[r].begin() , run_env[r].end() );
+        }
+
+      if ( pooled_env.size() < (size_t)sr ) continue; // essentially no NR for this channel
+
+      const double median = MiscMath::median( pooled_env );
+      std::vector<double> ad( pooled_env.size() );
+      for (size_t i=0; i<pooled_env.size(); i++) ad[i] = std::fabs( pooled_env[i] - median );
+      double sigma = 1.4826 * MiscMath::median( ad );
+      if ( sigma < 1e-12 ) sigma = 1.0;
+
+      for (size_t r=0; r<nr_runs.size(); r++)
+        {
+          const int n = (int)run_env[r].size();
+          if ( n < 2 ) continue;
+
+          int i = 0;
+          while ( i < n )
+            {
+              if ( ( run_env[r][i] - median ) / sigma < env_th ) { ++i; continue; }
+              int j = i;
+              while ( j + 1 < n && ( run_env[r][j+1] - median ) / sigma >= env_th ) ++j;
+
+              const double duration_sec = ( run_tp[r][j] - run_tp[r][i] ) / (double)globals::tp_1sec;
+              if ( duration_sec < p.spindle_min_dur || duration_sec > p.spindle_max_dur )
+                { i = j + 1; continue; }
+
+              // oscillatory validation: zero-crossing cycle count + period regularity
+              int zc_all = 0;
+              std::vector<double> pos_cross_tp;
+              for (int k=i+1; k<=j; k++)
+                {
+                  const double a = run_sig[r][k-1], b = run_sig[r][k];
+                  const bool up = a < 0 && b >= 0;
+                  const bool down = a >= 0 && b < 0;
+                  if ( ! up && ! down ) continue;
+                  ++zc_all;
+                  if ( up )
+                    {
+                      const double frac = std::fabs( b - a ) > eps ? ( -a ) / ( b - a ) : 0.0;
+                      pos_cross_tp.push_back( run_tp[r][k-1] + frac * (double)( run_tp[r][k] - run_tp[r][k-1] ) );
+                    }
+                }
+              const double cycles = zc_all / 2.0;
+              if ( cycles < min_cycles ) { i = j + 1; continue; }
+
+              if ( pos_cross_tp.size() < 3 ) { i = j + 1; continue; }
+              std::vector<double> periods( pos_cross_tp.size() - 1 );
+              for (size_t k=0; k<periods.size(); k++)
+                periods[k] = ( pos_cross_tp[k+1] - pos_cross_tp[k] ) / (double)globals::tp_1sec;
+              const double pmean = std::accumulate( periods.begin() , periods.end() , 0.0 ) / periods.size();
+              double pvar = 0;
+              for ( double pd : periods ) pvar += ( pd - pmean ) * ( pd - pmean );
+              pvar /= periods.size();
+              const double pcv = pmean > eps ? std::sqrt( pvar ) / pmean : 1e9;
+              if ( pcv > p.spindle_cv_th ) { i = j + 1; continue; }
+
+              int n_inband = 0, n_ifreq = 0;
+              for (int k=i; k<j; k++)
+                {
+                  if ( k >= (int)run_ifreq[r].size() ) continue;
+                  ++n_ifreq;
+                  if ( run_ifreq[r][k] >= p.spindle_f_lwr && run_ifreq[r][k] <= p.spindle_f_upr ) ++n_inband;
+                }
+              const double inband_frac = n_ifreq > 0 ? n_inband / (double)n_ifreq : 0.0;
+              if ( inband_frac < p.spindle_inband_frac ) { i = j + 1; continue; }
+
+              // spectral selectivity: raw (unfiltered) power in the sigma band
+              // vs. mean power density in flanking theta/low-beta bands
+              {
+                std::vector<double> y( run_raw[r].begin() + i , run_raw[r].begin() + j + 1 );
+                double ymean = std::accumulate( y.begin() , y.end() , 0.0 ) / y.size();
+                for ( double & v : y ) v -= ymean;
+                if ( (int)y.size() >= 8 )
+                  {
+                    FFT fft( (int)y.size() , (int)y.size() , sr , FFT_FORWARD , WINDOW_HANN );
+                    fft.apply( y );
+                    double p_sigma = 0, p_flank1 = 0, p_flank2 = 0;
+                    int n_sigma = 0, n_flank1 = 0, n_flank2 = 0;
+                    for (int f=0; f<fft.cutoff; f++)
+                      {
+                        const double frq = fft.frq[f];
+                        if ( ! std::isfinite( fft.X[f] ) ) continue;
+                        const double pw = std::max( 0.0 , fft.X[f] );
+                        if ( frq >= p.spindle_f_lwr && frq <= p.spindle_f_upr ) { p_sigma += pw; ++n_sigma; }
+                        else if ( frq >= flank1_lwr && frq <= flank1_upr ) { p_flank1 += pw; ++n_flank1; }
+                        else if ( frq >= flank2_lwr && frq <= flank2_upr ) { p_flank2 += pw; ++n_flank2; }
+                      }
+                    const double sigma_density = n_sigma > 0 ? p_sigma / n_sigma : 0.0;
+                    double flank_density = 0.0;
+                    int n_flank_bands = 0;
+                    if ( n_flank1 > 0 ) { flank_density += p_flank1 / n_flank1; ++n_flank_bands; }
+                    if ( n_flank2 > 0 ) { flank_density += p_flank2 / n_flank2; ++n_flank_bands; }
+                    if ( n_flank_bands > 0 ) flank_density /= n_flank_bands;
+                    const double selectivity = std::log( ( sigma_density + eps ) / ( flank_density + eps ) );
+                    if ( selectivity < p.spindle_selectivity_th ) { i = j + 1; continue; }
+                  }
+              }
+
+              confirmed[s].push_back( interval_t( run_tp[r][i] , run_tp[r][j] + 1 ) );
+              i = j + 1;
+            }
+        }
+    }
+
+  slices.clear();
+
+  // 3) Multi-channel consensus: a timepoint counts as a confirmed spindle
+  //    only when at least K channels independently confirm it there. Each
+  //    channel's own confirmed[] intervals are already disjoint, so a sweep
+  //    over interval start/stop events gives the number of channels
+  //    agreeing at any instant without needing per-sample masks.
+  //    Default K is a plain majority (ceil(nchan/2)): e.g. 1 of 1, 1 of 2,
+  //    2 of 3, 2 of 4, 3 of 5, ... requiring unanimity at n=2 was too strict
+  //    (any single-channel noise on one derivation would silently veto every
+  //    spindle in the recording).
+  int K = p.spindle_min_channels > 0 ? p.spindle_min_channels :
+    (int)std::ceil( ns_eeg / 2.0 );
+
+  std::vector<std::pair<uint64_t,int> > events;
+  for (int s=0; s<ns_eeg; s++)
+    for ( const interval_t & iv : confirmed[s] )
+      {
+        events.push_back( std::make_pair( iv.start , +1 ) );
+        events.push_back( std::make_pair( iv.stop  , -1 ) );
+      }
+  std::sort( events.begin() , events.end() );
+
+  std::vector<interval_t> consensus;
+  int depth = 0;
+  bool in_run = false;
+  uint64_t run_start = 0;
+  size_t ei = 0;
+  while ( ei < events.size() )
+    {
+      const uint64_t t = events[ei].first;
+      int delta = 0;
+      while ( ei < events.size() && events[ei].first == t ) { delta += events[ei].second; ++ei; }
+      const bool was_confirmed = depth >= K;
+      depth += delta;
+      const bool now_confirmed = depth >= K;
+      if ( now_confirmed && ! was_confirmed ) { run_start = t; in_run = true; }
+      else if ( ! now_confirmed && was_confirmed && in_run ) { consensus.push_back( interval_t( run_start , t ) ); in_run = false; }
+    }
+
+  std::sort( consensus.begin() , consensus.end() ,
+            []( const interval_t & a , const interval_t & b ) { return a.start < b.start; } );
+  const uint64_t merge_gap_tp = (uint64_t)std::llround( p.spindle_merge_gap * globals::tp_1sec );
+  for ( const interval_t & iv : consensus )
+    {
+      if ( ! spindles.empty() )
+        {
+          std::set<interval_t>::iterator last = std::prev( spindles.end() );
+          interval_t prior = *last;
+          if ( iv.start <= prior.stop + merge_gap_tp )
+            {
+              prior.stop = std::max( prior.stop , iv.stop );
+              spindles.erase( last );
+              spindles.insert( prior );
+              continue;
+            }
+        }
+      spindles.insert( iv );
+    }
+
+  if ( ! annot_label.empty() )
+    {
+      annot_t * annot = edf.annotations->add( annot_label );
+      for ( const interval_t & iv : spindles )
+        annot->add( "." , iv , "." );
+    }
+
+  return spindles;
+}
+
 std::map<std::string,std::set<interval_t> >
 arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::VectorXd> > > & X ,
                               const std::vector<std::vector<std::vector<double> > > & tt ,
                               const std::vector<std::vector<std::vector<double> > > & eeg_artifact ,
+                              const std::set<interval_t> & spindles ,
                               const arousals2_params_t & p )
 {
   std::map<std::string,std::set<interval_t> > ret;
@@ -1422,6 +1773,7 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
       int vcand_merged = 0, vcand_final_dur_ok = 0, vcand_presleep_ok = 0;
       int vcand_final_dur_too_short = 0, vcand_final_dur_trimmed = 0;
       int vcand_artifact_block = 0, vcand_rem_emg_confirmed = 0, vcand_rem_emg_rejected = 0;
+      int vcand_spindle_block = 0;
       int vdiag_win = 0, vdiag_eeg_seed = 0, vdiag_emg_seed = 0, vdiag_delta_art = 0;
 
       const int nc = X[st].size();
@@ -1798,6 +2150,36 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
           evts = evts2;
           add_verbose_events( "candidate_artifact_ok" , evts );
 
+          // NR spindle veto: suppress a candidate if a confirmed spindle (or
+          // union of spindles) covers more than spindle_frac of its duration.
+          // Spindles are capped at spindle_max_dur, so this naturally only
+          // engages for short/borderline candidates; long genuine arousals
+          // cannot have most of their duration spanned by a single spindle.
+          if ( ! spindles.empty() )
+            {
+              evts2.clear();
+              for (int e=0; e<evts.size(); e++)
+                {
+                  const std::pair<double,double> tint = event_interval( evts[e] );
+                  const interval_t cand( (uint64_t)std::llround( tint.first * globals::tp_1sec ) ,
+                                         (uint64_t)std::llround( tint.second * globals::tp_1sec ) );
+                  const double dur_tp = (double)( cand.stop - cand.start );
+                  double covered = 0;
+                  for ( std::set<interval_t>::const_iterator si = spindles.begin(); si != spindles.end(); ++si )
+                    covered += arousals2_overlap_tp( cand , *si );
+                  const double frac = dur_tp > 0 ? covered / dur_tp : 0;
+                  if ( frac >= p.spindle_frac )
+                    {
+                      ++vcand_spindle_block;
+                      ret[ "suppressed_spindle_" + stg_lab ].insert( cand );
+                    }
+                  else
+                    evts2.push_back( evts[e] );
+                }
+              evts = evts2;
+              add_verbose_events( "candidate_spindle_ok" , evts );
+            }
+
           if ( is_rem )
             {
               std::vector<bool> emg_high( ne , false );
@@ -2041,6 +2423,13 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
       writer.value( "N_SUPPRESSED" , n_art_block_final );
       writer.value( "AI_SUPPRESSED" , tot_sec > 0 ? n_art_block_final / ( tot_sec / 3600.0 ) : 0.0 );
 
+      if ( p.spindle_veto )
+        {
+          const int n_spindle_block_final = final_count( "suppressed_spindle_" + stg_lab );
+          writer.value( "N_SUPPRESSED_SPINDLE" , n_spindle_block_final );
+          writer.value( "AI_SUPPRESSED_SPINDLE" , tot_sec > 0 ? n_spindle_block_final / ( tot_sec / 3600.0 ) : 0.0 );
+        }
+
       if ( p.verbose )
         {
           auto vcand_prop = [&]( const int n ) { return vcand_raw > 0 ? n / (double)vcand_raw : 0.0; };
@@ -2071,6 +2460,11 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
           writer.value( "VCAND_PROP_PRESLEEP_OK" , vcand_prop( vcand_presleep_ok ) );
           writer.value( "VCAND_N_ARTIFACT_BLOCKED" , vcand_artifact_block );
           writer.value( "VCAND_PROP_ARTIFACT_BLOCKED" , vcand_prop( vcand_artifact_block ) );
+          if ( p.spindle_veto )
+            {
+              writer.value( "VCAND_N_SPINDLE_BLOCKED" , vcand_spindle_block );
+              writer.value( "VCAND_PROP_SPINDLE_BLOCKED" , vcand_prop( vcand_spindle_block ) );
+            }
           if ( is_rem )
             {
               writer.value( "VCAND_N_REM_EMG_CONFIRMED" , vcand_rem_emg_confirmed );

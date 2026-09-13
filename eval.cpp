@@ -5281,8 +5281,10 @@ void proc_drop_signals( edf_t & edf , param_t & param )
 	}
     }
   
-  // if a keep list is specified, means we keep 
-  if ( keeps.size() > 0 )
+  // A keep list always defines the retained set.  In particular, an
+  // unmatched keep specification leaves `keeps` empty and therefore drops
+  // every channel rather than silently retaining the entire EDF.
+  if ( param.has( "keep" ) || keeps.size() > 0 )
     {
 
       //
