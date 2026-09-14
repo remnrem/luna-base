@@ -1699,7 +1699,7 @@ void proc_runpops( edf_t & edf , param_t & param )
   // required POPS library (defaults to s2); determined up front since it
   // drives model-specific handling below (hard-coded per model, per the
   // agreed pattern -- add another branch here as new models are added)
-  const std::string pops_lib = param.has( "lib" ) ? param.requires( "lib" ) : "s2";
+  const std::string pops_lib = param.has( "lib" ) ? param.requires( "lib" ) : "s2a";
   const bool is_hyp1 = pops_lib == "hyp1";
 
   // main signal (currently, either 1 or 2 for s2; up to 10 for hyp1)
@@ -1972,6 +1972,10 @@ void proc_runpops( edf_t & edf , param_t & param )
     pops_param.add( "pops-SHAP" );
   if ( param.has( "coda-SHAP" ) )
     pops_param.add( "coda-SHAP" );
+  if ( param.has( "pops-importance" ) )
+    pops_param.add( "pops-importance" );
+  if ( param.has( "coda-importance" ) )
+    pops_param.add( "coda-importance" );
   if ( param.has( "epoch-SHAP" ) )
     pops_param.add( "epoch-SHAP" );
   if ( param.has( "SHAP-epoch" ) )
@@ -2420,6 +2424,15 @@ void proc_pops( edf_t & edf , param_t & param )
                   coda->opt = coda_opt;
                   coda->load( coda_file );
                   coda_loaded_key = coda_key;
+                }
+
+              // Importance belongs to the fitted model, not this EDF.  Do
+              // not repeat identical rows for every record in a sample list.
+              if ( param.has( "coda-importance" ) )
+                {
+                  static std::set<std::string> reported_coda_importance;
+                  if ( reported_coda_importance.insert( coda_file ).second )
+                    coda->importance();
                 }
 
               // Build flagged[] for valid epochs: POPS_UNKNOWN or NaN in P

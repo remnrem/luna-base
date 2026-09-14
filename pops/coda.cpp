@@ -2313,6 +2313,38 @@ void pops_coda_t::SHAP( const Eigen::MatrixXd & X ,
     }
 }
 
+void pops_coda_t::importance()
+{
+  const std::vector<std::string> fnames = loaded_fnames.empty()
+    ? feature_names()
+    : loaded_fnames;
+  const std::vector<double> gain = lgbm.feature_importance( 1 );
+  const std::vector<double> split = lgbm.feature_importance( 0 );
+
+  if ( gain.size() != fnames.size() || split.size() != fnames.size() )
+    Helper::halt( "POPS-CODA: feature-importance length does not match feature names" );
+
+  std::vector<int> order( fnames.size() );
+  for (int i = 0; i < (int)order.size(); i++) order[i] = i;
+  std::sort( order.begin(), order.end(),
+             [&gain]( int a, int b ) { return gain[a] > gain[b]; } );
+  const double total_gain = std::accumulate( gain.begin(), gain.end(), 0.0 );
+
+  logger << "  reporting CODA LightGBM feature importance (gain/split)\n";
+  writer.level( "CODA" , "MDL" );
+  for (int rank = 0; rank < (int)order.size(); rank++)
+    {
+      const int i = order[rank];
+      writer.level( fnames[i] , "FTR" );
+      writer.value( "RANK" , rank + 1 );
+      writer.value( "GAIN" , gain[i] );
+      writer.value( "GAIN_PCT" , total_gain > 0 ? 100.0 * gain[i] / total_gain : 0.0 );
+      writer.value( "SPLIT" , split[i] );
+      writer.unlevel( "FTR" );
+    }
+  writer.unlevel( "MDL" );
+}
+
 
 // ============================================================
 //  Standalone training from a posteriors file

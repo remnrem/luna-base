@@ -4192,7 +4192,7 @@ void cmddefs_t::init()
   add_param( "POPS" , "continue-model" , "m0.model" , "POPS training: existing compatible LGBM model to extend; use the original feature/config setup, and iterations= is the number of added boosting rounds" );
   add_param( "POPS" , "config" , "m1.config" , "LGBM configuration file" );
   add_param( "POPS" , "path" , "." , "Base path for POPS resources" );
-  add_param( "POPS" , "lib" , "s2" , "POPS library root" );
+  add_param( "POPS" , "lib" , "s2a" , "POPS library root" );
   add_param( "POPS" , "force-reload" , "" , "Force re-reading the POPS specs" );
   add_param( "POPS" , "ignore-obs-staging" , "" , "Ignore existing observed staging" );
   add_param( "POPS" , "apply-ranges" , "T" , "Apply library-specific feature ranges" );
@@ -4217,6 +4217,8 @@ void cmddefs_t::init()
   add_param( "POPS" , "stage-assoc" , "F" , "Run stage-association summaries" );
   add_param( "POPS" , "pops-SHAP" , "" , "Emit SHAP values for the stage-1 POPS model only" );
   add_param( "POPS" , "coda-SHAP" , "" , "Emit SHAP values for the CODA model only" );
+  add_param( "POPS" , "pops-importance" , "" , "Emit intrinsic LightGBM gain/split feature importance for the stage-1 POPS model (no SHAP)" );
+  add_param( "POPS" , "coda-importance" , "" , "Emit intrinsic LightGBM gain/split feature importance for the CODA model (no SHAP)" );
   add_param( "POPS" , "epoch-SHAP" , "" , "Emit epoch-level SHAP values" );
   add_param( "POPS" , "SHAP-epoch" , "" , "Alias for epoch-SHAP" );
   add_param( "POPS" , "3-class" , "" , "Pool N1/N2/N3 into a single NREM class" );
@@ -4234,7 +4236,7 @@ void cmddefs_t::init()
   add_param( "POPS" , "posteriors" , "pops-out.txt" , "POPS-CODA: file of stage-1 posteriors for standalone CODA training or posterior-file CODA prediction (destrat POPS -r E format; PRIOR required for training, optional for prediction; START/STOP copied through if present)" );
   add_param( "POPS" , "train-coda" , "coda.mod" , "POPS-CODA: explicit output model file for standalone CODA training (legacy override; otherwise coda[=<file>] with lib=ROOT defaults to ROOT.coda.mod)" );
   add_param( "POPS" , "coda" , "coda.mod" , "POPS-CODA: apply the second-stage CODA model in the original POPS/RUN-POPS scoring path, or name the output model for standalone CODA training from posteriors=" );
-  add_param( "POPS" , "predict-coda" , "" , "POPS-CODA: stage-2-only rescoring with the model resolved as <lib>.coda.mod (default lib=s2); uses posteriors= file if given, otherwise reads attached EDF posterior channels (default PP_W/PP_R/PP_N1/PP_N2/PP_N3 or PP_NR)" );
+  add_param( "POPS" , "predict-coda" , "" , "POPS-CODA: stage-2-only rescoring with the model resolved as <lib>.coda.mod (default lib=s2a); uses posteriors= file if given, otherwise reads attached EDF posterior channels (default PP_W/PP_R/PP_N1/PP_N2/PP_N3 or PP_NR)" );
   add_param( "POPS" , "resolution" , "30|5" , "Posterior stream resolution: 30-second epochs (default) or 5-second stride/native posterior rows" );
   add_param( "POPS" , "emit-pp" , "" , "Emit PP_* posterior channels/signals to the in-memory EDF using the active stream (stage-1 unless CODA rescoring is requested)" );
   add_param( "POPS" , "smooth-pp" , "T" , "resolution=5 only: apply the 7-tap symmetric output-smoothing kernel that cancels any exactly-epoch-period ripple in the combined posterior stream (default T; set F for diagnostic comparison)" );
@@ -4324,6 +4326,12 @@ void cmddefs_t::init()
 
   add_table( "POPS" , "MDL,SS,FTR" , "Model-specific SHAP values" );
   add_var( "POPS" , "MDL,SS,FTR" , "SHAP" , "SHAP values" );
+
+  add_table( "POPS" , "MDL,FTR" , "Model-specific intrinsic LightGBM feature importance" );
+  add_var( "POPS" , "MDL,FTR" , "RANK" , "Rank by total gain (1 = highest)" );
+  add_var( "POPS" , "MDL,FTR" , "GAIN" , "Total LightGBM split gain" );
+  add_var( "POPS" , "MDL,FTR" , "GAIN_PCT" , "Percentage of the model's total LightGBM split gain" );
+  add_var( "POPS" , "MDL,FTR" , "SPLIT" , "Number of LightGBM splits using the feature" );
  
   add_table( "POPS" , "E,SS,FTR" , "Epoch-level SHAP values" );
   add_var( "POPS" , "E,SS,FTR" , "SHAP" , "SHAP values" );
@@ -4489,7 +4497,7 @@ void cmddefs_t::init()
   add_verb( "RUN-POPS" ,
             "Run the standard Luna POPS preprocessing and scoring pipeline in one "
             "command.\n\n"
-            "For lib=s2 (and other classical POPS models), RUN-POPS copies the "
+            "For lib=s2a (and other classical POPS models), RUN-POPS copies the "
             "requested signals, optionally re-references them, resamples to 128 Hz, "
             "band-pass filters, normalizes, optionally runs EDGER, and then invokes "
             "POPS with the assembled temporary signals.\n\n"
@@ -4513,7 +4521,7 @@ void cmddefs_t::init()
   add_param( "RUN-POPS" , "ref" , "M2,M1" , "Reference signal(s), matching sig length" );
   add_param( "RUN-POPS" , "args" , "trim=10 3-class" , "Additional arguments passed to POPS" );
   add_param( "RUN-POPS" , "ignore-obs" , "F" , "Ignore existing observed staging" );
-  add_param( "RUN-POPS" , "lib" , "s2" , "POPS library root (e.g. currently s2 or hyp1)" );
+  add_param( "RUN-POPS" , "lib" , "s2a" , "POPS library root (e.g. currently s2a or hyp1)" );
   add_param( "RUN-POPS" , "path" , "." , "Base path for POPS resources" );
   add_param( "RUN-POPS" , "filter" , "T" , "Band-pass filter copied signals before POPS (no effect for lib=hyp1)" );
   add_param( "RUN-POPS" , "edger" , "T" , "Run EDGER on the copied signals" );
@@ -4526,6 +4534,8 @@ void cmddefs_t::init()
   add_param( "RUN-POPS" , "coda" , "coda.mod" , "Apply POPS-CODA second-stage rescoring model; if no file is given and lib=ROOT then uses ROOT.coda.mod under path=" );
   add_param( "RUN-POPS" , "pops-SHAP" , "" , "Emit SHAP values for the stage-1 POPS model only" );
   add_param( "RUN-POPS" , "coda-SHAP" , "" , "Emit SHAP values for the CODA model only" );
+  add_param( "RUN-POPS" , "pops-importance" , "" , "Emit intrinsic LightGBM gain/split importance for the stage-1 POPS model (no SHAP)" );
+  add_param( "RUN-POPS" , "coda-importance" , "" , "Emit intrinsic LightGBM gain/split importance for the CODA model (no SHAP)" );
   add_param( "RUN-POPS" , "epoch-SHAP" , "" , "Emit epoch-level SHAP values" );
   add_param( "RUN-POPS" , "SHAP-epoch" , "" , "Alias for epoch-SHAP" );
   add_param( "RUN-POPS" , "coda-context" , "20" , "CODA context window in epochs (default 20)" );

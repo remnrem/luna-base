@@ -130,6 +130,10 @@ class pops_coda_t {
 
   bool has_model() const { return lgbm.has_booster; }
 
+  // Model-global LightGBM importance (gain and split count), reported with
+  // the feature names stored beside the CODA model.
+  void importance();
+
   // ---------------------------------------------------------------------------
   // Prediction
   //   Called after pops_indiv_t::predict() has populated P/E/PS/S.

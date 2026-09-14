@@ -362,7 +362,7 @@ void pops_t::make_level2_library( param_t & param )
   if ( ranges_file != "." )
     {
 
-      // this does a) whole sample, b) per indiv
+      // Write the deployable population feature ranges.
       dump_ranges( ranges_file );
       
       // all done?
@@ -1327,7 +1327,7 @@ std::string pops_t::resolve_coda_model_file( const param_t & param ,
   if ( pops_opt_t::pops_root != "" )
     return update_filepath( pops_opt_t::pops_root + "." + coda_tag + ".mod" );
 
-  return update_filepath( "s2." + coda_tag + ".mod" );
+  return update_filepath( "s2a." + coda_tag + ".mod" );
 }
 
 
@@ -1411,10 +1411,10 @@ void pops_t::read_ranges( const std::string & f )
 void pops_t::dump_ranges( const std::string & f )
 {
 
-  // dump ranges a) overall (ID == ".")
-  // and then person by person (trainer)
-  // this will be called after a level2 library
-  // construction
+  // Dump the overall population ranges (ID == ".").  At scoring time
+  // read_ranges() deliberately reads only this initial block; historical
+  // per-trainer rows were never consumed and made deployed range files very
+  // large.
 
   std::string rfile = Helper::expand( f );
   
@@ -1445,38 +1445,6 @@ void pops_t::dump_ranges( const std::string & f )
       // 	  std::cout << X1.col(i) << "\n\n";
       // 	}
 
-    }
-
-  //
-  // now indiv-by-indiv
-  //
-  
-  const int nt = Istart.size();
-
-  //  std::cout << " stts " << nrow <<" " << ncol << " " << nt << "\n";
-  
-  for (int i=0; i<nt; i++)
-    {
-      
-      // pull out data for this trainer only
-      int fromi = Istart[i];
-      int sz    = Iend[i] - Istart[i] + 1;
-      Eigen::MatrixXd XI = X1.block( fromi , 0 , sz, ncol ); 
-      
-      // repeat as above (by col)
-      for (int j=0; j<ncol; j++)
-	{	  
-	  //std::cout << "i , j = " << i << "\t" << j << "\n";
-	  double mean = XI.col(j).mean();
-	  double sd = sqrt((XI.col(j).array() - mean ).square().sum()/(sz-1));
-	  
-	  O1 << I[i] << "\t"
-	     << labels[j] << "\t"
-	     << mean << "\t"
-	     << sd << "\n";
-	}
-      
-      // next trainer
     }
 
   O1.close();

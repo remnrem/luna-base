@@ -478,6 +478,15 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	      pops_t::lgbm_model_loaded = model_file ;
 	    }
 
+	  // Importance belongs to the fitted model, not this EDF.  Do not repeat
+	  // identical rows for every record in a sample list.
+	  if ( param.has( "pops-importance" ) )
+	    {
+	      static std::set<std::string> reported_pops_importance;
+	      if ( reported_pops_importance.insert( model_file ).second )
+		importance();
+	    }
+
 	  
 	  //
 	  // Make the actual predictions
@@ -2014,6 +2023,36 @@ void pops_indiv_t::SHAP()
       writer.unlevel( globals::stage_strat );
     }
   
+}
+
+void pops_indiv_t::importance()
+{
+  const std::vector<std::string> labels = pops_t::specs.select_labels();
+  const std::vector<double> gain = pops_t::lgbm.feature_importance( 1 );
+  const std::vector<double> split = pops_t::lgbm.feature_importance( 0 );
+
+  if ( gain.size() != labels.size() || split.size() != labels.size() )
+    Helper::halt( "POPS: feature-importance length does not match feature labels" );
+
+  std::vector<int> order( labels.size() );
+  for (int i = 0; i < (int)order.size(); i++) order[i] = i;
+  std::sort( order.begin(), order.end(),
+             [&gain]( int a, int b ) { return gain[a] > gain[b]; } );
+  const double total_gain = std::accumulate( gain.begin(), gain.end(), 0.0 );
+
+  logger << "  reporting POPS LightGBM feature importance (gain/split)\n";
+  writer.level( "POPS" , "MDL" );
+  for (int rank = 0; rank < (int)order.size(); rank++)
+    {
+      const int i = order[rank];
+      writer.level( labels[i] , "FTR" );
+      writer.value( "RANK" , rank + 1 );
+      writer.value( "GAIN" , gain[i] );
+      writer.value( "GAIN_PCT" , total_gain > 0 ? 100.0 * gain[i] / total_gain : 0.0 );
+      writer.value( "SPLIT" , split[i] );
+      writer.unlevel( "FTR" );
+    }
+  writer.unlevel( "MDL" );
 }
 
 void pops_indiv_t::summarize( pops_sol_t * sol )

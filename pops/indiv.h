@@ -83,6 +83,10 @@ struct pops_indiv_t {
   void predict( const int iter = 0 );
   
   void SHAP();
+
+  // Model-global LightGBM importance (gain and split count). Unlike SHAP,
+  // this is read directly from the fitted booster.
+  void importance();
   
   void apply_soap();
   Eigen::MatrixXd soap_X( bool * okay );
