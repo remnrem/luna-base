@@ -4189,6 +4189,7 @@ void cmddefs_t::init()
   add_param( "POPS" , "features" , "m1.ftr" , "Feature specification file" );
   add_param( "POPS" , "data" , "pops/lib/^" , "Filename for binary training files" );
   add_param( "POPS" , "model" , "m1.model" , "LGBM model file to write to or read from" );
+  add_param( "POPS" , "continue-model" , "m0.model" , "POPS training: existing compatible LGBM model to extend; use the original feature/config setup, and iterations= is the number of added boosting rounds" );
   add_param( "POPS" , "config" , "m1.config" , "LGBM configuration file" );
   add_param( "POPS" , "path" , "." , "Base path for POPS resources" );
   add_param( "POPS" , "lib" , "s2" , "POPS library root" );

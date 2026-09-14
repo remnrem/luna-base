@@ -77,14 +77,14 @@ struct lgbm_t {
 
   lgbm_t( lgbm_t && rhs ) noexcept
     : params( std::move( rhs.params ) ),
-      has_booster( rhs.has_booster ), booster( rhs.booster ),
+      has_booster( rhs.has_booster ), loaded_model( rhs.loaded_model ), booster( rhs.booster ),
       has_training( rhs.has_training ), training( rhs.training ), training_weights( std::move( rhs.training_weights ) ),
       has_validation( rhs.has_validation ), validation( rhs.validation ), validation_weights( std::move( rhs.validation_weights ) ),
       qt_mode( rhs.qt_mode ), fastconfig( rhs.fastconfig ),
       n_iterations( rhs.n_iterations ), early_stopping_rounds( rhs.early_stopping_rounds ),
       has_config_early_stopping( rhs.has_config_early_stopping ), best_iteration( rhs.best_iteration )
   {
-    rhs.has_booster = rhs.has_training = rhs.has_validation = false;
+    rhs.has_booster = rhs.loaded_model = rhs.has_training = rhs.has_validation = false;
   }
 
   lgbm_t & operator=( lgbm_t && rhs ) noexcept
@@ -93,13 +93,13 @@ struct lgbm_t {
       {
 	reset();
 	params = std::move( rhs.params );
-	has_booster = rhs.has_booster; booster = rhs.booster;
+	has_booster = rhs.has_booster; loaded_model = rhs.loaded_model; booster = rhs.booster;
 	has_training = rhs.has_training; training = rhs.training; training_weights = std::move( rhs.training_weights );
 	has_validation = rhs.has_validation; validation = rhs.validation; validation_weights = std::move( rhs.validation_weights );
 	qt_mode = rhs.qt_mode; fastconfig = rhs.fastconfig;
 	n_iterations = rhs.n_iterations; early_stopping_rounds = rhs.early_stopping_rounds;
 	has_config_early_stopping = rhs.has_config_early_stopping; best_iteration = rhs.best_iteration;
-	rhs.has_booster = rhs.has_training = rhs.has_validation = false;
+	rhs.has_booster = rhs.loaded_model = rhs.has_training = rhs.has_validation = false;
       }
     return *this;
   }
@@ -147,7 +147,9 @@ struct lgbm_t {
   
 
   //
-  // Set up a booster 
+  // Set up a booster.  If load_model() was called after training data was
+  // attached, this continues that model on the attached data; otherwise it
+  // starts a new model.
   //
 
   bool create_booster( const bool verbose = false );
@@ -232,7 +234,7 @@ struct lgbm_t {
     if ( has_validation && LGBM_DatasetFree( validation ) )
       Helper::halt( "problem freeing LGBM validation data" );
 
-    has_booster = has_training = has_validation = false;
+    has_booster = loaded_model = has_training = has_validation = false;
     
   }
   
@@ -251,6 +253,7 @@ struct lgbm_t {
   
   // booster
   bool has_booster;  
+  bool loaded_model = false; // true only between load_model() and create_booster()
   BoosterHandle booster;
   
   // training data
@@ -273,7 +276,9 @@ struct lgbm_t {
   int n_iterations;
   int early_stopping_rounds = 0; // 0 = disabled; set before create_booster()
   bool has_config_early_stopping = false;
-  int best_iteration = 0;        // set by create_booster(); used by save_model()
+  // Absolute (not run-relative) iteration to save after early stopping.
+  // A value <= 0 means save every iteration in the booster.
+  int best_iteration = 0;
 
 };
 

@@ -125,6 +125,12 @@ void pops_t::make_level2_library( param_t & param )
     model_file = pops_opt_t::pops_root + ".mod";
   if ( model_file != "." )
     model_file = pops_t::update_filepath( model_file );
+
+  // `model` is always the output path during POPS training.  An explicitly
+  // separate input keeps continuation from silently overwriting a model.
+  std::string continue_model = ".";
+  if ( param.has( "continue-model" ) )
+    continue_model = pops_t::update_filepath( param.value( "continue-model" ) );
   
   std::string conf_file  = ".";
   if ( param.has( "conf" ) )
@@ -418,7 +424,7 @@ void pops_t::make_level2_library( param_t & param )
   // Train model
   //
 
-  fit_model( model_file , weights );
+  fit_model( model_file , weights , continue_model );
 
   if ( param.has( "coda" ) )
     logger << "  POPS-CODA: note -- CODA training is only supported from an explicit "
@@ -882,7 +888,8 @@ void pops_t::level2( const bool training , const bool quiet ,
 //
 
 void pops_t::fit_model( const std::string & modelfile , 
-			const lgbm_label_t & weights )
+			const lgbm_label_t & weights ,
+			const std::string & continue_model )
 {
 
   // training   X1.topRows( nrows_training )   -->   S1
@@ -935,6 +942,16 @@ void pops_t::fit_model( const std::string & modelfile ,
   // save weights?
   if ( pops_opt_t::dump_model_weights )
     dump_weights();
+
+  if ( continue_model != "." )
+    {
+      lgbm.load_model( continue_model );
+      const int model_classes = lgbm_t::classes( lgbm.booster );
+      if ( model_classes != pops_opt_t::n_stages )
+	Helper::halt( "cannot continue POPS model: class count differs (model=" +
+		      Helper::int2str( model_classes ) + ", POPS=" +
+		      Helper::int2str( pops_opt_t::n_stages ) + ")" );
+    }
 
   // fit model
   lgbm.create_booster();

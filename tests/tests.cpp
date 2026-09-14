@@ -23,7 +23,7 @@
 // Invocation: luna __LUNA_TESTS__ [group] [verbose]
 //
 // Groups: all, signal, epoch, mask, filter, resample, psd, spindles,
-//         hypno, annot, write, script, eval, lunapi, segsrv, plm, sigdyn, dpp,
+//         hypno, annot, write, script, eval, lunapi, segsrv, plm, sigdyn, lgbm, dpp,
 //         dpp-fit (HAS_LGBM builds only)
 //
 // All tests use fully synthetic in-memory data (no external files needed).
@@ -62,6 +62,10 @@
 #include <limits>
 #include <algorithm>
 #include <stdexcept>
+
+namespace pops_calibration {
+  bool self_test( std::string * message );
+}
 
 #ifdef _WIN32
 #include <process.h>
@@ -4430,6 +4434,80 @@ static void test_dpp( lunapi_t * eng,
 
 #ifdef HAS_LGBM
 
+// ============================================================
+// Group V: LightGBM continuation -- HAS_LGBM only.
+// ============================================================
+
+static void test_lgbm_continuation( lunapi_t *,
+				    std::vector<test_result_t> & R, bool V )
+{
+  const std::string model = temp_base_path( "test_lgbm_continue" ) + ".model";
+  const std::string continued_model = temp_base_path( "test_lgbm_continue" ) + ".continued.model";
+
+  try
+    {
+      // A small, non-trivial binary corpus.  Keep a validation set attached
+      // in both runs so this also exercises rebinding validation data.
+      Eigen::MatrixXd X( 32 , 2 );
+      std::vector<int> y( 32 );
+      for (int i=0; i<32; i++)
+	{
+	  X(i,0) = i;
+	  X(i,1) = ( i * 7 ) % 11;
+	  y[i] = ( i % 3 == 0 || i % 7 == 0 ) ? 1 : 0;
+	}
+      std::vector<int> ytrain( y.begin() , y.begin() + 24 );
+      std::vector<int> yvalid( y.begin() + 24 , y.end() );
+      const std::string cfg = "objective=binary metric=binary_logloss "
+	"verbosity=-1 min_data_in_leaf=1 min_data_in_bin=1 "
+	"num_leaves=7 learning_rate=0.1 seed=17";
+
+      lgbm_t initial;
+      initial.params = cfg;
+      initial.n_iterations = 5;
+      initial.attach_training_matrix( X.topRows(24) );
+      initial.attach_training_labels( ytrain );
+      initial.attach_validation_matrix( X.bottomRows(8) );
+      initial.attach_validation_labels( yvalid );
+      initial.create_booster();
+      initial.save_model( model );
+
+      int first_iterations = 0;
+      LGBM_BoosterGetCurrentIteration( initial.booster , &first_iterations );
+
+      lgbm_t extended;
+      // The dataset and added trees are constructed with the same compatible
+      // configuration as the original run.
+      extended.params = cfg;
+      extended.n_iterations = 3;
+      extended.attach_training_matrix( X.topRows(24) );
+      extended.attach_training_labels( ytrain );
+      extended.attach_validation_matrix( X.bottomRows(8) );
+      extended.attach_validation_labels( yvalid );
+      extended.load_model( model );
+      extended.create_booster();
+      extended.save_model( continued_model );
+
+      int final_iterations = 0;
+      int nfeatures = 0;
+      const int iter_status = LGBM_BoosterGetCurrentIteration( extended.booster , &final_iterations );
+      const int feature_status = LGBM_BoosterGetNumFeature( extended.booster , &nfeatures );
+      const bool pass = iter_status == 0 && feature_status == 0
+	&& first_iterations == 5 && final_iterations == 8 && nfeatures == 2;
+      std::ostringstream m;
+      m << "initial=" << first_iterations << ", continued=" << final_iterations
+	<< ", features=" << nfeatures << " (expected 5, 8, 2)";
+      record( R , "lgbm/continue-model-adds-iterations" , pass , m.str() , V );
+    }
+  catch ( std::exception & e )
+    {
+      record( R , "lgbm/continue-model-adds-iterations" , false , e.what() , V );
+    }
+
+  std::remove( model.c_str() );
+  std::remove( continued_model.c_str() );
+}
+
 static void test_dpp_fit( lunapi_t * eng,
 			  std::vector<test_result_t> & R, bool V )
 {
@@ -5780,6 +5858,18 @@ static void test_dpp_fit( lunapi_t * eng,
 #endif
 
 // ============================================================
+// Group: POPS posterior calibration
+// ============================================================
+
+static void test_pops_calibration( lunapi_t * /*eng*/,
+                                   std::vector<test_result_t> & R, bool V )
+{
+  std::string message;
+  record(R, "pops-calibration/temperature-and-weight-transforms",
+         pops_calibration::self_test( &message ), message, V);
+}
+
+// ============================================================
 // Main entry point
 // ============================================================
 
@@ -5818,6 +5908,10 @@ void proc_tests( const std::string & group, const bool verbose )
   RUN("segsrv",   test_segsrv)
   RUN("plm",      test_plm)
   RUN("sigdyn",   test_sigdyn)
+  RUN("pops-calibration", test_pops_calibration)
+#ifdef HAS_LGBM
+  RUN("lgbm",     test_lgbm_continuation)
+#endif
   // DPP tests are temporarily disabled while the vector-default and
   // database/API test paths are being consolidated.  They remain in the
   // source for later reactivation, but are not part of the general suite.

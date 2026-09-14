@@ -41,6 +41,10 @@ extern logger_t logger;
 
 extern freezer_t freezer;
 
+namespace pops_calibration {
+  void run( param_t & param );
+}
+
 namespace {
 
 std::string lc( const std::string & s );
@@ -1720,6 +1724,7 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
   clmap[ "--pops" ]         = PROC_POPS;
   clmap[ "--eval-stages" ]  = PROC_EVAL_STAGES;
   clmap[ "--priors" ]       = PROC_POPS_ESPRIORS;
+  clmap[ "--calibration" ] = PROC_POPS_CALIBRATION;
 
   // DPP model training
   clmap[ "--dpp-fit" ]      = PROC_DPP_FIT;
@@ -1746,6 +1751,14 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
   
   if ( clmap.find( arg1 ) != clmap.end() )
     cmdline = clmap[ arg1 ];
+
+  // This standalone utility intentionally accepts the compact form
+  //   luna --pops-calibration file=posteriors.txt bins=10
+  // in addition to Luna's usual --options form used by older utilities.
+  if ( cmdline == PROC_POPS_CALIBRATION && *param_from_command_line == 0 )
+    // Negative marker: accept compact calibration arguments while still
+    // letting the normal command-line pass process -o/-a/-t/@file/--flag.
+    *param_from_command_line = -2;
 
   
   
@@ -1786,7 +1799,7 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
       // then ignore any options at or past this value, i.e. as they are specific
       // for the command line tool
       
-      if ( *param_from_command_line != 0 && i >= *param_from_command_line ) 
+      if ( *param_from_command_line > 0 && i >= *param_from_command_line )
 	continue;
       
       // parse for a key=value form
@@ -2225,6 +2238,40 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 #else
       Helper::halt( "LGBM support not compiled in" );
 #endif
+      std::exit(0);
+    }
+
+  //
+  // POPS posterior calibration (destrat +POPS -r E export)
+  //
+
+  if ( cmdline == PROC_POPS_CALIBRATION )
+    {
+      param_t param;
+      if ( param_from_command_line == -2 )
+        {
+          // The normal parse_cmdline() pass has already handled Luna-global
+          // options.  Pass only calibration arguments to this utility.
+          for (int i = 2; i < argc; ++i)
+            {
+              const std::string arg = argv[i];
+              if ( arg == "-o" || arg == "-a" || arg == "-t" )
+                { ++i; continue; }
+              if ( !arg.empty() && ( arg[0] == '@' ||
+                                     ( arg.size() > 1 && arg[0] == '-' && arg[1] == '-' ) ) )
+                continue;
+              param.parse( arg );
+            }
+        }
+      else
+        build_param( &param, argc, argv, param_from_command_line );
+      writer.begin();
+      writer.id( ".", "." );
+      writer.cmd( "CALIBRATION", 1, "" );
+      writer.level( "CALIBRATION", "_CALIBRATION" );
+      pops_calibration::run( param );
+      writer.unlevel( "_CALIBRATION" );
+      writer.commit();
       std::exit(0);
     }
 

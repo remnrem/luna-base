@@ -1838,8 +1838,8 @@ void proc_runpops( edf_t & edf , param_t & param )
 	  param_t filter_param;
 	  filter_param.add( "sig" , allsigs );
 	  filter_param.add( "bandpass" , "0.3,35" );
-	  filter_param.add( "tw" , "0.2" );
-	  filter_param.add( "ripple" , "0.01" );
+	  filter_param.add( "tw" , "0.2,5" );
+	  filter_param.add( "ripple" , "0.01,0.01" );
 	  proc_filter( edf , filter_param );
 	}
     }

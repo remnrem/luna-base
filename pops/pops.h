@@ -94,7 +94,8 @@ struct pops_t {
   static void read_ranges( const std::string & f );
     
   // fit and save a LGBM model (--> pops_t::lgbm)
-  void fit_model( const std::string & f , const lgbm_label_t & w );
+  void fit_model( const std::string & f , const lgbm_label_t & w ,
+		  const std::string & continue_model = "." );
 
   // write elapsed-sleep priors
   void write_elapsed_sleep_priors( const std::string & f );

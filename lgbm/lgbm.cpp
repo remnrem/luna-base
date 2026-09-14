@@ -57,6 +57,11 @@ void lgbm_cli_wrapper( param_t & param )
   const bool has_training = param.has( "train" );
   const bool has_training_weights = param.has( "train-weights" );
 
+  // In training mode this is the model whose trees are retained and extended.
+  // `model` remains the output path, so callers can choose whether to
+  // overwrite the input model explicitly.
+  const bool has_continue_model = param.has( "continue-model" );
+
   const bool has_validation = param.has( "valid" );
   const bool has_validation_weights = param.has( "valid-weights" );
 
@@ -75,6 +80,10 @@ void lgbm_cli_wrapper( param_t & param )
   if ( has_training && has_test ) Helper::halt( "can only specify train or test" );
   if ( ! ( has_training || has_test ) ) Helper::halt( "no train or test data attached" );
   if ( has_validation && ! has_training ) Helper::halt( "can only specify valid with train" );
+  if ( has_continue_model && ! has_training )
+    Helper::halt( "can only specify continue-model with train" );
+  if ( has_continue_model && ! has_config )
+    Helper::halt( "continue-model requires config= with the original compatible LightGBM configuration" );
   
   // generic input formats:
   //  - for test, LABEL typically unknown ('.') 
@@ -95,6 +104,17 @@ void lgbm_cli_wrapper( param_t & param )
   
   if ( has_config )
     lgbm.load_config( param.value( "config" ) );
+
+  // As in POPS training, this is the number of boosting rounds in a fresh
+  // run, or the number of *additional* rounds with continue-model=.
+  if ( param.has( "iterations" ) )
+    lgbm.n_iterations = param.requires_int( "iterations" );
+  else if ( param.has( "iter" ) )
+    lgbm.n_iterations = param.requires_int( "iter" );
+  if ( param.has( "early-stopping" ) )
+    lgbm.early_stopping_rounds = param.requires_int( "early-stopping" );
+  if ( lgbm.early_stopping_rounds < 0 )
+    Helper::halt( "early-stopping must be non-negative" );
   
   //
   // load training
@@ -164,7 +184,7 @@ void lgbm_cli_wrapper( param_t & param )
   // Apply weights
   //
   
-  if ( has_label_weights || has_validation_weights ) 
+  if ( has_label_weights || has_training_weights || has_validation_weights )
     {
       if ( has_training ) 
 	lgbm.apply_weights( lgbm.training , &lgbm.training_weights );
@@ -180,6 +200,9 @@ void lgbm_cli_wrapper( param_t & param )
 
   if ( has_training ) 
     {
+      if ( has_continue_model )
+	lgbm.load_model( param.value( "continue-model" ) );
+
       lgbm.create_booster();
       
       lgbm.save_model( model_file );
@@ -240,14 +263,80 @@ bool lgbm_t::create_booster( const bool verbose )
   //      LGBM_BoosterSaveModel(
   //      LGBM_BoosterFree(booster)
 
-  int flag = LGBM_BoosterCreate( training ,
+  if ( ! has_training )
+    Helper::halt( "no training data attached" );
+
+  int flag = 0;
+  int initial_iteration = 0;
+
+  if ( has_booster && loaded_model )
+    {
+      // A loaded model has no training dataset associated with it.  Build a
+      // fresh booster on the newly attached data and merge the old ensemble
+      // into it before adding trees.  This is safer than ResetTrainingData()
+      // for serialized models (which some LightGBM C-API versions cannot
+      // safely rebind).
+      int model_features = 0;
+      flag = LGBM_BoosterGetNumFeature( booster , &model_features );
+      if ( flag ) Helper::halt( "problem reading continued model feature count" );
+      if ( model_features != cols( training ) )
+	Helper::halt( "cannot continue LGBM model: feature count differs (model=" +
+		      Helper::int2str( model_features ) + ", training=" +
+		      Helper::int2str( cols( training ) ) + ")" );
+
+      flag = LGBM_BoosterGetCurrentIteration( booster , &initial_iteration );
+      if ( flag ) Helper::halt( "problem reading continued model iteration count" );
+
+      BoosterHandle loaded_booster = booster;
+      BoosterHandle new_booster;
+      flag = LGBM_BoosterCreate( training , params.c_str() , &new_booster );
+      if ( flag ) Helper::halt( "problem creating booster for continued model" );
+
+      // Merge only makes sense for compatible objectives/classes.  The
+      // feature-count check above provides a clear failure for the most
+      // common incompatibility; the configuration used to construct the new
+      // dataset/booster must otherwise match the original training run.
+      const int loaded_classes = classes( loaded_booster );
+      const int new_classes = classes( new_booster );
+      if ( loaded_classes != new_classes )
+	{
+	  LGBM_BoosterFree( new_booster );
+	  Helper::halt( "cannot continue LGBM model: class count differs (model=" +
+			Helper::int2str( loaded_classes ) + ", training=" +
+			Helper::int2str( new_classes ) + ")" );
+	}
+
+      flag = LGBM_BoosterMerge( new_booster , loaded_booster );
+      if ( flag )
+	{
+	  LGBM_BoosterFree( new_booster );
+	  Helper::halt( "problem merging continued LGBM model; use the original compatible configuration" );
+	}
+      if ( LGBM_BoosterFree( loaded_booster ) )
+	Helper::halt( "problem freeing merged LGBM model" );
+      booster = new_booster;
+      loaded_model = false;
+
+      logger << "  continuing model from " << initial_iteration
+	     << " iterations; adding up to " << n_iterations << " iterations\n";
+      // The attached dataset and new trees use `params`; it should therefore
+      // be the original compatible LightGBM configuration.
+    }
+  else
+    {
+      // A caller should not silently overwrite an active, trained booster.
+      // Continuation from a serialized model is the only supported reuse
+      // path and is identified explicitly by loaded_model above.
+      if ( has_booster )
+	Helper::halt( "booster already exists; load a model and attach new training data to continue it" );
+      flag = LGBM_BoosterCreate( training ,
 				 params.c_str() ,
 				 &booster );
-  
-  if ( flag )
-    Helper::halt( "problem creating this file" );
-
-  has_booster = true;
+      if ( flag )
+	Helper::halt( "problem creating booster" );
+      has_booster = true;
+      loaded_model = false;
+    }
   
   //
   // add validation data 
@@ -272,9 +361,26 @@ bool lgbm_t::create_booster( const bool verbose )
 
   // early stopping state
   double es_best_val  = std::numeric_limits<double>::max();
-  int    es_best_iter = 0;
+  int    es_best_iter = initial_iteration;
   int    es_no_improve = 0;
   best_iteration = 0;
+
+  // For a continued model the inherited ensemble is a legitimate baseline.
+  // Without this evaluation, the first added tree would always appear to be
+  // the best model and early stopping could not retain the original model.
+  if ( initial_iteration > 0 && has_validation && early_stopping_rounds > 0
+       && num_validation_eval_metrics > 0 )
+    {
+      int baseline_len = 0;
+      std::vector<double> baseline( num_validation_eval_metrics , 0 );
+      flag = LGBM_BoosterGetEval( booster , 1 , &baseline_len , baseline.data() );
+      if ( flag ) Helper::halt( "problem evaluating continued model baseline" );
+      if ( baseline_len > 0 )
+	{
+	  es_best_val = baseline[0];
+	  logger << "  continuation baseline validation = " << es_best_val << "\n";
+	}
+    }
 
   for (int i = 0; i < n_iterations ; i++)
     {
@@ -320,7 +426,8 @@ bool lgbm_t::create_booster( const bool verbose )
 	    Helper::halt( "problem evaluating validation data" );
 	}
 
-      logger << " iteration " << i+1 << ": training =";
+      const int current_iteration = initial_iteration + i + 1;
+      logger << " iteration " << current_iteration << ": training =";
 
       for (int j=0; j<out_len; j++)
 	logger << " " << eval[j];
@@ -336,7 +443,7 @@ bool lgbm_t::create_booster( const bool verbose )
       // track in DB?
       if ( verbose )
 	{
-	  writer.level( i+1 , "ITER" );
+	  writer.level( current_iteration , "ITER" );
 	  for (int j=0; j<out_len; j++)
 	    {
 	      writer.level( j+1 , "METRIC" );
@@ -354,7 +461,7 @@ bool lgbm_t::create_booster( const bool verbose )
 	  if ( val < es_best_val )
 	    {
 	      es_best_val  = val;
-	      es_best_iter = i + 1;
+	      es_best_iter = current_iteration;
 	      es_no_improve = 0;
 	    }
 	  else
@@ -362,7 +469,7 @@ bool lgbm_t::create_booster( const bool verbose )
 	      ++es_no_improve;
 	      if ( es_no_improve >= early_stopping_rounds )
 		{
-		  logger << "  early stopping at iteration " << i+1
+		  logger << "  early stopping at iteration " << current_iteration
 			 << "; best iteration = " << es_best_iter
 			 << " (val = " << es_best_val << ")\n";
 		  best_iteration = es_best_iter;
@@ -591,7 +698,9 @@ bool lgbm_t::load_model( const std::string & f )
   int temp = LGBM_BoosterCreateFromModelfile( filename.c_str() ,
 					      &out_num_iterations ,
 					      &booster );
+  if ( temp ) Helper::halt( "problem loading LGBM model " + filename );
   has_booster = true;  
+  loaded_model = true;
   logger << "  read model from " << filename << " (" << out_num_iterations << " iterations)\n";
   return true;
 }
@@ -604,6 +713,8 @@ bool lgbm_t::load_model_string( const std::string & str )
 					     &out_num_iterations ,
 					     &booster );
   if ( res ) Helper::halt( "problem in lgmb_t::load_model()" );
+  has_booster = true;
+  loaded_model = true;
   logger << "  attached model (" << out_num_iterations << " iterations)\n";  
   return true;
 }
@@ -1116,4 +1227,3 @@ void lgbm_t::load_pops_default_config()
 
    
 #endif
-
