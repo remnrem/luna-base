@@ -775,6 +775,14 @@ void pops_specs_t::build_colmap()
       const std::string & ch = specs[i].ch;
       const std::string & block = specs[i].block;
       const bool level1 = pops_specs_t::lvl2.find( ftrlab ) == pops_specs_t::lvl2.end();
+
+      // For level-2 transformations, ch is deliberately the source block
+      // (set while parsing block=).  It is useful provenance, but is not a
+      // unique column identity: multiple destination blocks may transform
+      // the same source with different parameters.  Use the destination
+      // block in public column labels so, for example, separately smoothed
+      // copies remain distinguishable.
+      const std::string & label_id = level1 ? ch : block;
       
       // track block size
       blocksize[ block ] += specs[i].size;
@@ -785,16 +793,16 @@ void pops_specs_t::build_colmap()
 	  ftr2ch2col[ ftr ][ ch ].push_back( j );
 
 	  // final label
-	  const std::string vlabel = ftrlab + "." + ch + ".V" + Helper::int2str( j - start + 1 );
+	  const std::string vlabel = ftrlab + "." + label_id + ".V" + Helper::int2str( j - start + 1 );
 
 	  col_label.push_back( vlabel );
 	  
-	  if ( pops_opt_t::replacements_rmap.find( ch ) != pops_opt_t::replacements_rmap.end() )
+	  if ( level1 && pops_opt_t::replacements_rmap.find( ch ) != pops_opt_t::replacements_rmap.end() )
 	    col_original_label.push_back( ftrlab + "." + pops_opt_t::replacements_rmap[ ch ] + ".V" + Helper::int2str( j - start + 1 ) );
 	  else
-	    col_original_label.push_back( ftrlab + "." + ch + ".V" + Helper::int2str( j - start + 1 ) );
+	    col_original_label.push_back( vlabel );
 	  
-	  col_root.push_back( ftrlab + "." + ch ); // i.e. channel/block specific
+	  col_root.push_back( ftrlab + "." + label_id ); // i.e. channel/block specific
 	  
 	  col_block.push_back( block );	  
 
