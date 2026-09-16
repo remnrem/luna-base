@@ -40,6 +40,7 @@
 #include <numeric>
 #include <cmath>
 #include <memory>
+#include <limits>
 
 extern logger_t logger;
 extern writer_t writer;
@@ -241,10 +242,14 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 
   //
   // Optionally load CODA model once; if present, each stride's combined 30 s
-  // posterior matrix will be rescored before contributing to hypnodensity PP.
+  // posterior matrix may be rescored before contributing to hypnodensity PP.
+  // A model trained on genuine 5 s rows is instead applied after the stride
+  // matrices have been merged into the final 5 s stream below.
   //
 
   pops_coda_t * coda = NULL;
+  bool coda_rescore_per_stride = false;
+  bool coda_rescore_final_5s = false;
 
   if ( param.has( "coda" ) )
     {
@@ -295,8 +300,21 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 
           coda = coda_cache.get();
 
+          if ( coda->opt.three_state )
+            Helper::halt( "resolution=5 POPS hypnodensity requires a 5-class CODA model" );
+          if ( std::fabs( coda->opt.row_duration_sec - 30.0 ) < 1e-6 )
+            coda_rescore_per_stride = true;
+          else if ( std::fabs( coda->opt.row_duration_sec - stride_sec ) < 1e-6 )
+            coda_rescore_final_5s = true;
+          else
+            Helper::halt( "resolution=5 POPS hypnodensity supports CODA models trained on 30 s or " +
+                          Helper::dbl2str( stride_sec ) + " s posterior rows; model uses " +
+                          Helper::dbl2str( coda->opt.row_duration_sec ) + " s" );
+
           logger << "  resolution=5 mode: using CODA rescoring model "
-                 << coda_file << " for each stride\n";
+                 << coda_file
+                 << ( coda_rescore_per_stride ? " for each 30 s stride\n"
+                                               : " on the final 5 s posterior stream\n" );
         }
     }
 
@@ -626,7 +644,7 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
       // mapping them into the overlapping hypnodensity PP traces.
       //
 
-      if ( coda && indiv.ne > 0 && n_flagged < indiv.ne )
+      if ( coda_rescore_per_stride && indiv.ne > 0 && n_flagged < indiv.ne )
         {
           logger << "    rescoring stride posteriors with CODA\n";
           indiv.P = coda->rescore( indiv.P , indiv.E , flagged );
@@ -728,6 +746,31 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
     {
       emit_hypno_soft_fail( pops_hypno_soft_fail_msg , n_candidate_rows );
       return;
+    }
+
+  // A CODA model trained with row_duration_sec=5 must see the combined 5 s
+  // stream, not an individual stride's 30 s-spaced rows.  Preserve missing
+  // samples as flagged rows so that feature context and recording boundaries
+  // are exactly those of the final posterior sequence.
+  if ( coda_rescore_final_5s )
+    {
+      const double NaN = std::numeric_limits<double>::quiet_NaN();
+      Eigen::MatrixXd P5 = Eigen::MatrixXd::Constant( total_samples , 5 , NaN );
+      std::vector<int> E5( total_samples );
+      std::vector<bool> flagged5( total_samples , true );
+      for (int m = 0; m < total_samples; m++) E5[m] = m;
+      for (std::map<int,Eigen::VectorXd>::const_iterator it = sample_to_post.begin();
+           it != sample_to_post.end(); ++it)
+        {
+          P5.row( it->first ) = it->second;
+          flagged5[it->first] = false;
+        }
+
+      logger << "  rescoring final 5 s posterior stream with CODA\n";
+      const Eigen::MatrixXd P_coda5 = coda->rescore( P5 , E5 , flagged5 );
+      for (std::map<int,Eigen::VectorXd>::iterator it = sample_to_post.begin();
+           it != sample_to_post.end(); ++it)
+        it->second = P_coda5.row( it->first );
     }
 
 

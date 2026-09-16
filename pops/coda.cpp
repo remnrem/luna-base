@@ -469,6 +469,15 @@ std::vector<std::string> pops_coda_t::feature_names() const
     {
       for (int s = 0; s < ns; s++) fn.push_back( "total_p_"    + slabs[s] );
       for (int s = 0; s < ns; s++) fn.push_back( "fraction_p_" + slabs[s] );
+
+      // Recording-level posterior calibration.  The stage-specific summaries
+      // are conditioned on the stage-1 hard call (argmax), so they describe
+      // how sharp/ambiguous calls of each nominal stage are across a night.
+      fn.push_back( "global_mean_top_prob" );
+      fn.push_back( "global_mean_entropy" );
+      for (int s = 0; s < ns; s++) fn.push_back( "global_argmax_frac_" + slabs[s] );
+      for (int s = 0; s < ns; s++) fn.push_back( "global_mean_top_prob_given_argmax_" + slabs[s] );
+      for (int s = 0; s < ns; s++) fn.push_back( "global_mean_entropy_given_argmax_" + slabs[s] );
     }
 
   // I2. Sleep-period-time (SPT) features.  SPT is bounded by the first and
@@ -638,16 +647,54 @@ void pops_coda_t::make_features( const Eigen::MatrixXd & P ,
         }
     }
 
-  // ---- Global totals (I) and cumulative sums (J) ---------------------
+  // ---- Global totals / calibration (I) and cumulative sums (J) -------
   std::vector<double> total_p( ns , 0.0 );
+  std::vector<int> hard_count( ns , 0 );
+  std::vector<double> hard_top_prob_sum( ns , 0.0 );
+  std::vector<double> hard_entropy_sum( ns , 0.0 );
+  double global_top_prob_sum = 0.0;
+  double global_entropy_sum = 0.0;
   for (int e = 0; e < ne; e++)
     {
       if ( flagged[e] ) continue;
+
+      int hmax = 0;
+      double top_prob = P(e,0);
+      double entropy = 0.0;
       for (int s = 0; s < ns; s++) total_p[s] += P(e,s);
+      for (int s = 0; s < ns; s++)
+        {
+          const double ps = P(e,s);
+          if ( s > 0 )
+            {
+              if ( ps > top_prob )
+                { top_prob = ps; hmax = s; }
+            }
+          entropy -= ps * std::log( ps + eps );
+        }
+
+      ++hard_count[hmax];
+      hard_top_prob_sum[hmax] += top_prob;
+      hard_entropy_sum[hmax] += entropy;
+      global_top_prob_sum += top_prob;
+      global_entropy_sum += entropy;
     }
   std::vector<double> fraction_p( ns , 0.0 );
   if ( n_valid > 0 )
     for (int s = 0; s < ns; s++) fraction_p[s] = total_p[s] / n_valid;
+
+  const double global_mean_top_prob = n_valid > 0 ? global_top_prob_sum / n_valid : NaN;
+  const double global_mean_entropy = n_valid > 0 ? global_entropy_sum / n_valid : NaN;
+  std::vector<double> global_argmax_frac( ns , 0.0 );
+  std::vector<double> global_mean_top_prob_given_argmax( ns , NaN );
+  std::vector<double> global_mean_entropy_given_argmax( ns , NaN );
+  for (int s = 0; s < ns; s++)
+    if ( hard_count[s] > 0 )
+      {
+        global_argmax_frac[s] = (double)hard_count[s] / n_valid;
+        global_mean_top_prob_given_argmax[s] = hard_top_prob_sum[s] / hard_count[s];
+        global_mean_entropy_given_argmax[s] = hard_entropy_sum[s] / hard_count[s];
+      }
 
   // Running cumulative sum (over valid epochs only, in E order)
   std::vector<std::vector<double>> cum_p( ne , std::vector<double>( ns , 0.0 ) );
@@ -943,11 +990,16 @@ void pops_coda_t::make_features( const Eigen::MatrixXd & P ,
           X(e, col++) = ent;
         }
 
-      // I. Global totals / fractions
+      // I. Global totals / fractions / posterior calibration
       if ( opt.include_global )
         {
           for (int s = 0; s < ns; s++) X(e, col++) = total_p[s];
           for (int s = 0; s < ns; s++) X(e, col++) = fraction_p[s];
+          X(e, col++) = global_mean_top_prob;
+          X(e, col++) = global_mean_entropy;
+          for (int s = 0; s < ns; s++) X(e, col++) = global_argmax_frac[s];
+          for (int s = 0; s < ns; s++) X(e, col++) = global_mean_top_prob_given_argmax[s];
+          for (int s = 0; s < ns; s++) X(e, col++) = global_mean_entropy_given_argmax[s];
         }
 
       // I2. Sleep-period-time features.  Phase is -1 before SOL, 0 in SPT,
@@ -1229,6 +1281,118 @@ int pops_coda_t::accumulate( const Eigen::MatrixXd & P_in ,
            << ", mixed-same=" << n_mixed_same
            << ", mixed-partial=" << n_mixed_partial << "\n";
 
+  return n_added;
+}
+
+int pops_coda_t::accumulate_augmented( const Eigen::MatrixXd & P_in ,
+                                        const std::vector<int> & S ,
+                                        const std::vector<int> & E ,
+                                        const std::vector<bool> & supervised ,
+                                        float augmentation_weight ,
+                                        const std::string & subject_id )
+{
+  const int ne = P_in.rows();
+  if ( ne == 0 ) return 0;
+  if ( (int)S.size() != ne || (int)E.size() != ne ||
+       (int)supervised.size() != ne )
+    Helper::halt( "POPS-CODA: augmented P/S/E/supervised size mismatch" );
+  if ( augmentation_weight <= 0 ) return 0;
+
+  Eigen::MatrixXd P = validate_and_normalise( P_in );
+  const int ns = P.cols();
+  std::vector<bool> flagged( ne , false );
+  for (int e = 0; e < ne; e++)
+    {
+      if ( S[e] == POPS_UNKNOWN )
+        { flagged[e] = true; continue; }
+      for (int s = 0; s < ns; s++)
+        if ( std::isnan( P(e,s) ) ) { flagged[e] = true; break; }
+    }
+
+  Eigen::MatrixXd X;
+  std::vector<std::string> fn;
+  make_features( P , E , flagged , X , fn );
+
+  const double row_duration_sec = opt.row_duration_sec <= 0 ? 30.0 : opt.row_duration_sec;
+  const bool can_mix =
+    row_duration_sec < 30.0 &&
+    std::fabs( std::round( 30.0 / row_duration_sec ) - ( 30.0 / row_duration_sec ) ) < 1e-6;
+  const int rows_per_epoch = can_mix ? (int)std::lround( 30.0 / row_duration_sec ) : 1;
+  const int mid_offset = can_mix ? ( rows_per_epoch - 1 ) / 2 : 0;
+
+  std::map<int,int> epoch_labels;
+  std::map<int,bool> epoch_has_supervised_rows;
+  if ( can_mix )
+    for (int e = 0; e < ne; e++)
+      if ( !flagged[e] )
+        {
+          const int obs_epoch = E[e] / rows_per_epoch;
+          if ( epoch_labels.find( obs_epoch ) == epoch_labels.end() )
+            epoch_labels[ obs_epoch ] = S[e];
+          if ( supervised[e] ) epoch_has_supervised_rows[obs_epoch] = true;
+        }
+
+  auto add_row = [&]( int e , int label , float weight )
+    {
+      if ( weight <= 0 ) return;
+      X_train_rows.push_back( X.row(e) );
+      S_train.push_back( label );
+      W_train.push_back( augmentation_weight * weight );
+    };
+
+  int n_added = 0;
+  for (int e = 0; e < ne; e++)
+    {
+      // Synthetic wake is context-only; the original supervised rows retain
+      // their manual labels and are the only rows supplied to LightGBM.
+      if ( flagged[e] || !supervised[e] ) continue;
+
+      const int label = coda_effective_label( S[e] , opt.three_state );
+      if ( label < 0 || label >= ns ) continue;
+      if ( !can_mix )
+        {
+          add_row( e , label , 1.0f );
+          ++n_added;
+          continue;
+        }
+
+      const int window_start_row = E[e] - mid_offset;
+      int offset = window_start_row % rows_per_epoch;
+      if ( offset < 0 ) offset += rows_per_epoch;
+      if ( offset == 0 )
+        {
+          add_row( e , label , 1.0f );
+          ++n_added;
+          continue;
+        }
+
+      const int obs_epoch = E[e] / rows_per_epoch;
+      const std::map<int,int>::const_iterator nn = epoch_labels.find( obs_epoch + 1 );
+      const std::map<int,bool>::const_iterator nsup = epoch_has_supervised_rows.find( obs_epoch + 1 );
+      const int next_raw = nn == epoch_labels.end() || nsup == epoch_has_supervised_rows.end() || !nsup->second
+        ? POPS_UNKNOWN : nn->second;
+      const int next_label = coda_effective_label( next_raw , opt.three_state );
+      const float w_cur = (float)( rows_per_epoch - offset ) / (float)rows_per_epoch;
+      const float w_nxt = (float)offset / (float)rows_per_epoch;
+      if ( next_raw == POPS_UNKNOWN || next_label < 0 || next_label >= ns )
+        {
+          add_row( e , label , w_cur );
+          ++n_added;
+        }
+      else if ( next_label == label )
+        {
+          add_row( e , label , 1.0f );
+          ++n_added;
+        }
+      else
+        {
+          add_row( e , label , w_cur );
+          add_row( e , next_label , w_nxt );
+          n_added += 2;
+        }
+    }
+
+  (void)subject_id;
   return n_added;
 }
 
@@ -2537,10 +2701,17 @@ void pops_coda_t::train_from_posteriors_file( const std::string & filename ,
     return (int)std::ceil( rows - 1e-9 );
   };
   std::array<int,5> min_stage_epochs;
-  if ( opt.min_stage_minutes.size() == 5 )
-    for (int s = 0; s < 5; s++) min_stage_epochs[s] = mins_to_epochs( opt.min_stage_minutes[s] );
-  else
+  min_stage_epochs.fill( 0 );
+  if ( opt.min_stage_minutes.empty() )
+    Helper::halt( "POPS-CODA: coda-min-stage-minutes requires one value or one value per effective class" );
+  if ( opt.min_stage_minutes.size() == 1 )
     min_stage_epochs.fill( mins_to_epochs( opt.min_stage_minutes[0] ) );
+  else if ( (int)opt.min_stage_minutes.size() == n_classes() )
+    for (int s = 0; s < n_classes(); s++) min_stage_epochs[s] = mins_to_epochs( opt.min_stage_minutes[s] );
+  else
+    Helper::halt( "POPS-CODA: coda-min-stage-minutes expects one value or " +
+                  Helper::int2str( n_classes() ) + " values for this " +
+                  Helper::int2str( n_classes() ) + "-class model" );
   const bool any_min_stage = std::any_of( min_stage_epochs.begin(), min_stage_epochs.end(),
                                           []( int v ){ return v > 0; } );
 
@@ -2766,6 +2937,128 @@ void pops_coda_t::train_from_posteriors_file( const std::string & filename ,
       logger << "\n";
     }
 
+  // ----------------------------------------------------------------------
+  // Training-only recording-protocol augmentation.  This deliberately runs
+  // after all screening, exclusion, and validation membership decisions.
+  // Consequently neither validation subjects nor excluded/failed subjects
+  // can become augmented examples or wake donors.
+  // ----------------------------------------------------------------------
+  struct WakeChunk {
+    Eigen::MatrixXd P;
+  };
+  struct AugmentedSubject {
+    Eigen::MatrixXd P;
+    std::vector<int> S;
+    std::vector<int> E;
+    std::vector<bool> supervised;
+    std::string kind;
+  };
+  struct AugmentationSummary {
+    int prepend = 0;
+    int truncate = 0;
+    int append = 0;
+    int skipped_or_resampled = 0;
+    int augmented_rows = 0;
+    int original_epochs = 0;
+    double augmented_base_weight = 0.0;
+  } augment_summary;
+
+  std::vector<WakeChunk> pre_wake_chunks;
+  std::vector<WakeChunk> post_wake_chunks;
+  std::set<std::string> pre_wake_donors;
+  std::set<std::string> post_wake_donors;
+
+  if ( opt.augment )
+    {
+      if ( opt.augment_n < 0 )
+        Helper::halt( "POPS-CODA: coda-augment-n must be non-negative" );
+      if ( opt.augment_pre_prob < 0 || opt.augment_trunc_prob < 0 || opt.augment_post_prob < 0 ||
+           std::fabs( opt.augment_pre_prob + opt.augment_trunc_prob + opt.augment_post_prob - 1.0 ) > 1e-8 )
+        Helper::halt( "POPS-CODA: coda augmentation probabilities must be non-negative and sum to 1" );
+      if ( opt.augment_wake_chunk <= 0 || opt.augment_wake_min <= 0 ||
+           opt.augment_wake_max < opt.augment_wake_min )
+        Helper::halt( "POPS-CODA: invalid coda wake-augmentation duration options" );
+      if ( opt.augment_trunc_min_frac <= 0 || opt.augment_trunc_max_frac <= 0 ||
+           opt.augment_trunc_min_frac > opt.augment_trunc_max_frac ||
+           opt.augment_trunc_max_frac > 1.0 || opt.augment_trunc_min_minutes < 0 )
+        Helper::halt( "POPS-CODA: invalid coda truncation-augmentation options" );
+
+      logger << "  POPS-CODA: recording augmentation enabled\n"
+             << "    augmented copies per recording = " << opt.augment_n << "\n"
+             << "    PREPEND_WAKE probability = " << opt.augment_pre_prob << "\n"
+             << "    TRUNCATE_END probability = " << opt.augment_trunc_prob << "\n"
+             << "    APPEND_WAKE probability = " << opt.augment_post_prob << "\n"
+             << "    wake extension = " << opt.augment_wake_min << "-" << opt.augment_wake_max << " min\n"
+             << "    wake chunk size = " << opt.augment_wake_chunk << " min\n"
+             << "    truncation retained fraction = " << opt.augment_trunc_min_frac
+             << "-" << opt.augment_trunc_max_frac << "\n"
+             << "    minimum truncated duration = " << opt.augment_trunc_min_minutes << " min\n"
+             << "    seed = " << opt.augment_seed << "\n";
+
+      const int chunk_rows = std::max( 1 , (int)std::lround(
+        opt.augment_wake_chunk * 60.0 / row_duration_sec ) );
+
+      auto valid_wake_row = [&]( const SubjectData & subj , int e ) -> bool {
+        if ( subj.S[e] != POPS_WAKE ) return false;
+        for (int s = 0; s < subj.P.cols(); s++)
+          if ( std::isnan( subj.P(e,s) ) ) return false;
+        return true;
+      };
+
+      auto add_wake_chunks = [&]( const SubjectData & subj , int lo , int hi ,
+                                  std::vector<WakeChunk> * out ,
+                                  std::set<std::string> * donors ) {
+        std::vector<int> run;
+        auto flush = [&]() {
+          for (int start = 0; start + chunk_rows <= (int)run.size(); start += chunk_rows)
+            {
+              WakeChunk chunk;
+              chunk.P.resize( chunk_rows , subj.P.cols() );
+              for (int r = 0; r < chunk_rows; r++)
+                chunk.P.row(r) = subj.P.row( run[start+r] );
+              out->push_back( chunk );
+              donors->insert( subj.id );
+            }
+          run.clear();
+        };
+        for (int e = lo; e < hi; e++)
+          {
+            const bool contiguous = !run.empty() && subj.E[e] == subj.E[run.back()] + 1;
+            if ( !valid_wake_row( subj , e ) || ( !run.empty() && !contiguous ) ) flush();
+            if ( valid_wake_row( subj , e ) ) run.push_back( e );
+          }
+        flush();
+      };
+
+      for (const auto & subj : good_subjects)
+        {
+          if ( coda_subject_in_holdouts( holdouts , subj.id ) ) continue;
+          int first_sleep = -1;
+          int last_sleep = -1;
+          for (int e = 0; e < (int)subj.S.size(); e++)
+            if ( subj.S[e] == POPS_REM || subj.S[e] == POPS_N1 ||
+                 subj.S[e] == POPS_N2 || subj.S[e] == POPS_N3 )
+              {
+                if ( first_sleep < 0 ) first_sleep = e;
+                last_sleep = e;
+              }
+          if ( first_sleep >= 0 )
+            {
+              add_wake_chunks( subj , 0 , first_sleep , &pre_wake_chunks , &pre_wake_donors );
+              add_wake_chunks( subj , last_sleep + 1 , (int)subj.S.size() ,
+                               &post_wake_chunks , &post_wake_donors );
+            }
+        }
+
+      logger << "  POPS-CODA: augmentation wake library:\n"
+             << "    PRE_WAKE chunks = " << pre_wake_chunks.size()
+             << " from " << pre_wake_donors.size() << " donor recording"
+             << ( pre_wake_donors.size() == 1 ? "" : "s" ) << "\n"
+             << "    POST_WAKE chunks = " << post_wake_chunks.size()
+             << " from " << post_wake_donors.size() << " donor recording"
+             << ( post_wake_donors.size() == 1 ? "" : "s" ) << "\n";
+    }
+
   // Accumulate screened-good subjects into training / validation sets
   int n_subj_training = 0;
   int n_subj_validation = 0;
@@ -2781,8 +3074,204 @@ void pops_coda_t::train_from_posteriors_file( const std::string & filename ,
         }
     }
 
+  const int n_original_training_rows = (int)X_train_rows.size();
+
+  if ( opt.augment && opt.augment_n > 0 )
+    {
+      // A small, local SplitMix-style generator avoids dependence on global
+      // RNG state or subject traversal order.  Its state is derived solely
+      // from the configured seed, target ID, and replicate index.
+      struct AugmentRNG {
+        uint64_t state;
+        explicit AugmentRNG( uint64_t s ) : state(s) {}
+        uint64_t next() {
+          state += 0x9e3779b97f4a7c15ULL;
+          uint64_t z = state;
+          z = ( z ^ ( z >> 30 ) ) * 0xbf58476d1ce4e5b9ULL;
+          z = ( z ^ ( z >> 27 ) ) * 0x94d049bb133111ebULL;
+          return z ^ ( z >> 31 );
+        }
+        double unit() { return ( next() >> 11 ) * ( 1.0 / 9007199254740992.0 ); }
+        int integer( int n ) { return n <= 1 ? 0 : (int)( next() % (uint64_t)n ); }
+      };
+      auto hash_id = []( const std::string & id ) -> uint64_t {
+        uint64_t h = 1469598103934665603ULL;
+        for (unsigned char c : id) { h ^= c; h *= 1099511628211ULL; }
+        return h;
+      };
+      auto count_usable = [&]( const Eigen::MatrixXd & P , const std::vector<int> & S ,
+                               const std::vector<bool> * supervised ) -> int {
+        int n = 0;
+        for (int e = 0; e < P.rows(); e++)
+          {
+            if ( supervised != NULL && !(*supervised)[e] ) continue;
+            const int label = coda_effective_label( S[e] , opt.three_state );
+            if ( label < 0 || label >= n_classes() ) continue;
+            bool valid = true;
+            for (int s = 0; s < P.cols(); s++)
+              if ( std::isnan( P(e,s) ) ) { valid = false; break; }
+            if ( valid ) ++n;
+          }
+        return n;
+      };
+
+      auto wake_extension = [&]( const std::vector<WakeChunk> & library ,
+                                 AugmentRNG * rng ) -> Eigen::MatrixXd {
+        if ( library.empty() ) return Eigen::MatrixXd();
+        // Extension duration is chosen independently of the donor-chunk
+        // length.  Assemble enough empirical chunks and crop only the final
+        // one, allowing (for example) 16 minutes from 5-minute chunks.
+        const int minutes = opt.augment_wake_min +
+          rng->integer( opt.augment_wake_max - opt.augment_wake_min + 1 );
+        const int nrows = std::max( 1 , (int)std::lround( minutes * 60.0 / row_duration_sec ) );
+        const int chunk_rows = library[0].P.rows();
+        const int nchunks = ( nrows + chunk_rows - 1 ) / chunk_rows;
+        Eigen::MatrixXd wake( nrows , library[0].P.cols() );
+        for (int c = 0; c < nchunks; c++)
+          {
+            const WakeChunk & chunk = library[ rng->integer( (int)library.size() ) ];
+            if ( chunk.P.cols() != wake.cols() || chunk.P.rows() != library[0].P.rows() )
+              Helper::halt( "POPS-CODA: inconsistent augmentation wake-chunk dimensions" );
+            const int from = c * chunk_rows;
+            const int take = std::min( chunk_rows , nrows - from );
+            wake.block( from , 0 , take , chunk.P.cols() ) = chunk.P.topRows( take );
+          }
+        return wake;
+      };
+
+      for (const auto & subj : good_subjects)
+        {
+          if ( coda_subject_in_holdouts( holdouts , subj.id ) ) continue;
+          const int n0 = count_usable( subj.P , subj.S , NULL );
+          if ( n0 == 0 ) continue;
+          augment_summary.original_epochs += n0;
+
+          const int first_e = subj.E.front();
+          const int span_rows = subj.E.back() - first_e + 1;
+          const int trunc_lo = std::max(
+            (int)std::ceil( opt.augment_trunc_min_frac * span_rows - 1e-9 ),
+            (int)std::ceil( opt.augment_trunc_min_minutes * 60.0 / row_duration_sec - 1e-9 ) );
+          const int trunc_hi = (int)std::floor( opt.augment_trunc_max_frac * span_rows + 1e-9 );
+          const bool can_pre = !pre_wake_chunks.empty();
+          const bool can_post = !post_wake_chunks.empty();
+          const bool can_trunc = trunc_lo <= trunc_hi && trunc_hi >= 1;
+
+          std::vector<AugmentedSubject> copies;
+          copies.reserve( opt.augment_n );
+          for (int rep = 0; rep < opt.augment_n; rep++)
+            {
+              const uint64_t seed = opt.augment_seed ^ hash_id( subj.id ) ^
+                ( 0x9e3779b97f4a7c15ULL * (uint64_t)( rep + 1 ) );
+              AugmentRNG rng( seed );
+              int type = -1; // 0=pre, 1=trunc, 2=post
+              for (int attempt = 0; attempt < 8; attempt++)
+                {
+                  const double u = rng.unit();
+                  const int picked = u < opt.augment_pre_prob ? 0 :
+                    ( u < opt.augment_pre_prob + opt.augment_trunc_prob ? 1 : 2 );
+                  const bool available = picked == 0 ? can_pre : picked == 1 ? can_trunc : can_post;
+                  if ( available ) { type = picked; break; }
+                  ++augment_summary.skipped_or_resampled;
+                }
+              if ( type < 0 )
+                {
+                  // Prefer a useful perturbation over dropping a replicate merely
+                  // because its initially selected donor library was empty.
+                  if ( can_pre ) type = 0;
+                  else if ( can_trunc ) type = 1;
+                  else if ( can_post ) type = 2;
+                }
+              if ( type < 0 )
+                {
+                  ++augment_summary.skipped_or_resampled;
+                  continue;
+                }
+
+              AugmentedSubject out;
+              const int ne = subj.P.rows();
+              if ( type == 0 || type == 2 )
+                {
+                  Eigen::MatrixXd wake = wake_extension( type == 0 ? pre_wake_chunks : post_wake_chunks , &rng );
+                  if ( wake.rows() == 0 || wake.cols() != subj.P.cols() )
+                    { ++augment_summary.skipped_or_resampled; continue; }
+                  out.P.resize( ne + wake.rows() , subj.P.cols() );
+                  out.S.resize( ne + wake.rows() );
+                  out.E.resize( ne + wake.rows() );
+                  out.supervised.assign( ne + wake.rows() , false );
+                  if ( type == 0 )
+                    {
+                      out.P.topRows( wake.rows() ) = wake;
+                      out.P.bottomRows( ne ) = subj.P;
+                      for (int e = 0; e < wake.rows(); e++) { out.S[e] = POPS_WAKE; out.E[e] = e; }
+                      for (int e = 0; e < ne; e++)
+                        { out.S[wake.rows()+e] = subj.S[e]; out.E[wake.rows()+e] = subj.E[e] - first_e + wake.rows(); out.supervised[wake.rows()+e] = true; }
+                      out.kind = "PREPEND_WAKE";
+                    }
+                  else
+                    {
+                      out.P.topRows( ne ) = subj.P;
+                      out.P.bottomRows( wake.rows() ) = wake;
+                      for (int e = 0; e < ne; e++)
+                        { out.S[e] = subj.S[e]; out.E[e] = subj.E[e] - first_e; out.supervised[e] = true; }
+                      const int append_start = out.E[ne-1] + 1;
+                      for (int e = 0; e < wake.rows(); e++)
+                        { out.S[ne+e] = POPS_WAKE; out.E[ne+e] = append_start + e; }
+                      out.kind = "APPEND_WAKE";
+                    }
+                }
+              else
+                {
+                  const int retained_span = trunc_lo + rng.integer( trunc_hi - trunc_lo + 1 );
+                  const int endpoint = first_e + retained_span - 1;
+                  int nr = 0;
+                  while ( nr < ne && subj.E[nr] <= endpoint ) ++nr;
+                  if ( nr == 0 ) { ++augment_summary.skipped_or_resampled; continue; }
+                  out.P = subj.P.topRows( nr );
+                  out.S.assign( subj.S.begin() , subj.S.begin() + nr );
+                  out.E.resize( nr );
+                  out.supervised.assign( nr , true );
+                  for (int e = 0; e < nr; e++) out.E[e] = subj.E[e] - first_e;
+                  out.kind = "TRUNCATE_END";
+                }
+
+              const int nj = count_usable( out.P , out.S , &out.supervised );
+              if ( nj == 0 ) { ++augment_summary.skipped_or_resampled; continue; }
+              copies.push_back( out );
+            }
+
+          const int m = (int)copies.size();
+          for (int j = 0; j < m; j++)
+            {
+              const int nj = count_usable( copies[j].P , copies[j].S , &copies[j].supervised );
+              const float w = (float)n0 / (float)( m * nj );
+              augment_summary.augmented_rows += accumulate_augmented(
+                copies[j].P , copies[j].S , copies[j].E , copies[j].supervised , w , subj.id );
+              augment_summary.augmented_base_weight += nj * w;
+              if ( copies[j].kind == "PREPEND_WAKE" ) ++augment_summary.prepend;
+              else if ( copies[j].kind == "TRUNCATE_END" ) ++augment_summary.truncate;
+              else if ( copies[j].kind == "APPEND_WAKE" ) ++augment_summary.append;
+            }
+        }
+
+      const double ratio = augment_summary.original_epochs > 0
+        ? augment_summary.augmented_base_weight / augment_summary.original_epochs : 0.0;
+      logger << "  POPS-CODA: augmentation summary:\n"
+             << "    original training recordings = " << n_subj_training << "\n"
+             << "    PREPEND_WAKE copies = " << augment_summary.prepend << "\n"
+             << "    TRUNCATE_END copies = " << augment_summary.truncate << "\n"
+             << "    APPEND_WAKE copies = " << augment_summary.append << "\n"
+             << "    skipped/resampled augmentations = " << augment_summary.skipped_or_resampled << "\n"
+             << "    original supervised training epochs = " << augment_summary.original_epochs << "\n"
+             << "    augmented supervised training rows = " << augment_summary.augmented_rows << "\n"
+             << "    augmentation/original total base-weight ratio = " << ratio << "\n";
+    }
+
   logger << "  POPS-CODA: accumulated training data from " << n_subj_training << " subjects ("
-         << (int)X_train_rows.size() << " valid epochs)";
+         << n_original_training_rows << " original valid epochs";
+  if ( opt.augment )
+    logger << "; " << (int)X_train_rows.size() - n_original_training_rows
+           << " augmented training rows";
+  logger << ")";
   if ( ! holdouts.empty() )
     logger << "; validation data from " << n_subj_validation << " subjects ("
            << (int)X_valid_rows.size() << " valid epochs)";

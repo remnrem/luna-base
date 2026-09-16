@@ -45,6 +45,7 @@
 #include <vector>
 #include <string>
 #include <set>
+#include <cstdint>
 
 struct edf_t;
 
@@ -71,6 +72,20 @@ class pops_coda_t {
     bool   include_entropy_margin = true; // top_prob, second_prob, margin, entropy
     bool   require_all_stages   = true; // require every effective stage to be observed at least once
     bool   broad_stage_qc      = false; // group N1+N2+N3 as NREM for require_all_stages / min_stage_minutes checks
+    // Recording-protocol augmentation is training-only.  Synthetic wake rows
+    // alter feature context but are never supervised observations.
+    bool   augment             = true;
+    int    augment_n           = 1;
+    uint64_t augment_seed      = 1;
+    double augment_pre_prob    = 0.33;
+    double augment_trunc_prob  = 0.34;
+    double augment_post_prob   = 0.33;
+    int    augment_wake_min    = 15;
+    int    augment_wake_max    = 120;
+    int    augment_wake_chunk  = 5;
+    double augment_trunc_min_frac = 0.60;
+    double augment_trunc_max_frac = 0.95;
+    int    augment_trunc_min_minutes = 120;
     bool   three_state          = false; // 3-state (W R NR) vs 5-state (W R N1 N2 N3)
     bool   do_SHAP             = false; // emit CODA SHAP values during prediction
     bool   dump_features       = false; // emit the epoch x CODA-feature matrix (verbose diagnostics)
@@ -206,6 +221,16 @@ class pops_coda_t {
                       const std::vector<bool> & flagged ,
                       Eigen::MatrixXd & X ,
                       std::vector<std::string> & fnames ) const;
+
+  // Training accumulation for an augmented representation.  supervised[e]
+  // identifies real target epochs; false rows provide context only.  This
+  // writes to the training partition exclusively.
+  int accumulate_augmented( const Eigen::MatrixXd & P ,
+                            const std::vector<int> & S ,
+                            const std::vector<int> & E ,
+                            const std::vector<bool> & supervised ,
+                            float augmentation_weight ,
+                            const std::string & subject_id );
 
   // If opt.three_state and P has 5 columns: collapse N1+N2+N3 → NR, renormalise.
   // Otherwise returns P unchanged.

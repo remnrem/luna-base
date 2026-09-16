@@ -29,6 +29,7 @@
 #include "dynamics/sigdyn.h"
 #include "stats/dpp.h"
 #include <memory>
+#include <cstdint>
 
 // defined in timeline/ralign.cpp
 void proc_review_alignment( edf_t & edf , param_t & param );
@@ -1984,6 +1985,15 @@ void proc_runpops( edf_t & edf , param_t & param )
     pops_param.add( "coda-context" , param.value( "coda-context" ) );
   if ( param.has( "coda-lambda" ) )
     pops_param.add( "coda-lambda" , param.value( "coda-lambda" ) );
+  const char * coda_augment_params[] = {
+    "coda-augment", "coda-augment-n", "coda-augment-seed",
+    "coda-augment-pre-prob", "coda-augment-trunc-prob", "coda-augment-post-prob",
+    "coda-augment-wake-min", "coda-augment-wake-max", "coda-augment-wake-chunk",
+    "coda-augment-trunc-min-frac", "coda-augment-trunc-max-frac",
+    "coda-augment-trunc-min-minutes"
+  };
+  for ( const char * p : coda_augment_params )
+    if ( param.has( p ) ) pops_param.add( p , param.value( p ) );
   if ( param.has( "pre-coda" ) )
     pops_param.add( "pre-coda" , param.value( "pre-coda" ) );
   if ( param.has( "coda-no-future" ) )
@@ -2072,6 +2082,34 @@ void proc_pops( edf_t & edf , param_t & param )
         coda.opt.require_all_stages = false;
       if ( param.has( "coda-broad-stage-qc" ) )
         coda.opt.broad_stage_qc = true;
+      if ( param.has( "coda-augment" ) )
+        coda.opt.augment = param.yesno( "coda-augment" );
+      if ( param.has( "coda-augment-n" ) )
+        coda.opt.augment_n = param.requires_int( "coda-augment-n" );
+      if ( param.has( "coda-augment-seed" ) )
+        {
+          const int seed = param.requires_int( "coda-augment-seed" );
+          if ( seed < 0 ) Helper::halt( "coda-augment-seed must be non-negative" );
+          coda.opt.augment_seed = (uint64_t)seed;
+        }
+      if ( param.has( "coda-augment-pre-prob" ) )
+        coda.opt.augment_pre_prob = param.requires_dbl( "coda-augment-pre-prob" );
+      if ( param.has( "coda-augment-trunc-prob" ) )
+        coda.opt.augment_trunc_prob = param.requires_dbl( "coda-augment-trunc-prob" );
+      if ( param.has( "coda-augment-post-prob" ) )
+        coda.opt.augment_post_prob = param.requires_dbl( "coda-augment-post-prob" );
+      if ( param.has( "coda-augment-wake-min" ) )
+        coda.opt.augment_wake_min = param.requires_int( "coda-augment-wake-min" );
+      if ( param.has( "coda-augment-wake-max" ) )
+        coda.opt.augment_wake_max = param.requires_int( "coda-augment-wake-max" );
+      if ( param.has( "coda-augment-wake-chunk" ) )
+        coda.opt.augment_wake_chunk = param.requires_int( "coda-augment-wake-chunk" );
+      if ( param.has( "coda-augment-trunc-min-frac" ) )
+        coda.opt.augment_trunc_min_frac = param.requires_dbl( "coda-augment-trunc-min-frac" );
+      if ( param.has( "coda-augment-trunc-max-frac" ) )
+        coda.opt.augment_trunc_max_frac = param.requires_dbl( "coda-augment-trunc-max-frac" );
+      if ( param.has( "coda-augment-trunc-min-minutes" ) )
+        coda.opt.augment_trunc_min_minutes = param.requires_int( "coda-augment-trunc-min-minutes" );
       if ( for_prediction )
         {
           coda.opt.do_SHAP = param.has( "SHAP" ) || param.has( "shap" ) ||
