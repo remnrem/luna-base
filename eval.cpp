@@ -2076,6 +2076,7 @@ void proc_pops( edf_t & edf , param_t & param )
         {
           coda.opt.do_SHAP = param.has( "SHAP" ) || param.has( "shap" ) ||
                              param.has( "coda-SHAP" );
+          coda.opt.dump_features = param.has( "verbose" );
           coda.opt.output_both_stages = param.has( "pre-coda" ) ? param.yesno( "pre-coda" ) : false;
         }
       else
@@ -2404,6 +2405,7 @@ void proc_pops( edf_t & edf , param_t & param )
                 coda_opt.include_future = false;
               coda_opt.do_SHAP = param.has( "SHAP" ) || param.has( "shap" ) ||
                                  param.has( "coda-SHAP" );
+              coda_opt.dump_features = param.has( "verbose" );
               coda_opt.output_both_stages = param.has( "pre-coda" ) ? param.yesno( "pre-coda" ) : false;
 
               const std::string coda_key =
@@ -2413,6 +2415,7 @@ void proc_pops( edf_t & edf , param_t & param )
                 Helper::dbl2str( coda_opt.lambda ) + "|" +
                 Helper::int2str( coda_opt.include_future ? 1 : 0 ) + "|" +
                 Helper::int2str( coda_opt.do_SHAP ? 1 : 0 ) + "|" +
+                Helper::int2str( coda_opt.dump_features ? 1 : 0 ) + "|" +
                 Helper::int2str( coda_opt.output_both_stages ? 1 : 0 );
 
               static std::unique_ptr<pops_coda_t> coda;

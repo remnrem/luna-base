@@ -4327,11 +4327,11 @@ void cmddefs_t::init()
   add_table( "POPS" , "MDL,SS,FTR" , "Model-specific SHAP values" );
   add_var( "POPS" , "MDL,SS,FTR" , "SHAP" , "SHAP values" );
 
-  add_table( "POPS" , "MDL,FTR" , "Model-specific intrinsic LightGBM feature importance" );
-  add_var( "POPS" , "MDL,FTR" , "RANK" , "Rank by total gain (1 = highest)" );
-  add_var( "POPS" , "MDL,FTR" , "GAIN" , "Total LightGBM split gain" );
-  add_var( "POPS" , "MDL,FTR" , "GAIN_PCT" , "Percentage of the model's total LightGBM split gain" );
-  add_var( "POPS" , "MDL,FTR" , "SPLIT" , "Number of LightGBM splits using the feature" );
+  add_table( "POPS" , "MDL,COL,FTR" , "Model-specific intrinsic LightGBM feature importance" );
+  add_var( "POPS" , "MDL,COL,FTR" , "RANK" , "Rank by total gain (1 = highest)" );
+  add_var( "POPS" , "MDL,COL,FTR" , "GAIN" , "Total LightGBM split gain" );
+  add_var( "POPS" , "MDL,COL,FTR" , "GAIN_PCT" , "Percentage of the model's total LightGBM split gain" );
+  add_var( "POPS" , "MDL,COL,FTR" , "SPLIT" , "Number of LightGBM splits using the feature" );
  
   add_table( "POPS" , "E,SS,FTR" , "Epoch-level SHAP values" );
   add_var( "POPS" , "E,SS,FTR" , "SHAP" , "SHAP values" );

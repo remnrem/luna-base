@@ -73,6 +73,7 @@ class pops_coda_t {
     bool   broad_stage_qc      = false; // group N1+N2+N3 as NREM for require_all_stages / min_stage_minutes checks
     bool   three_state          = false; // 3-state (W R NR) vs 5-state (W R N1 N2 N3)
     bool   do_SHAP             = false; // emit CODA SHAP values during prediction
+    bool   dump_features       = false; // emit the epoch x CODA-feature matrix (verbose diagnostics)
     bool   output_both_stages  = false; // when predicting, emit both pre-CODA and CODA outputs under CODA=0/1
   } opt;
 
@@ -169,6 +170,13 @@ class pops_coda_t {
   std::vector<std::string> feature_names() const;
   int n_features() const { return (int)feature_names().size(); }
   static int scale_context_epochs( int context_30s_epochs , double row_duration_sec );
+
+  // Verbose diagnostic output of the exact feature matrix used by CODA.
+  // Rows are stratified by E and CFTR, with X holding the feature value.
+  void dump_features( const Eigen::MatrixXd & X ,
+                      const std::vector<std::string> & fnames ,
+                      const std::vector<int> & E ,
+                      const std::vector<bool> & flagged ) const;
 
  private:
 

@@ -2031,10 +2031,17 @@ void pops_indiv_t::importance()
   const std::vector<double> gain = pops_t::lgbm.feature_importance( 1 );
   const std::vector<double> split = pops_t::lgbm.feature_importance( 0 );
 
-  if ( gain.size() != labels.size() || split.size() != labels.size() )
-    Helper::halt( "POPS: feature-importance length does not match feature labels" );
+  // The booster is authoritative: it defines the input columns for which
+  // importance is available.  POPS labels are auxiliary metadata and can be
+  // unavailable (e.g. a model is scored with a different/older spec).
+  if ( gain.size() != split.size() )
+    Helper::halt( "POPS: gain/split feature-importance lengths differ" );
+  if ( labels.size() != gain.size() )
+    logger << "  ** warning: POPS feature-label count (" << labels.size()
+           << ") does not match model column count (" << gain.size()
+           << "); unresolved labels will be reported as Column_N\n";
 
-  std::vector<int> order( labels.size() );
+  std::vector<int> order( gain.size() );
   for (int i = 0; i < (int)order.size(); i++) order[i] = i;
   std::sort( order.begin(), order.end(),
              [&gain]( int a, int b ) { return gain[a] > gain[b]; } );
@@ -2045,12 +2052,21 @@ void pops_indiv_t::importance()
   for (int rank = 0; rank < (int)order.size(); rank++)
     {
       const int i = order[rank];
-      writer.level( labels[i] , "FTR" );
+      // FTR alone used to be the output-table key.  That silently merges
+      // distinct model columns when a spec yields duplicate labels, so the
+      // later (lower-ranked) row overwrites the earlier one.  Keep the model
+      // column as a separate, unique stratum and use it as the FTR fallback.
+      const std::string column = "Column_" + Helper::int2str( i );
+      const std::string ftr = i < (int)labels.size() && labels[i] != ""
+        ? labels[i] : column;
+      writer.level( column , "COL" );
+      writer.level( ftr , "FTR" );
       writer.value( "RANK" , rank + 1 );
       writer.value( "GAIN" , gain[i] );
       writer.value( "GAIN_PCT" , total_gain > 0 ? 100.0 * gain[i] / total_gain : 0.0 );
       writer.value( "SPLIT" , split[i] );
       writer.unlevel( "FTR" );
+      writer.unlevel( "COL" );
     }
   writer.unlevel( "MDL" );
 }

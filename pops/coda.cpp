@@ -471,6 +471,18 @@ std::vector<std::string> pops_coda_t::feature_names() const
       for (int s = 0; s < ns; s++) fn.push_back( "fraction_p_" + slabs[s] );
     }
 
+  // I2. Sleep-period-time (SPT) features.  SPT is bounded by the first and
+  // last sustained posterior-derived sleep runs, so lead-in and trailing wake
+  // do not contribute to its totals or progress measures.
+  fn.push_back( "spt_valid" );
+  fn.push_back( "spt_phase" );
+  fn.push_back( "spt_duration_sec" );
+  fn.push_back( "spt_elapsed_sec" );
+  fn.push_back( "spt_elapsed_frac" );
+  for (int s = 0; s < ns; s++) fn.push_back( "spt_total_p_"    + slabs[s] );
+  for (int s = 0; s < ns; s++) fn.push_back( "spt_fraction_p_" + slabs[s] );
+  for (int s = 0; s < ns; s++) fn.push_back( "spt_rel_elapsed_p_" + slabs[s] );
+
   // J. relative elapsed posterior progression (always included)
   for (int s = 0; s < ns; s++) fn.push_back( "rel_elapsed_p_" + slabs[s] );
 
@@ -647,12 +659,85 @@ void pops_coda_t::make_features( const Eigen::MatrixXd & P ,
         for (int s = 0; s < ns; s++) cum_p[e][s] += P(e,s);
     }
 
-  // ---- Derived cumulative physiology-inspired summaries --------------
+  // ---- Posterior-derived sleep-period-time (SPT) ---------------------
+  // SPT begins with the first and ends with the last sustained run of
+  // posterior-derived sleep.  "Sleep" here is p(sleep) >= 0.5, with sleep
+  // defined as 1 - p(W).  The 5-minute minimum is deliberately expressed in
+  // seconds so it has the same meaning for 30-s and 5-s posterior streams.
   const int idx_w = POPS_WAKE;
   const int idx_r = POPS_REM;
   const int idx_n1 = POPS_N1;
   const int idx_n2 = ns == 5 ? POPS_N2 : POPS_N1;
   const int idx_n3 = ns == 5 ? POPS_N3 : POPS_N1;
+
+  const double spt_min_sustained_sec = 5.0 * 60.0;
+  const int spt_min_rows = std::max( 1 , (int)std::ceil(
+    spt_min_sustained_sec / std::max( 1.0 , opt.row_duration_sec ) ) );
+  int spt_start = -1;
+  int spt_end = -1;
+  int run_start = -1;
+  int run_length = 0;
+  int run_last_E = std::numeric_limits<int>::min();
+
+  for (int e = 0; e < ne; e++)
+    {
+      const bool sleep_like = !flagged[e] && ( 1.0 - P(e,idx_w) >= 0.5 );
+      const bool continues_run = sleep_like && run_length > 0 &&
+        E[e] == run_last_E + 1;
+
+      if ( !sleep_like )
+        {
+          run_start = -1;
+          run_length = 0;
+          run_last_E = std::numeric_limits<int>::min();
+          continue;
+        }
+
+      if ( continues_run ) ++run_length;
+      else
+        {
+          run_start = e;
+          run_length = 1;
+        }
+      run_last_E = E[e];
+
+      if ( run_length >= spt_min_rows )
+        {
+          if ( spt_start < 0 ) spt_start = run_start;
+          spt_end = e;
+        }
+    }
+
+  const bool spt_valid = spt_start >= 0 && spt_end >= spt_start;
+  const double spt_duration_sec = spt_valid
+    ? ( E[spt_end] - E[spt_start] ) * opt.row_duration_sec
+    : NaN;
+
+  std::vector<double> spt_total_p( ns , 0.0 );
+  int spt_n_valid = 0;
+  if ( spt_valid )
+    for (int e = spt_start; e <= spt_end; e++)
+      {
+        if ( flagged[e] ) continue;
+        ++spt_n_valid;
+        for (int s = 0; s < ns; s++) spt_total_p[s] += P(e,s);
+      }
+
+  std::vector<double> spt_fraction_p( ns , NaN );
+  if ( spt_n_valid > 0 )
+    for (int s = 0; s < ns; s++) spt_fraction_p[s] = spt_total_p[s] / spt_n_valid;
+
+  // Running posterior totals are frozen before SOL and after the SPT end.
+  std::vector<std::vector<double>> spt_cum_p( ne , std::vector<double>( ns , 0.0 ) );
+  for (int e = 0; e < ne; e++)
+    {
+      if ( e > 0 )
+        for (int s = 0; s < ns; s++) spt_cum_p[e][s] = spt_cum_p[e-1][s];
+      if ( spt_valid && e >= spt_start && e <= spt_end && !flagged[e] )
+        for (int s = 0; s < ns; s++) spt_cum_p[e][s] += P(e,s);
+    }
+
+  // ---- Derived cumulative physiology-inspired summaries --------------
 
   std::vector<double> cum_nrem( ne , 0.0 );
   std::vector<double> cum_deep( ne , 0.0 );
@@ -865,6 +950,32 @@ void pops_coda_t::make_features( const Eigen::MatrixXd & P ,
           for (int s = 0; s < ns; s++) X(e, col++) = fraction_p[s];
         }
 
+      // I2. Sleep-period-time features.  Phase is -1 before SOL, 0 in SPT,
+      // and +1 after the final sustained sleep run.  Time/progress are
+      // clipped at SPT boundaries, thereby excluding lead-in and trailing wake.
+      X(e, col++) = spt_valid ? 1.0 : 0.0;
+      if ( spt_valid )
+        {
+          const int phase = E[e] < E[spt_start] ? -1 :
+                            E[e] > E[spt_end]   ?  1 : 0;
+          const double elapsed_sec = phase < 0 ? 0.0 :
+            ( phase > 0 ? spt_duration_sec :
+              ( E[e] - E[spt_start] ) * opt.row_duration_sec );
+          X(e, col++) = phase;
+          X(e, col++) = spt_duration_sec;
+          X(e, col++) = elapsed_sec;
+          X(e, col++) = spt_duration_sec > 0 ? elapsed_sec / spt_duration_sec : 0.0;
+          for (int s = 0; s < ns; s++) X(e, col++) = spt_total_p[s];
+          for (int s = 0; s < ns; s++) X(e, col++) = spt_fraction_p[s];
+          for (int s = 0; s < ns; s++)
+            X(e, col++) = spt_cum_p[e][s] / ( spt_total_p[s] + opt.lambda );
+        }
+      else
+        {
+          // spt_valid is retained as zero; all unavailable SPT measures are NaN.
+          col += 4 + 3 * ns;
+        }
+
       // J. Relative elapsed posterior progression
       for (int s = 0; s < ns; s++)
         X(e, col++) = cum_p[e][s] / ( total_p[s] + opt.lambda );
@@ -902,7 +1013,37 @@ void pops_coda_t::make_features( const Eigen::MatrixXd & P ,
       if ( col != nf )
         Helper::halt( "POPS-CODA internal error: col=" + Helper::int2str(col) +
                       " nf=" + Helper::int2str(nf) );
+  }
+}
+
+
+void pops_coda_t::dump_features( const Eigen::MatrixXd & X ,
+                                  const std::vector<std::string> & fnames ,
+                                  const std::vector<int> & E ,
+                                  const std::vector<bool> & flagged ) const
+{
+  if ( X.rows() != (int)E.size() || X.rows() != (int)flagged.size() ||
+       X.cols() != (int)fnames.size() )
+    Helper::halt( "POPS-CODA: inconsistent dimensions in dump_features()" );
+
+  logger << "  POPS-CODA: writing epoch x feature matrix ("
+         << X.rows() << " rows x " << X.cols() << " features)\n";
+
+  // CFTR is deliberately distinct from POPS FTR, which contains the stage-1
+  // feature specification and feature-QC output.  This is the exact CODA
+  // design matrix supplied to LightGBM.
+  for (int e = 0; e < X.rows(); e++)
+    {
+      if ( flagged[e] ) continue;
+      writer.epoch( E[e] + 1 );
+      for (int f = 0; f < X.cols(); f++)
+        {
+          writer.level( fnames[f] , "CFTR" );
+          writer.value( "X" , X(e,f) );
+          writer.unlevel( "CFTR" );
+        }
     }
+  writer.unepoch();
 }
 
 
@@ -1281,6 +1422,7 @@ void pops_coda_t::save( const std::string & f )
   FN << "# row_duration_sec=" << Helper::dbl2str( opt.row_duration_sec ) << "\n";
   FN << "# context_epochs=" << opt.context_epochs << "\n";
   FN << "# lambda=" << Helper::dbl2str( opt.lambda ) << "\n";
+  FN << "# spt_min_sustained_sec=300\n";
   FN << "# include_future=" << coda_bool( opt.include_future ) << "\n";
   FN << "# include_global=" << coda_bool( opt.include_global ) << "\n";
   FN << "# include_prev_next=" << coda_bool( opt.include_prev_next ) << "\n";
@@ -1501,6 +1643,9 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
   Eigen::MatrixXd X;
   std::vector<std::string> fn;
   make_features( P , E , flagged , X , fn );
+
+  if ( opt.dump_features )
+    dump_features( X , fn , E , flagged );
 
   // Apply CODA model: get posteriors
   Eigen::MatrixXd P_coda = lgbm.predict( X );   // ne × nc
