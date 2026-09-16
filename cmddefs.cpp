@@ -4625,6 +4625,7 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "min-samples" , "20"    , "Minimum samples required to emit STABLE summaries" );
   add_param( "HDSTATS" , "annot"      , ""       , "Annotation class to stratify output by" );
   add_param( "HDSTATS" , "min-events"  , "3"      , "Minimum events required to emit aligned transition profile" );
+  add_param( "HDSTATS" , "emit-all-trans", "F"   , "Emit all directed TRANS and BOUT_TRANS pairs, padding unobserved pair summaries with zero counts/densities" );
   add_param( "HDSTATS" , "emit-annots", ""       , "Emit detected transitions as annotations under this class name" );
   add_param( "HDSTATS" , "emit-annots-by-type", "F" , "Encode transition type in the emitted annotation class name" );
   add_param( "HDSTATS" , "emit-sigs"  , ""       , "Emit per-sample PS/H/CONF (and PS3/H3/CONF3 if 3state) as new EDF signals under this channel-name prefix" );
@@ -4656,6 +4657,10 @@ void cmddefs_t::init()
     "NSS,TRANS",
     "ANNOT,NSS,TRANS"
   };
+  const std::vector<std::string> hdstats_bout_trans_tables = {
+    "NSS,BOUT_TRANS",
+    "ANNOT,NSS,BOUT_TRANS"
+  };
   const std::vector<std::string> hdstats_mix_tables = {
     "NSS,MIX",
     "ANNOT,NSS,MIX"
@@ -4665,9 +4670,9 @@ void cmddefs_t::init()
   const std::vector<std::string> hdstats_mix_bare_tables = {
     "NSS,MIX"
   };
-  const std::vector<std::string> hdstats_sec_tables = {
-    "NSS,SEC",
-    "ANNOT,NSS,SEC"
+  const std::vector<std::string> hdstats_trans_sec_tables = {
+    "NSS,TRANS,SEC",
+    "ANNOT,NSS,TRANS,SEC"
   };
   const std::vector<std::string> hdstats_bout_sec_tables = {
     "NSS,BOUT_TRANS,SEC",
@@ -4758,11 +4763,15 @@ void cmddefs_t::init()
   add_hdstats_var( hdstats_top_tables,   "TRANS_PEAK_H",   "Mean peak entropy across each transition window" );
   add_hdstats_var( hdstats_top_tables,   "TRANS_MIN_CONF", "Mean minimum confidence across each transition window" );
   add_hdstats_var( hdstats_top_tables,   "TRANS_TOT_PS",   "Mean PS area under each transition curve (seconds)" );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_DUR",      "Mean entropy-defined width around each bout-transition anchor (seconds)" );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_PEAK_H",   "Mean peak entropy across each bout-transition window" );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_MIN_CONF", "Mean minimum confidence across each bout-transition window" );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_TOT_PS",   "Mean PS area under each bout-transition curve (seconds)" );
   add_hdstats_var( hdstats_top_tables,   "TRANS_N_MATCHED",   "Number of TRANS events that also fall within a BOUT_TRANS gap" );
   add_hdstats_var( hdstats_top_tables,   "TRANS_PCT_MATCHED", "TRANS_N_MATCHED as a percentage of TRANS_N; low values indicate fragmentation" );
 
-  add_table( "HDSTATS" , "NSS,TRANS"            , "Transition-pair-specific summary statistics, by state representation" );
-  add_table( "HDSTATS" , "ANNOT,NSS,TRANS"      , "Transition-pair-specific summary statistics, by annotation level and state representation" );
+  add_table( "HDSTATS" , "NSS,TRANS"            , "Directional transition summary statistics, by state representation" );
+  add_table( "HDSTATS" , "ANNOT,NSS,TRANS"      , "Directional transition summary statistics, by annotation level and state representation" );
   add_hdstats_var( hdstats_trans_tables, "TRANS_N",        "Number of transitions detected" );
   add_hdstats_var( hdstats_trans_tables, "TRANS_DENS",     "Transition density (per hour)" );
   add_hdstats_var( hdstats_trans_tables, "TRANS_DUR",      "Mean transition duration (seconds)" );
@@ -4772,38 +4781,47 @@ void cmddefs_t::init()
   add_hdstats_var( hdstats_trans_tables, "TRANS_N_MATCHED",   "Number of TRANS events (this pair) that also fall within a BOUT_TRANS gap" );
   add_hdstats_var( hdstats_trans_tables, "TRANS_PCT_MATCHED", "TRANS_N_MATCHED as a percentage of TRANS_N (this pair)" );
 
+  add_table( "HDSTATS" , "NSS,BOUT_TRANS"       , "Settled bout-to-bout transition summary statistics, by state representation" );
+  add_table( "HDSTATS" , "ANNOT,NSS,BOUT_TRANS" , "Settled bout-to-bout transition summary statistics, by annotation level and state representation" );
+  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_N",        "Number of settled bout-to-bout transitions" );
+  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_DENS",     "Settled bout-to-bout transition density (per hour)" );
+  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_DUR",      "Mean entropy-defined width around each bout-transition anchor (seconds)" );
+  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_PEAK_H",   "Mean peak entropy across each bout-transition window" );
+  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_MIN_CONF", "Mean minimum confidence across each bout-transition window" );
+  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_TOT_PS",   "Mean PS area under each bout-transition curve (seconds)" );
+
   add_table( "HDSTATS" , "NSS,MIX"              , "State-set mixing, by combination of states and state representation" );
   add_table( "HDSTATS" , "ANNOT,NSS,MIX"        , "State-set mixing, by combination of states, annotation level, and state representation" );
   add_hdstats_var( hdstats_mix_tables,      "HD_MINS", "Expected minutes jointly ambiguous across this state set" );
   add_hdstats_var( hdstats_mix_bare_tables, "HD_DENS", "HD_MINS as a proportion of HD_SPT" );
 
-  add_table( "HDSTATS" , "NSS,SEC"            , "Bout-to-bout transition-aligned mean profiles, by state representation" );
-  add_table( "HDSTATS" , "ANNOT,NSS,SEC"      , "Bout-to-bout transition-aligned mean profiles, by annotation level and state representation" );
-  add_hdstats_var( hdstats_sec_tables, "H",    "Mean entropy at offset" );
-  add_hdstats_var( hdstats_sec_tables, "CONF", "Mean confidence at offset" );
-  add_hdstats_var( hdstats_sec_tables, "MG",   "Mean margin at offset" );
-  add_hdstats_var( hdstats_sec_tables, "PS",   "Mean PS at offset" );
-
-  add_table( "HDSTATS" , "NSS,BOUT_TRANS,SEC"      , "Bout-to-bout transition-pair-specific aligned profiles, by state representation" );
-  add_table( "HDSTATS" , "ANNOT,NSS,BOUT_TRANS,SEC", "Bout-to-bout transition-pair-specific aligned profiles, by annotation level and state representation" );
-  add_hdstats_var( hdstats_bout_sec_tables, "H",    "Mean entropy at offset" );
-  add_hdstats_var( hdstats_bout_sec_tables, "CONF", "Mean confidence at offset" );
-  add_hdstats_var( hdstats_bout_sec_tables, "MG",   "Mean margin at offset" );
-  add_hdstats_var( hdstats_bout_sec_tables, "PS",   "Mean PS at offset" );
-  add_hdstats_var( hdstats_bout_sec_tables, "P_W",  "Mean wake posterior at offset" );
-  add_hdstats_var( hdstats_bout_sec_tables, "P_NR", "Mean NREM posterior at offset (3-state only)" );
-  add_hdstats_var( hdstats_bout_sec_tables, "P_N1", "Mean N1 posterior at offset (5-state only)" );
-  add_hdstats_var( hdstats_bout_sec_tables, "P_N2", "Mean N2 posterior at offset (5-state only)" );
-  add_hdstats_var( hdstats_bout_sec_tables, "P_N3", "Mean N3 posterior at offset (5-state only)" );
-  add_hdstats_var( hdstats_bout_sec_tables, "P_R",  "Mean REM posterior at offset" );
+  add_table( "HDSTATS" , "NSS,TRANS,SEC"       , "Transition-aligned profiles, by TRANS label (ALL or directional pair) and state representation" );
+  add_table( "HDSTATS" , "ANNOT,NSS,TRANS,SEC" , "Transition-aligned profiles, by annotation level, TRANS label (ALL or directional pair), and state representation" );
+  add_table( "HDSTATS" , "NSS,BOUT_TRANS,SEC"       , "Bout-transition-aligned profiles, by BOUT_TRANS label (ALL or directional pair) and state representation" );
+  add_table( "HDSTATS" , "ANNOT,NSS,BOUT_TRANS,SEC" , "Bout-transition-aligned profiles, by annotation level, BOUT_TRANS label (ALL or directional pair), and state representation" );
+  const std::vector<std::string> hdstats_profile_vars = {
+    "N", "H", "CONF", "MG", "PS", "P_W", "P_NR", "P_N1", "P_N2", "P_N3", "P_R"
+  };
+  const std::vector<std::string> hdstats_profile_desc = {
+    "Number of events contributing to the complete aligned profile",
+    "Mean entropy at offset",
+    "Mean confidence at offset",
+    "Mean margin at offset",
+    "Mean PS at offset",
+    "Mean wake posterior at offset",
+    "Mean NREM posterior at offset (3-state only)",
+    "Mean N1 posterior at offset (5-state only)",
+    "Mean N2 posterior at offset (5-state only)",
+    "Mean N3 posterior at offset (5-state only)",
+    "Mean REM posterior at offset"
+  };
+  for ( int i = 0; i < (int)hdstats_profile_vars.size(); i++ )
+    {
+      add_hdstats_var( hdstats_trans_sec_tables, hdstats_profile_vars[i], hdstats_profile_desc[i] );
+      add_hdstats_var( hdstats_bout_sec_tables,  hdstats_profile_vars[i], hdstats_profile_desc[i] );
+    }
 
   // Aligned-profile tables are conditional on enough events being present.
-  const std::vector<std::string> hdstats_sec_vars = {
-    "H", "CONF", "MG", "PS"
-  };
-  const std::vector<std::string> hdstats_bout_sec_vars = {
-    "H", "CONF", "MG", "PS", "P_W", "P_NR", "P_N1", "P_N2", "P_N3", "P_R"
-  };
   auto disable_hdstats_vars = [&]( const std::vector<std::string> & tables ,
 				   const std::vector<std::string> & vars )
     {
@@ -4811,8 +4829,8 @@ void cmddefs_t::init()
 	for ( int j = 0 ; j < (int)vars.size() ; j++ )
 	  register_var( "HDSTATS" , tables[i] , vars[j] , false );
     };
-  disable_hdstats_vars( hdstats_sec_tables, hdstats_sec_vars );
-  disable_hdstats_vars( hdstats_bout_sec_tables, hdstats_bout_sec_vars );
+  disable_hdstats_vars( hdstats_trans_sec_tables, hdstats_profile_vars );
+  disable_hdstats_vars( hdstats_bout_sec_tables,  hdstats_profile_vars );
 
   add_table( "HDSTATS" , "TIME"             , "Per-sample time-series (verbose only)" );
   add_var(   "HDSTATS" , "TIME"             , "H"           , "Entropy" );

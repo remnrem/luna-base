@@ -118,6 +118,7 @@ struct hd_params_t
   double min_shift;                 // minimum L1 posterior shift for TR event acceptance (0=disabled)
   double shift_win_sec;             // pre/post window (seconds) for shift computation
   bool emit_annot_typed_classes;    // if true, encode directional transition type in point-event class name
+  bool emit_all_trans;              // if true, pad TRANS/BOUT_TRANS pair summaries with unobserved directions
   double bout_min_sec;              // minimum stable-run span (seconds) to qualify as a bout
   double bout_gap_sec;               // max within-run gap (seconds) tolerated before splitting a bout
   double bout_smooth_sec;           // centered moving-average half-window (seconds) applied to PS/CONF before the bout stability test (0=off)
@@ -1440,16 +1441,26 @@ static void write_region_corr( const hd_region_stats_t & rs )
   writer.value( "CORR_H_PS", rs.corr_H_TV );
 }
 
-static void write_trans_stats( const hd_trans_stats_t & ts )
+static void write_trans_stats( const hd_trans_stats_t & ts,
+                               const std::string & prefix,
+                               const bool emit_na_for_empty = false )
 {
-  writer.value( "TRANS_N",         ts.n_events );
-  writer.value( "TRANS_DENS",      ts.density );
+  writer.value( prefix + "_N",    ts.n_events );
+  writer.value( prefix + "_DENS", ts.density );
   if ( ts.valid )
     {
-      writer.value( "TRANS_DUR",      ts.mean_width_sec );
-      writer.value( "TRANS_PEAK_H",   ts.mean_peak_H );
-      writer.value( "TRANS_MIN_CONF", ts.mean_min_C );
-      writer.value( "TRANS_TOT_PS",   ts.mean_TV_area );
+      writer.value( prefix + "_DUR",      ts.mean_width_sec );
+      writer.value( prefix + "_PEAK_H",   ts.mean_peak_H );
+      writer.value( prefix + "_MIN_CONF", ts.mean_min_C );
+      writer.value( prefix + "_TOT_PS",   ts.mean_TV_area );
+    }
+  else if ( emit_na_for_empty )
+    {
+      const double na = std::numeric_limits<double>::quiet_NaN();
+      writer.value( prefix + "_DUR",      na );
+      writer.value( prefix + "_PEAK_H",   na );
+      writer.value( prefix + "_MIN_CONF", na );
+      writer.value( prefix + "_TOT_PS",   na );
     }
 }
 
@@ -1712,6 +1723,7 @@ static void write_hdstats(
 	  for ( int j = 0; j < (int)pf.offsets.size(); j++ )
 	    {
 	      writer.level( pf.offsets[j], globals::sec_strat );
+	      writer.value( "N", pf.n_events );
 	      writer.value( "H",  pf.H[j] );
 	      writer.value( "CONF", pf.C[j] );
 	      writer.value( "MG", pf.Mg[j] );
@@ -1809,6 +1821,11 @@ static void write_hdstats(
 	  const std::vector<hd_bout_t> bouts = compute_bouts( context_mask, is_bout_stable, argmax,
 	                                                       par.bout_min_sec, par.bout_gap_sec, dat.Fs );
 	  const std::vector<hd_event_t> bout_events = compute_bout_transitions( bouts, evts, threestate ? der.TV3 : der.TV );
+	  hd_trans_stats_t tshape_bout;
+	  hd_profile_t     profile_bout;
+	  if ( emit_top_level_transition_stats || emit_profiles_and_pairs )
+	    compute_trans_shape( der, bout_events, context_mask, is_stable, dat, par, dat.Fs, threestate,
+	                         false, false, tshape_bout, profile_bout );
 
 	  // TRANS events restricted to this context (matches how TRANS_N itself, via
 	  // compute_trans_shape's region_mask filtering, is scoped).
@@ -1819,17 +1836,13 @@ static void write_hdstats(
 
 	  if ( emit_top_level_transition_stats )
 	    {
-	      write_trans_stats( tshape );
+	      write_trans_stats( tshape, "TRANS" );
 
 	      const int n_matched = count_trans_bout_matches( evts_in_context, bouts );
 	      writer.value( "TRANS_N_MATCHED",   n_matched );
 	      writer.value( "TRANS_PCT_MATCHED", tshape.n_events > 0 ? 100.0 * n_matched / tshape.n_events : 0.0 );
 
-	      int n_in_region = 0;
-	      for ( bool b : context_mask ) if (b) ++n_in_region;
-	      double dur_hr = (double)n_in_region / dat.Fs / 3600.0;
-	      writer.value( "BOUT_TRANS_N",    (int)bout_events.size() );
-	      writer.value( "BOUT_TRANS_DENS", dur_hr > 0 ? (int)bout_events.size() / dur_hr : 0.0 );
+	      write_trans_stats( tshape_bout, "BOUT_TRANS" );
 
 	      // MIX table: state-set mixing, in the same MINS/DENS units as the HD_*
 	      // hypnodensity metrics (top-level context only; not under SS, matching
@@ -1853,19 +1866,27 @@ static void write_hdstats(
 
 	  if ( ! emit_profiles_and_pairs ) return;
 
-          // Generic OFFSET: aligned profile pooled across all bout-to-bout transitions.
-          hd_trans_stats_t tshape_bout;
-          hd_profile_t     profile_bout;
-          compute_trans_shape( der, bout_events, context_mask, is_stable, dat, par, dat.Fs, threestate,
-                               false, false, tshape_bout, profile_bout );
+	  // Generic aligned profiles, pooled across every event family.  The ALL
+	  // level keeps the family explicit while retaining one table per family.
+	  writer.level( "ALL", "TRANS" );
+	  if ( profile.valid )
+	    emit_profile_rows( profile, false );
+	  writer.unlevel( "TRANS" );
+
+	  writer.level( "ALL", "BOUT_TRANS" );
 	  if ( profile_bout.valid )
 	    emit_profile_rows( profile_bout, false );
+	  writer.unlevel( "BOUT_TRANS" );
 
 	  // TRANS: pair-specific summary statistics still use directional events (unchanged).
 	  std::set<std::pair<int,int>> trans_pairs;
 	  for ( const auto & e : evts )
 	    if ( e.is_dir && e.from_st >= 0 && e.to_st >= 0 && e.from_st != e.to_st )
 	      trans_pairs.insert( std::make_pair( e.from_st , e.to_st ) );
+	  if ( par.emit_all_trans )
+	    for ( int from = 0; from < K; from++ )
+	      for ( int to = 0; to < K; to++ )
+		if ( from != to ) trans_pairs.insert( std::make_pair( from, to ) );
 
 	  for ( const auto & tp : trans_pairs )
 	    {
@@ -1874,7 +1895,7 @@ static void write_hdstats(
 		if ( e.from_st == tp.first && e.to_st == tp.second )
 		  evts_pair.push_back( e );
 
-	      if ( evts_pair.empty() ) continue;
+	      if ( evts_pair.empty() && !par.emit_all_trans ) continue;
 
 	      hd_trans_stats_t tshape_pair;
               hd_profile_t     profile_pair_dir;
@@ -1891,9 +1912,14 @@ static void write_hdstats(
 		+ hd_state_label( threestate , tp.second );
 
 	      writer.level( trans_label , "TRANS" );
-	      write_trans_stats( tshape_pair );
+	      const bool empty_pair = tshape_pair.n_events == 0;
+	      write_trans_stats( tshape_pair, "TRANS", par.emit_all_trans && empty_pair );
 	      writer.value( "TRANS_N_MATCHED",   n_matched_pair );
-	      writer.value( "TRANS_PCT_MATCHED", tshape_pair.n_events > 0 ? 100.0 * n_matched_pair / tshape_pair.n_events : 0.0 );
+	      writer.value( "TRANS_PCT_MATCHED", tshape_pair.n_events > 0
+		    ? 100.0 * n_matched_pair / tshape_pair.n_events
+		    : ( par.emit_all_trans ? std::numeric_limits<double>::quiet_NaN() : 0.0 ) );
+	      if ( profile_pair_dir.valid )
+		emit_profile_rows( profile_pair_dir, true );
 	      writer.unlevel( "TRANS" );
 	    }
 
@@ -1901,6 +1927,10 @@ static void write_hdstats(
 	  std::set<std::pair<int,int>> bout_pairs;
 	  for ( const auto & e : bout_events )
 	    bout_pairs.insert( std::make_pair( e.from_st , e.to_st ) );
+	  if ( par.emit_all_trans )
+	    for ( int from = 0; from < K; from++ )
+	      for ( int to = 0; to < K; to++ )
+		if ( from != to ) bout_pairs.insert( std::make_pair( from, to ) );
 
 	  for ( const auto & tp : bout_pairs )
 	    {
@@ -1909,7 +1939,7 @@ static void write_hdstats(
 		if ( e.from_st == tp.first && e.to_st == tp.second )
 		  bout_events_pair.push_back( e );
 
-	      if ( bout_events_pair.empty() ) continue;
+	      if ( bout_events_pair.empty() && !par.emit_all_trans ) continue;
 
 	      hd_trans_stats_t tshape_bout_pair;
               hd_profile_t     profile_bout_pair;
@@ -1920,6 +1950,8 @@ static void write_hdstats(
 		+ hd_state_label( threestate , tp.second );
 
 	      writer.level( bout_label , "BOUT_TRANS" );
+	      write_trans_stats( tshape_bout_pair, "BOUT_TRANS",
+				 par.emit_all_trans && tshape_bout_pair.n_events == 0 );
 	      if ( profile_bout_pair.valid )
 		emit_profile_rows( profile_bout_pair, true );
 	      writer.unlevel( "BOUT_TRANS" );
@@ -1961,31 +1993,26 @@ static void write_hdstats(
 
 static void set_hdstats_offset_outputs( bool enabled )
 {
-  // Generic SEC: no per-state posteriors (pooled across mixed pair types).
-  const std::vector<std::string> sec_tables = {
-    "NSS,SEC",
-    "ANNOT,NSS,SEC"
+  // Pooled (ALL) and pair-specific profiles share a table. Per-state
+  // posteriors are emitted only for named directional-pair levels.
+  const std::vector<std::string> trans_sec_tables = {
+    "NSS,TRANS,SEC",
+    "ANNOT,NSS,TRANS,SEC"
   };
-  const std::vector<std::string> sec_vars = {
-    "H", "CONF", "MG", "PS"
-  };
-
-  // Pair-specific BOUT_TRANS,SEC: posteriors are meaningful once restricted to one pair.
   const std::vector<std::string> bout_sec_tables = {
     "NSS,BOUT_TRANS,SEC",
     "ANNOT,NSS,BOUT_TRANS,SEC"
   };
-  const std::vector<std::string> bout_sec_vars = {
-    "H", "CONF", "MG", "PS", "P_W", "P_NR", "P_N1", "P_N2", "P_N3", "P_R"
+  const std::vector<std::string> sec_vars = {
+    "N", "H", "CONF", "MG", "PS", "P_W", "P_NR", "P_N1", "P_N2", "P_N3", "P_R"
   };
 
-  for ( int i = 0; i < (int)sec_tables.size(); i++ )
+  for ( int i = 0; i < (int)trans_sec_tables.size(); i++ )
     for ( int j = 0; j < (int)sec_vars.size(); j++ )
-      globals::cmddefs().register_var( "HDSTATS", sec_tables[i], sec_vars[j], enabled );
-
+      globals::cmddefs().register_var( "HDSTATS", trans_sec_tables[i], sec_vars[j], enabled );
   for ( int i = 0; i < (int)bout_sec_tables.size(); i++ )
-    for ( int j = 0; j < (int)bout_sec_vars.size(); j++ )
-      globals::cmddefs().register_var( "HDSTATS", bout_sec_tables[i], bout_sec_vars[j], enabled );
+    for ( int j = 0; j < (int)sec_vars.size(); j++ )
+      globals::cmddefs().register_var( "HDSTATS", bout_sec_tables[i], sec_vars[j], enabled );
 }
 
 struct hdstats_offset_outputs_scope_t
@@ -2046,6 +2073,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
   par.min_events_profile = param.has( "min-events" ) ? param.requires_int( "min-events" ) : 3;
   par.min_samples_region = param.has( "min-samples" ) ? param.requires_int( "min-samples" ) : 20;
   par.emit_annot_typed_classes = param.has( "emit-annots-by-type" ) ? param.yesno( "emit-annots-by-type" ) : false;
+  par.emit_all_trans = param.yesno( "emit-all-trans" );
   par.emit_annot_label   =
     param.has( "emit-annots" ) ? ( ( ! param.empty("emit-annots" ) ) ? param.value( "emit-annots" ) : "hd" )
     : ( par.emit_annot_typed_classes ? "hd" : "" );
