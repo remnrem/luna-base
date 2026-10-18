@@ -1956,6 +1956,8 @@ void proc_runpops( edf_t & edf , param_t & param )
       if ( param.empty( "unweighted" ) ) pops_param.add( "unweighted" );
       else pops_param.add( "unweighted" , param.value( "unweighted" ) );
     }
+  if ( param.has( "weights" ) )
+    pops_param.add( "weights" , param.value( "weights" ) );
 
   if ( opt_args != "" )
     {

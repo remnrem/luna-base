@@ -4249,7 +4249,8 @@ void cmddefs_t::init()
   add_param( "POPS" , "smooth-pp" , "T" , "resolution=5 only: apply the 7-tap symmetric output-smoothing kernel that cancels any exactly-epoch-period ripple in the combined posterior stream (default T; set F for diagnostic comparison)" );
   add_param( "POPS" , "posterior-channels" , "E|CODA|BOTH" , "Add posterior channels to the in-memory EDF after scoring: stage-1 POPS (E), CODA, or BOTH; requires one 30s EDF record per epoch and skips any channel that already exists" );
   add_param( "POPS" , "posterior-prefix" , "PP or PP,CP" , "Prefix for emitted posterior output; one token applies to both, or give STG1_PREFIX,CODA_PREFIX to separate stage-1 and CODA channel sets" );
-  add_param( "POPS" , "unweighted" , "F" , "With an optional <lib>.wgts file, disable the default inverse posterior-weight correction" );
+  add_param( "POPS" , "weights" , "" , "Direct inverse posterior-calibration weights, W,R,N1,N2,N3; overrides optional <lib>.wgts and applies to the final five-state POPS or CODA stream" );
+  add_param( "POPS" , "unweighted" , "F" , "Disable inverse posterior-weight correction from either weights= or an optional <lib>.wgts file" );
   add_param( "POPS" , "coda-config" , "coda.conf" , "POPS-CODA: LightGBM config file for CODA training (default: built-in)" );
   add_param( "POPS" , "coda-iter" , "200" , "POPS-CODA: number of LightGBM iterations for CODA training (default 200)" );
   add_param( "POPS" , "early-stopping" , "10" , "POPS / POPS-CODA: validation-loss patience in boosting rounds (default 10; 0 disables early stopping); overrides early_stopping=N in the LightGBM config file" );
@@ -4589,7 +4590,8 @@ void cmddefs_t::init()
   add_param( "RUN-POPS" , "coda-no-future" , "" , "Disable future-context features in CODA" );
   add_param( "RUN-POPS" , "posterior-channels" , "E|CODA|BOTH" , "Compatibility override for POPS posterior export stream selection" );
   add_param( "RUN-POPS" , "posterior-prefix" , "PP or PP,CP" , "Forwarded to POPS: prefix for posterior emission to the in-memory EDF" );
-  add_param( "RUN-POPS" , "unweighted" , "F" , "With an optional <lib>.wgts file, disable the default inverse posterior-weight correction" );
+  add_param( "RUN-POPS" , "weights" , "" , "Forwarded direct inverse posterior-calibration weights, W,R,N1,N2,N3; overrides optional <lib>.wgts" );
+  add_param( "RUN-POPS" , "unweighted" , "F" , "Disable inverse posterior-weight correction from either weights= or an optional <lib>.wgts file" );
 
   //
   // EVAL-STAGES

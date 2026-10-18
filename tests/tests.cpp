@@ -5882,9 +5882,12 @@ static void test_pops_posterior_weights( lunapi_t * /*eng*/,
                                          std::vector<test_result_t> & R, bool V )
 {
   try {
-    pops_opt_t::posterior_weighting_disabled = false;
-    pops_opt_t::pops_posterior_weights = { 1.0 , 2.0 , 2.0 , 1.0 , 2.0 };
-    pops_opt_t::coda_posterior_weights.clear();
+    param_t direct;
+    direct.add( "weights" , "1,2,2,1,2" );
+    pops_opt_t::set_options( direct );
+    const bool direct_applies_to_both_streams =
+      pops_opt_t::pops_posterior_weights == std::vector<double>{ 1.0 , 2.0 , 2.0 , 1.0 , 2.0 } &&
+      pops_opt_t::coda_posterior_weights == std::vector<double>{ 1.0 , 2.0 , 2.0 , 1.0 , 2.0 };
 
     Eigen::MatrixXd P( 2 , 5 );
     P.row( 0 ) << 0.2 , 0.2 , 0.2 , 0.2 , 0.2;
@@ -5900,6 +5903,7 @@ static void test_pops_posterior_weights( lunapi_t * /*eng*/,
     const bool invalid_unchanged = P(1,0) == before(1,0) &&
       P(1,1) == before(1,1) && P(1,2) == before(1,2) &&
       P(1,3) == before(1,3) && std::isnan( P(1,4) );
+    pops_opt_t::coda_posterior_weights.clear();
     const Eigen::MatrixXd coda_before = P;
     pops_opt_t::apply_posterior_weights( &P , true );
     const bool absent_coda_ignored = P(0,0) == coda_before(0,0) &&
@@ -5910,7 +5914,9 @@ static void test_pops_posterior_weights( lunapi_t * /*eng*/,
     pops_opt_t::pops_posterior_weights.clear();
     pops_opt_t::coda_posterior_weights.clear();
     record(R, "pops-weights/inverse-correction-and-invalid-row-preservation",
-           corrected && invalid_unchanged && absent_coda_ignored,
+           direct_applies_to_both_streams && corrected && invalid_unchanged && absent_coda_ignored,
+           "direct_both=" + std::string(direct_applies_to_both_streams ? "T" : "F") +
+           " " +
            "corrected=" + std::string(corrected ? "T" : "F") +
            " invalid_unchanged=" + std::string(invalid_unchanged ? "T" : "F") +
            " absent_coda_ignored=" + std::string(absent_coda_ignored ? "T" : "F"), V);

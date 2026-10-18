@@ -201,8 +201,26 @@ void pops_opt_t::set_options( param_t & param )
   pops_posterior_weights.clear();
   coda_posterior_weights.clear();
   bool posterior_weights_file_found = false;
+  bool posterior_weights_direct = false;
 
-  if ( pops_root != "" )
+  // A direct weights= override is useful for standalone CODA rescoring from
+  // an external posterior file, where there need not be a local POPS library
+  // root from which to resolve <lib>.wgts.  It intentionally applies to
+  // whichever five-state stream is final.
+  if ( param.has( "weights" ) )
+    {
+      const std::vector<double> w = param.dblvector( "weights" );
+      if ( w.size() != 5 )
+        Helper::halt( "POPS weights= requires exactly five finite positive W,R,N1,N2,N3 values" );
+      for ( int j = 0 ; j < 5 ; ++j )
+        if ( ! std::isfinite( w[j] ) || w[j] <= 0 )
+          Helper::halt( "POPS weights= requires exactly five finite positive W,R,N1,N2,N3 values" );
+      pops_posterior_weights = w;
+      coda_posterior_weights = w;
+      posterior_weights_direct = true;
+      logger << "  POPS: direct posterior weights supplied by weights=\n";
+    }
+  else if ( pops_root != "" )
     {
       const std::string weights_file = pops_t::update_filepath( pops_root + ".wgts" );
       if ( Helper::fileExists( weights_file ) )
@@ -253,6 +271,9 @@ void pops_opt_t::set_options( param_t & param )
 
   if ( posterior_weighting_disabled )
     logger << "  POPS: posterior weight recalibration not applied (unweighted=T)\n";
+  else if ( posterior_weights_direct )
+    logger << "  POPS: posterior weight recalibration enabled from direct weights=; "
+           << "the final matching POPS/CODA posterior stream will be corrected before hard calls\n";
   else if ( ! posterior_weights_file_found )
     logger << "  POPS: posterior weight recalibration not applied (no <lib>.wgts file)\n";
   else
