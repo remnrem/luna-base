@@ -58,6 +58,27 @@ namespace {
 
 bool real(const double x) { return std::isfinite(x); }
 
+dpp_record_filter_t outcome_filter(const param_t &p) {
+  const std::string phe = p.requires("phe");
+  return [phe](const std::string &id) {
+    double y = std::numeric_limits<double>::quiet_NaN();
+    return cmd_t::pull_ivar(id, phe, &y) && std::isfinite(y);
+  };
+}
+
+std::vector<dpp_matrix_t>
+load_outcome_complete_corpus(const std::vector<std::string> &files,
+                             const param_t &p) {
+  int n_skipped = 0;
+  std::vector<dpp_matrix_t> d = dpp_io::load_files_filtered(
+      files, -1, outcome_filter(p), &n_skipped);
+  if (n_skipped)
+    logger << "  DPP two-level: skipped " << n_skipped
+           << " individuals without a valid numeric " << p.requires("phe")
+           << " outcome\n";
+  return d;
+}
+
 std::vector<std::string> groups(const param_t &p) {
   std::vector<std::string> g =
       p.has("level2-features")
@@ -1009,7 +1030,7 @@ void dpp_twolevel::fit(param_t &p) {
   std::vector<std::string> files =
       p.has("files") ? p.strvector("files")
                      : std::vector<std::string>{p.requires("data")};
-  std::vector<dpp_matrix_t> d = dpp_io::load_files(files, -1);
+  std::vector<dpp_matrix_t> d = load_outcome_complete_corpus(files, p);
   if (d.empty())
     Helper::halt("DPP two-level: no corpus data");
   for (const dpp_matrix_t &m : d)
@@ -1155,7 +1176,7 @@ void dpp_twolevel::fit_model_set(param_t &p) {
   std::vector<std::string> files =
       p.has("files") ? p.strvector("files")
                      : std::vector<std::string>{p.requires("data")};
-  std::vector<dpp_matrix_t> d = dpp_io::load_files(files, -1);
+  std::vector<dpp_matrix_t> d = load_outcome_complete_corpus(files, p);
   if (d.empty())
     Helper::halt("DPP two-level: no corpus data");
   for (const auto &m : d)

@@ -440,25 +440,18 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
        param.has( "sigma-veto-rem" ) || param.has( "sigma-veto2-rem" ) )
     Helper::halt( "sigma veto options are not used for arousal detection" );
 
-  arousals2_verbose_annots = false;
+  // Verbose output consistently enables the diagnostic annotation tracks as
+  // well as verbose writer output.  verbose-annot only customizes their
+  // prefix; it is not a separate enable switch.
+  const bool verbose = param.yesno( "verbose" , false , true );
+  arousals2_verbose_annots = verbose;
   arousals2_verbose_prefix = "arv_";
   const std::string verbose_key = param.has( "verbose-annot" ) ? "verbose-annot" :
     ( param.has( "verbose-annots" ) ? "verbose-annots" : "" );
-  if ( verbose_key != "" )
+  if ( verbose_key != "" && ! param.empty( verbose_key ) )
     {
-      if ( param.empty( verbose_key ) )
-        arousals2_verbose_annots = true;
-      else
-        {
-          const std::string v = param.value( verbose_key );
-          if ( arousals2_bool_token( v ) )
-            arousals2_verbose_annots = arousals2_true_token( v );
-          else
-            {
-              arousals2_verbose_annots = true;
-              arousals2_verbose_prefix = v;
-            }
-        }
+      const std::string v = param.value( verbose_key );
+      if ( ! arousals2_bool_token( v ) ) arousals2_verbose_prefix = v;
     }
 
   const bool add_chs = param.has( "add" );
@@ -470,7 +463,7 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   hp.post_sec = epoch_win;
   hp.do_nrem = param.yesno( "nrem" , true , true );
   hp.do_rem  = param.yesno( "rem"  , true , true );
-  hp.verbose = param.has( "verbose" );
+  hp.verbose = verbose;
   hp.nrem_emg_only = param.yesno( "nrem-emg-only" , false , true );
   if ( param.has( "eeg-tilt-rise-th" ) ) hp.eeg_tilt_rise_th = param.requires_dbl( "eeg-tilt-rise-th" );
   if ( param.has( "eeg-fast-rise-th" ) ) hp.eeg_fast_rise_th = param.requires_dbl( "eeg-fast-rise-th" );
@@ -510,11 +503,8 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   if ( param.has( "emg-rise-buffer" )  ) hp.emg_rise_buffer  = param.requires_dbl( "emg-rise-buffer" );
 
   hp.spindle_veto = param.yesno( "spindle" , false , true );
-  hp.spindle_annot_on = param.has( "spindle-annot" );
-  if ( hp.spindle_annot_on && ! param.empty( "spindle-annot" ) )
-    hp.spindle_annot = param.value( "spindle-annot" );
-  if ( ( hp.spindle_veto || hp.spindle_annot_on ) && ns_eeg == 0 )
-    Helper::halt( "spindle veto/annotation requires an EEG channel" );
+  if ( hp.spindle_veto && ns_eeg == 0 )
+    Helper::halt( "spindle veto requires an EEG channel" );
   if ( param.has( "spindle-f-lwr" )        ) hp.spindle_f_lwr        = param.requires_dbl( "spindle-f-lwr" );
   if ( param.has( "spindle-f-upr" )        ) hp.spindle_f_upr        = param.requires_dbl( "spindle-f-upr" );
   if ( param.has( "spindle-min-dur" )      ) hp.spindle_min_dur      = param.requires_dbl( "spindle-min-dur" );
@@ -528,7 +518,7 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   if ( param.has( "spindle-frac" )         ) hp.spindle_frac         = param.requires_dbl( "spindle-frac" );
   if ( param.has( "spindle-min-channels" ) ) hp.spindle_min_channels = param.requires_int( "spindle-min-channels" );
 
-  if ( hp.spindle_veto || hp.spindle_annot_on )
+  if ( hp.spindle_veto )
     {
       if ( ! std::isfinite( hp.spindle_f_lwr ) || ! std::isfinite( hp.spindle_f_upr ) ||
            ! std::isfinite( hp.spindle_min_dur ) || ! std::isfinite( hp.spindle_max_dur ) ||
@@ -585,9 +575,14 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   if ( hp.eeg_artifact_th < 0 || hp.eeg_artifact_th > 1 )
     Helper::halt( "eeg-artifact-th must be between 0 and 1" );
 
-  const int wake_bridge = param.has( "wake-bridge" ) ? param.requires_int( "wake-bridge" ) : 1;
-  if ( wake_bridge < 0 )
-    Helper::halt( "wake-bridge must be 0 or greater" );
+  bool wake_bridge = true;
+  if ( param.has( "wake-bridge" ) && ! param.empty( "wake-bridge" ) )
+    {
+      const std::string v = param.value( "wake-bridge" );
+      if ( ! arousals2_bool_token( v ) )
+        Helper::halt( "wake-bridge must be T/F (or Y/N, 1/0)" );
+      wake_bridge = arousals2_true_token( v );
+    }
 
   if ( ns_eeg == 0 && ns_emg == 0 )
     {
@@ -624,25 +619,35 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   std::vector<int> state;
   std::vector<int> seq;
   std::vector<double> sec;
+  std::vector<double> wake_bridge_start;
   Eigen::MatrixXd Xeeg, Xemg;
   build_ftr_matrix( edf , eeg_signals , emg_signals , Xeeg , Xemg ,
-                    &state , &seq , &sec , wake_bridge , epoch_inc );
+                    &state , &seq , &sec , &wake_bridge_start , wake_bridge , epoch_inc );
 
   // Standalone NR spindle detector: run before the arousal candidate pipeline
   // since it operates directly on the raw EEG and the NR/REM state sequence,
-  // not on the per-window feature matrix built below. If requested, it also
-  // writes the confirmed spindle intervals as a QC-style annotation.
+  // not on the per-window feature matrix built below.
   std::set<interval_t> spindles;
-  if ( hp.spindle_veto || hp.spindle_annot_on )
-    spindles = detect_spindles( edf , eeg_signals , state , sec , epoch_inc , hp ,
-                                hp.spindle_annot_on ? hp.spindle_annot : "" );
+  if ( hp.spindle_veto )
+    spindles = detect_spindles( edf , eeg_signals , state , sec , epoch_inc , hp );
+
+  // Follow the ordinary AROUSALS verbose convention: emit a fixed QC class
+  // only when verbose output was requested, never in a standard production run.
+  if ( hp.spindle_veto && hp.verbose )
+    {
+      annot_t * annot = edf.annotations->add( "arousal_spindle" );
+      for ( const interval_t & iv : spindles )
+        annot->add( "." , iv , "." );
+    }
 
   Eigen::MatrixXd Xftr = process_ftr_matrix( &Xeeg , &Xemg , state , seq , sec , hp );
   Xeeg.resize(0,0);
   Xemg.resize(0,0);
 
   std::vector<std::vector<std::vector<double> > > tt;
-  std::vector<std::vector<std::vector<Eigen::VectorXd> > > X = assemble( Xftr , state , seq , sec , &tt );
+  std::vector<std::vector<std::vector<double> > > bridge_tt;
+  std::vector<std::vector<std::vector<Eigen::VectorXd> > > X =
+    assemble( Xftr , state , seq , sec , wake_bridge_start , &tt , &bridge_tt );
 
   std::vector<std::vector<std::vector<double> > > eeg_artifact;
   // Compute the raw-EEG quality score before event scoring.  add_channels()
@@ -651,7 +656,8 @@ arousals2_t::arousals2_t( edf_t & edf , param_t & param )
   add_channels( X , tt , add_chs ? ch_prefix : "" , eeg_signals , epoch_win , &eeg_artifact );
 
   std::map<std::string,std::set<interval_t> > anns =
-    event_heuristic( X , tt , eeg_artifact , hp.spindle_veto ? spindles : std::set<interval_t>() , hp );
+    event_heuristic( X , tt , bridge_tt , eeg_artifact ,
+                     hp.spindle_veto ? spindles : std::set<interval_t>() , hp );
   if ( event_root != "arousal" )
     {
       std::map<std::string,std::set<interval_t> > renamed;
@@ -701,7 +707,8 @@ void arousals2_t::build_ftr_matrix( edf_t & edf ,
                                     std::vector<int> * state ,
                                     std::vector<int> * sequence ,
                                     std::vector<double> * sec ,
-                                    const int wake_bridge ,
+                                    std::vector<double> * wake_bridge_start ,
+                                    const bool wake_bridge ,
                                     const double epoch_inc )
 {
   const int ns_eeg = eeg_signals.size();
@@ -710,6 +717,7 @@ void arousals2_t::build_ftr_matrix( edf_t & edf ,
   state->clear();
   sequence->clear();
   sec->clear();
+  wake_bridge_start->clear();
 
   int ne = edf.timeline.first_epoch();
   Xeeg = Eigen::MatrixXd::Zero( ne , ns_eeg * 4 );
@@ -736,7 +744,7 @@ void arousals2_t::build_ftr_matrix( edf_t & edf ,
   bool have_prior_feature_sec = false;
   double prior_feature_sec = 0;
 
-  const double wake_bridge_sec = wake_bridge * globals::default_epoch_len;
+  const double wake_bridge_sec = globals::default_epoch_len;
   int last_sleep_state = 2;
   bool in_wake_run = false;
   int wake_bridge_state = 2;
@@ -784,6 +792,7 @@ void arousals2_t::build_ftr_matrix( edf_t & edf ,
         }
 
       int st = scored_st;
+      double bridged_wake_start_sec = -1;
       if ( scored_st == 0 || scored_st == 1 )
         {
           last_sleep_state = scored_st;
@@ -791,7 +800,7 @@ void arousals2_t::build_ftr_matrix( edf_t & edf ,
           wake_bridge_state = 2;
           wake_run_start_sec = 0;
         }
-      else if ( scored_wake && wake_bridge > 0 )
+      else if ( scored_wake && wake_bridge )
         {
           if ( ! in_wake_run )
             {
@@ -801,7 +810,10 @@ void arousals2_t::build_ftr_matrix( edf_t & edf ,
             }
           if ( ( wake_bridge_state == 0 || wake_bridge_state == 1 ) &&
                feature_sec - wake_run_start_sec < wake_bridge_sec )
-            st = wake_bridge_state;
+            {
+              st = wake_bridge_state;
+              bridged_wake_start_sec = wake_run_start_sec;
+            }
         }
       else
         {
@@ -828,6 +840,7 @@ void arousals2_t::build_ftr_matrix( edf_t & edf ,
       else if ( st == 1 ) sequence->push_back( seq_r );
       else sequence->push_back( -1 );
       sec->push_back( feature_sec );
+      wake_bridge_start->push_back( bridged_wake_start_sec );
 
       if ( st == 2 ) continue;
 
@@ -1092,10 +1105,13 @@ arousals2_t::assemble( const Eigen::MatrixXd & Xftr ,
                        const std::vector<int> & state ,
                        const std::vector<int> & seq ,
                        const std::vector<double> & sec ,
-                       std::vector<std::vector<std::vector<double> > > * tt )
+                       const std::vector<double> & wake_bridge_start ,
+                       std::vector<std::vector<std::vector<double> > > * tt ,
+                       std::vector<std::vector<std::vector<double> > > * bridge_tt )
 {
   std::vector<std::vector<std::vector<Eigen::VectorXd> > > X;
   tt->clear();
+  bridge_tt->clear();
 
   std::map<int,std::map<int,std::vector<int> > > contigs;
   for (int i=0; i<state.size(); i++)
@@ -1110,6 +1126,9 @@ arousals2_t::assemble( const Eigen::MatrixXd & Xftr ,
   tt->resize( 2 );
   (*tt)[0].resize( contigs[0].size() );
   (*tt)[1].resize( contigs[1].size() );
+  bridge_tt->resize( 2 );
+  (*bridge_tt)[0].resize( contigs[0].size() );
+  (*bridge_tt)[1].resize( contigs[1].size() );
 
   for (int st=0; st<2; st++)
     {
@@ -1120,10 +1139,12 @@ arousals2_t::assemble( const Eigen::MatrixXd & Xftr ,
           const std::vector<int> & ee = cc->second;
           const int nce = ee.size();
           (*tt)[st][sq].resize( nce );
+          (*bridge_tt)[st][sq].resize( nce );
           X[st][sq].resize( nce );
           for (int i=0; i<nce; i++)
             {
               (*tt)[st][sq][i] = sec[ ee[i] ];
+              (*bridge_tt)[st][sq][i] = wake_bridge_start[ ee[i] ];
               X[st][sq][i] = Xftr.row( ee[i] );
             }
         }
@@ -1464,8 +1485,7 @@ std::set<interval_t> arousals2_t::detect_spindles( edf_t & edf ,
                                                     const std::vector<int> & state ,
                                                     const std::vector<double> & sec ,
                                                     const double epoch_inc ,
-                                                    const arousals2_params_t & p ,
-                                                    const std::string & annot_label )
+                                                    const arousals2_params_t & p )
 {
   std::set<interval_t> spindles;
 
@@ -1726,19 +1746,13 @@ std::set<interval_t> arousals2_t::detect_spindles( edf_t & edf ,
       spindles.insert( iv );
     }
 
-  if ( ! annot_label.empty() )
-    {
-      annot_t * annot = edf.annotations->add( annot_label );
-      for ( const interval_t & iv : spindles )
-        annot->add( "." , iv , "." );
-    }
-
   return spindles;
 }
 
 std::map<std::string,std::set<interval_t> >
 arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::VectorXd> > > & X ,
                               const std::vector<std::vector<std::vector<double> > > & tt ,
+                              const std::vector<std::vector<std::vector<double> > > & bridge_tt ,
                               const std::vector<std::vector<std::vector<double> > > & eeg_artifact ,
                               const std::set<interval_t> & spindles ,
                               const arousals2_params_t & p )
@@ -2283,10 +2297,18 @@ arousals2_t::event_heuristic( const std::vector<std::vector<std::vector<Eigen::V
             {
               const std::pair<double,double> tint = event_interval( evts[e] );
               const double dur = tint.second - tint.first;
+              // A bridged W epoch can represent a mixed sleep/wake epoch.
+              // Permit an onset only during its first pre_sleep_sec, which is
+              // the most that can plausibly retain the required stable prior
+              // sleep.  The bridge still lets a valid sleep-onset candidate
+              // continue into W; it cannot license a new late-W onset.
+              const double bridge_start = bridge_tt[st][c][ evts[e].first ];
+              const bool wake_transition_ok =
+                bridge_start < 0 || tint.first <= bridge_start + p.pre_sleep_sec;
               const bool duration_ok =
                 dur >= p.arousal_dur &&
                 ( dur <= p.max_dur || ( do_long && dur <= p.long_dur ) );
-              if ( duration_ok ) final_duration_evts.push_back( evts[e] );
+              if ( duration_ok && wake_transition_ok ) final_duration_evts.push_back( evts[e] );
             }
           add_verbose_events( "candidate_final_duration_ok" , final_duration_evts );
           evts = final_duration_evts;

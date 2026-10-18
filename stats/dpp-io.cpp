@@ -144,3 +144,63 @@ dpp_io::load_files(const std::vector<std::string> &files,
   }
   return out;
 }
+
+std::vector<dpp_matrix_t>
+dpp_io::load_filtered(const std::string &f, int expected_n_features,
+                      const dpp_record_filter_t &keep, int *n_skipped) {
+  std::vector<dpp_matrix_t> out;
+  std::ifstream IN1 =
+      LunaIO::open_ifstream(Helper::expand(f), std::ios::binary | std::ios::in);
+
+  while (1) {
+    const std::string id = bread_str(IN1);
+    if (IN1.eof() || IN1.bad())
+      break;
+    const int nr = bread_int(IN1);
+    const int nf = bread_int(IN1);
+    if (expected_n_features >= 0 && nf != expected_n_features)
+      Helper::halt("data in " + f +
+                   " does not match the expected feature schema");
+    if (nr < 0 || nf < 0)
+      Helper::halt("invalid DPP matrix dimensions in " + f + " for " + id);
+
+    if (!keep(id)) {
+      const std::streamoff bytes =
+          (std::streamoff)nr * (std::streamoff)(nf + 1) *
+          (std::streamoff)sizeof(double);
+      IN1.seekg(bytes, std::ios::cur);
+      if (!IN1.good())
+        Helper::halt("could not skip DPP matrix payload in " + f + " for " +
+                     id);
+      if (n_skipped)
+        ++(*n_skipped);
+      continue;
+    }
+
+    dpp_matrix_t m;
+    m.id = id;
+    m.time_sec.resize(nr);
+    m.X.resize(nr);
+    for (int i = 0; i < nr; i++) {
+      m.time_sec[i] = bread_dbl(IN1);
+      m.X[i].resize(nf);
+      for (int j = 0; j < nf; j++)
+        m.X[i][j] = bread_dbl(IN1);
+    }
+    out.push_back(m);
+  }
+  IN1.close();
+  return out;
+}
+
+std::vector<dpp_matrix_t> dpp_io::load_files_filtered(
+    const std::vector<std::string> &files, int expected_n_features,
+    const dpp_record_filter_t &keep, int *n_skipped) {
+  std::vector<dpp_matrix_t> out;
+  for (int i = 0; i < (int)files.size(); i++) {
+    std::vector<dpp_matrix_t> part =
+        load_filtered(files[i], expected_n_features, keep, n_skipped);
+    out.insert(out.end(), part.begin(), part.end());
+  }
+  return out;
+}

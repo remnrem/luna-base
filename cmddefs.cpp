@@ -3788,6 +3788,8 @@ void cmddefs_t::init()
   add_param( "HYPNO" , "trans5" , "F" , "Emit N1/N2/N3/R/W PRE/POST transition strata (default F)" );
   add_param( "HYPNO" , "annot" , "hyp_" , "Add hypnogram-derived annotations with this optional prefix" );
   add_param( "HYPNO" , "annot-cycles" , "hyp_" , "Legacy alias for annot" );
+  add_param( "HYPNO" , "pc-out" , "" , "Write one HYPNO-PC feature line per individual" );
+  add_param( "HYPNO" , "pc-proj" , "" , "Project a saved HYPNO-PC model" );
 
 
   add_table( "HYPNO" , "" , "Individual-level output" );
@@ -3851,6 +3853,8 @@ void cmddefs_t::init()
 
   add_var( "HYPNO" , "" , "SFI"  , "Sleep Fragmentation Index: transitions to W per minute TST" );
   add_var( "HYPNO" , "" , "SFI1" , "Sleep Fragmentation Index (N1-inclusive): transitions to W or N1 per minute TST" );
+  add_var( "HYPNO" , "" , "HYPC_COMPATIBLE" , "HYPNO-PC model compatibility" );
+  add_var( "HYPNO" , "" , "HYPC_N_MISSING" , "Missing HYPNO-PC features" );
   add_var( "HYPNO" , "" , "TI_S" , "Sleep Transition Index" );
   add_var( "HYPNO" , "" , "TI_S3" , "Sleep Transition Index, 3-stage classification" );
   add_var( "HYPNO" , "" , "TI_RNR" , "Sleep Transition Index: REM-NREM only" );
@@ -4213,7 +4217,9 @@ void cmddefs_t::init()
   add_param( "POPS" , "soap-upr" , "100" , "Upper SOAP likelihood bound" );
   add_param( "POPS" , "soap-steps" , "100" , "Number of SOAP likelihood steps" );
   add_param( "POPS" , "soap-grid" , "0.8" , "Run a SOAP confidence grid search" );
-  add_param( "POPS" , "verbose" , "" , "Verbose model and feature diagnostics" );
+  add_param( "POPS" , "verbose" , "" , "Emit feature-definition/QC, channel-equivalence and error-type diagnostics; raw feature matrices still require an explicit output-features option" );
+  add_param( "POPS" , "output-features" , "" , "Emit the raw stage-1 epoch-by-feature matrix (E,CODA=0,COL; FTR and X values)" );
+  add_param( "POPS" , "coda-output-features" , "" , "Emit the raw CODA epoch-by-feature matrix (E,CODA=1,COL; FTR and X values)" );
   add_param( "POPS" , "stage-assoc" , "F" , "Run stage-association summaries" );
   add_param( "POPS" , "pops-SHAP" , "" , "Emit SHAP values for the stage-1 POPS model only" );
   add_param( "POPS" , "coda-SHAP" , "" , "Emit SHAP values for the CODA model only" );
@@ -4236,12 +4242,14 @@ void cmddefs_t::init()
   add_param( "POPS" , "posteriors" , "pops-out.txt" , "POPS-CODA: file of stage-1 posteriors for standalone CODA training or posterior-file CODA prediction (destrat POPS -r E format; PRIOR required for training, optional for prediction; START/STOP copied through if present)" );
   add_param( "POPS" , "train-coda" , "coda.mod" , "POPS-CODA: explicit output model file for standalone CODA training (legacy override; otherwise coda[=<file>] with lib=ROOT defaults to ROOT.coda.mod)" );
   add_param( "POPS" , "coda" , "coda.mod" , "POPS-CODA: apply the second-stage CODA model in the original POPS/RUN-POPS scoring path, or name the output model for standalone CODA training from posteriors=" );
+  add_param( "POPS" , "pre-coda" , "F" , "With coda=, also emit stage-1 results as CODA=0; final CODA results are CODA=1" );
   add_param( "POPS" , "predict-coda" , "" , "POPS-CODA: stage-2-only rescoring with the model resolved as <lib>.coda.mod (default lib=s2a); uses posteriors= file if given, otherwise reads attached EDF posterior channels (default PP_W/PP_R/PP_N1/PP_N2/PP_N3 or PP_NR)" );
   add_param( "POPS" , "resolution" , "30|5" , "Posterior stream resolution: 30-second epochs (default) or 5-second stride/native posterior rows" );
   add_param( "POPS" , "emit-pp" , "" , "Emit PP_* posterior channels/signals to the in-memory EDF using the active stream (stage-1 unless CODA rescoring is requested)" );
   add_param( "POPS" , "smooth-pp" , "T" , "resolution=5 only: apply the 7-tap symmetric output-smoothing kernel that cancels any exactly-epoch-period ripple in the combined posterior stream (default T; set F for diagnostic comparison)" );
   add_param( "POPS" , "posterior-channels" , "E|CODA|BOTH" , "Add posterior channels to the in-memory EDF after scoring: stage-1 POPS (E), CODA, or BOTH; requires one 30s EDF record per epoch and skips any channel that already exists" );
   add_param( "POPS" , "posterior-prefix" , "PP or PP,CP" , "Prefix for emitted posterior output; one token applies to both, or give STG1_PREFIX,CODA_PREFIX to separate stage-1 and CODA channel sets" );
+  add_param( "POPS" , "unweighted" , "F" , "With an optional <lib>.wgts file, disable the default inverse posterior-weight correction" );
   add_param( "POPS" , "coda-config" , "coda.conf" , "POPS-CODA: LightGBM config file for CODA training (default: built-in)" );
   add_param( "POPS" , "coda-iter" , "200" , "POPS-CODA: number of LightGBM iterations for CODA training (default 200)" );
   add_param( "POPS" , "early-stopping" , "10" , "POPS / POPS-CODA: validation-loss patience in boosting rounds (default 10; 0 disables early stopping); overrides early_stopping=N in the LightGBM config file" );
@@ -4316,42 +4324,43 @@ void cmddefs_t::init()
   add_var( "POPS" , "SS" , "RECALL" , "Recall" );
   add_var( "POPS" , "SS" , "PREC" , "Precision" );
 
-  add_table( "POPS" , "FTR" , "Feature definitions" );
-  add_var( "POPS" , "FTR" , "BLOCK" , "Block label" );
-  add_var( "POPS" , "FTR" , "FINAL" , "Column, if included" );
-  add_var( "POPS" , "FTR" , "INC" , "Included?" );
-  add_var( "POPS" , "FTR" , "LABEL" , "Feature label" );
-  add_var( "POPS" , "FTR" , "LABEL_ORIG" , "Feature label" );
-  add_var( "POPS" , "FTR" , "LEVEL" , "Level (1/2)" );
-  add_var( "POPS" , "FTR" , "ROOT" , "Root label" );
+  add_table( "POPS" , "SPEC" , "Feature definitions [verbose or output-features]" );
+  add_var( "POPS" , "SPEC" , "COL" , "One-based final model-input column, if included" );
+  add_var( "POPS" , "SPEC" , "FTR" , "Feature label (metadata; not a row key)" );
+  add_var( "POPS" , "SPEC" , "BLOCK" , "Block label" );
+  add_var( "POPS" , "SPEC" , "INC" , "Included?" );
+  add_var( "POPS" , "SPEC" , "LABEL_ORIG" , "Original feature label" );
+  add_var( "POPS" , "SPEC" , "LEVEL" , "Level (1/2)" );
+  add_var( "POPS" , "SPEC" , "ROOT" , "Root label" );
 
-  add_table( "POPS" , "ETYPE" , "Error type" );
+  add_table( "POPS" , "ETYPE" , "Error type [verbose]" );
   add_var( "POPS" , "ETYPE" , "ACC" , "Accuracy" );
   add_var( "POPS" , "ETYPE" , "N" , "Count" );
 
-  add_table( "POPS" , "SS,ETYPE" , "Stage-specific error type" );
+  add_table( "POPS" , "SS,ETYPE" , "Stage-specific error type [verbose]" );
   add_var( "POPS" , "SS,ETYPE" , "ACC" , "Accuracy" );
   add_var( "POPS" , "SS,ETYPE" , "N" , "Count" );
 
-  add_table( "POPS" , "SS,FTR" , "SHAP values" );
-  add_var( "POPS" , "SS,FTR" , "SHAP" , "SHAP values" );
+  add_table( "POPS" , "CODA,SS,COL" , "Model SHAP values; CODA=0 stage-1 POPS, CODA=1 CODA" );
+  add_var( "POPS" , "CODA,SS,COL" , "FTR" , "Feature label (metadata; not a row key)" );
+  add_var( "POPS" , "CODA,SS,COL" , "SHAP" , "Mean absolute SHAP value" );
 
-  add_table( "POPS" , "MDL,SS,FTR" , "Model-specific SHAP values" );
-  add_var( "POPS" , "MDL,SS,FTR" , "SHAP" , "SHAP values" );
+  add_table( "POPS" , "CODA,COL" , "Intrinsic LightGBM feature importance; CODA=0 stage-1 POPS, CODA=1 CODA" );
+  add_var( "POPS" , "CODA,COL" , "FTR" , "Feature label (metadata; not a row key)" );
+  add_var( "POPS" , "CODA,COL" , "RANK" , "Rank by total gain (1 = highest)" );
+  add_var( "POPS" , "CODA,COL" , "GAIN" , "Total LightGBM split gain" );
+  add_var( "POPS" , "CODA,COL" , "GAIN_PCT" , "Percentage of the model's total LightGBM split gain" );
+  add_var( "POPS" , "CODA,COL" , "SPLIT" , "Number of LightGBM splits using the feature" );
 
-  add_table( "POPS" , "MDL,COL,FTR" , "Model-specific intrinsic LightGBM feature importance" );
-  add_var( "POPS" , "MDL,COL,FTR" , "RANK" , "Rank by total gain (1 = highest)" );
-  add_var( "POPS" , "MDL,COL,FTR" , "GAIN" , "Total LightGBM split gain" );
-  add_var( "POPS" , "MDL,COL,FTR" , "GAIN_PCT" , "Percentage of the model's total LightGBM split gain" );
-  add_var( "POPS" , "MDL,COL,FTR" , "SPLIT" , "Number of LightGBM splits using the feature" );
- 
-  add_table( "POPS" , "E,SS,FTR" , "Epoch-level SHAP values" );
-  add_var( "POPS" , "E,SS,FTR" , "SHAP" , "SHAP values" );
-  set_compressed( "POPS" , tfac_t( "E,SS,FTR" ) );
+  add_table( "POPS" , "CODA,E,SS,COL" , "Epoch-level model SHAP values" );
+  add_var( "POPS" , "CODA,E,SS,COL" , "FTR" , "Feature label (metadata; not a row key)" );
+  add_var( "POPS" , "CODA,E,SS,COL" , "SHAP" , "SHAP value" );
+  set_compressed( "POPS" , tfac_t( "CODA,E,SS,COL" ) );
 
-  add_table( "POPS" , "MDL,E,SS,FTR" , "Model-specific epoch-level SHAP values" );
-  add_var( "POPS" , "MDL,E,SS,FTR" , "SHAP" , "SHAP values" );
-  set_compressed( "POPS" , tfac_t( "MDL,E,SS,FTR" ) );
+  add_table( "POPS" , "CODA,E,COL" , "Raw model feature matrix [output-features]" );
+  add_var( "POPS" , "CODA,E,COL" , "FTR" , "Feature label (metadata; not a row key)" );
+  add_var( "POPS" , "CODA,E,COL" , "X" , "Feature value" );
+  set_compressed( "POPS" , tfac_t( "CODA,E,COL" ) );
   
   add_table( "POPS" , "PRED,OBS" , "Confusion matrix" );
   add_var( "POPS" , "PRED,OBS" , "N" , "Count" );
@@ -4402,10 +4411,11 @@ void cmddefs_t::init()
   add_var( "POPS" , "SS,CHEQ" , "RECALL" , "Recall" );
   add_var( "POPS" , "SS,CHEQ" , "PREC" , "Precision" );
 
-  add_table( "POPS" , "FTR,CHEQ" , "Feature stats" );
-  add_var( "POPS" , "FTR,CHEQ" , "BAD" , "Number of bad epochs" );
-  add_var( "POPS" , "FTR,CHEQ" , "DROPPED" , "Feature completely dropped" );
-  add_var( "POPS" , "FTR,CHEQ" , "PROP" , "Proportion of bad epochs" );
+  add_table( "POPS" , "COL,CHEQ" , "Feature QC [verbose]" );
+  add_var( "POPS" , "COL,CHEQ" , "FTR" , "Feature label (metadata; not a row key)" );
+  add_var( "POPS" , "COL,CHEQ" , "BAD" , "Number of bad epochs" );
+  add_var( "POPS" , "COL,CHEQ" , "DROPPED" , "Feature completely dropped" );
+  add_var( "POPS" , "COL,CHEQ" , "PROP" , "Proportion of bad epochs" );
 
 
   add_table( "POPS" , "ETYPE,CHEQ" , "Error type" );
@@ -4528,7 +4538,13 @@ void cmddefs_t::init()
             "running staggered 30-second POPS windows every 5 seconds (for lib=hyp1, "
             "SleepFM's own 300-second embedding windows are phase-shifted in step, "
             "6 offsets covering all 5-second strides). Edge regions are filled by "
-            "zero-order hold and marked with an annotation. Requires a 5-class model." );
+            "zero-order hold and marked with an annotation. Requires a 5-class model.\n\n"
+            "By default, RUN-POPS emits only the final combined scoring stream: "
+            "recording/stage summaries, one E-level posterior stream and its "
+            "confusion table. With coda=, that stream is CODA's result; pre-coda "
+            "adds the stage-1 result under CODA=0 while CODA remains CODA=1. "
+            "Feature, channel-equivalence and error-type diagnostics require verbose; "
+            "raw feature matrices require explicit output-features options." );
   add_param( "RUN-POPS" , "sig" , "C3,C4" , "Primary EEG signal(s) (up to 10, for lib=hyp1)" );
   add_param( "RUN-POPS" , "ref" , "M2,M1" , "Reference signal(s), matching sig length" );
   add_param( "RUN-POPS" , "args" , "trim=10 3-class" , "Additional arguments passed to POPS" );
@@ -4544,6 +4560,10 @@ void cmddefs_t::init()
   add_param( "RUN-POPS" , "add-nrem123" , "T" , "Add individual N1/N2/N3 posterior channels when emitting 5-second PP signals" );
   add_param( "RUN-POPS" , "add-nrem" , "F" , "Add summed NR=N1+N2+N3 posterior channel when emitting 5-second PP signals" );
   add_param( "RUN-POPS" , "coda" , "coda.mod" , "Apply POPS-CODA second-stage rescoring model; if no file is given and lib=ROOT then uses ROOT.coda.mod under path=" );
+  add_param( "RUN-POPS" , "pre-coda" , "F" , "With coda=, retain the stage-1 stream as CODA=0 alongside final CODA=1 output" );
+  add_param( "RUN-POPS" , "verbose" , "" , "Emit feature-definition/QC, channel-equivalence and error-type diagnostics; raw feature matrices remain opt-in" );
+  add_param( "RUN-POPS" , "output-features" , "" , "Emit the raw stage-1 epoch-by-feature matrix (E,CODA=0,COL; FTR and X values)" );
+  add_param( "RUN-POPS" , "coda-output-features" , "" , "Emit the raw CODA epoch-by-feature matrix (E,CODA=1,COL; FTR and X values)" );
   add_param( "RUN-POPS" , "pops-SHAP" , "" , "Emit SHAP values for the stage-1 POPS model only" );
   add_param( "RUN-POPS" , "coda-SHAP" , "" , "Emit SHAP values for the CODA model only" );
   add_param( "RUN-POPS" , "pops-importance" , "" , "Emit intrinsic LightGBM gain/split importance for the stage-1 POPS model (no SHAP)" );
@@ -4569,6 +4589,7 @@ void cmddefs_t::init()
   add_param( "RUN-POPS" , "coda-no-future" , "" , "Disable future-context features in CODA" );
   add_param( "RUN-POPS" , "posterior-channels" , "E|CODA|BOTH" , "Compatibility override for POPS posterior export stream selection" );
   add_param( "RUN-POPS" , "posterior-prefix" , "PP or PP,CP" , "Forwarded to POPS: prefix for posterior emission to the in-memory EDF" );
+  add_param( "RUN-POPS" , "unweighted" , "F" , "With an optional <lib>.wgts file, disable the default inverse posterior-weight correction" );
 
   //
   // EVAL-STAGES
@@ -4590,10 +4611,10 @@ void cmddefs_t::init()
 
   add_cmd( "stage" , "HDSTATS" , "Hypnodensity signal analysis" );
   add_verb( "HDSTATS" ,
-	    "Analyze hypnodensity signals (posterior-probability EDF channels) along four "
+	    "Analyze hypnodensity signals (posterior-probability EDF channels) along five "
 	    "conceptual domains: (A) mixedness/spread of the posterior, (B) instability/"
 	    "motion over time, (C) transition structure near likely state boundaries, and "
-	    "(D) context via user-defined annotation strata.  The primary distinction "
+	    "(D) long-range organization, and (E) context via user-defined annotation strata.  The primary distinction "
 	    "preserved is stable mixed/intermediate states vs. transient instability." );
   add_param( "HDSTATS" , "W"          , "PP_W"   , "Channel name for wake posterior" );
   add_param( "HDSTATS" , "N1"         , "PP_N1"  , "Channel name for N1 posterior" );
@@ -4601,11 +4622,23 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "N3"         , "PP_N3"  , "Channel name for N3 posterior" );
   add_param( "HDSTATS" , "NR"         , "PP_NR"  , "Channel name for NREM posterior (used by emit-nr-pp)" );
   add_param( "HDSTATS" , "R"          , "PP_R"   , "Channel name for REM posterior" );
+  add_param( "HDSTATS" , "weights"    , ""       , "Apply inverse class-weight correction before HDSTATS calculations; five positive values in W,R,N1,N2,N3 order" );
+  add_param( "HDSTATS" , "update-pp"  , "F"      , "With weights=, also update the selected posterior channels in memory; invalid samples are unchanged" );
   add_param( "HDSTATS" , "emit-nr-pp" , "F"      , "Create NR by summing available N1/N2/N3 posterior channels" );
   add_param( "HDSTATS" , "emit-stats" , "T"      , "Emit the normal HDSTATS summaries and tables" );
   add_param( "HDSTATS" , "3state"     , "T"      , "Also compute 3-state (W/NREM/R) summaries" );
   add_param( "HDSTATS" , "window"     , "60"     , "Transition window half-width (seconds)" );
   add_param( "HDSTATS" , "lag"        , "30"     , "Lag for the longer-lag PS metric (seconds)" );
+  add_param( "HDSTATS" , "longrange"  , "T"      , "Long-range statistics" );
+  add_param( "HDSTATS" , "lr-lags"    , "600,1800,3600,5400" , "Long-range lags (seconds)" );
+  add_param( "HDSTATS" , "lr-windows" , "1800,3600" , "Long-range windows (seconds)" );
+  add_param( "HDSTATS" , "lr-min-duration" , "16200" , "Strict duration minimum (seconds)" );
+  add_param( "HDSTATS" , "gap-aware" , "T" , "Gap-aware long-range mode" );
+  add_param( "HDSTATS" , "fail-on-empty" , "F" , "Fail if no long-range values" );
+  add_param( "HDSTATS" , "spt" , "T" , "Use SPT analysis interval" );
+  add_param( "HDSTATS" , "spt-flank" , "300" , "SPT flank (seconds); default 300s (5 min) on each side" );
+  add_param( "HDSTATS" , "spt-flank-pre" , "300" , "Pre-SPT flank (seconds); defaults to spt-flank" );
+  add_param( "HDSTATS" , "spt-flank-post" , "300" , "Post-SPT flank (seconds); defaults to spt-flank" );
   add_param( "HDSTATS" , "stable-min" , "30"     , "Minimum contiguous flank duration (seconds) for a stable-to-stable transition" );
   add_param( "HDSTATS" , "stable-ps"  , "0.05"   , "Per-sample PS must be below this to qualify as stable-core" );
   add_param( "HDSTATS" , "stable-conf", "0.70"   , "Per-sample confidence threshold to qualify as stable-core" );
@@ -4628,9 +4661,39 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "emit-all-trans", "F"   , "Emit all directed TRANS and BOUT_TRANS pairs, padding unobserved pair summaries with zero counts/densities" );
   add_param( "HDSTATS" , "emit-annots", ""       , "Emit detected transitions as annotations under this class name" );
   add_param( "HDSTATS" , "emit-annots-by-type", "F" , "Encode transition type in the emitted annotation class name" );
+  add_param( "HDSTATS" , "emit-spt", "hd"      , "Emit soft SPT annotations under this root" );
+  add_param( "HDSTATS" , "pc-out", ""          , "Write one HDSTATS-PC feature line per individual" );
+  add_param( "HDSTATS" , "pc-proj", ""         , "Project a saved HDSTATS-PC model" );
   add_param( "HDSTATS" , "emit-sigs"  , ""       , "Emit per-sample PS/H/CONF (and PS3/H3/CONF3 if 3state) as new EDF signals under this channel-name prefix" );
   add_param( "HDSTATS" , "emit-hypnogram", ""    , "Emit hard-called stage runs, pooled to 30s epochs, as annotations (N1/N2/N3/R/W), optionally under this prefix" );
   add_param( "HDSTATS" , "verbose"    , ""       , "Emit the per-sample TIME table" );
+
+  add_cmd( "stage" , "--hdstats-pc" , "Build an HDSTATS PCA model" );
+  add_param( "--hdstats-pc" , "data" , "all.txt" , "HDSTATS-PC feature lines" );
+  add_param( "--hdstats-pc" , "model" , "hdstats-pc.txt" , "Output PCA model" );
+  add_param( "--hdstats-pc" , "nc" , "10" , "Components" );
+  add_param( "--hdstats-pc" , "corr-matrix" , "" , "Optional TSV Pearson correlation matrix across PCA features" );
+
+  add_cmd( "hypno" , "--hypno-pc" , "Build a HYPNO PCA model" );
+  add_param( "--hypno-pc" , "data" , "all.hypc" , "HYPNO-PC feature lines" );
+  add_param( "--hypno-pc" , "model" , "hypno-pc.txt" , "Output PCA model" );
+  add_param( "--hypno-pc" , "nc" , "10" , "Components" );
+  add_param( "--hypno-pc" , "corr-matrix" , "" , "Optional TSV Pearson correlation matrix across PCA features" );
+
+  add_table( "HYPNO-PC" , "" , "HYPNO PCA model" );
+  add_var( "HYPNO-PC" , "" , "N" , "People used" );
+  add_var( "HYPNO-PC" , "" , "N_INPUT" , "Input people" );
+  add_var( "HYPNO-PC" , "" , "N_FEATURES" , "Features" );
+  add_var( "HYPNO-PC" , "" , "N_COMPONENTS" , "Components" );
+  add_table( "HYPNO-PC" , "FTR" , "Feature scaling" );
+  add_var( "HYPNO-PC" , "FTR" , "MEAN" , "Reference mean" );
+  add_var( "HYPNO-PC" , "FTR" , "SD" , "Reference SD" );
+  add_table( "HYPNO-PC" , "PC" , "Component summary" );
+  add_var( "HYPNO-PC" , "PC" , "W" , "Singular value" );
+  add_var( "HYPNO-PC" , "PC" , "VE" , "Variance explained" );
+  add_var( "HYPNO-PC" , "PC" , "CVE" , "Cumulative variance explained" );
+  add_table( "HYPNO-PC" , "PC,FTR" , "Component loadings" );
+  add_var( "HYPNO-PC" , "PC,FTR" , "LOADING" , "Feature loading" );
 
   // emit_state() — which carries every var below except HD_SPT-family, HD_MINS/
   // HD_PCT/HD_DENS, and the validity counts — always emits an NSS level (5, and
@@ -4689,17 +4752,98 @@ void cmddefs_t::init()
   add_table( "HDSTATS" , ""                 , "Sleep timing (HD_*) and channel-validity summary, unstratified" );
   add_table( "HDSTATS" , "NSS"              , "Overall HDSTATS summary, by state representation (5/3)" );
   add_table( "HDSTATS" , "ANNOT,NSS"        , "Overall HDSTATS summary, by annotation level and state representation" );
-  add_var(   "HDSTATS" , ""                 , "HD_SPT"       , "Sleep period time (minutes, first to final sustained sleep)" );
+  add_var(   "HDSTATS" , ""                 , "HD_SPT"       , "Sleep period time (minutes)" );
   add_var(   "HDSTATS" , ""                 , "HD_SME"       , "Sleep maintenance efficiency (sleep mass / HD_SPT)" );
   add_var(   "HDSTATS" , ""                 , "HD_WASO"      , "Wake after sleep onset (minutes)" );
   add_var(   "HDSTATS" , ""                 , "HD_SOL"       , "Sleep latency (minutes from recording start)" );
   add_var(   "HDSTATS" , ""                 , "HD_REM_LAT"   , "REM latency (minutes from sleep onset)" );
   add_var(   "HDSTATS" , ""                 , "HD_REM_LAT2"  , "REM latency excluding wake (minutes)" );
+  add_var(   "HDSTATS" , ""                 , "HD_TWT"       , "Expected wake time (minutes)" );
   add_var(   "HDSTATS" , ""                 , "N_VALID"          , "Number of valid (in-range posterior) samples" );
   add_var(   "HDSTATS" , ""                 , "PCT_VALID"        , "Percentage of samples that are valid" );
   add_var(   "HDSTATS" , ""                 , "N_INVALID_LEAD"   , "Number of invalid samples trimmed from the start" );
   add_var(   "HDSTATS" , ""                 , "N_INVALID_TRAIL"  , "Number of invalid samples trimmed from the end" );
   add_var(   "HDSTATS" , ""                 , "N_INVALID_MID"    , "Number of invalid samples found mid-recording" );
+  add_var(   "HDSTATS" , ""                 , "LR_CORE_SEC"      , "Strict valid-core duration (seconds)" );
+  add_var(   "HDSTATS" , ""                 , "LR_POLICY"        , "Long-range policy" );
+  add_var(   "HDSTATS" , ""                 , "LR_N_VALID_RUNS"  , "Valid runs" );
+  add_var(   "HDSTATS" , ""                 , "LR_VALID_SEC"     , "Valid duration (seconds)" );
+  add_var(   "HDSTATS" , ""                 , "LR_INVALID_SEC"   , "Invalid duration (seconds)" );
+  add_var(   "HDSTATS" , ""                 , "LR_LONGEST_INTERNAL_GAP_SEC" , "Longest internal gap (seconds)" );
+  add_var(   "HDSTATS" , ""                 , "LR_N_INTERNAL_GAPS" , "Internal gaps" );
+  add_var(   "HDSTATS" , ""                 , "HD_ANALYSIS"  , "Analysis interval" );
+  add_var(   "HDSTATS" , ""                 , "HD_ANALYSIS_START_SEC" , "Analysis start (seconds)" );
+  add_var(   "HDSTATS" , ""                 , "HD_ANALYSIS_STOP_SEC" , "Analysis stop (seconds)" );
+  add_var(   "HDSTATS" , ""                 , "HD_ANALYSIS_SEC" , "Analysis duration (seconds)" );
+  add_var(   "HDSTATS" , ""                 , "HD_EXCLUDED_PRE_SEC" , "Excluded pre-analysis (seconds)" );
+  add_var(   "HDSTATS" , ""                 , "HD_EXCLUDED_POST_SEC" , "Excluded post-analysis (seconds)" );
+  add_var(   "HDSTATS" , ""                 , "HD_ANALYSIS_INVALID_SEC" , "Invalid analysis time (seconds)" );
+  add_var(   "HDSTATS" , ""                 , "HD_ANALYSIS_FALLBACK" , "SPT fallback" );
+  add_var(   "HDSTATS" , ""                 , "HDPC_COMPATIBLE" , "HDSTATS-PC model compatibility" );
+  add_var(   "HDSTATS" , ""                 , "HDPC_N_MISSING" , "Missing HDSTATS-PC features" );
+
+  add_table( "HDSTATS-PC" , "" , "HDSTATS PCA model" );
+  add_var( "HDSTATS-PC" , "" , "N" , "People used" );
+  add_var( "HDSTATS-PC" , "" , "N_INPUT" , "Input people" );
+  add_var( "HDSTATS-PC" , "" , "N_FEATURES" , "Features" );
+  add_var( "HDSTATS-PC" , "" , "N_COMPONENTS" , "Components" );
+  add_table( "HDSTATS-PC" , "FTR" , "Feature scaling" );
+  add_var( "HDSTATS-PC" , "FTR" , "MEAN" , "Reference mean" );
+  add_var( "HDSTATS-PC" , "FTR" , "SD" , "Reference SD" );
+  add_table( "HDSTATS-PC" , "PC" , "Component summary" );
+  add_var( "HDSTATS-PC" , "PC" , "W" , "Singular value" );
+  add_var( "HDSTATS-PC" , "PC" , "VE" , "Variance explained" );
+  add_var( "HDSTATS-PC" , "PC" , "CVE" , "Cumulative variance explained" );
+  add_table( "HDSTATS-PC" , "PC,FTR" , "Component loadings" );
+  add_var( "HDSTATS-PC" , "PC,FTR" , "LOADING" , "Loading" );
+
+  add_table( "HDSTATS" , "NSS,LRLAG"       , "Long-range lags" );
+  add_table( "HDSTATS" , "NSS,LRLAG,SS"    , "Long-range stage ACF" );
+  add_table( "HDSTATS" , "NSS,LRVAR"       , "Long-range trends" );
+  add_table( "HDSTATS" , "NSS,LRWIN,LRVAR" , "Long-range windows" );
+  add_table( "HDSTATS" , "NSS,LRLAG,LRMETRIC" , "Long-range lag QC" );
+  add_table( "HDSTATS" , "NSS,LRLAG,SS,LRMETRIC" , "Long-range stage QC" );
+  add_table( "HDSTATS" , "NSS,LRVAR,LRMETRIC" , "Long-range trend QC" );
+  add_table( "HDSTATS" , "NSS,LRWIN,LRVAR,LRMETRIC" , "Long-range window QC" );
+  add_var(   "HDSTATS" , "NSS,LRLAG"       , "NPAIR", "Retained pairs" );
+  add_var(   "HDSTATS" , "NSS,LRLAG"       , "PS",    "Probability shift" );
+  add_var(   "HDSTATS" , "NSS,LRLAG"       , "SIM",   "Posterior similarity" );
+  add_var(   "HDSTATS" , "NSS,LRLAG"       , "LR_ESTIMABLE", "Estimable" );
+  add_var(   "HDSTATS" , "NSS,LRLAG"       , "LR_NA_REASON", "NA reason" );
+  add_var(   "HDSTATS" , "NSS,LRLAG,SS"    , "NPAIR", "Retained pairs" );
+  add_var(   "HDSTATS" , "NSS,LRLAG,SS"    , "ACF",   "Stage autocorrelation" );
+  add_var(   "HDSTATS" , "NSS,LRLAG,SS"    , "LR_ESTIMABLE", "Estimable" );
+  add_var(   "HDSTATS" , "NSS,LRLAG,SS"    , "LR_NA_REASON", "NA reason" );
+  add_var(   "HDSTATS" , "NSS,LRVAR"       , "SLOPE", "Overnight slope" );
+  add_var(   "HDSTATS" , "NSS,LRVAR"       , "COM", "Posterior-mass centre of mass relative to analysis start (0-1; >=2 minutes mass)" );
+  add_var(   "HDSTATS" , "NSS,LRVAR"       , "COM_M", "Posterior-mass centre of mass from analysis start (minutes; >=2 minutes mass)" );
+  add_var(   "HDSTATS" , "NSS,LRVAR"       , "T50", "Relative time by which 50% of posterior mass accrued (0-1; >=2 minutes mass)" );
+  add_var(   "HDSTATS" , "NSS,LRVAR"       , "T50_M", "Time from analysis start by which 50% of posterior mass accrued (minutes; >=2 minutes mass)" );
+  add_var(   "HDSTATS" , "NSS,LRVAR"       , "TIMING_MASS_M", "Eligible posterior mass (minutes) for COM/T50" );
+  add_var(   "HDSTATS" , "NSS,LRVAR"       , "TIMING_NVALID", "Eligible samples for COM/T50" );
+  add_var(   "HDSTATS" , "NSS,LRVAR"       , "TIMING_ESTIMABLE", "COM/T50 estimable (>=2 minutes posterior mass)" );
+  add_var(   "HDSTATS" , "NSS,LRVAR"       , "TIMING_NA_REASON", "COM/T50 NA reason" );
+  add_var(   "HDSTATS" , "NSS,LRVAR"       , "LR_ESTIMABLE", "Estimable" );
+  add_var(   "HDSTATS" , "NSS,LRVAR"       , "LR_NA_REASON", "NA reason" );
+  add_var(   "HDSTATS" , "NSS,LRWIN,LRVAR" , "NWIN", "Retained windows" );
+  add_var(   "HDSTATS" , "NSS,LRWIN,LRVAR" , "WITHIN_SD", "Within-window SD" );
+  add_var(   "HDSTATS" , "NSS,LRWIN,LRVAR" , "BETWEEN_SD", "Between-window SD" );
+  add_var(   "HDSTATS" , "NSS,LRWIN,LRVAR" , "LR_ESTIMABLE", "Estimable" );
+  add_var(   "HDSTATS" , "NSS,LRWIN,LRVAR" , "LR_NA_REASON", "NA reason" );
+  const std::vector<std::string> hdstats_lr_quality_tables = {
+    "NSS,LRLAG,LRMETRIC",
+    "NSS,LRLAG,SS,LRMETRIC",
+    "NSS,LRVAR,LRMETRIC",
+    "NSS,LRWIN,LRVAR,LRMETRIC"
+  };
+  for ( const auto & table : hdstats_lr_quality_tables )
+    {
+      add_var( "HDSTATS", table, "NPAIR", "Retained pairs" );
+      add_var( "HDSTATS", table, "NWIN", "Retained windows" );
+      add_var( "HDSTATS", table, "NVALID", "Valid observations" );
+      add_var( "HDSTATS", table, "LR_ESTIMABLE", "Estimable" );
+      add_var( "HDSTATS", table, "LR_NA_REASON", "NA reason" );
+    }
 
   add_table( "HDSTATS" , "SS"               , "Sleep timing (HD_MINS/HD_PCT/HD_DENS) by stage, unstratified" );
   add_table( "HDSTATS" , "NSS,SS"           , "Mixedness/instability by stage, by state representation (5/3)" );
@@ -7968,7 +8112,9 @@ void cmddefs_t::init()
   add_cmd( "helpers" , "--build" , "Generate a sample list automatically" );
   add_verb( "--build" ,
             "--build scans one or more folders recursively and constructs a Luna "
-            "sample list by pairing EDFs with associated annotation files. It is "
+            "sample list by pairing EDFs with associated annotation files. With "
+            "`-annot-only`, annotation files themselves seed rows, with `.` in the "
+            "EDF column. It is "
             "intended as a project bootstrap utility for assembling a dataset "
             "without manually writing the sample list.\n\n"
             "Options control how IDs are derived, which annotation extensions are "
@@ -7976,6 +8122,7 @@ void cmddefs_t::init()
             "and whether NSRR annotation naming conventions are assumed." );
   add_param( "--build" , "-nsrr" , "" , "Use NSRR annotation extension, i.e. `-ext=-nsrr.xml`" );
   add_param( "--build" , "-edfid" , "" , "Use filename as ID, instead of looking in each EDF header" );
+  add_param( "--build" , "-annot-only" , "" , "Seed rows from annotation files and write `.` in the EDF column" );
   add_param( "--build" , "-nospan" , "" , "Do not match similarly-named files across folders" );
   add_param( "--build" , "-ext" , "-ext=txt,eannot,annot" , "Consider these extensions as annotation files" );
 
@@ -8260,7 +8407,7 @@ void cmddefs_t::init()
 	            "artifact-suppressed candidate spans are annotated separately as "
 	            "suppressed_nrem/suppressed_rem. "
             "By default, only the aggregate arousal annotation is attached. With "
-            "verbose-annot, stage-specific and diagnostic classes are also attached. "
+            "verbose, stage-specific and diagnostic classes are also attached. "
             "Standard events use arousal_std_nrem/arousal_std_rem and arousal_std, while "
             "long events use arousal_long_nrem/arousal_long_rem and arousal_long. "
             "Aggregate stage classes are arousal_nrem/arousal_rem, and arousal is the "
@@ -8270,8 +8417,8 @@ void cmddefs_t::init()
   add_param( "AROUSALS" , "emg" , "EMG" , "Optional EMG channels used to derive local EMG-rise features; required for REM detection" );
   add_param( "AROUSALS" , "win" , "4.0" , "Epoch window length in seconds for feature extraction and post-onset rise scoring" );
   add_param( "AROUSALS" , "inc" , "0.5" , "Epoch increment in seconds for feature extraction" );
-  add_param( "AROUSALS" , "verbose" , "" , "Emit verbose candidate-pipeline counts and proportions with VCAND_* and VDIAG_* variables" );
-  add_param( "AROUSALS" , "verbose-annot" , "arv_" , "Emit numbered diagnostic annotation tracks for intermediate masks/candidates; NREM and REM share tracks in pipeline order (e.g. arv_00_eeg_fast_rise_pass, arv_01_eeg_tilt_rise_pass, arv_02_eeg_seed_supported, arv_14_candidate_level_refined, arv_15_candidate_final_duration_ok); empty/T uses prefix arv_, otherwise value is used as prefix" );
+  add_param( "AROUSALS" , "verbose" , "" , "Emit verbose candidate-pipeline counts and proportions with VCAND_* and VDIAG_* variables, plus diagnostic annotation tracks" );
+  add_param( "AROUSALS" , "verbose-annot" , "arv_" , "Optional prefix for diagnostic annotation tracks emitted by verbose; NREM and REM share tracks in pipeline order (e.g. arv_00_eeg_fast_rise_pass, arv_01_eeg_tilt_rise_pass, arv_02_eeg_seed_supported, arv_14_candidate_level_refined, arv_15_candidate_final_duration_ok); empty or a boolean value uses prefix arv_, otherwise value is used as prefix" );
   add_param( "AROUSALS" , "verbose-annots" , "arv_" , "Alias for verbose-annot" );
   add_param( "AROUSALS" , "add" , "a_" , "Add derived channels with this prefix, including activation (the pointwise maximum of theta/alpha/beta level) and the diagnostic eeg_artifact score; single channels span both NREM and REM" );
   add_param( "AROUSALS" , "annot" , "arousal" , "Root for event annotations; e.g. annot=detector produces detector, detector_std, detector_long, and stage-specific variants" );
@@ -8281,7 +8428,7 @@ void cmddefs_t::init()
   add_param( "AROUSALS" , "manual" , "" , "Existing annotation class containing manual arousal events; summarizes it by stage and enables comparison with automated arousals" );
   add_param( "AROUSALS" , "manual-min-overlap" , "0" , "Minimum positive overlap in seconds for a manual/automated event match; matching is one-to-one" );
   add_param( "AROUSALS" , "eval-by-bin" , "F" , "When enabled with manual=, also report 30-second stage-restricted bin-level precision, recall, F1, and Cohen kappa; original event-level metrics are always retained" );
-  add_param( "AROUSALS" , "wake-bridge" , "1" , "Treat this many 30-second W epochs immediately after NREM/REM as the prior sleep stage for arousal detection only" );
+  add_param( "AROUSALS" , "wake-bridge" , "T" , "Allow the first 30-second W epoch after NREM/REM to continue a transitional candidate; an onset inside W is retained only during the pre-sleep interval after the W transition; only T/F (or Y/N, 1/0) is accepted" );
   add_param( "AROUSALS" , "pre-local" , "10" , "Seconds before candidate time used for the local pre-onset reference window" );
   add_param( "AROUSALS" , "pre-gap" , "2" , "Seconds immediately before candidate time excluded from the local pre-onset reference" );
   add_param( "AROUSALS" , "eeg-tilt-rise-th" , "4.0" , "Default threshold for max(theta/delta, alpha/delta, beta/delta) local rise contrast" );
@@ -8308,7 +8455,6 @@ void cmddefs_t::init()
   add_param( "AROUSALS" , "emg-rise-buffer" , "2.0" , "REM only: temporal tolerance in seconds used when checking whether a chin-EMG rise overlaps an EEG candidate" );
 
   add_param( "AROUSALS" , "spindle" , "F" , "Detect NR sigma-band spindles and suppress (veto) any arousal candidate whose duration is mostly spanned by one; NR only" );
-  add_param( "AROUSALS" , "spindle-annot" , "" , "Also emit confirmed spindles used by the spindle veto as a QC-style annotation; empty/T uses class 'spindle_veto', otherwise value is used as the class label; implies spindle detection runs even if spindle=F" );
   add_param( "AROUSALS" , "spindle-f-lwr" , "10" , "Lower edge in Hz of the sigma band used for spindle detection" );
   add_param( "AROUSALS" , "spindle-f-upr" , "16" , "Upper edge in Hz of the sigma band used for spindle detection" );
   add_param( "AROUSALS" , "spindle-min-dur" , "0.5" , "Minimum duration in seconds for a candidate spindle" );

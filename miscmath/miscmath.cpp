@@ -1789,9 +1789,10 @@ double MiscMath::mcc( std::map<std::string,std::map<std::string,int> > table ,
 
   double Qk = tr / (double)N;
 
-  double COV_XY = N*tr - rowcol_sumprod; //  NOTE, COV_XY, COV_XX and COV_YY
-  double COV_XX = N*N - rowrow_sumprod;  //# are HERE ALWAYS INTEGERS!
-  double COV_YY = N*N - colcol_sumprod; 
+  const double n = N;
+  double COV_XY = n*tr - rowcol_sumprod; //  NOTE, COV_XY, COV_XX and COV_YY
+  double COV_XX = n*n - rowrow_sumprod;  //# are HERE ALWAYS INTEGERS!
+  double COV_YY = n*n - colcol_sumprod;
   double denominator = sqrt( COV_XX*COV_YY );
 
   double RK = 0;

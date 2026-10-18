@@ -88,7 +88,7 @@ class pops_coda_t {
     int    augment_trunc_min_minutes = 120;
     bool   three_state          = false; // 3-state (W R NR) vs 5-state (W R N1 N2 N3)
     bool   do_SHAP             = false; // emit CODA SHAP values during prediction
-    bool   dump_features       = false; // emit the epoch x CODA-feature matrix (verbose diagnostics)
+    bool   dump_features       = false; // emit the epoch x CODA-feature matrix (explicit diagnostic request)
     bool   output_both_stages  = false; // when predicting, emit both pre-CODA and CODA outputs under CODA=0/1
   } opt;
 
@@ -153,7 +153,7 @@ class pops_coda_t {
   // ---------------------------------------------------------------------------
   // Prediction
   //   Called after pops_indiv_t::predict() has populated P/E/PS/S.
-  //   Writes CODA outputs at epoch level under MODEL=CODA stratum.
+  //   Writes CODA outputs at epoch level; pre-CODA/CODA comparisons use CODA=0/1.
   // ---------------------------------------------------------------------------
 
   // P:          ne × n_classes POPS stage-1 posteriors
@@ -176,7 +176,7 @@ class pops_coda_t {
                 bool emit_stage1 = false );
 
   // Matrix-only rescoring path for callers that want CODA posteriors without
-  // writing the standard epoch-level MDL=CODA outputs.
+  // writing the standard epoch-level CODA outputs.
   Eigen::MatrixXd rescore( const Eigen::MatrixXd & P ,
                            const std::vector<int> & E ,
                            const std::vector<bool> & flagged );
@@ -186,8 +186,9 @@ class pops_coda_t {
   int n_features() const { return (int)feature_names().size(); }
   static int scale_context_epochs( int context_30s_epochs , double row_duration_sec );
 
-  // Verbose diagnostic output of the exact feature matrix used by CODA.
-  // Rows are stratified by E and CFTR, with X holding the feature value.
+  // Explicit diagnostic output of the exact feature matrix used by CODA.
+  // Rows are stratified by E and COL, with FTR and X holding the feature
+  // label and value respectively.
   void dump_features( const Eigen::MatrixXd & X ,
                       const std::vector<std::string> & fnames ,
                       const std::vector<int> & E ,

@@ -6,6 +6,7 @@
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "helper/zfile.h"
+#include "miscmath/miscmath.h"
 
 #include <algorithm>
 #include <array>
@@ -46,6 +47,14 @@ struct stage_t {
 struct metrics_t {
   std::array<stage_t,NS> stages;
   double logloss = 0, multiclass_brier = 0, ece = 0;
+};
+struct hard_metrics_t {
+  int n = 0;
+  double kappa = 0, kappa3 = 0, acc = 0, acc3 = 0, mcc = 0, mcc3 = 0;
+  double macro_precision = 0, macro_recall = 0, macro_f1 = 0;
+  double weighted_precision = 0, weighted_recall = 0, weighted_f1 = 0;
+  double macro_precision3 = 0, macro_recall3 = 0, macro_f13 = 0;
+  std::array<double,NS> precision, recall, f1;
 };
 
 int stage_index( const std::string & s ) {
@@ -155,6 +164,52 @@ metrics_t metrics( const std::vector<row_t> & rows,
   for(int i=0;i<(int)rows.size();++i) m.logloss-=std::log(std::max(p[i][rows[i].y],RAW_LOGLOSS_EPS));
   m.logloss/=rows.size();
   return m;
+}
+
+// This uses the same MiscMath::accuracy()/kappa() primitives as POPS's
+// pops_stats_t, while keeping this standalone utility independent of LGBM.
+hard_metrics_t hard_metrics( const std::vector<row_t> & rows,
+                             const std::vector<std::array<double,NS> > & p ) {
+  if ( rows.size() != p.size() )
+    Helper::halt( "Luna calibration: hard-call rows/posteriors size mismatch" );
+
+  std::vector<int> obs, pred, obs3, pred3;
+  obs.reserve( rows.size() ); pred.reserve( rows.size() );
+  obs3.reserve( rows.size() ); pred3.reserve( rows.size() );
+  for ( int i = 0; i < (int)rows.size(); ++i ) {
+    const int y = rows[i].y;
+    const int z = argmax( p[i] );
+    obs.push_back( y );
+    pred.push_back( z );
+    obs3.push_back( y < 2 ? y : 2 );
+    pred3.push_back( z < 2 ? z : 2 );
+  }
+
+  std::vector<int> labels5 = { 0, 1, 2, 3, 4 };
+  std::vector<int> labels3 = { 0, 1, 2 };
+  hard_metrics_t out;
+  out.n = obs.size();
+  out.kappa = MiscMath::kappa( obs, pred );
+  out.kappa3 = MiscMath::kappa( obs3, pred3 );
+  std::vector<double> precision5, recall5, f15;
+  out.acc = MiscMath::accuracy( obs, pred, -1, &labels5,
+                                &precision5, &recall5, &f15,
+                                &out.macro_precision, &out.macro_recall, &out.macro_f1,
+                                &out.weighted_precision, &out.weighted_recall, &out.weighted_f1,
+                                &out.mcc );
+  for ( int s = 0; s < NS; ++s ) {
+    out.precision[s] = precision5[s];
+    out.recall[s] = recall5[s];
+    out.f1[s] = f15[s];
+  }
+  std::vector<double> precision3, recall3, f13;
+  double weighted_precision3, weighted_recall3, weighted_f13;
+  out.acc3 = MiscMath::accuracy( obs3, pred3, -1, &labels3,
+                                 &precision3, &recall3, &f13,
+                                 &out.macro_precision3, &out.macro_recall3, &out.macro_f13,
+                                 &weighted_precision3, &weighted_recall3, &weighted_f13,
+                                 &out.mcc3 );
+  return out;
 }
 
 std::vector<row_t> read_rows( const std::string & filename, qc_t * qc ) {
@@ -268,6 +323,26 @@ void emit_metrics( const std::string & scale, const metrics_t & m, bool use_scal
   writer.unlevel("STAGE"); writer.value("LOGLOSS",m.logloss);
   if(use_scale) writer.unlevel("SCALE");
 }
+void emit_hard_metrics( const std::string & scale, const hard_metrics_t & m, bool use_scale ) {
+  if ( use_scale ) writer.level( scale, "SCALE" );
+  writer.value( "N_HARD", m.n );
+  writer.value( "K", m.kappa ); writer.value( "K3", m.kappa3 );
+  writer.value( "ACC", m.acc ); writer.value( "ACC3", m.acc3 );
+  writer.value( "MCC", m.mcc ); writer.value( "MCC3", m.mcc3 );
+  writer.value( "F1", m.macro_f1 ); writer.value( "PREC", m.macro_precision );
+  writer.value( "RECALL", m.macro_recall );
+  writer.value( "F1_WGT", m.weighted_f1 ); writer.value( "PREC_WGT", m.weighted_precision );
+  writer.value( "RECALL_WGT", m.weighted_recall );
+  writer.value( "F13", m.macro_f13 ); writer.value( "PREC3", m.macro_precision3 );
+  writer.value( "RECALL3", m.macro_recall3 );
+  for ( int s = 0; s < NS; ++s ) {
+    writer.level( labels[s], "STAGE" );
+    writer.value( "F1", m.f1[s] ); writer.value( "PREC", m.precision[s] );
+    writer.value( "RECALL", m.recall[s] );
+  }
+  writer.unlevel( "STAGE" );
+  if ( use_scale ) writer.unlevel( "SCALE" );
+}
 void write_posteriors( const std::string & filename, const std::vector<row_t> & rows,
                        const std::vector<std::pair<std::string,std::vector<std::array<double,NS> > > > & scales ) {
   std::ofstream out(Helper::expand(filename).c_str());
@@ -330,6 +405,7 @@ void run( param_t & param ) {
     if(boundary) logger<<"  Luna calibration: fitted temperature reached search boundary; consider wider bounds\n"; }
   std::vector<std::array<double,NS> > raw; for(const row_t&r:rows) raw.push_back(r.raw);
   const metrics_t raw_metrics=metrics(rows,raw,bins,binning=="quantile");
+  const hard_metrics_t raw_hard_metrics=hard_metrics(rows,raw);
   const bool transformed=has_weights||use_temperature;
   std::vector<std::pair<std::string,std::vector<std::array<double,NS> > > > scales;
   if(transformed) scales.push_back({"RAW",raw});
@@ -356,9 +432,15 @@ void run( param_t & param ) {
           <<" raw posterior rows have abs(sum(PP_*) - 1) > "
           <<POSTERIOR_SUM_WARN_TOL<<"; raw values were not renormalized\n";
   if(nontrivial_temp) logger<<"  Luna calibration warning: temperature scaling changed "<<nontrivial_temp<<" non-tied argmax calls\n";
-  if(!transformed) emit_metrics("",raw_metrics,false);
+  if(!transformed) {
+    emit_metrics("",raw_metrics,false);
+    emit_hard_metrics("",raw_hard_metrics,false);
+  }
   else {
-    for(const auto&scale:scales) emit_metrics(scale.first,metrics(rows,scale.second,bins,binning=="quantile"),true);
+    for(const auto&scale:scales) {
+      emit_metrics(scale.first,metrics(rows,scale.second,bins,binning=="quantile"),true);
+      emit_hard_metrics(scale.first,hard_metrics(rows,scale.second),true);
+    }
     writer.value("ARGMAX_CHANGED_WEIGHT",changed_weight);
     writer.value("ARGMAX_CHANGED_TEMP",changed_temp);
     if(use_temperature) {
@@ -395,6 +477,15 @@ bool self_test( std::string * message ) {
   for(int k=0;k<NS;++k) weighted[k]=raw[k]*weights[k]/d;
   const auto recovered=transform(weighted,&weights,1);
   for(int k=0;k<NS;++k) okay=okay&&std::fabs(recovered[k]-raw[k])<1e-12;
+  // Hard-call statistics use POPS's underlying MiscMath machinery.  This
+  // deliberately swaps the predicted stage in one of two rows, so accuracy
+  // falls from one to one half and the hard-call path cannot be metrics-only.
+  std::vector<row_t> hard_rows(2);
+  hard_rows[0].y=0; hard_rows[1].y=1;
+  std::vector<std::array<double,NS> > hard_pp(2);
+  hard_pp[0]={{.9,.1,0,0,0}}; hard_pp[1]={{.8,.2,0,0,0}};
+  const hard_metrics_t hard=hard_metrics(hard_rows,hard_pp);
+  okay=okay&&hard.n==2&&std::fabs(hard.acc-.5)<1e-12&&hard.f1.size()==NS;
   // Deliberately mismatched confidence: the one-dimensional fit must soften
   // overconfident rows and sharpen underconfident rows, never worsening NLL.
   std::vector<row_t> over, under;

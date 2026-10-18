@@ -45,6 +45,10 @@
 #include "stats/dpp-evaluation.h"
 #include "db/db.h"
 
+#ifdef HAS_LGBM
+#include "pops/options.h"
+#endif
+
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -5869,7 +5873,297 @@ static void test_pops_calibration( lunapi_t * /*eng*/,
          pops_calibration::self_test( &message ), message, V);
 }
 
+#ifdef HAS_LGBM
 // ============================================================
+// Group: POPS library posterior weights
+// ============================================================
+
+static void test_pops_posterior_weights( lunapi_t * /*eng*/,
+                                         std::vector<test_result_t> & R, bool V )
+{
+  try {
+    pops_opt_t::posterior_weighting_disabled = false;
+    pops_opt_t::pops_posterior_weights = { 1.0 , 2.0 , 2.0 , 1.0 , 2.0 };
+    pops_opt_t::coda_posterior_weights.clear();
+
+    Eigen::MatrixXd P( 2 , 5 );
+    P.row( 0 ) << 0.2 , 0.2 , 0.2 , 0.2 , 0.2;
+    P.row( 1 ) << 0.5 , 0.1 , 0.1 , 0.1 ,
+                 std::numeric_limits<double>::quiet_NaN();
+    const Eigen::MatrixXd before = P;
+
+    pops_opt_t::apply_posterior_weights( &P , false );
+
+    const bool corrected = std::fabs( P(0,0) - 2.0/7.0 ) < 1e-12 &&
+                           std::fabs( P(0,1) - 1.0/7.0 ) < 1e-12 &&
+                           std::fabs( P.row(0).sum() - 1.0 ) < 1e-12;
+    const bool invalid_unchanged = P(1,0) == before(1,0) &&
+      P(1,1) == before(1,1) && P(1,2) == before(1,2) &&
+      P(1,3) == before(1,3) && std::isnan( P(1,4) );
+    const Eigen::MatrixXd coda_before = P;
+    pops_opt_t::apply_posterior_weights( &P , true );
+    const bool absent_coda_ignored = P(0,0) == coda_before(0,0) &&
+      P(0,1) == coda_before(0,1) && P(0,2) == coda_before(0,2) &&
+      P(0,3) == coda_before(0,3) && P(0,4) == coda_before(0,4) &&
+      invalid_unchanged;
+
+    pops_opt_t::pops_posterior_weights.clear();
+    pops_opt_t::coda_posterior_weights.clear();
+    record(R, "pops-weights/inverse-correction-and-invalid-row-preservation",
+           corrected && invalid_unchanged && absent_coda_ignored,
+           "corrected=" + std::string(corrected ? "T" : "F") +
+           " invalid_unchanged=" + std::string(invalid_unchanged ? "T" : "F") +
+           " absent_coda_ignored=" + std::string(absent_coda_ignored ? "T" : "F"), V);
+  } catch(std::exception & e) {
+    pops_opt_t::pops_posterior_weights.clear();
+    pops_opt_t::coda_posterior_weights.clear();
+    record(R, "pops-weights/inverse-correction-and-invalid-row-preservation", false, e.what(), V);
+  }
+}
+#endif
+
+// ============================================================
+// HDSTATS soft-ultradian integration: drive the public command over synthetic
+// five-state posterior signals rather than testing an internal helper.  The
+// trajectory includes unequal/continuous excursions and a long pure-wake gap;
+// the latter must become unsupported instead of receiving an invented phase.
+static void test_hdstats_ultradian( lunapi_t * eng,
+                                    std::vector<test_result_t> & R,
+                                    bool V )
+{
+  try {
+    const int n = 7200; // 2 h at 1 Hz; deliberately not tied to 30-s epochs
+    std::vector<double> w(n,0.0), n1(n,0.0), n2(n,0.0), n3(n,0.0), r(n,0.0);
+    for (int i=0; i<n; ++i)
+      {
+        const double d = 2.0 * std::sin( 2.0 * M_PI * i / 1000.0 );
+        if (d <= -1.0) { r[i] = -d - 1.0; n1[i] = d + 2.0; }
+        else if (d <= 1.0) { n1[i] = (1.0-d)/2.0; n2[i] = (d+1.0)/2.0; }
+        else { n2[i] = 2.0-d; n3[i] = d-1.0; }
+      }
+    // A long awakening exceeds the 60-s-FWHM kernel support and must split
+    // phase; it is not an intermediate-depth bridge.
+    for (int i=3300; i<3700; ++i)
+      { w[i]=1.0; n1[i]=n2[i]=n3[i]=r[i]=0.0; }
+
+    auto p = eng->inst("T_hdstats_ultradian");
+    p->empty_edf("T_hdstats_ultradian", n, 1, "01.01.85", "22.00.00");
+    p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",n1,1);
+    p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",n3,1);
+    p->insert_signal("PP_R",r,1);
+    p->eval("HDSTATS spt=F longrange=F ultra-fwhm=60 ultra-prominence=1 emit-ultradian=T ultra-diagnostics=T pc-out=/tmp");
+
+    const auto have = p->has_channels({"UPHASE","UPHASE_VALID","UAMP","UDEPTH","UAMP_RAW"});
+    const auto dat = p->data({"UPHASE_VALID","UAMP"}, {}, false);
+    const auto & x = std::get<1>(dat);
+    int n_phase = 0, n_gap_invalid = 0;
+    double max_amp = 0.0, gap_amp = 0.0;
+    for (int i=0; i<x.rows(); ++i)
+      {
+        if (x(i,0) > 0.5) ++n_phase;
+        if (i >= 3400 && i < 3600 && x(i,0) < 0.5) ++n_gap_invalid;
+        if (i >= 3400 && i < 3600) gap_amp = std::max(gap_amp, std::fabs((double)x(i,1)));
+        max_amp = std::max(max_amp, (double)x(i,1));
+      }
+    const double umag = get_val(p,"HDSTATS","U_MAG");
+    const double ucoverage = get_val(p,"HDSTATS","U_COVERAGE");
+    const double uncyc = get_val(p,"HDSTATS","U_NCYC");
+    const double uh_r2 = get_val_where(p,"HDSTATS","UVAR","UVAR","H","U_R2");
+    const double u_region_mean = get_val(p,"HDSTATS","U_MEAN");
+    std::ifstream pc_in("/tmp/T_hdstats_ultradian.hdpc");
+    std::stringstream pc_text; pc_text << pc_in.rdbuf();
+    const std::string pc_line = pc_text.str();
+    const bool pc_ultra = pc_line.find("FORMAT\t__HDSTATS_FEATURES_V2") != std::string::npos
+      && pc_line.find("U_MAG__ULTRA") != std::string::npos
+      && pc_line.find("CONF__ULTRA_UQ_D1") != std::string::npos
+      && pc_line.find("U_SLOPE__ULTRA_UVAR_CONF") != std::string::npos
+      && pc_line.find("U_MOD_COS__ULTRA_UVAR_CONF3") != std::string::npos
+      && pc_line.find("U_PARTIAL_R2__ULTRA_UVAR_PS") != std::string::npos;
+    const bool channels = std::all_of(have.begin(), have.end(), [](bool z){ return z; });
+    const bool pass = channels && n_phase > 1000 && n_gap_invalid == 200
+      && max_amp > 1.0 && gap_amp < 0.01
+      && Helper::realnum(umag) && umag > 0.0
+      && Helper::realnum(ucoverage) && ucoverage > 0.0 && ucoverage <= 1.000001
+      && Helper::realnum(uncyc) && uncyc > 1.0
+      && Helper::realnum(uh_r2) && Helper::realnum(u_region_mean) && pc_ultra;
+    std::ostringstream m; m << "channels=" << channels << " n_phase=" << n_phase
+                            << " wake_invalid=" << n_gap_invalid << "/200"
+                            << " max_amp=" << max_amp << " wake_amp=" << gap_amp
+                            << " U_MAG=" << umag << " U_COVERAGE=" << ucoverage
+                            << " U_NCYC=" << uncyc << " H_U_R2=" << uh_r2
+                            << " U_REGION_MEAN=" << u_region_mean
+                            << " PC_ULTRA=" << pc_ultra;
+    record(R,"hdstats-ultradian/phase-amplitude-and-wake-gap",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats-ultradian/phase-amplitude-and-wake-gap",false,e.what(),V);
+  }
+
+  // A flat, fully supported N2 posterior has depth but no reversal, so it
+  // must not generate a persuasive phase trajectory or non-zero UAMP.
+  try {
+    const int n = 1800;
+    auto p = eng->inst("T_hdstats_ultradian_flat");
+    p->empty_edf("T_hdstats_ultradian_flat", n, 1, "01.01.85", "22.00.00");
+    p->insert_signal("PP_W",std::vector<double>(n,0.0),1);
+    p->insert_signal("PP_N1",std::vector<double>(n,0.0),1);
+    p->insert_signal("PP_N2",std::vector<double>(n,1.0),1);
+    p->insert_signal("PP_N3",std::vector<double>(n,0.0),1);
+    p->insert_signal("PP_R",std::vector<double>(n,0.0),1);
+    p->eval("HDSTATS spt=F longrange=F ultra-fwhm=60 emit-ultradian=T");
+    const auto dat = p->data({"UPHASE_VALID","UAMP"}, {}, false);
+    const auto & x = std::get<1>(dat);
+    double max_phase_valid = 0.0, max_amp = 0.0;
+    for (int i=0; i<x.rows(); ++i)
+      { max_phase_valid = std::max(max_phase_valid,(double)x(i,0)); max_amp = std::max(max_amp,(double)x(i,1)); }
+    const double umag = get_val(p,"HDSTATS","U_MAG");
+    const double uncyc = get_val(p,"HDSTATS","U_NCYC");
+    const double uh_slope = get_val_where(p,"HDSTATS","UVAR","UVAR","H","U_SLOPE");
+    const bool pass = max_phase_valid < 0.5 && max_amp < 0.01
+      && approx_equal(umag,0.0,1e-8) && approx_equal(uncyc,0.0,1e-8) && !Helper::realnum(uh_slope);
+    std::ostringstream m; m << "max_phase_valid=" << max_phase_valid << " max_amp=" << max_amp
+                            << " U_MAG=" << umag << " U_NCYC=" << uncyc << " H_U_SLOPE=" << uh_slope;
+    record(R,"hdstats-ultradian/flat-signal-has-no-phase",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats-ultradian/flat-signal-has-no-phase",false,e.what(),V);
+  }
+
+  // A single monotonic half-excursion retains its UPHASE coordinate but must
+  // not support a phase-adjusted time slope: time/cos/sin are too confounded.
+  try {
+    const int n = 1800;
+    std::vector<double> w(n,0.0), n1(n,0.0), n2(n,0.0), n3(n,0.0), r(n,0.0);
+    for ( int i = 0; i < n; ++i )
+      {
+        const double d = -2.0 + 4.0 * i / ( n - 1.0 );
+        if ( d <= -1.0 ) { r[i] = -d - 1.0; n1[i] = d + 2.0; }
+        else if ( d <= 1.0 ) { n1[i] = (1.0-d)/2.0; n2[i] = (d+1.0)/2.0; }
+        else { n2[i] = 2.0-d; n3[i] = d-1.0; }
+      }
+    auto p = eng->inst("T_hdstats_ultradian_partial");
+    p->empty_edf("T_hdstats_ultradian_partial", n, 1, "01.01.85", "22.00.00");
+    p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",n1,1);
+    p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",n3,1);
+    p->insert_signal("PP_R",r,1);
+    p->eval("HDSTATS spt=F longrange=F ultra-fwhm=60");
+    const double uncyc = get_val(p,"HDSTATS","U_NCYC");
+    const double slope = get_val_where(p,"HDSTATS","UVAR","UVAR","H","U_SLOPE");
+    const double cond = get_val_where(p,"HDSTATS","UVAR","UVAR","H","U_DESIGN_COND");
+    const bool pass = uncyc > 0.45 && uncyc < 0.55 && !Helper::realnum(slope)
+      && Helper::realnum(cond) && cond > 12.0;
+    std::ostringstream m; m << "U_NCYC=" << uncyc << " H_U_SLOPE=" << slope
+                            << " H_U_DESIGN_COND=" << cond;
+    record(R,"hdstats-ultradian/partial-phase-rejects-confounded-uvar",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats-ultradian/partial-phase-rejects-confounded-uvar",false,e.what(),V);
+  }
+
+  // Long-range WITHIN_SD/BETWEEN_SD averages every possible tiling origin.
+  // Check the prefix-moment implementation against the original direct
+  // window-scanning definition on a known posterior trace.
+  try {
+    const int n = 1000, width = 100;
+    std::vector<double> w(n), n2(n), z(n,0.0), invalid(n,0.0);
+    for ( int i = 0; i < n; ++i )
+      { w[i] = 0.15 + 0.70 * ( 0.5 + 0.5 * std::sin( 2.0 * M_PI * i / 173.0 ) ); n2[i] = 1.0 - w[i]; }
+    for ( int i = 430; i < 450; ++i ) invalid[i] = 1.0;
+    auto p = eng->inst("T_hdstats_lr_prefix");
+    p->empty_edf("T_hdstats_lr_prefix", n, 1, "01.01.85", "22.00.00");
+    p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",z,1);
+    p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",z,1);
+    p->insert_signal("PP_R",z,1);
+    p->insert_signal("PP_INVALID",invalid,1);
+    p->eval("HDSTATS spt=F ultradian=F 3state=F lr-lags=100 lr-windows=100 lr-min-duration=1 gap-aware=T");
+    const auto input = p->data({"PP_W"}, {}, false);
+    const auto & input_w = std::get<1>(input);
+    std::vector<double> w_ref(n);
+    for ( int i = 0; i < n; ++i ) w_ref[i] = input_w(i,0);
+
+    auto sample_sd = []( const std::vector<double> & x ) {
+      double sum = 0.0; for ( double v : x ) sum += v;
+      const double mean = sum / x.size();
+      double ss = 0.0; for ( double v : x ) { const double d = v - mean; ss += d*d; }
+      return std::sqrt( ss / ( x.size() - 1 ) );
+    };
+    double sum_n = 0.0, sum_within = 0.0, sum_between = 0.0;
+    int n_offsets = 0;
+    for ( int offset = 0; offset < width; ++offset )
+      {
+        std::vector<double> means, within;
+        for ( int lo = offset; lo + width - 1 < n; lo += width )
+          {
+            bool eligible = true;
+            for ( int i = lo; i < lo + width; ++i ) if ( invalid[i] >= 0.5 ) { eligible = false; break; }
+            if ( ! eligible ) continue;
+            std::vector<double> block( w_ref.begin() + lo, w_ref.begin() + lo + width );
+            double s = 0.0; for ( double v : block ) s += v;
+            means.push_back( s / width );
+            within.push_back( sample_sd( block ) );
+          }
+        if ( means.size() < 4 ) continue;
+        double mw = 0.0; for ( double v : within ) mw += v;
+        sum_n += means.size(); sum_within += mw / means.size();
+        sum_between += sample_sd( means ); ++n_offsets;
+      }
+    const double want_within = sum_within / n_offsets;
+    const double want_between = sum_between / n_offsets;
+    const double got_within = get_val_where(p,"HDSTATS","LRVAR_LRWIN_NSS","LRVAR","W","WITHIN_SD");
+    const double got_between = get_val_where(p,"HDSTATS","LRVAR_LRWIN_NSS","LRVAR","W","BETWEEN_SD");
+    const bool pass = approx_equal(got_within,want_within,1e-10)
+      && approx_equal(got_between,want_between,1e-10);
+    std::ostringstream m; m << "WITHIN got/want=" << got_within << "/" << want_within
+                            << " BETWEEN got/want=" << got_between << "/" << want_between;
+    record(R,"hdstats-longrange/prefix-tiling-preserves-reference-statistic",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats-longrange/prefix-tiling-preserves-reference-statistic",false,e.what(),V);
+  }
+
+  // Posterior-mass timing: early N3 and late REM should have the expected
+  // raw and conditional (N3|NREM, REM|sleep) COM/T50 values.  Each active
+  // mass exceeds the two-minute minimum; absent stages remain non-estimable.
+  try {
+    const int n = 600;
+    std::vector<double> w(n,0.0), n1(n,0.0), n2(n,1.0), n3(n,0.0), r(n,0.0);
+    for ( int i = 0; i < 150; ++i ) { n2[i] = 0.1; n3[i] = 0.9; }
+    for ( int i = 450; i < n; ++i ) { n2[i] = 0.1; r[i] = 0.9; }
+    auto p = eng->inst("T_hdstats_lr_timing");
+    p->empty_edf("T_hdstats_lr_timing", n, 1, "01.01.85", "22.00.00");
+    p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",n1,1);
+    p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",n3,1);
+    p->insert_signal("PP_R",r,1);
+    p->eval("HDSTATS spt=F ultradian=F lr-lags=100 lr-windows=100 lr-min-duration=1 pc-out=/tmp");
+    const double n3_com = get_val_where(p,"HDSTATS","LRVAR_NSS","LRVAR","N3","COM");
+    const double n3_t50 = get_val_where(p,"HDSTATS","LRVAR_NSS","LRVAR","N3","T50");
+    const double n3_com_m = get_val_where(p,"HDSTATS","LRVAR_NSS","LRVAR","N3_NREM","COM_M");
+    const double r_com = get_val_where(p,"HDSTATS","LRVAR_NSS","LRVAR","R","COM");
+    const double r_t50_m = get_val_where(p,"HDSTATS","LRVAR_NSS","LRVAR","R_SLEEP","T50_M");
+    const double w_timing_ok = get_val_where(p,"HDSTATS","LRVAR_NSS","LRVAR","W","TIMING_ESTIMABLE");
+    std::ifstream pc_in("/tmp/T_hdstats_lr_timing.hdpc");
+    std::stringstream pc_text; pc_text << pc_in.rdbuf();
+    const std::string pc_line = pc_text.str();
+    const bool pc_timing = pc_line.find("T50__NSS_5__LRVAR_N3") != std::string::npos
+      && pc_line.find("T50__NSS_3__LRVAR_W") != std::string::npos
+      && pc_line.find("T50__NSS_3__LRVAR_R") != std::string::npos
+      && pc_line.find("T50__NSS_5__LRVAR_N3_NREM") != std::string::npos
+      && pc_line.find("T50__NSS_5__LRVAR_R_SLEEP") != std::string::npos
+      && pc_line.find("T50__NSS_3__LRVAR_NR") == std::string::npos
+      && pc_line.find("COM__NSS_") == std::string::npos
+      && pc_line.find("WITHIN_SD__NSS_5__LRWIN_100") == std::string::npos;
+    const bool pass = approx_equal(n3_com,75.0/600.0,1e-10)
+      && approx_equal(n3_t50,75.0/600.0,1e-10)
+      && approx_equal(n3_com_m,75.0/60.0,1e-10)
+      && approx_equal(r_com,525.0/600.0,1e-10)
+      && approx_equal(r_t50_m,525.0/60.0,1e-10)
+      && w_timing_ok == 0.0 && pc_timing;
+    std::ostringstream m; m << "N3 COM/T50=" << n3_com << "/" << n3_t50
+                            << " N3|NREM COM_M=" << n3_com_m
+                            << " R COM=" << r_com << " R|sleep T50_M=" << r_t50_m
+                            << " W estimable=" << w_timing_ok << " PC timing=" << pc_timing;
+    record(R,"hdstats-longrange/posterior-mass-timing",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats-longrange/posterior-mass-timing",false,e.what(),V);
+  }
+}
+
 // Main entry point
 // ============================================================
 
@@ -5908,8 +6202,10 @@ void proc_tests( const std::string & group, const bool verbose )
   RUN("segsrv",   test_segsrv)
   RUN("plm",      test_plm)
   RUN("sigdyn",   test_sigdyn)
+  RUN("hdstats-ultradian", test_hdstats_ultradian)
   RUN("pops-calibration", test_pops_calibration)
 #ifdef HAS_LGBM
+  RUN("pops-weights", test_pops_posterior_weights)
   RUN("lgbm",     test_lgbm_continuation)
 #endif
   // DPP tests are temporarily disabled while the vector-default and

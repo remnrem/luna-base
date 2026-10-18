@@ -1081,21 +1081,23 @@ void pops_coda_t::dump_features( const Eigen::MatrixXd & X ,
   logger << "  POPS-CODA: writing epoch x feature matrix ("
          << X.rows() << " rows x " << X.cols() << " features)\n";
 
-  // CFTR is deliberately distinct from POPS FTR, which contains the stage-1
-  // feature specification and feature-QC output.  This is the exact CODA
-  // design matrix supplied to LightGBM.
+  // COL is the model-input key; FTR is descriptive metadata and may repeat.
+  // This is the exact CODA design matrix supplied to LightGBM.
+  writer.level( "1" , "CODA" );
   for (int e = 0; e < X.rows(); e++)
     {
       if ( flagged[e] ) continue;
       writer.epoch( E[e] + 1 );
       for (int f = 0; f < X.cols(); f++)
         {
-          writer.level( fnames[f] , "CFTR" );
+          writer.level( f + 1 , "COL" );
+          writer.value( "FTR" , fnames[f] );
           writer.value( "X" , X(e,f) );
-          writer.unlevel( "CFTR" );
+          writer.unlevel( "COL" );
         }
     }
   writer.unepoch();
+  writer.unlevel( "CODA" );
 }
 
 
@@ -1814,6 +1816,10 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
   // Apply CODA model: get posteriors
   Eigen::MatrixXd P_coda = lgbm.predict( X );   // ne × nc
 
+  // Apply the optional CODA-specific library correction before deriving
+  // hard calls, reporting metrics or exporting PP_* channels.
+  pops_opt_t::apply_posterior_weights( &P_coda , true );
+
   if ( opt.do_SHAP )
     SHAP( X , fn , E , flagged );
 
@@ -2231,6 +2237,8 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
       writer.value( "PREC3" , stats3.macro_precision );
       writer.value( "RECALL3" , stats3.macro_recall );
 
+      if ( pops_opt_t::verbose )
+        {
       pops_stats_t stats_AAA( obs , pred , 5 , 1 );
       pops_stats_t stats_AAX( obs , pred , 5 , 2 );
       pops_stats_t stats_XAA( obs , pred , 5 , 3 );
@@ -2335,6 +2343,7 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
 
           writer.unlevel( globals::stage_strat );
         }
+        }
 
       for (int ss = 0; ss < nc; ss++)
         {
@@ -2384,6 +2393,8 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
       writer.value( "PREC3" , stats3.macro_precision );
       writer.value( "RECALL3" , stats3.macro_recall );
 
+      if ( pops_opt_t::verbose )
+        {
       pops_stats_t stats_AAA( obs , pred , 3 , 1 );
       pops_stats_t stats_AAX( obs , pred , 3 , 2 );
       pops_stats_t stats_XAA( obs , pred , 3 , 3 );
@@ -2488,6 +2499,7 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
 
           writer.unlevel( globals::stage_strat );
         }
+        }
 
       for (int ss = 0; ss < nc; ss++)
         {
@@ -2550,6 +2562,8 @@ Eigen::MatrixXd pops_coda_t::rescore( const Eigen::MatrixXd & P_in ,
 
   Eigen::MatrixXd P_coda = lgbm.predict( X );
 
+  pops_opt_t::apply_posterior_weights( &P_coda , true );
+
   if ( opt.do_SHAP )
     SHAP( X , fn , E , flagged );
 
@@ -2572,6 +2586,7 @@ void pops_coda_t::SHAP( const Eigen::MatrixXd & X ,
   const int nc = n_classes();
   const int n_features = fnames.size();
 
+  writer.level( "1" , "CODA" );
   int p = 0;
   for (int c = 0 ; c < nc ; c++)
     {
@@ -2582,10 +2597,11 @@ void pops_coda_t::SHAP( const Eigen::MatrixXd & X ,
 
       for (int r = 0; r < n_features ; r++)
         {
-          writer.level( fnames[r] , globals::feature_strat );
+          writer.level( r + 1 , "COL" );
+          writer.value( "FTR" , fnames[r] );
           writer.value( "SHAP" , shap.col(p++).cwiseAbs().mean() );
         }
-      writer.unlevel( globals::feature_strat );
+      writer.unlevel( "COL" );
     }
   writer.unlevel( globals::stage_strat );
 
@@ -2603,7 +2619,8 @@ void pops_coda_t::SHAP( const Eigen::MatrixXd & X ,
 
           for (int r = 0; r < n_features ; r++)
             {
-              writer.level( fnames[r] , globals::feature_strat );
+              writer.level( r + 1 , "COL" );
+              writer.value( "FTR" , fnames[r] );
 
               for (int e = 0; e < X.rows() ; e++)
                 {
@@ -2615,11 +2632,13 @@ void pops_coda_t::SHAP( const Eigen::MatrixXd & X ,
 
               p++;
             }
-          writer.unlevel( globals::feature_strat );
+              writer.unlevel( "COL" );
         }
 
       writer.unlevel( globals::stage_strat );
     }
+
+  writer.unlevel( "CODA" );
 }
 
 void pops_coda_t::importance()
@@ -2640,18 +2659,19 @@ void pops_coda_t::importance()
   const double total_gain = std::accumulate( gain.begin(), gain.end(), 0.0 );
 
   logger << "  reporting CODA LightGBM feature importance (gain/split)\n";
-  writer.level( "CODA" , "MDL" );
+  writer.level( "1" , "CODA" );
   for (int rank = 0; rank < (int)order.size(); rank++)
     {
       const int i = order[rank];
-      writer.level( fnames[i] , "FTR" );
+      writer.level( i + 1 , "COL" );
+      writer.value( "FTR" , fnames[i] );
       writer.value( "RANK" , rank + 1 );
       writer.value( "GAIN" , gain[i] );
       writer.value( "GAIN_PCT" , total_gain > 0 ? 100.0 * gain[i] / total_gain : 0.0 );
       writer.value( "SPLIT" , split[i] );
-      writer.unlevel( "FTR" );
+      writer.unlevel( "COL" );
     }
-  writer.unlevel( "MDL" );
+  writer.unlevel( "CODA" );
 }
 
 

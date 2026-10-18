@@ -650,6 +650,14 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
           indiv.P = coda->rescore( indiv.P , indiv.E , flagged );
         }
 
+      // In the absence of a usable CODA model, this is the final stage-1
+      // stream that will be mapped to the 5 s PP signals.
+      if ( coda == NULL && pops_opt_t::has_posterior_weights( false ) )
+        {
+          pops_opt_t::apply_posterior_weights( &indiv.P , false );
+          indiv.update_predicted();
+        }
+
 
       //
       // Map each epoch's posterior to its single output sample index.

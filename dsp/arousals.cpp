@@ -46,17 +46,6 @@ namespace {
 bool arousal_verbose_annots = false;
 std::string arousal_verbose_prefix = "arv_";
 
-bool arousal_bool_token( const std::string & s )
-{
-  return s == "T" || s == "t" || s == "Y" || s == "y" ||
-    s == "1" || s == "F" || s == "f" || s == "N" || s == "n" || s == "0";
-}
-
-bool arousal_true_token( const std::string & s )
-{
-  return s == "T" || s == "t" || s == "Y" || s == "y" || s == "1";
-}
-
 }
 
 // expected inputs
@@ -113,27 +102,20 @@ arousals_t::arousals_t( edf_t & edf , param_t & param )
 	    Helper::halt( "AROUSALS per-channel option is not supported by the current heuristic" );
 
 
-  // optional diagnostic annotation tracks for the intermediate masks and
-  // candidate intervals used by the heuristic detector
-  arousal_verbose_annots = false;
+  // Verbose output consistently enables the diagnostic annotation tracks as
+  // well as verbose writer output.  verbose-annot only customizes their
+  // prefix; it is not a separate enable switch.
+  const bool verbose = param.yesno( "verbose" , false , true );
+  arousal_verbose_annots = verbose;
   arousal_verbose_prefix = "arv_";
   const std::string verbose_key = param.has( "verbose-annot" ) ? "verbose-annot" :
     ( param.has( "verbose-annots" ) ? "verbose-annots" : "" );
-  if ( verbose_key != "" )
+  if ( verbose_key != "" && ! param.empty( verbose_key ) )
     {
-      if ( param.empty( verbose_key ) )
-	arousal_verbose_annots = true;
-      else
-	{
-	  const std::string v = param.value( verbose_key );
-	  if ( arousal_bool_token( v ) )
-	    arousal_verbose_annots = arousal_true_token( v );
-	  else
-	    {
-	      arousal_verbose_annots = true;
-	      arousal_verbose_prefix = v;
-	    }
-	}
+      const std::string v = param.value( verbose_key );
+      if ( v != "T" && v != "t" && v != "Y" && v != "y" && v != "1" &&
+           v != "F" && v != "f" && v != "N" && v != "n" && v != "0" )
+	arousal_verbose_prefix = v;
     }
 
   // add channels
@@ -145,7 +127,7 @@ arousals_t::arousals_t( edf_t & edf , param_t & param )
   hp.epoch_inc = epoch_inc;
   hp.do_nrem = param.yesno( "nrem" , true , true );
   hp.do_rem  = param.yesno( "rem"  , true , true );
-  hp.verbose = param.has( "verbose" );
+  hp.verbose = verbose;
   if ( param.has( "mode" ) )
     {
       const std::string mode = param.value( "mode" );

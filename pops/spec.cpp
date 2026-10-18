@@ -860,20 +860,20 @@ void pops_specs_t::build_colmap()
 
       if ( this->emit_feature_defs )
 	{
-	  writer.level( f+1 , globals::feature_strat );
+	  // FTR is descriptive metadata, not a reliable key: distinct spec
+	  // columns can share a label.  Keep the immutable specification slot as
+	  // the row identity and report labels as ordinary values.
+	  writer.level( f+1 , "SPEC" );
 	  writer.value( "BLOCK" , col_block[f]  );
 	  writer.value( "INC" , (int)col_select[f] );
 	  if ( col_select[f] )
-	    {
-	      writer.value( "FINAL" , orig2final[ f ] + 1 );
-	      //writer.value( "ORIG" , final2orig[ orig2final[ f ] ] + 1 );
-	    }
+	    writer.value( "COL" , orig2final[ f ] + 1 );
 	  writer.value( "LEVEL" , col_level[f] );
-	  writer.value( "LABEL" , col_label[f] );
+	  writer.value( "FTR" , col_label[f] );
 	  writer.value( "LABEL_ORIG" , col_original_label[f] );
 	  writer.value( "ROOT" ,  col_root[f] );
-	  
-	  writer.unlevel( globals::feature_strat );
+
+	  writer.unlevel( "SPEC" );
 	}
 
     }

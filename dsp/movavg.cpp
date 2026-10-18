@@ -56,7 +56,7 @@ void dsptools::movavg( edf_t & edf , param_t & param )
     {
       
       // get sample rate
-      int sr = edf.header.sampling_freq( signals(s) );
+      const double sr = edf.header.sampling_freq( signals(s) );
       
       int hwin = hwin_sec * sr;
 
@@ -135,5 +135,4 @@ void dsptools::movavg( edf_t & edf , param_t & param )
   logger << "\n";
   
 }
-
 

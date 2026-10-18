@@ -435,16 +435,30 @@ void dpp_fit_t::build_feature_labels() {
 }
 
 void dpp_fit_t::attach_phenotypes() {
+  phenotype.clear();
+  std::vector<dpp_matrix_t> retained;
+  retained.reserve(individuals.size());
+  int n_skipped = 0;
   for (int i = 0; i < (int)individuals.size(); i++) {
-    double y;
-    if (!cmd_t::pull_ivar(individuals[i].id, phe_label, &y))
-      Helper::halt("no phenotype " + phe_label + " found for individual " +
-                   individuals[i].id);
+    double y = std::numeric_limits<double>::quiet_NaN();
+    if (!cmd_t::pull_ivar(individuals[i].id, phe_label, &y) ||
+        !std::isfinite(y)) {
+      ++n_skipped;
+      continue;
+    }
     if (binary_outcome(param) && (y != 0.0 && y != 1.0))
       Helper::halt("binary outcome " + phe_label + " must be coded 0/1; " +
                    individuals[i].id + " has " + Helper::dbl2str(y));
     phenotype[individuals[i].id] = y;
+    retained.push_back(std::move(individuals[i]));
   }
+  individuals.swap(retained);
+  if (n_skipped)
+    logger << "  skipped " << n_skipped << " individuals without a valid "
+           << "numeric " << phe_label << " outcome\n";
+  if (individuals.empty())
+    Helper::halt("no individuals with a valid numeric " + phe_label +
+                 " outcome");
 }
 
 void dpp_fit_t::attach_covariates() {

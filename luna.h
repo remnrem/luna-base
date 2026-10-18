@@ -109,6 +109,7 @@
 #include "pops/coda.h"
 #include "pops/hypnodensity.h"
 #include "pops/hdstats.h"
+#include "pops/hdstats-pc.h"
 
 #include "assoc/assoc.h"
 #include "assoc/massoc.h"

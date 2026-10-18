@@ -23,6 +23,7 @@
 #define __LUNA_DPP_IO_H__
 
 #include <fstream>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,10 @@ struct dpp_matrix_t {
   std::vector<std::vector<double>> X; // [row][col]
 };
 
+// Called after a record header (ID, row count, feature count) is read.  A
+// false result skips that record's payload without allocating its matrix.
+typedef std::function<bool(const std::string &)> dpp_record_filter_t;
+
 namespace dpp_io {
 
 // append (or create) one individual's matrix in 'f'; 'n_features' is
@@ -58,6 +63,16 @@ std::vector<dpp_matrix_t> load(const std::string &f,
                                int expected_n_features = -1);
 std::vector<dpp_matrix_t> load_files(const std::vector<std::string> &files,
                                      int expected_n_features = -1);
+
+// Filtered variants of load()/load_files().  Skipped records are not held in
+// memory; n_skipped, if non-NULL, is incremented once per skipped individual.
+std::vector<dpp_matrix_t>
+load_filtered(const std::string &f, int expected_n_features,
+              const dpp_record_filter_t &keep, int *n_skipped = NULL);
+std::vector<dpp_matrix_t>
+load_files_filtered(const std::vector<std::string> &files,
+                    int expected_n_features, const dpp_record_filter_t &keep,
+                    int *n_skipped = NULL);
 
 // low-level primitives (mirrors pops_indiv_t::bwrite/bread_*)
 void bwrite(std::ofstream &O, const std::string &s);

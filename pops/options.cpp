@@ -31,6 +31,10 @@
 #include "stats/eigen_ops.h"
 #include "db/db.h"
 
+#include <fstream>
+#include <sstream>
+#include <cmath>
+
 extern logger_t logger;
 extern writer_t writer;
 
@@ -85,6 +89,9 @@ std::string pops_opt_t::posterior_prefix_stage1;
 std::string pops_opt_t::posterior_prefix_coda;
 bool pops_opt_t::pre_coda_output;
 bool pops_opt_t::coda_prediction_mode;
+bool pops_opt_t::posterior_weighting_disabled;
+std::vector<double> pops_opt_t::pops_posterior_weights;
+std::vector<double> pops_opt_t::coda_posterior_weights;
 
 std::vector<double> pops_opt_t::slope_range{ 30.0 , 45.0 } ;
 double pops_opt_t::slope_th  = 3;
@@ -139,6 +146,47 @@ bool pops_opt_t::write_coda_posteriors_to_edf()
   return posterior_channels == "CODA" || posterior_channels == "BOTH";
 }
 
+bool pops_opt_t::has_posterior_weights( const bool coda )
+{
+  if ( posterior_weighting_disabled ) return false;
+  return coda ? ! coda_posterior_weights.empty()
+              : ! pops_posterior_weights.empty();
+}
+
+void pops_opt_t::apply_posterior_weights( Eigen::MatrixXd * P , const bool coda )
+{
+  if ( P == NULL || ! has_posterior_weights( coda ) ) return;
+
+  const std::vector<double> & w = coda ? coda_posterior_weights
+                                        : pops_posterior_weights;
+  if ( P->cols() != 5 )
+    Helper::halt( "POPS: <lib>.wgts has 5-state W,R,N1,N2,N3 weights but the active "
+                  + std::string( coda ? "CODA" : "POPS" )
+                  + " posterior stream is not 5-state" );
+
+  logger << "  POPS: posterior weight recalibration applied to "
+         << ( coda ? "CODA" : "POPS" )
+         << " posteriors [W,R,N1,N2,N3=" << Helper::stringize( w )
+         << "]\n";
+
+  for ( int e = 0 ; e < P->rows() ; e++ )
+    {
+      bool valid = true;
+      double sum = 0;
+      for ( int j = 0 ; j < 5 ; j++ )
+        {
+          const double p = (*P)( e , j );
+          if ( ! std::isfinite( p ) || p < 0 ) { valid = false; break; }
+          sum += p / w[j];
+        }
+      // Invalid posterior rows retain their original values; ordinary POPS
+      // flagging continues to handle them downstream.
+      if ( ! valid || ! std::isfinite( sum ) || sum <= 0 ) continue;
+      for ( int j = 0 ; j < 5 ; j++ )
+        (*P)( e , j ) = ( (*P)( e , j ) / w[j] ) / sum;
+    }
+}
+
 
 void pops_opt_t::set_options( param_t & param )
 {
@@ -147,6 +195,69 @@ void pops_opt_t::set_options( param_t & param )
   
   pops_path = param.has( "path" ) ? Helper::expand( param.value( "path" ) ) : "" ;
   pops_root = param.has( "lib" ) ? Helper::expand( param.value( "lib" ) ) : "" ;
+
+  posterior_weighting_disabled = param.has( "unweighted" )
+    ? param.yesno( "unweighted" ) : false;
+  pops_posterior_weights.clear();
+  coda_posterior_weights.clear();
+  bool posterior_weights_file_found = false;
+
+  if ( pops_root != "" )
+    {
+      const std::string weights_file = pops_t::update_filepath( pops_root + ".wgts" );
+      if ( Helper::fileExists( weights_file ) )
+        {
+          posterior_weights_file_found = true;
+          std::ifstream in( weights_file.c_str() );
+          if ( ! in ) Helper::halt( "POPS: could not open posterior weights file " + weights_file );
+
+          std::vector< std::vector<double> > rows;
+          std::string line;
+          int line_number = 0;
+          while ( std::getline( in , line ) )
+            {
+              ++line_number;
+              const std::string::size_type comment = line.find( '#' );
+              if ( comment != std::string::npos ) line.erase( comment );
+              std::istringstream iss( line );
+              std::vector<double> row;
+              std::string token;
+              while ( iss >> token )
+                {
+                  std::istringstream number( token );
+                  double value;
+                  char extra;
+                  if ( ! ( number >> value ) || ( number >> extra ) ||
+                       ! std::isfinite( value ) || value <= 0 )
+                    Helper::halt( "POPS: invalid positive numeric weight in "
+                                  + weights_file + " line " + Helper::int2str( line_number ) );
+                  row.push_back( value );
+                }
+              if ( row.empty() ) continue;
+              if ( row.size() != 5 )
+                Helper::halt( "POPS: " + weights_file + " line "
+                              + Helper::int2str( line_number )
+                              + " must contain exactly five W,R,N1,N2,N3 weights" );
+              rows.push_back( row );
+            }
+
+          if ( rows.size() < 1 || rows.size() > 2 )
+            Helper::halt( "POPS: " + weights_file
+                          + " must contain one POPS row and optionally one CODA row" );
+          pops_posterior_weights = rows[0];
+          if ( rows.size() == 2 ) coda_posterior_weights = rows[1];
+
+          logger << "  POPS: posterior weights read from " << weights_file << "\n";
+        }
+    }
+
+  if ( posterior_weighting_disabled )
+    logger << "  POPS: posterior weight recalibration not applied (unweighted=T)\n";
+  else if ( ! posterior_weights_file_found )
+    logger << "  POPS: posterior weight recalibration not applied (no <lib>.wgts file)\n";
+  else
+    logger << "  POPS: posterior weight recalibration enabled; the final matching "
+           << "POPS/CODA posterior stream will be corrected before hard calls\n";
   
   // assume path/lib.ftr
   //        path/lib.mod

@@ -168,6 +168,7 @@ std::set<std::string> globals::id_includes;
 std::set<std::string> globals::sl_annot_extensions;
 std::map<std::string,sample_list_t> globals::sl_data;
 bool globals::sl_visit_edf;
+bool globals::sl_seed_annots;
 bool globals::sl_link_across_folders;
 
 int globals::sample_list_min;
@@ -415,6 +416,7 @@ void globals::init_defs()
   //
 
   sl_visit_edf = true;
+  sl_seed_annots = false;
   
 
   //

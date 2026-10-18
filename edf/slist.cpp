@@ -135,7 +135,7 @@ int fn_luna_slbuilder( const std::string & filename )
  
   // need to parse foldes?
   std::vector<std::string> tok;
-  if ( globals::sl_link_across_folders || ( ! globals::sl_visit_edf ) )
+  if ( globals::sl_link_across_folders || ( ! globals::sl_visit_edf ) || globals::sl_seed_annots )
     {
       std::string dl( 1 , globals::folder_delimiter );	      
       tok = Helper::parse( filename , dl );
@@ -145,7 +145,7 @@ int fn_luna_slbuilder( const std::string & filename )
   const bool has_edfz_ext = Helper::file_extension( filename , "edfz" ) ; // 5 
   const bool has_edfgz_ext = Helper::file_extension( filename , "edf.gz" ) ; // 7  
   
-  if ( has_edf_ext || has_edfz_ext || has_edfgz_ext ) 
+  if ( ( has_edf_ext || has_edfz_ext || has_edfgz_ext ) && ! globals::sl_seed_annots )
     {
       
       const int xchar = has_edf_ext ? 4 : ( has_edfz_ext ? 5 : 7 ) ;
@@ -191,6 +191,7 @@ int fn_luna_slbuilder( const std::string & filename )
     }
   else 
     {
+      int best_len = 0;
       std::set<std::string>::const_iterator ii = globals::sl_annot_extensions.begin();
       while ( ii != globals::sl_annot_extensions.end() )
 	{
@@ -200,18 +201,43 @@ int fn_luna_slbuilder( const std::string & filename )
 	  
 	  if ( match_with_period || match_no_period )
 	    {
-
-	      int len = ii->size() + ( match_with_period ? 1 : 0 ); 
-	      
-	      std::string key = globals::sl_link_across_folders ? 
-		tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - len ) :
-		filename.substr( 0 , filename.size() - len );
-
-	      globals::sl_data[ key ].annots.insert( filename );
-	      
+	      const int len = ii->size() + ( match_with_period ? 1 : 0 );
+	      if ( globals::sl_seed_annots )
+		{
+		  // A specific extension such as -nsrr.xml must win over the
+		  // generic xml suffix, otherwise annotation-only mode would emit
+		  // a spurious second row for the same file.
+		  if ( len > best_len ) best_len = len;
+		}
+	      else
+		{
+		  // Preserve the original EDF-seeded builder behavior exactly.
+		  std::string key = globals::sl_link_across_folders ?
+		    tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - len ) :
+		    filename.substr( 0 , filename.size() - len );
+		  globals::sl_data[ key ].annots.insert( filename );
+		}
 	    }
 	  
 	  ++ii;
+	}
+
+
+      if ( globals::sl_seed_annots && best_len > 0 )
+	{
+	  std::string key = globals::sl_link_across_folders ?
+	    tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - best_len ) :
+	    filename.substr( 0 , filename.size() - best_len );
+
+	  if ( globals::sl_seed_annots )
+	    {
+	      // The basename is the sample ID, as for ordinary filename-derived
+	      // EDF IDs.  Keep it separate from `key`, which includes the path
+	      // when -nospan is selected.
+	      std::string id = tok[tok.size()-1].substr( 0 , tok[ tok.size() - 1 ].size() - best_len );
+	      globals::sl_data[ key ].id = id;
+	    }
+	  globals::sl_data[ key ].annots.insert( filename );
 	}
     }
   
@@ -228,6 +254,7 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t 
   // link same-named 
 
   globals::sl_visit_edf = false;
+  globals::sl_seed_annots = false;
   globals::sl_link_across_folders = true;  // index just on file file, not full path
 
   // if there are distinct EDFs/ANNOTs with the same name, but in
@@ -257,6 +284,9 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t 
 
 	  // use ID from EDF header, rather than file name
 	  if ( tok0[t].substr(1) == "edfid" ) globals::sl_visit_edf = true;
+
+	  // Emit annotation-derived records with '.' in the EDF column.
+	  if ( tok0[t].substr(1) == "annot-only" ) globals::sl_seed_annots = true;
 
 	  // only link EDF and annotation files within the same folder
 	  if ( tok0[t].substr(1) == "nospan" ) globals::sl_link_across_folders = false;
@@ -345,14 +375,15 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t 
       
       bool has_edf = ii->second.edf != "";
       int  num_annots = ii->second.annots.size();
+      bool has_source = has_edf || ( globals::sl_seed_annots && num_annots > 0 );
       
-      if ( has_edf && ids.find( ii->second.id ) != ids.end() ) 
+      if ( has_source && ids.find( ii->second.id ) != ids.end() )
 	{
 	  dupes = true;
 	  logger << "*** warning *** ID " << ii->second.id << " is duplicated\n";
 	}
 
-      if ( has_edf ) 
+      if ( has_source )
 	{
 	  ids.insert( ii->second.id );
 	  edf_annot_count[ num_annots ]++;
@@ -367,7 +398,7 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t 
       std::string exp_edf = "";
       std::set<std::string> exp_annots;
       
-      if ( has_edf )
+      if ( has_source )
 	{
 
 	  //
@@ -410,14 +441,14 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t 
 	    }
 
 	  //
-	  // EDF
+	  // EDF (annotation-seeded rows use the standard '.' placeholder)
 	  //
 
 	  if ( write_cout )
-	    std::cout << ii->second.edf   // was Helper::quote_spaced( ii->second.edf )
+	    std::cout << ( has_edf ? ii->second.edf : "." ) // was Helper::quote_spaced( ii->second.edf )
 		      << "\t";
 	  else
-	    exp_edf = ii->second.edf;
+	    exp_edf = has_edf ? ii->second.edf : ".";
 	}
 
       //
@@ -437,7 +468,7 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t 
       std::set<std::string>::const_iterator jj = ii->second.annots.begin();
       while ( jj != ii->second.annots.end() )
 	{	  
-	  if ( has_edf ) 
+	  if ( has_source )
 	    {
 	      if ( write_cout )
 		{
@@ -457,7 +488,7 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t 
 	  ++jj;
 	}
       
-      if ( has_edf ) 
+      if ( has_source )
 	if ( write_cout )
 	  std::cout << "\n";
       
@@ -487,7 +518,9 @@ void Helper::build_sample_list( const std::vector<std::string> & tok0 , slist_t 
   
   if ( write_cout )
     {
-      std::cerr << "\nwrote " << edfs << " EDFs to the sample list\n";
+      std::cerr << "\nwrote " << edfs
+		<< ( globals::sl_seed_annots ? " annotation-only entries" : " EDFs" )
+		<< " to the sample list\n";
       
       std::map<int,int>::const_iterator kk = edf_annot_count.begin();
       while ( kk != edf_annot_count.end() )

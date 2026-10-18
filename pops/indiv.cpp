@@ -325,7 +325,8 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 		  ++ee;
 		}
 	      
-	      writer.level( pops_opt_t::equiv_label , "CHEQ" );
+	      if ( pops_opt_t::verbose )
+		writer.level( pops_opt_t::equiv_label , "CHEQ" );
 	      
 	      logger << "\n  processing equivalent channel set " << pops_opt_t::equiv_label << "\n";
 		     	      
@@ -404,7 +405,8 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  // which may drop stuff
 	  //
 	  
-	  ftr_summaries();
+	  if ( pops_opt_t::verbose )
+	    ftr_summaries();
 	  
 	  //
 	  // Optionally, dump all
@@ -446,6 +448,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	      // 		<< E.size() << "\n";
 	     
 	      // E x FTR
+	      writer.level( "0" , "CODA" );
 	      for (int i=0; i<X1.rows(); i++)
 		{
 
@@ -453,15 +456,14 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 		  
 		  for (int j=0; j<X1.cols(); j++)
                     {
-		      if ( equivn )
-			writer.level( pops_opt_t::equiv_label + ":" + labels[j] , "FTR" );
-		      else
-			writer.level( labels[j] , "FTR" );
+		      writer.level( j + 1 , "COL" );
+		      writer.value( "FTR" , labels[j] );
 		      writer.value( "X" , X1(i,j) );
 		    }
-		  writer.unlevel( "FTR" );
+		  writer.unlevel( "COL" );
 		}
 	      writer.unepoch();
+	      writer.unlevel( "CODA" );
 	    }
 	  	  
 	  //
@@ -539,7 +541,7 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 
 	}
 
-      if ( equivn )
+      if ( equivn && pops_opt_t::verbose )
 	writer.unlevel( "CHEQ" );
       
 
@@ -596,6 +598,16 @@ pops_indiv_t::pops_indiv_t( edf_t & edf ,
 	  // prior to SOAP-grid, print 
 	  grid_soap();
 	}
+
+      // A library POPS weight row is an inference-time inverse correction,
+      // applied only when this is the final stream.  With CODA, the CODA
+      // row (if present) is instead applied to CODA's final posteriors.
+      if ( ! pops_opt_t::coda_prediction_mode &&
+           pops_opt_t::has_posterior_weights( false ) )
+        {
+          pops_opt_t::apply_posterior_weights( &P , false );
+          update_predicted();
+        }
       
       //
       // Add annotations
@@ -1965,6 +1977,7 @@ void pops_indiv_t::SHAP()
   if ( labels.size() != n_features )
     Helper::halt( "internal error in getting labels" );
 
+  writer.level( "0" , "CODA" );
   int p = 0;
   for (int c = 0 ; c < n_classes ; c++)
     {
@@ -1975,12 +1988,13 @@ void pops_indiv_t::SHAP()
       
       for (int r = 0; r < n_features ; r++)
 	{
-	  writer.level( labels[r] , globals::feature_strat );
+	  writer.level( r + 1 , "COL" );
+	  writer.value( "FTR" , labels[r] );
 
 	  C(r,c) = SHAP.col(p++).cwiseAbs().mean();
 	  writer.value( "SHAP" , C(r,c) );
 	}
-      writer.unlevel( globals::feature_strat );
+      writer.unlevel( "COL" );
     }
   writer.unlevel( globals::stage_strat );
 
@@ -2003,7 +2017,8 @@ void pops_indiv_t::SHAP()
 	  
 	  for (int r = 0; r < n_features ; r++)
 	    {
-	      writer.level( labels[r] , globals::feature_strat );
+	      writer.level( r + 1 , "COL" );
+	      writer.value( "FTR" , labels[r] );
 	      
 	      // epoch	     
 	      for (int e = 0; e < ne ; e++) 
@@ -2017,11 +2032,13 @@ void pops_indiv_t::SHAP()
 	      p++;
 	      
 	    } // next feature
-	  writer.unlevel( globals::feature_strat );
+	  writer.unlevel( "COL" );
 	}
       
       writer.unlevel( globals::stage_strat );
     }
+
+  writer.unlevel( "CODA" );
   
 }
 
@@ -2048,33 +2065,29 @@ void pops_indiv_t::importance()
   const double total_gain = std::accumulate( gain.begin(), gain.end(), 0.0 );
 
   logger << "  reporting POPS LightGBM feature importance (gain/split)\n";
-  writer.level( "POPS" , "MDL" );
+  writer.level( "0" , "CODA" );
   for (int rank = 0; rank < (int)order.size(); rank++)
     {
       const int i = order[rank];
-      // FTR alone used to be the output-table key.  That silently merges
-      // distinct model columns when a spec yields duplicate labels, so the
-      // later (lower-ranked) row overwrites the earlier one.  Keep the model
-      // column as a separate, unique stratum and use it as the FTR fallback.
-      const std::string column = "Column_" + Helper::int2str( i );
+      // FTR labels can repeat, so COL is the model-input key and FTR remains
+      // descriptive metadata.
+      const std::string column = "Column_" + Helper::int2str( i + 1 );
       const std::string ftr = i < (int)labels.size() && labels[i] != ""
         ? labels[i] : column;
-      writer.level( column , "COL" );
-      writer.level( ftr , "FTR" );
+      writer.level( i + 1 , "COL" );
+      writer.value( "FTR" , ftr );
       writer.value( "RANK" , rank + 1 );
       writer.value( "GAIN" , gain[i] );
       writer.value( "GAIN_PCT" , total_gain > 0 ? 100.0 * gain[i] / total_gain : 0.0 );
       writer.value( "SPLIT" , split[i] );
-      writer.unlevel( "FTR" );
       writer.unlevel( "COL" );
     }
-  writer.unlevel( "MDL" );
+  writer.unlevel( "CODA" );
 }
 
 void pops_indiv_t::summarize( pops_sol_t * sol )
 {
   const bool coda_stage1_level = sol == NULL && pops_opt_t::coda_prediction_mode && pops_opt_t::pre_coda_output;
-  const bool suppress_mdl_e = coda_stage1_level;
   if ( coda_stage1_level )
     writer.level( "0" , "CODA" );
 
@@ -2110,6 +2123,19 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
       emit_pops_soft_fail( msg , ne_total - ne );
       if ( coda_stage1_level )
         writer.unlevel( "CODA" );
+      return;
+    }
+
+  // Channel-equivalent runs are intermediate candidates.  Their full
+  // posterior, summary and confusion output is useful for troubleshooting,
+  // but the ordinary RUN-POPS result is the final combined solution below.
+  // Retain only the solution data unless diagnostics were explicitly asked
+  // for.
+  if ( sol != NULL && ! pops_opt_t::verbose )
+    {
+      sol->E = E;
+      sol->P = P;
+      sol->S = PS;
       return;
     }
 
@@ -2429,31 +2455,6 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   writer.value( "PREC3" , stats3.macro_precision );
   writer.value( "RECALL3" , stats3.macro_recall );
 
-  // Mirror core stage-1 summary metrics under MDL=E for easy model comparisons.
-  if ( ! suppress_mdl_e )
-    {
-      writer.level( "E" , "MDL" );
-      writer.value( "K" , stats.kappa );
-      writer.value( "K3" , stats3.kappa );
-      writer.value( "ACC" , stats.acc );
-      writer.value( "ACC3" , stats3.acc );
-      writer.value( "NE_OKAY" , ne_okay );
-      writer.value( "NE_FLAGGED" , ne_flagged );
-      writer.value( "CONF" , safe_conf_mean( avg_pmax , ne ) );
-      writer.value( "MCC" , stats.mcc );
-      writer.value( "MCC3" , stats3.mcc );
-      writer.value( "F1" , stats.macro_f1 );
-      writer.value( "PREC" , stats.macro_precision );
-      writer.value( "RECALL" , stats.macro_recall );
-      writer.value( "F1_WGT" , stats.avg_weighted_f1 );
-      writer.value( "PREC_WGT" , stats.avg_weighted_precision );
-      writer.value( "RECALL_WGT" , stats.avg_weighted_recall );
-      writer.value( "F13" , stats3.macro_f1 );
-      writer.value( "PREC3" , stats3.macro_precision );
-      writer.value( "RECALL3" , stats3.macro_recall );
-      writer.unlevel( "MDL" );
-    }
-
   //
   // sleep and REM latencies
   //
@@ -2471,6 +2472,9 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   //
   // restricted set summaries
   //
+
+  if ( pops_opt_t::verbose )
+    {
 
   // 5-class stats, but on 'restricted' epoch sets
   // here, do all obs stage types
@@ -2602,8 +2606,9 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
     }
 
   writer.unlevel( globals::stage_strat );
-  
-  
+
+    }
+
   //
   // Stage-specific outputs
   //
@@ -2638,32 +2643,6 @@ void pops_indiv_t::summarize( pops_sol_t * sol )
   writer.value( "PR1" ,  fac * ( masked + ( pops_opt_t::eval_mode ? pred_unknown : 0 ) ) );
 
   writer.unlevel(  globals::stage_strat  );
-
-  if ( ! suppress_mdl_e )
-    {
-      writer.level( "E" , "MDL" );
-      for (int ss=0; ss < pops_opt_t::n_stages ; ss++ )
-        {
-          writer.level( pops_t::label( (pops_stage_t)ss ) , globals::stage_strat );
-          writer.value( "F1" , stats.f1[ss] );
-          writer.value( "PREC" , stats.precision[ss] );
-          writer.value( "RECALL" , stats.recall[ss] );
-          writer.value( "OBS" ,  fac * dur_obs[ss] );
-          writer.value( "ORIG" , fac * dur_obs_orig[ss] );
-          if ( ! pops_opt_t::eval_mode )
-            writer.value( "PRF" ,  fac * dur_predf[ss] );
-          writer.value( "PR1" ,  fac * dur_pred1[ss] );
-        }
-      writer.level( pops_t::label( POPS_UNKNOWN ) , globals::stage_strat );
-      writer.value( "OBS" ,  fac * masked );
-      writer.value( "ORIG" , fac * dur_obs_orig[ POPS_UNKNOWN ] );
-      if ( ! pops_opt_t::eval_mode )
-        writer.value( "PRF" ,  fac * masked );
-      writer.value( "PR1" ,  fac * ( masked + ( pops_opt_t::eval_mode ? pred_unknown : 0 ) ) );
-      writer.unlevel( globals::stage_strat );
-      writer.unlevel( "MDL" );
-    }
-
 
   //
   // Confusion matrix, to console
@@ -3022,9 +3001,8 @@ void pops_indiv_t::ftr_summaries()
       if ( pops_t::specs.final2orig.find( j ) == pops_t::specs.final2orig.end() )
 	Helper::halt( "internal logic error in apply_ranges()" );
       
-      const int ftr_slot = pops_t::specs.final2orig[ j ] + 1 ;
-      
-      writer.level( ftr_slot , "FTR" );
+      writer.level( j + 1 , "COL" );
+      writer.value( "FTR" , labels[j] );
       
       // track number of outlier epochs
       int missing = 0;
@@ -3040,8 +3018,8 @@ void pops_indiv_t::ftr_summaries()
       writer.value( "PROP" , missing_prop );
       writer.value( "DROPPED" , (int)dropped );
       
+      writer.unlevel( "COL" );
     }
-  writer.unlevel( "FTR" );
 
 }
 

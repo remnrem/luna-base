@@ -101,6 +101,11 @@ struct hypnogram_t
 	       const std::string & eannot = "" ,
 	       const std::string & annot_prefix = "" ,
 	       const std::string & annot_suffix = "_" );
+
+  // Fixed whole-night panel used by HYPNO-PC.  This returns all eleven
+  // contract keys; no-sleep recordings deliberately receive non-finite
+  // values so PCA fitting excludes them by complete-case logic.
+  std::map<std::string,double> pc_features() const;
   
   void annotate( const std::string & annot_prefix , const std::string & suffix );
   

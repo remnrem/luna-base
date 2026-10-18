@@ -1951,6 +1951,11 @@ void proc_runpops( edf_t & edf , param_t & param )
     pops_param.add( "add-nrem" , param.value( "add-nrem" ) );
   if ( param.has( "smooth-pp" ) )
     pops_param.add( "smooth-pp" , param.value( "smooth-pp" ) );
+  if ( param.has( "unweighted" ) )
+    {
+      if ( param.empty( "unweighted" ) ) pops_param.add( "unweighted" );
+      else pops_param.add( "unweighted" , param.value( "unweighted" ) );
+    }
 
   if ( opt_args != "" )
     {
@@ -1969,6 +1974,10 @@ void proc_runpops( edf_t & edf , param_t & param )
     pops_param.add( "shap" );
   if ( param.has( "verbose" ) )
     pops_param.add( "verbose" );
+  if ( param.has( "output-features" ) )
+    pops_param.add( "output-features" );
+  if ( param.has( "coda-output-features" ) )
+    pops_param.add( "coda-output-features" );
   if ( param.has( "pops-SHAP" ) )
     pops_param.add( "pops-SHAP" );
   if ( param.has( "coda-SHAP" ) )
@@ -2114,7 +2123,7 @@ void proc_pops( edf_t & edf , param_t & param )
         {
           coda.opt.do_SHAP = param.has( "SHAP" ) || param.has( "shap" ) ||
                              param.has( "coda-SHAP" );
-          coda.opt.dump_features = param.has( "verbose" );
+          coda.opt.dump_features = param.has( "coda-output-features" );
           coda.opt.output_both_stages = param.has( "pre-coda" ) ? param.yesno( "pre-coda" ) : false;
         }
       else
@@ -2392,7 +2401,8 @@ void proc_pops( edf_t & edf , param_t & param )
       return; 
     }
   
-  pops_t::specs.emit_feature_defs = true;
+  pops_t::specs.emit_feature_defs = param.has( "verbose" ) ||
+    param.has( "output-features" );
   pops_t::specs.read( feature_file );
 
   //
@@ -2405,7 +2415,8 @@ void proc_pops( edf_t & edf , param_t & param )
   // Optionally apply POPS-CODA second-stage rescoring (prediction mode only).
   // CODA model is specified via coda=<model-file>.
   // The POPS stage-1 outputs are written above by summarize() inside the
-  // pops_indiv_t constructor.  CODA outputs are written here under MDL=CODA.
+  // pops_indiv_t constructor.  CODA output is the final unstratified stream
+  // unless pre-coda requests explicit CODA=0/1 comparison output.
   //
 
   const bool training_mode = param.has( "train" );
@@ -2443,7 +2454,7 @@ void proc_pops( edf_t & edf , param_t & param )
                 coda_opt.include_future = false;
               coda_opt.do_SHAP = param.has( "SHAP" ) || param.has( "shap" ) ||
                                  param.has( "coda-SHAP" );
-              coda_opt.dump_features = param.has( "verbose" );
+              coda_opt.dump_features = param.has( "coda-output-features" );
               coda_opt.output_both_stages = param.has( "pre-coda" ) ? param.yesno( "pre-coda" ) : false;
 
               const std::string coda_key =
@@ -4297,6 +4308,35 @@ void proc_sleep_stage( edf_t & edf , param_t & param , bool verbose )
   // and output...
 
   edf.timeline.hypnogram.output( verbose , epoch_lvl_output , cycle_lvl_output, eannot , annot_prefix );
+
+  // HYPNO-PC is a compact, whole-night exchange distinct from ordinary
+  // HYPNO output.  The feature map is read only from the completed HYPNO
+  // summaries, so pc-out and pc-proj can safely be requested together.
+  if ( param.has( "pc-out" ) || param.has( "pc-proj" ) )
+    {
+      const hypno_pc::feature_map_t features = edf.timeline.hypnogram.pc_features();
+      if ( param.has( "pc-out" ) )
+        {
+          hypno_pc::write_features( param.value( "pc-out" ), edf.id, features );
+          logger << "  wrote HYPNO-PC features for " << edf.id << "\n";
+        }
+      if ( param.has( "pc-proj" ) )
+        {
+          std::vector<double> scores;
+          int missing = 0;
+          const bool ok = hypno_pc::project( param.value( "pc-proj" ), features,
+                                              &scores, &missing );
+          writer.value( "HYPC_COMPATIBLE", ok ? 1 : 0 );
+          writer.value( "HYPC_N_MISSING", missing );
+          if ( ok )
+            for ( int k = 0; k < (int)scores.size(); ++k )
+              writer.value( "HYPC" + std::string( k < 9 ? "0" : "" )
+                            + Helper::int2str( k + 1 ), scores[k] );
+          else
+            logger << "  warning: HYPNO-PC projection skipped (" << missing
+                   << " required feature(s) missing)\n";
+        }
+    }
 
 }
 

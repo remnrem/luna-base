@@ -34,6 +34,9 @@
 #include "dsp/lzw.h"
 #include "dsp/mse.h"
 
+#include <cmath>
+#include <limits>
+
 extern writer_t writer;
 
 extern logger_t logger;
@@ -3784,6 +3787,53 @@ void hypnogram_t::annotate( const std::string & annot_prefix , const std::string
 
 }
 
+
+std::map<std::string,double> hypnogram_t::pc_features() const
+{
+  const double na = std::numeric_limits<double>::quiet_NaN();
+  std::map<std::string,double> out;
+  const std::vector<std::string> names = {
+    "SME", "WASO", "TST", "PCT__SS_N1", "PCT__SS_N3", "PCT__SS_R",
+    "SFI", "SFI1", "BOUT_N__SS_S", "BOUT_MD__SS_S", "BOUT_05__SS_S"
+  };
+  for ( const std::string & name : names ) out[name] = na;
+  if ( ! any_sleep || ! std::isfinite( TST ) || TST <= 0 ) return out;
+
+  out["SME"] = slp_eff2_pct;
+  out["WASO"] = WASO;
+  out["TST"] = TST;
+  const auto named_value = [na]( const std::map<std::string,double> & values,
+                                 const std::string & name ) {
+    const auto found = values.find( name );
+    return found == values.end() ? na : found->second;
+  };
+  out["PCT__SS_N1"] = named_value( pct, "N1" );
+  out["PCT__SS_N3"] = named_value( pct, "N3" );
+  out["PCT__SS_R"] = named_value( pct, "R" );
+
+  // Do not use operator[] here: this accessor must not mutate the already
+  // calculated HYPNO transition map.  Explicit lookups also cover stages
+  // absent from an otherwise valid recording.
+  const auto ntrans = [this]( sleep_stage_t from, sleep_stage_t to ) {
+    const auto a = transitions5.find( from );
+    if ( a == transitions5.end() ) return 0;
+    const auto b = a->second.find( to );
+    return b == a->second.end() ? 0 : b->second;
+  };
+  const int sfi_w = ntrans( NREM1, WAKE ) + ntrans( NREM2, WAKE )
+    + ntrans( NREM3, WAKE ) + ntrans( REM, WAKE );
+  const int sfi1_w = sfi_w + ntrans( NREM2, NREM1 )
+    + ntrans( NREM3, NREM1 ) + ntrans( REM, NREM1 );
+  out["SFI"] = sfi_w / TST;
+  out["SFI1"] = sfi1_w / TST;
+  const int sleep_bouts = bout_n.count( "S" ) ? bout_n.at( "S" ) : 0;
+  out["BOUT_N__SS_S"] = sleep_bouts;
+  // A median duration is not a zero-duration surrogate.  It must only be
+  // represented when an actual S bout was found.
+  out["BOUT_MD__SS_S"] = sleep_bouts > 0 ? named_value( bout_med, "S" ) : na;
+  out["BOUT_05__SS_S"] = bout_5.count( "S" ) ? bout_5.at( "S" ) : na;
+  return out;
+}
 
 void hypnogram_t::output( const bool verbose ,
 			  const bool epoch_lvl_output ,

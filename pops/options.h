@@ -28,6 +28,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include "stats/Eigen/Dense"
 
 struct param_t;
 
@@ -118,6 +119,16 @@ struct pops_opt_t {
   static std::string posterior_prefix_coda;
   static bool pre_coda_output;
   static bool coda_prediction_mode;
+
+  // Optional library-side posterior correction.  A <lib>.wgts file contains
+  // one (POPS) or two (POPS then CODA) rows of five class weights in
+  // W,R,N1,N2,N3 order.  Prediction divides posterior probabilities by the
+  // relevant weights and renormalises before any output or hard calls.
+  static bool posterior_weighting_disabled;
+  static std::vector<double> pops_posterior_weights;
+  static std::vector<double> coda_posterior_weights;
+  static bool has_posterior_weights( bool coda );
+  static void apply_posterior_weights( Eigen::MatrixXd * P , bool coda );
 
 
   // no P (i.e. if in eval mode)

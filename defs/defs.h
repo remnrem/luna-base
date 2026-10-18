@@ -143,7 +143,9 @@ enum cmdline_proc_t
     PROC_GED_GROUP,
     PROC_WAVEFORM_SUMMARY,
     PROC_DPP_FIT,
-    PROC_POPS_CALIBRATION
+    PROC_POPS_CALIBRATION,
+    PROC_HDSTATS_PC,
+    PROC_HYPNO_PC
   };
 
 typedef std::map<sleep_stage_t,std::string> sleep_stage_label_t;
@@ -359,6 +361,7 @@ struct globals
   static std::set<std::string> sl_annot_extensions;
   static std::map<std::string,sample_list_t> sl_data;
   static bool sl_visit_edf;
+  static bool sl_seed_annots;
   static bool sl_link_across_folders;
   
   static int sample_list_min;

@@ -1713,6 +1713,8 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
   // dimension reduction (SVD/NMF)
   clmap[ "--psc" ]          = PROC_PSC;
   clmap[ "--nmf" ]          = PROC_NMF;
+  clmap[ "--hdstats-pc" ]   = PROC_HDSTATS_PC;
+  clmap[ "--hypno-pc" ]     = PROC_HYPNO_PC;
 
   // microstate analysis helper functions
   clmap[ "--kmer" ]         = PROC_MS_KMER;
@@ -1725,6 +1727,7 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
   clmap[ "--eval-stages" ]  = PROC_EVAL_STAGES;
   clmap[ "--priors" ]       = PROC_POPS_ESPRIORS;
   clmap[ "--calibration" ] = PROC_POPS_CALIBRATION;
+  clmap[ "--pops-calibration" ] = PROC_POPS_CALIBRATION;
 
   // DPP model training
   clmap[ "--dpp-fit" ]      = PROC_DPP_FIT;
@@ -1759,9 +1762,6 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
     // Negative marker: accept compact calibration arguments while still
     // letting the normal command-line pass process -o/-a/-t/@file/--flag.
     *param_from_command_line = -2;
-
-  
-  
   //
   // otherwise, first element will be treated as the data source
   // (sample list, EDF or text file) 
@@ -2095,6 +2095,41 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 {
 
   if ( cmdline == NOPROC ) return;
+
+  // HDSTATS-PC level 2: fit a reference PCA from concatenated, level-1
+  // HDSTATS feature lines. Projection itself is performed by HDSTATS pc-proj.
+  if ( cmdline == PROC_HDSTATS_PC )
+    {
+      param_t param;
+      build_param( &param, argc, argv, param_from_command_line );
+      writer.begin();
+      writer.id( ".", "." );
+      writer.cmd( "HDSTATS-PC", 1, "" );
+      writer.level( "HDSTATS-PC", "_HDSTATS-PC" );
+      hdstats_pc::fit( param );
+      writer.unlevel( "_HDSTATS-PC" );
+      writer.commit();
+      std::exit(0);
+    }
+
+  // HYPNO-PC level 2: fit a reference PCA from conventional HYPNO feature
+  // lines.  Its format and output namespace are intentionally independent
+  // of HDSTATS-PC.
+  if ( cmdline == PROC_HYPNO_PC )
+    {
+      param_t param;
+      build_param( &param, argc, argv, param_from_command_line );
+      writer.begin();
+      writer.id( ".", "." );
+      writer.cmd( "HYPNO-PC", 1, "" );
+      // The underscore-prefixed factor is internal and suppressed by the
+      // writer; the user-facing command/table label remains HYPNO-PC.
+      writer.level( "HYPNO-PC", "_HYPNO-PC" );
+      hypno_pc::fit( param );
+      writer.unlevel( "_HYPNO-PC" );
+      writer.commit();
+      std::exit(0);
+    }
   
   //
   // PSC (or NMF)

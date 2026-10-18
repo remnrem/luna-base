@@ -28,6 +28,9 @@
 #include <sstream>
 #include <cstring>
 #include <algorithm>
+#include <cmath>
+#include <numeric>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <filesystem>
@@ -63,6 +66,14 @@ struct options_t {
   bool cmd_hash;
   bool compressed = false; // -z
   std::string dump_directory; // -t
+  bool mean = false;
+  bool median = false;
+  bool sd = false;
+  bool range = false;
+  bool tabulate = false;
+  bool tabulate_all = false;
+  bool metrics_rows = false;
+  bool metrics_layout_set = false;
   
   char strata_delim;
   char faclvl_delim;
@@ -154,6 +165,7 @@ struct output_file_t
 void dictionary();
 void extract();
 void display();
+void display_aggregate();
 void summary();
 void pre_summary();
 bool get_matching_strata( bool show_table = true );
@@ -187,6 +199,12 @@ std::set<int> match_strata_ids;
 
 bool run_summary;
 bool run_dictionary;
+bool requested_variables = false;
+
+bool aggregate_requested()
+{
+  return options.mean || options.median || options.sd || options.range || options.tabulate;
+}
 
 struct request_t 
 {
@@ -249,7 +267,7 @@ int main(int argc , char ** argv )
 
 
   if ( argc < 2 ) 
-    Helper::halt( "usage: destrat file.db [more.db ...] [-s CMD] [-r FAC ...] [-c FAC ...] [-v VAR ...] [-i ID ...] [-e] [-z] [-t DIRECTORY]" );
+    Helper::halt( "usage: destrat file.db [more.db ...] [-s CMD] [-r FAC ...] [-c FAC ...] [-v VAR ...] [-i ID ...] [--mean|--median|--sd|--range|--tabulate] [--metrics-cols|--metrics-rows] [-e] [-z] [-t DIRECTORY]" );
   
   //
   // Get command line options
@@ -282,7 +300,29 @@ int main(int argc , char ** argv )
   for (int i=1;i<argc;i++)
     {
 
-      if      ( strcmp( argv[i] , "-x" ) == 0 ) { run_summary = true; any_opt = true; mode = '0'; }
+      if      ( strcmp( argv[i] , "--mean" ) == 0 ) { options.mean = true; any_opt = true; mode = '0'; }
+      else if ( strcmp( argv[i] , "--median" ) == 0 ) { options.median = true; any_opt = true; mode = '0'; }
+      else if ( strcmp( argv[i] , "--sd" ) == 0 ) { options.sd = true; any_opt = true; mode = '0'; }
+      else if ( strcmp( argv[i] , "--range" ) == 0 ) { options.range = true; any_opt = true; mode = '0'; }
+      else if ( strcmp( argv[i] , "--tabulate" ) == 0 ) { options.tabulate = true; any_opt = true; mode = '0'; }
+      else if ( strcmp( argv[i] , "--tabulate-all" ) == 0 ) { options.tabulate_all = true; any_opt = true; mode = '0'; }
+      else if ( strcmp( argv[i] , "--metrics-rows" ) == 0 )
+        {
+          if ( options.metrics_layout_set && ! options.metrics_rows )
+            Helper::halt( "cannot combine --metrics-cols and --metrics-rows" );
+          options.metrics_rows = true;
+          options.metrics_layout_set = true;
+          mode = '0';
+        }
+      else if ( strcmp( argv[i] , "--metrics-cols" ) == 0 )
+        {
+          if ( options.metrics_layout_set && options.metrics_rows )
+            Helper::halt( "cannot combine --metrics-cols and --metrics-rows" );
+          options.metrics_rows = false;
+          options.metrics_layout_set = true;
+          mode = '0';
+        }
+      else if ( strcmp( argv[i] , "-x" ) == 0 ) { run_summary = true; any_opt = true; mode = '0'; }
       else if ( strcmp( argv[i] , "-l" ) == 0 ) { run_summary = false; any_opt = true; options.long_format = true; mode = '0'; }
       else if ( strcmp( argv[i] , "-d" ) == 0 ) { run_dictionary = true; any_opt = true; mode = '0'; }
  
@@ -402,6 +442,7 @@ int main(int argc , char ** argv )
 	  else if ( mode == 'V' ) 
 	    {
 	      for ( const auto & item : option_list( argv[i] ) ) vars.insert( item );
+	      requested_variables = true;
 	    }
 	  
 	  else if ( mode == 'I' ) 
@@ -437,6 +478,16 @@ int main(int argc , char ** argv )
   if ( databases.size() == 0 ) 
     Helper::halt( "no STOUT databases specified" );
 
+  if ( options.tabulate && ( options.mean || options.median || options.sd || options.range ) )
+    Helper::halt( "--tabulate cannot be combined with numeric summary options" );
+  if ( options.tabulate_all && ! options.tabulate )
+    Helper::halt( "--tabulate-all requires --tabulate" );
+  if ( options.metrics_layout_set && ! ( options.mean || options.median || options.sd || options.range ) )
+    Helper::halt( "--metrics-cols/--metrics-rows require a numeric summary option" );
+  if ( aggregate_requested() && ( run_summary || run_dictionary || options.long_format
+                                  || ! options.dump_directory.empty() || options.print_empty_rows ) )
+    Helper::halt( "summary options cannot be combined with -x, -d, -l, -t or -e" );
+
   if ( ! options.dump_directory.empty() )
     {
       bool row_selection = false;
@@ -461,7 +512,7 @@ int main(int argc , char ** argv )
   
 
   std::set<std::string> all_vars;
-  const bool requested_variables = ! vars.empty();
+  const bool have_variable_filter = requested_variables;
 
   bool verbose = databases.size() > 1; 
 
@@ -509,7 +560,7 @@ int main(int argc , char ** argv )
 
   if ( ! options.dump_directory.empty() )
     {
-      dump_all( cmd_spec, args_ind, requested_variables );
+      dump_all( cmd_spec, args_ind, have_variable_filter );
       return 0;
     }
 
@@ -1854,6 +1905,234 @@ std::string format_value( const std::string & value )
   return formatted.str();
 }
 
+std::vector<size_t> sorted_output_columns()
+{
+  std::vector<size_t> columns;
+  for ( size_t i = 0; i < output_column_labels.size(); ++i ) columns.push_back( i );
+  std::stable_sort( columns.begin(), columns.end(), [](size_t a, size_t b) {
+    return output_column_labels[a] < output_column_labels[b];
+  } );
+  return columns;
+}
+
+struct aggregate_measure_t
+{
+  cell_key_t key;
+  std::string name;
+};
+
+std::vector<aggregate_measure_t> aggregate_measures()
+{
+  std::vector<aggregate_measure_t> measures;
+  const std::vector<size_t> columns = sorted_output_columns();
+  for ( const auto & variable : output_variables )
+    for ( const size_t column : columns )
+      {
+        std::string name = options.prepend + variable.first;
+        if ( output_column_labels[column] != "." ) name += "." + output_column_labels[column];
+        measures.push_back( { cell_key_t( variable.second, column ), std::move(name) } );
+      }
+  return measures;
+}
+
+bool has_visible_row_factors()
+{
+  for ( const auto & factor : rfacs )
+    if ( ! factor.empty() && factor[0] != '_' ) return true;
+  return false;
+}
+
+void print_aggregate_row_levels( const size_t row_id, const bool leading_delimiter = true )
+{
+  const auto & levels = *output_row_levels[row_id];
+  bool delimiter = leading_delimiter;
+  for ( const auto & factor : rfacs )
+    if ( ! factor.empty() && factor[0] != '_' )
+      {
+        const auto level = levels.find( factor );
+        if ( delimiter ) output() << '\t';
+        output() << ( level == levels.end() ? "NA" : level->second );
+        delimiter = true;
+      }
+}
+
+std::string format_aggregate_number( const double value )
+{
+  std::ostringstream formatted;
+  if ( options.full ) formatted << std::setprecision( 10 ) << value;
+  else formatted << std::fixed << std::setprecision( options.prec ) << value;
+  return formatted.str();
+}
+
+std::string aggregate_value( std::vector<double> values, const std::string & metric )
+{
+  if ( metric == "N" ) return std::to_string( values.size() );
+  if ( values.empty() ) return "NA";
+  if ( metric == "MEAN" || metric == "SD" )
+    {
+      const double mean = std::accumulate( values.begin(), values.end(), 0.0 ) / values.size();
+      if ( metric == "MEAN" ) return format_aggregate_number( mean );
+      if ( values.size() < 2 ) return "NA";
+      double ss = 0;
+      for ( const double value : values ) ss += ( value - mean ) * ( value - mean );
+      return format_aggregate_number( std::sqrt( ss / ( values.size() - 1 ) ) );
+    }
+  std::sort( values.begin(), values.end() );
+  if ( metric == "MIN" ) return format_aggregate_number( values.front() );
+  if ( metric == "MAX" ) return format_aggregate_number( values.back() );
+  if ( metric == "MEDIAN" )
+    {
+      const size_t middle = values.size() / 2;
+      const double median = values.size() % 2 ? values[middle]
+        : ( values[middle - 1] + values[middle] ) / 2;
+      return format_aggregate_number( median );
+    }
+  Helper::halt( "internal error: unknown aggregate metric " + metric );
+  return "NA";
+}
+
+std::vector<std::string> aggregate_metrics()
+{
+  std::vector<std::string> metrics{ "N" };
+  if ( options.mean ) metrics.push_back( "MEAN" );
+  if ( options.median ) metrics.push_back( "MEDIAN" );
+  if ( options.sd ) metrics.push_back( "SD" );
+  if ( options.range ) { metrics.push_back( "MIN" ); metrics.push_back( "MAX" ); }
+  return metrics;
+}
+
+void display_aggregate()
+{
+  if ( output_individuals.empty() ) return;
+
+  const std::vector<aggregate_measure_t> measures = aggregate_measures();
+
+  if ( options.tabulate )
+    {
+      constexpr size_t tabulate_limit = 100;
+      if ( ! requested_variables )
+        {
+          std::map<size_t,size_t> counts;
+          for ( const auto & person : output_individuals )
+            for ( const auto & row : person.second.rows ) ++counts[row.first];
+          if ( counts.size() > tabulate_limit && ! options.tabulate_all )
+            Helper::halt( "tabulation would produce " + std::to_string( counts.size() )
+                          + " groups; this may be a continuous factor; re-run with --tabulate-all to confirm" );
+          std::cerr << "tabulation: " << counts.size() << " group(s)\n";
+          for ( const auto & factor : rfacs )
+            if ( ! factor.empty() && factor[0] != '_' ) output() << factor << '\t';
+          output() << "_N\n";
+          for ( const auto & count : counts )
+            {
+              print_aggregate_row_levels( count.first, false );
+              if ( has_visible_row_factors() ) output() << '\t';
+              output() << count.second << '\n';
+            }
+          return;
+        }
+
+      std::unordered_map<cell_key_t,std::string,cell_hash_t> measure_names;
+      for ( const auto & measure : measures ) measure_names.emplace( measure.key, measure.name );
+      std::map<std::tuple<size_t,std::string,std::string>,size_t> counts;
+      for ( const auto & person : output_individuals )
+        for ( const auto & row : person.second.rows )
+          for ( const auto & cell : row.second.cells )
+            if ( ! cell.second.empty() && cell.second != "NA" )
+              counts[std::make_tuple( row.first, measure_names.at( cell.first ), cell.second )]++;
+      if ( counts.size() > tabulate_limit && ! options.tabulate_all )
+        Helper::halt( "tabulation would produce " + std::to_string( counts.size() )
+                      + " groups; this may be a continuous value; re-run with --tabulate-all to confirm" );
+      std::cerr << "tabulation: " << counts.size() << " group(s)\n";
+      for ( const auto & factor : rfacs )
+        if ( ! factor.empty() && factor[0] != '_' ) output() << factor << '\t';
+      output() << "_METRIC\t_VALUE\t_N\n";
+      for ( const auto & count : counts )
+        {
+          print_aggregate_row_levels( std::get<0>( count.first ), false );
+          if ( has_visible_row_factors() ) output() << '\t';
+          output() << std::get<1>( count.first ) << '\t'
+                   << std::get<2>( count.first ) << '\t' << count.second << '\n';
+        }
+      return;
+    }
+
+  std::vector<std::unordered_map<cell_key_t,std::vector<double>,cell_hash_t>> values( output_row_levels.size() );
+  for ( const auto & person : output_individuals )
+    for ( const auto & row : person.second.rows )
+      for ( const auto & cell : row.second.cells )
+        {
+          if ( cell.second.empty() || cell.second == "NA" ) continue;
+          double value;
+          if ( ! Helper::str2dbl( cell.second, &value ) || ! std::isfinite( value ) )
+            Helper::halt( "cannot summarize nonnumeric value '" + cell.second + "'" );
+          values[row.first][cell.first].push_back( value );
+        }
+
+  const std::vector<std::string> metrics = aggregate_metrics();
+  if ( options.metrics_rows )
+    {
+      output() << "_METRIC";
+      for ( const auto & factor : rfacs )
+        if ( ! factor.empty() && factor[0] != '_' ) output() << '\t' << factor;
+      for ( const auto & measure : measures ) output() << '\t' << measure.name;
+      output() << '\n';
+      for ( size_t row_id = 0; row_id < output_row_levels.size(); ++row_id )
+        for ( const auto & metric : metrics )
+          {
+            output() << metric;
+            print_aggregate_row_levels( row_id );
+            for ( const auto & measure : measures )
+              {
+                const auto found = values[row_id].find( measure.key );
+                output() << '\t' << aggregate_value(
+                  found == values[row_id].end() ? std::vector<double>{} : found->second, metric );
+              }
+            output() << '\n';
+          }
+      return;
+    }
+
+  bool first = true;
+  for ( const auto & factor : rfacs )
+    if ( ! factor.empty() && factor[0] != '_' )
+      {
+        if ( ! first ) output() << '\t';
+        output() << factor;
+        first = false;
+      }
+  for ( const auto & measure : measures )
+    for ( const auto & metric : metrics )
+      {
+        if ( ! first ) output() << '\t';
+        output() << measure.name << '_' << metric;
+        first = false;
+      }
+  output() << '\n';
+  for ( size_t row_id = 0; row_id < output_row_levels.size(); ++row_id )
+    {
+      bool first_value = true;
+      const auto & levels = *output_row_levels[row_id];
+      for ( const auto & factor : rfacs )
+        if ( ! factor.empty() && factor[0] != '_' )
+          {
+            if ( ! first_value ) output() << '\t';
+            const auto level = levels.find( factor );
+            output() << ( level == levels.end() ? "NA" : level->second );
+            first_value = false;
+          }
+      for ( const auto & measure : measures )
+        for ( const auto & metric : metrics )
+          {
+            if ( ! first_value ) output() << '\t';
+            const auto found = values[row_id].find( measure.key );
+            output() << aggregate_value(
+              found == values[row_id].end() ? std::vector<double>{} : found->second, metric );
+            first_value = false;
+          }
+      output() << '\n';
+    }
+}
+
 void clear_output_table()
 {
   output_individuals.clear();
@@ -1869,12 +2148,13 @@ void clear_output_table()
 void display()
 {
   if ( output_individuals.empty() ) return;
+  if ( aggregate_requested() )
+    {
+      display_aggregate();
+      return;
+    }
 
-  std::vector<size_t> columns;
-  for ( size_t i = 0; i < output_column_labels.size(); ++i ) columns.push_back( i );
-  std::stable_sort( columns.begin(), columns.end(), [](size_t a, size_t b) {
-    return output_column_labels[a] < output_column_labels[b];
-  } );
+  const std::vector<size_t> columns = sorted_output_columns();
 
   output() << "ID";
   for ( const auto & factor : rfacs )
@@ -2018,7 +2298,8 @@ void dump_all( const std::string & command, const std::set<std::string> & people
   const fs::path directory( Helper::expand( options.dump_directory ) );
   std::set<fs::path> destinations;
   // Check all names before writing any table: separate factor sets must never
-  // overwrite each other, and existing exports are left intact.
+  // overwrite each other. Existing exports are replaced, matching destrat's
+  // established default behavior.
   for ( auto & entry : tables )
     {
       std::string name = filename_component( entry.first.first );
@@ -2028,12 +2309,6 @@ void dump_all( const std::string & command, const std::set<std::string> & people
       entry.second.filename = directory / ( name + ( options.compressed ? ".txt.gz" : ".txt" ) );
       if ( ! destinations.insert( entry.second.filename ).second )
         Helper::halt( "different tables produce the same output filename: " + entry.second.filename.string() );
-      std::error_code error;
-      const auto status = fs::symlink_status( entry.second.filename, error );
-      if ( error && error != std::errc::no_such_file_or_directory )
-        Helper::halt( "cannot inspect output path: " + entry.second.filename.string() + ": " + error.message() );
-      if ( fs::exists( status ) )
-        Helper::halt( "output already exists: " + entry.second.filename.string() );
     }
   std::error_code error;
   fs::create_directories( directory, error );
