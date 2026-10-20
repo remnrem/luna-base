@@ -145,12 +145,12 @@ struct hd_params_t
   double ultra_prominence;           // hysteretic peak/trough prominence
   double ultra_min_sleep_support;    // Gaussian-weighted local sleep mass [0,1]
   std::array<double,5> ultra_weights; // W,N1,N2,N3,R depth weights
-  bool emit_ultradian;               // write UPHASE/UAMP EDF signals
-  bool ultra_diagnostics;            // also write UDEPTH/UAMP_RAW EDF signals
+  bool emit_ultradian;               // write U_PHASE/U_AMP EDF signals
+  bool ultra_diagnostics;            // also write U_DEPTH/U_AMP_RAW EDF signals
   bool do_ultra_condition;           // joint time + harmonic phase descriptions
-  bool ultra_condition_weighted;     // optional UAMP-weighted sensitivity fit
+  bool ultra_condition_weighted;     // optional U_AMP-weighted sensitivity fit
   double ultra_max_condition;        // max standardized UVAR design condition number
-  bool do_ultra_regions;             // optional four-region UPHASE summaries
+  bool do_ultra_regions;             // optional four-region U_PHASE summaries
 };
 
 
@@ -323,9 +323,9 @@ struct hd_data_t
 // Soft ultradian organization
 //
 // This is deliberately a turning-point coordinate, rather than a band-pass
-// phase estimate.  UDEPTH is the sleep-conditional Gaussian average of the
+// phase estimate.  U_DEPTH is the sleep-conditional Gaussian average of the
 // configured posterior depth contrast.  A small state-machine applies a
-// prominence (hysteresis) threshold to UDEPTH and only commits an extremum
+// prominence (hysteresis) threshold to U_DEPTH and only commits an extremum
 // once its reversal has been observed.  Thus neither recording edges nor an
 // unsupported (usually wake) gap can manufacture a half-cycle.
 // ============================================================
@@ -1882,11 +1882,9 @@ static std::vector<bool> make_stage_mask( const std::vector<bool> &,
                                           const int );
 static std::string hd_state_label( const bool, const int );
 
-// The level-1 HDSTATS-PC panel is intentionally compact and does not mirror
-// every writer row (in particular it excludes sparse directional pairs and
-// time/SEC profiles).  Its keys are stable, explicit factor encodings and its
-// values are computed from exactly the same selected analysis interval used by
-// the ordinary HDSTATS summaries.
+// Level-1 HDSTATS-PC features include the hard-coded structured panel inputs,
+// including zero-filled directional densities. Time/SEC profiles are excluded.
+// Keys encode their factors and use the selected analysis interval.
 static void hd_pc_add( hdstats_pc::feature_map_t * out,
                        const std::string & key,
                        const double value )
@@ -1894,16 +1892,15 @@ static void hd_pc_add( hdstats_pc::feature_map_t * out,
   (*out)[key] = value;
 }
 
-// The ultradian PC block has a deliberately fixed, modest schema.  The
-// ordinary HDSTATS tables retain a broader set of UQ/UVAR diagnostics; the
-// PCA uses confidence at the 5- and 3-state resolutions plus PS, avoiding
-// several near-duplicate uncertainty measures (H and MG).  Every key is
+// The ultradian PC block uses confidence and PS at both state resolutions.
+// The ordinary HDSTATS tables retain a broader set of UQ/UVAR diagnostics.
+// Every key is
 // present even when ultradian phase cannot be estimated, so a PC model has a
 // stable schema and treats such a record as unavailable rather than silently
 // ascribing it zero phase modulation.
 static const std::vector<std::string> & hd_pc_ultra_metrics()
 {
-  static const std::vector<std::string> metrics = { "CONF", "CONF3", "PS" };
+  static const std::vector<std::string> metrics = { "CONF", "CONF3", "PS", "PS3" };
   return metrics;
 }
 
@@ -1934,10 +1931,16 @@ static void hd_pc_add_ultradian_placeholders( hdstats_pc::feature_map_t * out )
   for ( const std::string & metric : hd_pc_ultra_metrics() )
     {
       for ( const std::string & uq : std::vector<std::string>{ "D1", "D2", "L1", "L2" } )
-        hd_pc_add( out, hd_pc_ultra_uq_key( metric, uq ), na );
+        {
+          hd_pc_add( out, hd_pc_ultra_uq_key( metric, uq ), na );
+          hd_pc_add( out, hdstats_pc::key( "U_MEAN", "UQ/" + uq + ";U_METRIC/" + metric ), na );
+        }
       for ( const std::string & statistic : std::vector<std::string>{
-              "U_SLOPE", "U_MOD_COS", "U_MOD_SIN", "U_R2", "U_PARTIAL_R2" } )
-        hd_pc_add( out, hd_pc_ultra_uvar_key( statistic, metric ), na );
+              "U_SLOPE", "U_MOD", "U_MOD_COS", "U_MOD_SIN", "U_R2", "U_PARTIAL_R2" } )
+        {
+          hd_pc_add( out, hdstats_pc::key( statistic, "UVAR/" + metric ), na );
+          if ( statistic != "U_MOD" ) hd_pc_add( out, hd_pc_ultra_uvar_key( statistic, metric ), na );
+        }
     }
 }
 
@@ -1990,8 +1993,15 @@ static hdstats_pc::feature_map_t hd_pc_features(
 {
   hdstats_pc::feature_map_t out;
   const std::vector<bool> & mask = analysis.valid_mask;
-  const double hours = ( analysis.hi >= analysis.lo )
-    ? ( analysis.hi - analysis.lo + 1 ) / dat.Fs / 3600.0 : 0.0;
+  // Match compute_trans_shape(): count only events centered on valid analysis
+  // samples and use those same samples for the density denominator.
+  const double hours = std::count( mask.begin(), mask.end(), true ) / dat.Fs / 3600.0;
+  auto event_density = [&]( const std::vector<hd_event_t> & events ) {
+    int n = 0;
+    for ( const auto & e : events )
+      if ( e.idx >= 0 && e.idx < (int)mask.size() && mask[e.idx] ) ++n;
+    return hours > 0.0 ? n / hours : 0.0;
+  };
 
   const hd_region_stats_t rs5 = compute_region( dat, der, mask, par, false );
   hd_pc_add_global_region( &out, rs5, "__NSS_5" );
@@ -2015,25 +2025,39 @@ static hdstats_pc::feature_map_t hd_pc_features(
     {
       if ( ! hd_pc_retain_stage( false, st, par.do_3state ) ) continue;
       const std::vector<bool> stage_mask = make_stage_mask( mask, der.argmax5, st );
-      hd_pc_add_stage_region( &out, compute_region( dat, der, stage_mask, par, false ),
+      const hd_region_stats_t stage_rs = compute_region( dat, der, stage_mask, par, false );
+      hd_pc_add_stage_region( &out, stage_rs,
                               "__NSS_5__SS_" + hd_state_label( false, st ),
                               hd_state_label( false, st ), st );
+      const std::string s = "SS/" + hd_state_label( false, st ) + ";NSS/5";
+      const bool ok = stage_rs.valid && stage_rs.n >= par.min_samples_region;
+      hd_pc_add( &out, hdstats_pc::key( "P_" + hd_state_label(false,st), s ),
+                 ok ? stage_rs.mean_p[st] : std::numeric_limits<double>::quiet_NaN() );
+      hd_pc_add( &out, hdstats_pc::key( "PS", s ),
+                 ok ? stage_rs.mean_TV : std::numeric_limits<double>::quiet_NaN() );
     }
   if ( par.do_3state )
     for ( int st = 0; st < 3; ++st )
       {
         const std::vector<bool> stage_mask = make_stage_mask( mask, der.argmax3, st );
-        hd_pc_add_stage_region( &out, compute_region( dat, der, stage_mask, par, true ),
+        const hd_region_stats_t stage_rs = compute_region( dat, der, stage_mask, par, true );
+        hd_pc_add_stage_region( &out, stage_rs,
                                 "__NSS_3__SS_" + hd_state_label( true, st ),
                                 hd_state_label( true, st ), st );
+        const std::string s = "SS/" + hd_state_label( true, st ) + ";NSS/3";
+        const bool ok = stage_rs.valid && stage_rs.n >= par.min_samples_region;
+        hd_pc_add( &out, hdstats_pc::key( "P_" + hd_state_label(true,st), s ),
+                   ok ? stage_rs.mean_p[st] : std::numeric_limits<double>::quiet_NaN() );
+        hd_pc_add( &out, hdstats_pc::key( "PS", s ),
+                   ok ? stage_rs.mean_TV : std::numeric_limits<double>::quiet_NaN() );
       }
 
-  hd_pc_add( &out, "TRANS_DENS__NSS_5", hours > 0 ? tr.events5.size() / hours : std::numeric_limits<double>::quiet_NaN() );
-  hd_pc_add( &out, "BOUT_TRANS_DENS__NSS_5", hours > 0 ? tr.bout_events5.size() / hours : std::numeric_limits<double>::quiet_NaN() );
+  hd_pc_add( &out, "TRANS_DENS__NSS_5", event_density( tr.events5 ) );
+  hd_pc_add( &out, "BOUT_TRANS_DENS__NSS_5", event_density( tr.bout_events5 ) );
   if ( par.do_3state )
     {
-      hd_pc_add( &out, "TRANS_DENS__NSS_3", hours > 0 ? tr.events3.size() / hours : std::numeric_limits<double>::quiet_NaN() );
-      hd_pc_add( &out, "BOUT_TRANS_DENS__NSS_3", hours > 0 ? tr.bout_events3.size() / hours : std::numeric_limits<double>::quiet_NaN() );
+      hd_pc_add( &out, "TRANS_DENS__NSS_3", event_density( tr.events3 ) );
+      hd_pc_add( &out, "BOUT_TRANS_DENS__NSS_3", event_density( tr.bout_events3 ) );
     }
 
   // Retain the non-derived conventional architecture measures. All occupancy
@@ -2056,6 +2080,125 @@ static hdstats_pc::feature_map_t hd_pc_features(
   mins[5] = mins[1] + mins[2] + mins[3]; mins[6] = mins[5] + mins[4];
   const std::vector<std::string> labels = { "W", "N1", "N2", "N3", "R", "NR", "S" };
   for ( int k = 1; k <= 4; ++k ) hd_pc_add( &out, "HD_MINS__SS_" + labels[k], mins[k] );
+
+  // Structured panels use exactly the selected analysis interval and the
+  // same statistics as the normal HDSTATS tables. Their schema lives in C++;
+  // pops/hdstats.pc is only a readable inventory.
+  auto add = [&]( const std::string & var, const std::string & stratum, const double value ) {
+    hd_pc_add( &out, hdstats_pc::key( var, stratum ), value );
+  };
+  const double analysis_min = ( analysis.hi - analysis.lo + 1 ) / dat.Fs / 60.0;
+  const double sleep_min = mins[6];
+  for ( const bool three : { false, true } )
+    {
+      if ( three && !par.do_3state ) continue;
+      const std::string s = three ? "NSS/3" : "NSS/5";
+      const hd_region_stats_t & all = three ? compute_region( dat, der, mask, par, true ) : rs5;
+      const std::vector<bool> & stable_mask = three ? tr.is_stable3 : tr.is_stable5;
+      const std::vector<bool> & bout_stable = three ? tr.is_bout_stable3 : tr.is_bout_stable5;
+      const std::vector<int> & argmax = three ? der.argmax3 : der.argmax5;
+      const std::vector<hd_event_t> & events = three ? tr.events3 : tr.events5;
+      const std::vector<hd_event_t> & bout_events = three ? tr.bout_events3 : tr.bout_events5;
+      const bool all_ok = all.valid && all.n >= par.min_samples_region;
+      auto masked = [&]( const bool want_stable ) {
+        std::vector<bool> result( mask.size(), false );
+        for ( int i = 0; i < (int)mask.size(); ++i ) result[i] = mask[i] && ( stable_mask[i] == want_stable );
+        return result;
+      };
+      const hd_region_stats_t st = compute_region( dat, der, masked(true), par, three );
+      const hd_region_stats_t un = compute_region( dat, der, masked(false), par, three );
+      const bool st_ok = st.valid && st.n >= par.min_samples_region;
+      const bool un_ok = un.valid && un.n >= par.min_samples_region;
+      add( "H", s, all_ok ? all.mean_H : na );
+      add( "H_P90", s, all_ok ? all.p90_H : na );
+      add( "CONF", s, all_ok ? all.mean_C : na );
+      add( "FRAC_LOW_CONF", s, all_ok ? all.frac_C_below : na );
+      add( "MG", s, all_ok ? all.mean_Mg : na );
+      add( "PS", s, all_ok ? all.mean_TV : na );
+      add( "PS_P90", s, all_ok ? all.p90_TV : na );
+      add( "PS_LAG", s, all_ok ? all.mean_TV_lag : na );
+      add( "CORR_H_PS", s, all_ok ? all.corr_H_TV : na );
+      add( "PCT_STABLE", s, all_ok ? 100.0 * st.n / all.n : na );
+      add( "H_RATIO_UN_ST", s, st_ok && un_ok && st.mean_H > 0 ? un.mean_H / st.mean_H : na );
+      add( "CONF_DIFF_UN_ST", s, st_ok && un_ok ? un.mean_C - st.mean_C : na );
+      add( "PS_RATIO_UN_ST", s, st_ok && un_ok && st.mean_TV > 0 ? un.mean_TV / st.mean_TV : na );
+      for ( const auto & pair : std::vector<std::pair<std::string,const hd_region_stats_t *>>{
+            {"1",&st}, {"0",&un} } )
+        {
+          const bool ok = pair.first == "1" ? st_ok : un_ok;
+          const std::string t = s + ";STABLE/" + pair.first;
+          add( "H", t, ok ? pair.second->mean_H : na );
+          add( "CONF", t, ok ? pair.second->mean_C : na );
+          add( "PS", t, ok ? pair.second->mean_TV : na );
+        }
+
+      const std::vector<std::vector<double>> & P = three ? dat.p3 : dat.p;
+      const std::vector<std::vector<int>> mixes = hd_mix_combinations( three );
+      for ( const auto & combo : mixes )
+        {
+          std::string label = hd_state_label( three, combo[0] );
+          for ( int i = 1; i < (int)combo.size(); ++i ) label += "_" + hd_state_label( three, combo[i] );
+          const double mix_mins = compute_mix_mins( P, mask, combo, dat.Fs );
+          add( "HD_MINS", s + ";MIX/" + label, mix_mins );
+          add( "HD_DENS", s + ";MIX/" + label, hm.hd_spt > 0 ? mix_mins / hm.hd_spt : 0.0 );
+        }
+
+      const auto bouts = compute_bouts( mask, bout_stable, argmax, par.bout_min_sec, par.bout_gap_sec, dat.Fs );
+      const auto scoped_bouts = compute_bout_transitions( bouts, events, three ? der.TV3 : der.TV );
+      auto emit_family = [&]( const std::vector<hd_event_t> & family, const std::string & prefix ) {
+        hd_trans_stats_t stats;
+        hd_profile_t profile;
+        compute_trans_shape( der, family, mask, stable_mask, dat, par, dat.Fs, three,
+                             false, false, stats, profile );
+        add( prefix + "_N", s, stats.n_events );
+        add( prefix + "_DENS", s, stats.density );
+        add( prefix + "_DUR", s, stats.valid ? stats.mean_width_sec : na );
+        add( prefix + "_PEAK_H", s, stats.valid ? stats.mean_peak_H : na );
+        add( prefix + "_MIN_CONF", s, stats.valid ? stats.mean_min_C : na );
+        add( prefix + "_TOT_PS", s, stats.valid ? stats.mean_TV_area : na );
+        return stats.n_events;
+      };
+      const int n_trans = emit_family( events, "TRANS" );
+      emit_family( scoped_bouts, "BOUT_TRANS" );
+      std::vector<hd_event_t> scoped_events;
+      for ( const auto & e : events ) if ( e.idx >= 0 && e.idx < (int)mask.size() && mask[e.idx] )
+        scoped_events.push_back( e );
+      const int n_matched = count_trans_bout_matches( scoped_events, bouts );
+      add( "TRANS_N_MATCHED", s, n_matched );
+      add( "TRANS_PCT_MATCHED", s, n_trans > 0 ? 100.0 * n_matched / n_trans : 0.0 );
+      const int K = three ? 3 : 5;
+      for ( int from = 0; from < K; ++from ) for ( int to = 0; to < K; ++to ) if ( from != to )
+        {
+          const std::string pair = hd_state_label( three, from ) + "to" + hd_state_label( three, to );
+          auto pair_density = [&]( const std::vector<hd_event_t> & family, const bool directional ) {
+            int count = 0;
+            for ( const auto & e : family )
+              if ( ( !directional || e.is_dir ) && e.from_st == from && e.to_st == to &&
+                   e.idx >= 0 && e.idx < (int)mask.size() && mask[e.idx] ) ++count;
+            return hours > 0 ? count / hours : 0.0;
+          };
+          add( "TRANS_DENS", s + ";TRANS/" + pair, pair_density( events, true ) );
+          add( "BOUT_TRANS_DENS", s + ";BOUT_TRANS/" + pair, pair_density( scoped_bouts, false ) );
+        }
+    }
+
+  if ( hm.valid_onset ) add( "HD_SOL", ".", hm.hd_sol );
+  const bool spt = analysis.mode == "spt";
+  add( "HD_SPT", ".", spt ? analysis_min : ( hm.valid_window ? hm.hd_spt : na ) );
+  add( "HD_WASO", ".", spt ? mins[0] : ( hm.valid_window ? hm.hd_waso : na ) );
+  add( "HD_SME", ".", spt ? ( analysis_min > 0 ? 100.0 * sleep_min / analysis_min : 0.0 )
+                          : ( hm.valid_window ? hm.hd_sme : na ) );
+  for ( int k = 0; k < 5; ++k )
+    {
+      const std::string st = labels[k], stratum = "SS/" + st;
+      const double value = spt ? mins[k] : hm.mins.at( st );
+      const double denom = spt ? ( k == 0 ? analysis_min : sleep_min )
+                               : ( k == 0 ? hm.total_min : hm.hd_tst );
+      add( "HD_MINS", stratum, value );
+      add( "HD_PCT", stratum, denom > 0 ? 100.0 * value / denom : 0.0 );
+      add( "HD_DENS", stratum, ( spt ? analysis_min : hm.hd_spt ) > 0
+           ? value / ( spt ? analysis_min : hm.hd_spt ) : 0.0 );
+    }
   hd_pc_add_ultradian_placeholders( &out );
   return out;
 }
@@ -2257,8 +2400,8 @@ static void hd_emit_signals( edf_t & edf,
 }
 
 // Missing phase must not be stored as zero: zero is the trough convention.
-// EDF itself has no NA representation, so UPHASE uses -1 radians and the
-// companion UPHASE_VALID channel makes the convention explicit.  UDEPTH's
+// EDF itself has no NA representation, so U_PHASE uses -1 radians and the
+// companion U_PHASE_VALID channel makes the convention explicit.  U_DEPTH's
 // diagnostic sentinel is chosen below the observed depth range.
 static void hd_emit_ultradian_signals( edf_t & edf,
                                        const hd_data_t & dat,
@@ -2293,11 +2436,11 @@ static void hd_emit_ultradian_signals( edf_t & edf,
         }
     }
 
-  add_sig( "UPHASE", p, -1.0, 2.0 * M_PI );
-  add_sig( "UPHASE_VALID", pvalid, 0.0, 1.0 );
+  add_sig( "U_PHASE", p, -1.0, 2.0 * M_PI );
+  add_sig( "U_PHASE_VALID", pvalid, 0.0, 1.0 );
   double amp_max = 1.0;
   for ( int i = 0; i < dat.N; ++i ) amp_max = std::max( amp_max, std::max( ua[i], ura[i] ) );
-  add_sig( "UAMP", ua, 0.0, amp_max );
+  add_sig( "U_AMP", ua, 0.0, amp_max );
 
   if ( par.ultra_diagnostics )
     {
@@ -2306,12 +2449,12 @@ static void hd_emit_ultradian_signals( edf_t & edf,
       std::vector<double> ud( dat.N, sentinel );
       for ( int i = 0; i < dat.N; ++i )
         if ( std::isfinite( ultra.depth[i] ) ) ud[i] = ultra.depth[i];
-      add_sig( "UDEPTH", ud, sentinel, std::isfinite( depth_max ) ? depth_max : 1.0 );
-      add_sig( "UAMP_RAW", ura, 0.0, amp_max );
+      add_sig( "U_DEPTH", ud, sentinel, std::isfinite( depth_max ) ? depth_max : 1.0 );
+      add_sig( "U_AMP_RAW", ura, 0.0, amp_max );
     }
 
-  logger << "  HDSTATS emit-ultradian: added UPHASE, UPHASE_VALID and UAMP"
-         << ( par.ultra_diagnostics ? ", UDEPTH and UAMP_RAW" : "" ) << "\n";
+  logger << "  HDSTATS emit-ultradian: added U_PHASE, U_PHASE_VALID and U_AMP"
+         << ( par.ultra_diagnostics ? ", U_DEPTH and U_AMP_RAW" : "" ) << "\n";
 }
 
 struct hd_ultra_fit_t
@@ -2462,7 +2605,7 @@ static hd_ultra_fit_t hd_ultra_fit_linear( const std::vector<std::vector<double>
   return out;
 }
 
-// Per-metric joint Y ~ time + cos(UPHASE) + sin(UPHASE) descriptions.  These
+// Per-metric joint Y ~ time + cos(U_PHASE) + sin(U_PHASE) descriptions.  These
 // are global/analysis-interval outputs, analogous to the existing long-range
 // trend summaries, rather than thousands of heavily overlapping strata.
 static void hd_write_ultra_conditioned_metrics( const hd_data_t & dat,
@@ -2575,6 +2718,13 @@ static void hd_write_ultra_conditioned_metrics( const hd_data_t & dat,
       // missing rather than being recoded as no modulation.
       if ( pc_features != NULL && hd_pc_ultra_metric( metric.label ) && status == "OK" )
         {
+          const std::string s = "UVAR/" + std::string( metric.label );
+          hd_pc_add( pc_features, hdstats_pc::key( "U_SLOPE", s ), slope );
+          hd_pc_add( pc_features, hdstats_pc::key( "U_MOD", s ), modulation );
+          hd_pc_add( pc_features, hdstats_pc::key( "U_MOD_COS", s ), phase_cos );
+          hd_pc_add( pc_features, hdstats_pc::key( "U_MOD_SIN", s ), phase_sin );
+          hd_pc_add( pc_features, hdstats_pc::key( "U_R2", s ), r2 );
+          hd_pc_add( pc_features, hdstats_pc::key( "U_PARTIAL_R2", s ), partial_r2 );
           hd_pc_add( pc_features, hd_pc_ultra_uvar_key( "U_SLOPE", metric.label ), slope );
           hd_pc_add( pc_features, hd_pc_ultra_uvar_key( "U_MOD_COS", metric.label ), phase_cos );
           hd_pc_add( pc_features, hd_pc_ultra_uvar_key( "U_MOD_SIN", metric.label ), phase_sin );
@@ -2586,7 +2736,7 @@ static void hd_write_ultra_conditioned_metrics( const hd_data_t & dat,
 
 // Complementary descriptive view of the continuous harmonic fit.  These are
 // phase regions, not scored sleep-cycle states: each observation remains on
-// the same soft UPHASE coordinate used by UVAR.
+// the same soft U_PHASE coordinate used by UVAR.
 static void hd_write_ultra_phase_regions( const hd_data_t & dat,
                                            const hd_derived_t & der,
                                            const hd_ultradian_t & ultra,
@@ -2640,7 +2790,10 @@ static void hd_write_ultra_phase_regions( const hd_data_t & dat,
                 writer.unlevel( "UQ" );
               }
             if ( pc_features != NULL && hd_pc_ultra_metric( metric.label ) )
-              hd_pc_add( pc_features, hd_pc_ultra_uq_key( metric.label, region_label[q] ), mean );
+              {
+                hd_pc_add( pc_features, hd_pc_ultra_uq_key( metric.label, region_label[q] ), mean );
+                hd_pc_add( pc_features, hdstats_pc::key( "U_MEAN", std::string("UQ/") + region_label[q] + ";U_METRIC/" + metric.label ), mean );
+              }
           }
     }
 }
@@ -3436,6 +3589,10 @@ static void write_hdstats_longrange(
         writer.value( "SIM", sim_ok ? dot / std::sqrt( ss0 * ss1 ) : NaN );
         if ( pc_features != NULL )
           {
+            const std::string s = "NSS/" + std::string( threestate ? "3" : "5" )
+              + ";LRLAG/" + Helper::dbl2str( lag_sec );
+            hd_pc_add( pc_features, hdstats_pc::key( "PS", s ), ps_ok ? mean_l1 / npair : NaN );
+            hd_pc_add( pc_features, hdstats_pc::key( "SIM", s ), sim_ok ? dot / std::sqrt( ss0 * ss1 ) : NaN );
             const std::string suffix = "__NSS_" + std::string( threestate ? "3" : "5" )
               + "__LRLAG_" + Helper::dbl2str( lag_sec );
             hd_pc_add( pc_features, "PS" + suffix, ps_ok ? mean_l1 / npair : NaN );
@@ -3462,6 +3619,11 @@ static void write_hdstats_longrange(
             const bool acf_ok = n >= min_lag_pairs && sxx > 0.0 && syy > 0.0;
             writer.value( "NPAIR", n );
             writer.value( "ACF", acf_ok ? sxy / std::sqrt( sxx * syy ) : NaN );
+            if ( pc_features != NULL )
+              hd_pc_add( pc_features, hdstats_pc::key( "ACF",
+                           "SS/" + hd_state_label(threestate,k) + ";NSS/"
+                           + ( threestate ? "3" : "5" ) + ";LRLAG/" + Helper::dbl2str(lag_sec) ),
+                         acf_ok ? sxy / std::sqrt( sxx * syy ) : NaN );
             if ( pc_features != NULL && hd_pc_retain_stage( threestate, k, par.do_3state ) )
               hd_pc_add( pc_features, "ACF__NSS_" + std::string( threestate ? "3" : "5" )
                          + "__LRLAG_" + Helper::dbl2str( lag_sec )
@@ -3514,6 +3676,17 @@ static void write_hdstats_longrange(
         const double slope = slope_ok ? ( n * sxy - sx * sy ) / den : NaN;
         writer.value( "SLOPE", slope );
         if ( q < K ) hd_write_lr_timing( stage_timing[q] );
+        if ( pc_features != NULL )
+          {
+            const std::string s = "NSS/" + std::string( threestate ? "3" : "5" )
+              + ";LRVAR/" + trend_label[q];
+            hd_pc_add( pc_features, hdstats_pc::key( "SLOPE", s ), slope );
+            if ( q < K && !( threestate && trend_label[q] == "NR" ) )
+              {
+                hd_pc_add( pc_features, hdstats_pc::key( "T50", s ), stage_timing[q].t50 );
+                hd_pc_add( pc_features, hdstats_pc::key( "COM", s ), stage_timing[q].com );
+              }
+          }
         if ( pc_features != NULL
              && ( q >= K || hd_pc_retain_stage( threestate, q, par.do_3state ) ) )
           {
@@ -3558,7 +3731,11 @@ static void write_hdstats_longrange(
           const hd_lr_timing_t timing = hd_lr_timing( x, dat, quality );
           hd_write_lr_timing( timing );
           if ( pc_features != NULL )
-            hd_pc_add( pc_features, "T50__NSS_5__LRVAR_" + label, timing.t50 );
+            {
+              hd_pc_add( pc_features, "T50__NSS_5__LRVAR_" + label, timing.t50 );
+              hd_pc_add( pc_features, hdstats_pc::key( "T50", "NSS/5;LRVAR/" + label ), timing.t50 );
+              hd_pc_add( pc_features, hdstats_pc::key( "COM", "NSS/5;LRVAR/" + label ), timing.com );
+            }
           writer.unlevel( "LRVAR" );
         };
         emit_conditional_timing( "N3_NREM", n3_nrem );
@@ -3607,6 +3784,13 @@ static void write_hdstats_longrange(
             const double between_sd = between_ok ? sum_between_sd / n_offsets_used : NaN;
             writer.value( "WITHIN_SD", within_sd );
             writer.value( "BETWEEN_SD", between_sd );
+            if ( pc_features != NULL )
+              {
+                const std::string s = "NSS/" + std::string( threestate ? "3" : "5" )
+                  + ";LRVAR/" + trend_label[q] + ";LRWIN/" + Helper::dbl2str(window_sec);
+                hd_pc_add( pc_features, hdstats_pc::key( "WITHIN_SD", s ), within_sd );
+                hd_pc_add( pc_features, hdstats_pc::key( "BETWEEN_SD", s ), between_sd );
+              }
             // The PC retains the 30-minute window only; the ordinary output
             // continues to report every requested window width.
             if ( pc_features != NULL && std::fabs( window_sec - 1800.0 ) < 1e-6
@@ -3944,6 +4128,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
   hd_hypno_metrics_t hm;
   hm.compute( dat, par );
   const hd_analysis_t analysis = hd_make_analysis( dat, hm, par );
+  const bool make_pc_features = ! par.pc_out.empty() || ! par.pc_proj.empty();
   if ( analysis.mode == "spt" )
     logger << "  HDSTATS analysis interval: " << ( analysis.hi - analysis.lo + 1 ) / dat.Fs
            << " seconds (samples " << analysis.lo << "-" << analysis.hi << ")\n";
@@ -3966,6 +4151,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
   // Gap-aware mode instead records every valid run and evaluates each metric
   // against its own usable subset without joining source-time across a gap.
   hd_lr_quality_t lr_quality;
+  bool longrange_available = true;
   if ( par.do_longrange )
     {
       lr_quality = hd_lr_quality( dat, &analysis.physical_mask );
@@ -3981,34 +4167,43 @@ void proc_hdstats( edf_t & edf, param_t & param )
                    << lr_quality.runs.size() << " valid runs)\n";
           if ( lr_quality.n_valid == 0 && par.lr_fail_on_empty )
             Helper::halt( "HDSTATS longrange has no valid observations" );
+          if ( lr_quality.n_valid == 0 && make_pc_features )
+            longrange_available = false;
         }
       else
         {
           while ( lr_core_lo <= analysis.hi && ! dat.valid[lr_core_lo] ) ++lr_core_lo;
           while ( lr_core_hi >= lr_core_lo && ! dat.valid[lr_core_hi] ) --lr_core_hi;
-          if ( lr_core_lo > lr_core_hi )
-            Helper::halt( "HDSTATS longrange requires valid hypnodensity samples" );
-          for ( int i = lr_core_lo; i <= lr_core_hi; i++ )
-            if ( ! dat.valid[i] )
-              Helper::halt( "HDSTATS longrange requires one contiguous valid core (no internal invalid samples)" );
-
-          const int lr_n = lr_core_hi - lr_core_lo + 1;
-          const double lr_duration_sec = lr_n / dat.Fs;
-          if ( lr_duration_sec < par.lr_min_duration_sec )
-            Helper::halt( "HDSTATS longrange requires at least "
-                          + Helper::dbl2str( par.lr_min_duration_sec / 3600.0 )
-                          + " hours of contiguous valid hypnodensity data" );
-          for ( double x : par.lr_lags_sec )
+          std::string reason;
+          if ( lr_core_lo > lr_core_hi ) reason = "HDSTATS longrange requires valid hypnodensity samples";
+          if ( reason.empty() )
+            for ( int i = lr_core_lo; i <= lr_core_hi; i++ )
+              if ( ! dat.valid[i] )
+                { reason = "HDSTATS longrange requires one contiguous valid core (no internal invalid samples)"; break; }
+          const int lr_n = reason.empty() ? lr_core_hi - lr_core_lo + 1 : 0;
+          if ( reason.empty() && lr_n / dat.Fs < par.lr_min_duration_sec )
+            reason = "HDSTATS longrange requires at least "
+              + Helper::dbl2str( par.lr_min_duration_sec / 3600.0 )
+              + " hours of contiguous valid hypnodensity data";
+          if ( reason.empty() ) for ( double x : par.lr_lags_sec )
             {
               const int lag = std::max( 1, (int)std::round( x * dat.Fs ) );
-              if ( lr_n < 3 * lag ) Helper::halt( "HDSTATS longrange core is too short for lr-lags=" + Helper::dbl2str( x ) + " seconds" );
+              if ( lr_n < 3 * lag )
+                { reason = "HDSTATS longrange core is too short for lr-lags=" + Helper::dbl2str(x) + " seconds"; break; }
             }
-          for ( double x : par.lr_windows_sec )
+          if ( reason.empty() ) for ( double x : par.lr_windows_sec )
             {
               const int width = std::max( 1, (int)std::round( x * dat.Fs ) );
-              if ( lr_n / width < 4 ) Helper::halt( "HDSTATS longrange core is too short for lr-windows=" + Helper::dbl2str( x ) + " seconds" );
+              if ( lr_n / width < 4 )
+                { reason = "HDSTATS longrange core is too short for lr-windows=" + Helper::dbl2str(x) + " seconds"; break; }
             }
-          logger << "  longrange valid core: " << lr_n / dat.Fs / 3600.0 << " hours\n";
+          if ( !reason.empty() )
+            {
+              if ( !make_pc_features || par.lr_fail_on_empty ) Helper::halt(reason);
+              longrange_available = false;
+              logger << "  warning: " << reason << "; long-range PC inputs unavailable\n";
+            }
+          else logger << "  longrange valid core: " << lr_n / dat.Fs / 3600.0 << " hours\n";
         }
     }
 
@@ -4191,7 +4386,6 @@ void proc_hdstats( edf_t & edf, param_t & param )
   // All substantive summaries are limited to the selected physical interval.
   // HD_SOL remains referenced to recording start by design.
   const std::vector<bool> & all_mask = analysis.valid_mask;
-  const bool make_pc_features = ! par.pc_out.empty() || ! par.pc_proj.empty();
   hdstats_pc::feature_map_t pc_features;
   if ( make_pc_features ) pc_features = hd_pc_features( dat, der, tr, hm, analysis, par );
 
@@ -4244,7 +4438,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
                 if ( !previous_phase ) ++n_phase_runs;
                 else
                   {
-                    // UPHASE is wrapped at troughs.  Only accumulate within
+                    // U_PHASE is wrapped at troughs.  Only accumulate within
                     // an uninterrupted defined run; never bridge a gap.
                     const double previous = ultra.phase[i-1];
                     double dphi = ultra.phase[i] - previous;
@@ -4267,6 +4461,9 @@ void proc_hdstats( edf_t & edf, param_t & param )
       writer.value( "U_NCYC", n_analysis_valid > 0 ? phase_advance / (2.0 * M_PI) : nan );
       if ( make_pc_features )
         {
+          hd_pc_add( &pc_features, "U_MAG", sleep_mass > 0.0 ? amp_mass / sleep_mass : nan );
+          hd_pc_add( &pc_features, "U_COVERAGE", sleep_mass > 0.0 ? covered_sleep_mass / sleep_mass : nan );
+          hd_pc_add( &pc_features, "U_NCYC", n_analysis_valid > 0 ? phase_advance / (2.0 * M_PI) : nan );
           hd_pc_add( &pc_features, "U_MAG__ULTRA", sleep_mass > 0.0 ? amp_mass / sleep_mass : nan );
           hd_pc_add( &pc_features, "U_COVERAGE__ULTRA", sleep_mass > 0.0 ? covered_sleep_mass / sleep_mass : nan );
           hd_pc_add( &pc_features, "U_NCYC__ULTRA", n_analysis_valid > 0 ? phase_advance / (2.0 * M_PI) : nan );
@@ -4319,10 +4516,11 @@ void proc_hdstats( edf_t & edf, param_t & param )
       writer.value( "LR_INVALID_SEC", lr_quality.n_invalid / dat.Fs );
       writer.value( "LR_LONGEST_INTERNAL_GAP_SEC", lr_quality.longest_internal_gap / dat.Fs );
       writer.value( "LR_N_INTERNAL_GAPS", lr_quality.n_internal_gaps );
-      if ( par.lr_policy == "strict" )
+      if ( par.lr_policy == "strict" && longrange_available )
         writer.value( "LR_CORE_SEC", ( lr_quality.last_valid - lr_quality.first_valid + 1 ) / dat.Fs );
-      write_hdstats_longrange( dat, der, par, lr_quality,
-                               make_pc_features ? &pc_features : NULL );
+      if ( longrange_available )
+        write_hdstats_longrange( dat, der, par, lr_quality,
+                                 make_pc_features ? &pc_features : NULL );
     }
 
   // Level-1 HDSTATS-PC exchange: one compact line per individual.  This is
@@ -4338,17 +4536,21 @@ void proc_hdstats( edf_t & edf, param_t & param )
         }
       if ( ! par.pc_proj.empty() )
         {
-          std::vector<double> scores;
-          int missing = 0;
-          const bool ok = hdstats_pc::project( par.pc_proj, pc_features, &scores, &missing );
-          writer.value( "HDPC_COMPATIBLE", ok ? 1 : 0 );
-          writer.value( "HDPC_N_MISSING", missing );
-          if ( ok )
-            for ( int k = 0; k < (int)scores.size(); ++k )
-              writer.value( "HDPC" + std::string( k < 9 ? "0" : "" )
-                            + Helper::int2str( k + 1 ), scores[k] );
-          else
-            logger << "  warning: HDSTATS-PC projection skipped (" << missing << " required feature(s) missing)\n";
+          for ( const auto & panel : hdstats_pc::project_panels( par.pc_proj, pc_features ) )
+            {
+              const bool generic = panel.panel == "GENERIC";
+              if ( !generic ) writer.level( panel.panel, "PANEL" );
+              writer.value( "HDPC_COMPATIBLE", panel.missing == 0 ? 1 : 0 );
+              writer.value( "HDPC_N_MISSING", panel.missing );
+              if ( panel.missing == 0 )
+                for ( int k = 0; k < (int)panel.scores.size(); ++k )
+                  writer.value( generic
+                                ? "HDPC" + std::string( k < 9 ? "0" : "" ) + Helper::int2str( k + 1 )
+                                : "PC" + Helper::int2str( k + 1 ), panel.scores[k] );
+              else logger << "  warning: HDSTATS-PC " << panel.panel << " projection skipped ("
+                          << panel.missing << " required feature(s) missing)\n";
+              if ( !generic ) writer.unlevel( "PANEL" );
+            }
         }
     }
 
@@ -4374,11 +4576,11 @@ void proc_hdstats( edf_t & edf, param_t & param )
 	  writer.value( "IS_STABLE",     (int)tr.is_stable5[i] );
 	  if ( par.do_ultradian )
 	    {
-	      if ( std::isfinite( ultra.depth[i] ) ) writer.value( "UDEPTH", ultra.depth[i] );
-	      if ( std::isfinite( ultra.phase[i] ) ) writer.value( "UPHASE", ultra.phase[i] );
-	      writer.value( "UPHASE_VALID", std::isfinite( ultra.phase[i] ) ? 1 : 0 );
-	      writer.value( "UAMP", ultra.amp[i] );
-	      writer.value( "UAMP_RAW", ultra.raw_amp[i] );
+	      if ( std::isfinite( ultra.depth[i] ) ) writer.value( "U_DEPTH", ultra.depth[i] );
+	      if ( std::isfinite( ultra.phase[i] ) ) writer.value( "U_PHASE", ultra.phase[i] );
+	      writer.value( "U_PHASE_VALID", std::isfinite( ultra.phase[i] ) ? 1 : 0 );
+	      writer.value( "U_AMP", ultra.amp[i] );
+	      writer.value( "U_AMP_RAW", ultra.raw_amp[i] );
 	    }
 	  if ( par.do_3state )
 	    {

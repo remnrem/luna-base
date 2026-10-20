@@ -1,4 +1,4 @@
-// HDSTATS level-1 feature files and level-2 PCA model (V2 schema).
+// HDSTATS level-1 feature files and structured level-2 PCA models.
 #ifndef __HDSTATS_PC_H__
 #define __HDSTATS_PC_H__
 
@@ -12,19 +12,34 @@ namespace hdstats_pc {
 
 typedef std::map<std::string,double> feature_map_t;
 
+struct panel_scores_t {
+  std::string panel;
+  std::vector<double> scores;
+  int missing = 0;
+};
+
+// Stable key for a stdout-style VARIABLE and FAC/LVL;FAC/LVL stratum.
+std::string key( const std::string & variable, const std::string & stratum );
+
 // Level 1: write one tab-delimited key/value line for an individual.
 void write_features( const std::string & directory,
                      const std::string & id,
                      const feature_map_t & features );
 
-// Level 1 projection against a fixed, text model. Returns false on a schema
-// mismatch; missing contains the number of required absent/non-finite values.
+// Legacy V2 single-model projection. Structured V3 projection uses
+// project_panels() so one unavailable panel does not suppress the others.
 bool project( const std::string & model,
               const feature_map_t & features,
               std::vector<double> * scores,
               int * missing );
 
-// Level 2: luna --hdstats-pc data=all.txt model=reference.txt nc=5
+// Structured models project each panel independently. Legacy V2 models are
+// returned as a single GENERIC panel.
+std::vector<panel_scores_t> project_panels( const std::string & model,
+                                           const feature_map_t & features );
+
+// Level 2: luna --hdstats-pc --options data=all.txt model=reference.txt nc=2
+// with optional nc-<panel>=N overrides. Fitting uses hard-coded C++ panels.
 void fit( param_t & param );
 
 }

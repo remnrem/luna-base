@@ -44,6 +44,7 @@
 #include "stats/dpp-fit.h"
 #include "stats/dpp-evaluation.h"
 #include "db/db.h"
+#include "pops/hdstats-pc.h"
 
 #ifdef HAS_LGBM
 #include "pops/options.h"
@@ -5937,6 +5938,43 @@ static void test_hdstats_ultradian( lunapi_t * eng,
                                     std::vector<test_result_t> & R,
                                     bool V )
 {
+  // A V3 model projects panels independently and retains the component count
+  // and scaling recorded for each panel. One absent panel must not hide another.
+  try {
+    const std::string path=temp_base_path("hdstats_v3_projection")+".txt";
+    {
+      std::ofstream out(path);
+      out << "__HDSTATS_PC_V3\nNP\t2\n"
+          << "PANEL\tAMBIGUITY\t3\t3\t1\t1\t1\t2\n"
+          << "I\tH__NSS_5\nF\tH__NSS_5\t1\t2\nW\t1\nV\tH__NSS_5\t1\nEND\n"
+          << "PANEL\tULTRADIAN\t3\t3\t1\t1\t1\t2\n"
+          << "I\tU_MAG\nF\tU_MAG\t0\t1\nW\t1\nV\tU_MAG\t1\nEND\n";
+    }
+    hdstats_pc::feature_map_t values;
+    values["H__NSS_5"]=5.0;
+    const auto partial=hdstats_pc::project_panels(path,values);
+    values["U_MAG"]=3.0;
+    const auto complete=hdstats_pc::project_panels(path,values);
+    const std::string old_path=temp_base_path("hdstats_v2_projection")+".txt";
+    {
+      std::ofstream out(old_path);
+      out << "__HDSTATS_PC_V2\nNF\t1\nF\tH__NSS_5\t1\t2\n"
+          << "NC\t1\nW\t1\nV\tH__NSS_5\t1\n";
+    }
+    const auto legacy=hdstats_pc::project_panels(old_path,values);
+    const bool pass=partial.size()==2 && complete.size()==2
+      && partial[0].panel=="AMBIGUITY" && partial[0].missing==0
+      && partial[0].scores.size()==1 && approx_equal(partial[0].scores[0],2.0,1e-12)
+      && partial[1].panel=="ULTRADIAN" && partial[1].missing==1 && partial[1].scores.empty()
+      && complete[1].missing==0 && complete[1].scores.size()==1
+      && approx_equal(complete[1].scores[0],3.0,1e-12)
+      && legacy.size()==1 && legacy[0].panel=="GENERIC" && legacy[0].missing==0
+      && legacy[0].scores.size()==1 && approx_equal(legacy[0].scores[0],2.0,1e-12);
+    record(R,"hdstats-pc/v3-independent-panel-projection",pass,
+           "one missing panel leaves the available panel score intact",V);
+  } catch(std::exception & e) {
+    record(R,"hdstats-pc/v3-independent-panel-projection",false,e.what(),V);
+  }
   try {
     const int n = 7200; // 2 h at 1 Hz; deliberately not tied to 30-s epochs
     std::vector<double> w(n,0.0), n1(n,0.0), n2(n,0.0), n3(n,0.0), r(n,0.0);
@@ -5957,10 +5995,12 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",n1,1);
     p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",n3,1);
     p->insert_signal("PP_R",r,1);
-    p->eval("HDSTATS spt=F longrange=F ultra-fwhm=60 ultra-prominence=1 emit-ultradian=T ultra-diagnostics=T pc-out=/tmp");
+    // This two-hour record is too short for strict long-range summaries;
+    // PC output must still be produced for its other panels.
+    p->eval("HDSTATS spt=F gap-aware=F ultra-fwhm=60 ultra-prominence=1 emit-ultradian=T ultra-diagnostics=T pc-out=/tmp");
 
-    const auto have = p->has_channels({"UPHASE","UPHASE_VALID","UAMP","UDEPTH","UAMP_RAW"});
-    const auto dat = p->data({"UPHASE_VALID","UAMP"}, {}, false);
+    const auto have = p->has_channels({"U_PHASE","U_PHASE_VALID","U_AMP","U_DEPTH","U_AMP_RAW"});
+    const auto dat = p->data({"U_PHASE_VALID","U_AMP"}, {}, false);
     const auto & x = std::get<1>(dat);
     int n_phase = 0, n_gap_invalid = 0;
     double max_amp = 0.0, gap_amp = 0.0;
@@ -5985,27 +6025,47 @@ static void test_hdstats_ultradian( lunapi_t * eng,
       && pc_line.find("U_SLOPE__ULTRA_UVAR_CONF") != std::string::npos
       && pc_line.find("U_MOD_COS__ULTRA_UVAR_CONF3") != std::string::npos
       && pc_line.find("U_PARTIAL_R2__ULTRA_UVAR_PS") != std::string::npos;
+    const bool short_night_pc = pc_line.find("H__NSS_5") != std::string::npos
+      && pc_line.find("PS__NSS_5__LRLAG_600") == std::string::npos;
+    std::map<std::string,std::string> pc_values;
+    {
+      std::stringstream ss(pc_line);
+      std::string key,value;
+      while (std::getline(ss,key,'\t') && std::getline(ss,value,'\t')) pc_values[key]=value;
+    }
+    int directional_keys=0, zero_directions=0;
+    for ( const auto & states : std::vector<std::pair<std::string,std::vector<std::string>>>{
+          {"5",{"W","N1","N2","N3","R"}}, {"3",{"W","NR","R"}} } )
+      for ( const auto & from : states.second ) for ( const auto & to : states.second ) if (from!=to)
+        for ( const auto & family : {"TRANS","BOUT_TRANS"} )
+          {
+            const std::string key=std::string(family)+"_DENS__NSS_"+states.first+"__"+family+"_"+from+"to"+to;
+            const auto found=pc_values.find(key);
+            if (found!=pc_values.end()) { ++directional_keys; if (found->second=="0") ++zero_directions; }
+          }
     const bool channels = std::all_of(have.begin(), have.end(), [](bool z){ return z; });
     const bool pass = channels && n_phase > 1000 && n_gap_invalid == 200
       && max_amp > 1.0 && gap_amp < 0.01
       && Helper::realnum(umag) && umag > 0.0
       && Helper::realnum(ucoverage) && ucoverage > 0.0 && ucoverage <= 1.000001
       && Helper::realnum(uncyc) && uncyc > 1.0
-      && Helper::realnum(uh_r2) && Helper::realnum(u_region_mean) && pc_ultra;
+      && Helper::realnum(uh_r2) && Helper::realnum(u_region_mean) && pc_ultra && short_night_pc
+      && directional_keys==52 && zero_directions>0;
     std::ostringstream m; m << "channels=" << channels << " n_phase=" << n_phase
                             << " wake_invalid=" << n_gap_invalid << "/200"
                             << " max_amp=" << max_amp << " wake_amp=" << gap_amp
                             << " U_MAG=" << umag << " U_COVERAGE=" << ucoverage
                             << " U_NCYC=" << uncyc << " H_U_R2=" << uh_r2
                             << " U_REGION_MEAN=" << u_region_mean
-                            << " PC_ULTRA=" << pc_ultra;
+                            << " PC_ULTRA=" << pc_ultra << " directional=" << directional_keys
+                            << " zero_directions=" << zero_directions;
     record(R,"hdstats-ultradian/phase-amplitude-and-wake-gap",pass,m.str(),V);
   } catch (std::exception & e) {
     record(R,"hdstats-ultradian/phase-amplitude-and-wake-gap",false,e.what(),V);
   }
 
   // A flat, fully supported N2 posterior has depth but no reversal, so it
-  // must not generate a persuasive phase trajectory or non-zero UAMP.
+  // must not generate a persuasive phase trajectory or non-zero U_AMP.
   try {
     const int n = 1800;
     auto p = eng->inst("T_hdstats_ultradian_flat");
@@ -6016,7 +6076,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     p->insert_signal("PP_N3",std::vector<double>(n,0.0),1);
     p->insert_signal("PP_R",std::vector<double>(n,0.0),1);
     p->eval("HDSTATS spt=F longrange=F ultra-fwhm=60 emit-ultradian=T");
-    const auto dat = p->data({"UPHASE_VALID","UAMP"}, {}, false);
+    const auto dat = p->data({"U_PHASE_VALID","U_AMP"}, {}, false);
     const auto & x = std::get<1>(dat);
     double max_phase_valid = 0.0, max_amp = 0.0;
     for (int i=0; i<x.rows(); ++i)
@@ -6033,7 +6093,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     record(R,"hdstats-ultradian/flat-signal-has-no-phase",false,e.what(),V);
   }
 
-  // A single monotonic half-excursion retains its UPHASE coordinate but must
+  // A single monotonic half-excursion retains its U_PHASE coordinate but must
   // not support a phase-adjusted time slope: time/cos/sin are too confounded.
   try {
     const int n = 1800;
@@ -6152,7 +6212,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
       && pc_line.find("T50__NSS_5__LRVAR_N3_NREM") != std::string::npos
       && pc_line.find("T50__NSS_5__LRVAR_R_SLEEP") != std::string::npos
       && pc_line.find("T50__NSS_3__LRVAR_NR") == std::string::npos
-      && pc_line.find("COM__NSS_") == std::string::npos
+      && pc_line.find("COM__NSS_5__LRVAR_N3") != std::string::npos
       && pc_line.find("WITHIN_SD__NSS_5__LRWIN_100") == std::string::npos;
     const bool pass = approx_equal(n3_com,75.0/600.0,1e-10)
       && approx_equal(n3_t50,75.0/600.0,1e-10)
