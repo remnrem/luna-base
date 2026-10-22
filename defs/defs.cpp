@@ -159,6 +159,7 @@ bool globals::set_annot_inst2hms;
 bool globals::set_annot_inst2hms_force;
 bool globals::skip_sl_annots;
 bool globals::skip_sl_edfs;
+bool globals::skip_bad_tals;
 bool globals::edf_stream_read;
 
 
@@ -576,6 +577,7 @@ void globals::init_defs()
   skip_nonedf_annots = false;
   skip_sl_annots = false;
   skip_sl_edfs = false;
+  skip_bad_tals = false;
   edf_stream_read = false;
 
   

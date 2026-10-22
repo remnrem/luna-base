@@ -28,6 +28,31 @@
 #include <iostream>
 #include <sstream>
 
+namespace {
+  // render a raw TAL fragment (which contains non-printable
+  // delimiters '\x00', '\x14', '\x15', and possibly garbage bytes
+  // from a corrupted/mis-parsed EDF+ record) in a form that is
+  // actually legible in an error message
+  std::string tal_debug_string( const std::string & s )
+  {
+    std::stringstream ss;
+    for (unsigned int i=0; i<s.size(); i++)
+      {
+	const unsigned char c = (unsigned char)s[i];
+	if ( c == 0x00 ) ss << "<NUL>";
+	else if ( c == 0x14 ) ss << "<TAL>";
+	else if ( c == 0x15 ) ss << "<DUR>";
+	else if ( c < 0x20 || c > 0x7e )
+	  {
+	    ss << "<0x" << std::hex << std::setw(2) << std::setfill('0')
+	       << (int)c << std::dec << std::setfill(' ') << ">";
+	  }
+	else ss << (char)c;
+      }
+    return ss.str();
+  }
+}
+
 tal_t edf_t::tal( const int signal , const int rec )
 {
 
@@ -138,19 +163,35 @@ tal_t::tal_t( edf_t * edf , int signal , int r )
 {
 
   record = r;
-  
+
+  pedf = edf;
+
+  channel = signal;
+
   if ( record < 0 || record >= edf->header.nr_all )
     Helper::halt( "bad record # requested" );
-  
+
   if ( ! edf->timeline.retained( record ) )
     Helper::halt( "bad record # requested" );
 
-  if ( signal < 0 || signal >= edf->header.ns ) 
+  if ( signal < 0 || signal >= edf->header.ns )
     Helper::halt( "bad signal # requested" );
-  
-  if ( ! edf->header.is_annotation_channel( signal ) ) 
+
+  if ( ! edf->header.is_annotation_channel( signal ) )
     Helper::halt( "not an annotation channel" );
 
+}
+
+std::string tal_t::tal_debug_context() const
+{
+  std::stringstream ss;
+
+  ss << "record " << record
+     << ", channel #" << channel
+     << ( pedf != NULL && channel >= 0 && channel < pedf->header.ns ?
+	  " (" + pedf->header.label[channel] + ")" : "" );
+
+  return ss.str();
 }
 
 void tal_t::decode( const std::string & str )
@@ -204,15 +245,53 @@ void tal_t::decode( const std::string & str )
       double duration = 0;
       
       if ( ! ( ts.size() == 1 || ts.size() == 2 ) )
-	continue;
+	{
+	  // this element is always skipped (not gated by skip-bad-tals): it
+	  // has no usable onset candidate at all, so there's nothing to
+	  // halt on in the first place
+	  logger << "  *** warning: skipping malformed TAL element (expecting 1 or 2 "
+		 << "'\\x15'-delimited onset/duration fields, found " << ts.size() << ") in "
+		 << tal_debug_context() << "\n"
+		 << "              raw TAL   : [" << tal_debug_string( toks[t] ) << "]\n"
+		 << "              full record: [" << tal_debug_string( str ) << "]\n";
+	  continue;
+	}
 
       if ( ! Helper::str2dbl( ts[0] , &onset ) )
-	Helper::halt( "problem converting time-stamp, " + ts[0] );
-      
+	{
+	  const std::string msg = "problem converting time-stamp (expecting a +/- numeric onset) in "
+	    + tal_debug_context() + "\n"
+	    + "       offending field : [" + tal_debug_string( ts[0] ) + "]\n"
+	    + "       raw TAL element : [" + tal_debug_string( toks[t] ) + "]\n"
+	    + "       full raw record : [" + tal_debug_string( str ) + "]";
+
+	  if ( ! globals::skip_bad_tals )
+	    Helper::halt( msg + "\n"
+			  + "       hint: this TAL element could instead be skipped (rather than\n"
+			  + "             halting) by setting the option skip-bad-tals=T" );
+
+	  logger << "  *** warning: skipping malformed TAL element (skip-bad-tals=T):\n" << msg << "\n";
+	  continue;
+	}
+
       if ( ts.size() == 2 )
 	{
 	  if ( ! Helper::str2dbl( ts[1] , &duration ) )
-	    Helper::halt( "problem converting duration, " + ts[1] );
+	    {
+	      const std::string msg = "problem converting duration in "
+		+ tal_debug_context() + "\n"
+		+ "       offending field : [" + tal_debug_string( ts[1] ) + "]\n"
+		+ "       raw TAL element : [" + tal_debug_string( toks[t] ) + "]\n"
+		+ "       full raw record : [" + tal_debug_string( str ) + "]";
+
+	      if ( ! globals::skip_bad_tals )
+		Helper::halt( msg + "\n"
+			      + "       hint: this TAL element could instead be skipped (rather than\n"
+			      + "             halting) by setting the option skip-bad-tals=T" );
+
+	      logger << "  *** warning: skipping malformed TAL element (skip-bad-tals=T):\n" << msg << "\n";
+	      continue;
+	    }
 	}
       
       // time-stamp?

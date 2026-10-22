@@ -6081,15 +6081,35 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 	      edf.has_edf_annots = true;
 	      
 	      std::vector<std::string> tok2 = Helper::parse( Helper::unquote( tok[j] ) , "|" );
-	      if ( tok2.size() < 3 ) Helper::halt( "bad format for EDFZ annotations (vec-len):\n" + tok[j] );
-	      
+
+	      const std::string hint = "\n       hint: this EDFZ annotation entry could instead be skipped\n"
+		"             (rather than halting) by setting the option skip-bad-tals=T";
+
+	      if ( tok2.size() < 3 )
+		{
+		  if ( ! globals::skip_bad_tals )
+		    Helper::halt( "bad format for EDFZ annotations (vec-len):\n" + tok[j] + hint );
+		  logger << "  *** warning: skipping malformed EDFZ annotation entry (vec-len): [" << tok[j] << "]\n";
+		  continue;
+		}
+
 	      double onset = 0, dur = 0;
 	      if ( ! Helper::str2dbl( tok2[0] , &onset ) )
-		Helper::halt( "bad format for EDFZ annotations (onset):\n" + tok[j]  );
+		{
+		  if ( ! globals::skip_bad_tals )
+		    Helper::halt( "bad format for EDFZ annotations (onset):\n" + tok[j] + hint );
+		  logger << "  *** warning: skipping malformed EDFZ annotation entry (onset): [" << tok[j] << "]\n";
+		  continue;
+		}
 
 	      if ( ! Helper::str2dbl( tok2[1] , &dur ) )
-		Helper::halt( "bad format for EDFZ annotations (dur):\n" + tok[j]  );
-	      
+		{
+		  if ( ! globals::skip_bad_tals )
+		    Helper::halt( "bad format for EDFZ annotations (dur):\n" + tok[j] + hint );
+		  logger << "  *** warning: skipping malformed EDFZ annotation entry (dur): [" << tok[j] << "]\n";
+		  continue;
+		}
+
 	      std::string txt = tok2[2];
 	      
 	      // add this annotation (clunky, but keep this code in sync w/

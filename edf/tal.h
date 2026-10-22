@@ -55,25 +55,35 @@ struct tal_element_t
 
 };
 
-struct tal_t 
+struct tal_t
 {
-  
+
   tal_t( edf_t * edf , int channel , int r );
-  
+
   void decode( const std::string & str );
-  
-  std::string encode() const; 
 
-  void add( const tal_element_t & t ) { d.push_back( t ); } 
+  // human-readable "individual X, record Y, channel Z (label)" string
+  // used to give context in any error/warning raised by decode()
+  std::string tal_debug_context() const;
 
-  int size() const { return d.size(); } 
+  std::string encode() const;
+
+  void add( const tal_element_t & t ) { d.push_back( t ); }
+
+  int size() const { return d.size(); }
 
   int record;
-  
+
+  // retained so that decode() can give record/channel/ID context
+  // in any error it reports (e.g. malformed TALs in EDF+/EDF+D)
+  edf_t * pedf;
+
+  int channel;
+
   std::vector<tal_element_t> d;
-  
+
   std::string export_annots() const;
-  
+
   friend std::ostream & operator<<( std::ostream & out , const tal_t & t );
 };
 

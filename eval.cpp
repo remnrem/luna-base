@@ -6807,6 +6807,17 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
     }
 
 
+  // by default, a malformed TAL (e.g. non-numeric onset/duration field)
+  // in the EDF+ 'EDF Annotations' track is a fatal error; if set, skip
+  // just that malformed TAL element (with a console warning) rather
+  // than halting
+  if ( Helper::iequals( tok0 , "skip-bad-tals" ) )
+    {
+      globals::skip_bad_tals = Helper::yesno( tok1 );
+      return;
+    }
+
+
 
   // drop (with a console warning) annotations that start at or after
   // the end of the recording; default is on

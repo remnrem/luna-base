@@ -145,6 +145,7 @@ enum cmdline_proc_t
     PROC_DPP_FIT,
     PROC_POPS_CALIBRATION,
     PROC_HDSTATS_PC,
+    PROC_HDSTATS_PC_DESC,
     PROC_HYPNO_PC
   };
 
@@ -272,6 +273,13 @@ struct globals
   static bool skip_nonedf_annots;
   static bool skip_sl_annots;
   static bool skip_sl_edfs;
+
+  // by default, a malformed TAL in the EDF+ 'EDF Annotations' track (e.g.
+  // a non-numeric onset/duration field, as can occur with some non-conformant
+  // devices) is a fatal error; if set, skip just that malformed TAL element
+  // (with a console warning) and continue reading the rest of the EDF+
+  // (can be turned on via skip-bad-tals=T)
+  static bool skip_bad_tals;
 
   static bool edf_stream_read;
 

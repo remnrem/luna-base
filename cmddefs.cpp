@@ -4665,12 +4665,19 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "emit-annots-by-type", "F" , "Encode transition type in the emitted annotation class name" );
   add_param( "HDSTATS" , "emit-spt", "hd"      , "Emit soft SPT annotations under this root" );
   add_param( "HDSTATS" , "pc-out", ""          , "Write one HDSTATS-PC feature line per individual" );
-  add_param( "HDSTATS" , "pc-proj", ""         , "Project a saved HDSTATS-PC model" );
+  add_param( "HDSTATS" , "pc-proj", ""         , "Project a V3 HDSTATS-PC model as domain-coded PC scores and loading-selected feature contributions" );
+  add_param( "HDSTATS" , "model-desc", "F"      , "With pc-proj=, emit optional appended HDSTATS-PC model descriptions and associations" );
+  add_param( "HDSTATS" , "pc-min-loading", "0.10" , "Minimum absolute oriented loading for linked PC feature contributions" );
+  add_param( "HDSTATS" , "pc-all", "F"         , "With pc-proj=, also emit all ordinary HDSTATS metrics" );
+  add_param( "HDSTATS" , "qc", "F"             , "Emit operational and fit diagnostics under QC=1" );
   add_param( "HDSTATS" , "emit-sigs"  , ""       , "Emit per-sample PS/H/CONF (and PS3/H3/CONF3 if 3state) as new EDF signals under this channel-name prefix" );
   add_param( "HDSTATS" , "emit-hypnogram", ""    , "Emit hard-called stage runs, pooled to 30s epochs, as annotations (N1/N2/N3/R/W), optionally under this prefix" );
   add_param( "HDSTATS" , "verbose"    , ""       , "Emit the per-sample TIME table" );
 
   add_cmd( "stage" , "--hdstats-pc" , "Build an HDSTATS PCA model" );
+  add_cmd( "stage" , "--hdstats-pc-desc" , "Print the HDSTATS-PC component registry as TSV" );
+  add_param( "--hdstats-pc-desc" , "model" , "" , "Fitted V3 HDSTATS-PC reference model used to report oriented loadings" );
+  add_param( "--hdstats-pc-desc" , "min-loading" , "0.10" , "Minimum absolute oriented loading to list for each PC" );
   add_param( "--hdstats-pc" , "data" , "all.txt" , "HDSTATS-PC feature lines" );
   add_param( "--hdstats-pc" , "model" , "hdstats-pc.txt" , "Output PCA model" );
   add_param( "--hdstats-pc" , "nc" , "1" , "Default components retained per panel" );
@@ -4772,31 +4779,10 @@ void cmddefs_t::init()
   add_var(   "HDSTATS" , ""                 , "HD_REM_LAT"   , "REM latency (minutes from sleep onset)" );
   add_var(   "HDSTATS" , ""                 , "HD_REM_LAT2"  , "REM latency excluding wake (minutes)" );
   add_var(   "HDSTATS" , ""                 , "HD_TWT"       , "Expected wake time (minutes)" );
-  add_var(   "HDSTATS" , ""                 , "N_VALID"          , "Number of valid (in-range posterior) samples" );
-  add_var(   "HDSTATS" , ""                 , "PCT_VALID"        , "Percentage of samples that are valid" );
-  add_var(   "HDSTATS" , ""                 , "N_INVALID_LEAD"   , "Number of invalid samples trimmed from the start" );
-  add_var(   "HDSTATS" , ""                 , "N_INVALID_TRAIL"  , "Number of invalid samples trimmed from the end" );
-  add_var(   "HDSTATS" , ""                 , "N_INVALID_MID"    , "Number of invalid samples found mid-recording" );
-  add_var(   "HDSTATS" , ""                 , "LR_CORE_SEC"      , "Strict valid-core duration (seconds)" );
-  add_var(   "HDSTATS" , ""                 , "LR_POLICY"        , "Long-range policy" );
-  add_var(   "HDSTATS" , ""                 , "LR_N_VALID_RUNS"  , "Valid runs" );
-  add_var(   "HDSTATS" , ""                 , "LR_VALID_SEC"     , "Valid duration (seconds)" );
-  add_var(   "HDSTATS" , ""                 , "LR_INVALID_SEC"   , "Invalid duration (seconds)" );
-  add_var(   "HDSTATS" , ""                 , "LR_LONGEST_INTERNAL_GAP_SEC" , "Longest internal gap (seconds)" );
-  add_var(   "HDSTATS" , ""                 , "LR_N_INTERNAL_GAPS" , "Internal gaps" );
-  add_var(   "HDSTATS" , ""                 , "HD_ANALYSIS"  , "Analysis interval" );
-  add_var(   "HDSTATS" , ""                 , "HD_ANALYSIS_START_SEC" , "Analysis start (seconds)" );
-  add_var(   "HDSTATS" , ""                 , "HD_ANALYSIS_STOP_SEC" , "Analysis stop (seconds)" );
-  add_var(   "HDSTATS" , ""                 , "HD_ANALYSIS_SEC" , "Analysis duration (seconds)" );
-  add_var(   "HDSTATS" , ""                 , "HD_EXCLUDED_PRE_SEC" , "Excluded pre-analysis (seconds)" );
-  add_var(   "HDSTATS" , ""                 , "HD_EXCLUDED_POST_SEC" , "Excluded post-analysis (seconds)" );
-  add_var(   "HDSTATS" , ""                 , "HD_ANALYSIS_INVALID_SEC" , "Invalid analysis time (seconds)" );
-  add_var(   "HDSTATS" , ""                 , "HD_ANALYSIS_FALLBACK" , "SPT fallback" );
-  add_var(   "HDSTATS" , ""                 , "HDPC_COMPATIBLE" , "HDSTATS-PC model compatibility" );
-  add_var(   "HDSTATS" , ""                 , "HDPC_N_MISSING" , "Missing HDSTATS-PC features" );
-  add_table( "HDSTATS" , "PANEL" , "Structured HDSTATS-PC panel scores and availability" );
-  add_var( "HDSTATS" , "PANEL" , "HDPC_COMPATIBLE" , "Panel can be projected" );
-  add_var( "HDSTATS" , "PANEL" , "HDPC_N_MISSING" , "Missing required panel features" );
+  add_table( "HDSTATS" , "PC" , "Domain-coded HDSTATS-PC scores and semantics" );
+  add_var( "HDSTATS" , "PC" , "SCORE" , "Semantically oriented component score (NA if unavailable)" );
+  add_table( "HDSTATS" , "PC,FTR" , "Curated signed standardized feature contributions" );
+  add_var( "HDSTATS" , "PC,FTR" , "VAL" , "Oriented loading times standardized feature value (NA if score unavailable)" );
 
   add_table( "HDSTATS-PC" , "" , "HDSTATS PCA model" );
   add_var( "HDSTATS-PC" , "" , "N" , "People used" );
@@ -4831,50 +4817,71 @@ void cmddefs_t::init()
 
   add_table( "HDSTATS" , "NSS,LRLAG"       , "Long-range lags" );
   add_table( "HDSTATS" , "NSS,LRLAG,SS"    , "Long-range stage ACF" );
-  add_table( "HDSTATS" , "NSS,LRVAR"       , "Long-range trends" );
-  add_table( "HDSTATS" , "NSS,LRWIN,LRVAR" , "Long-range windows" );
-  add_table( "HDSTATS" , "NSS,LRLAG,LRMETRIC" , "Long-range lag QC" );
-  add_table( "HDSTATS" , "NSS,LRLAG,SS,LRMETRIC" , "Long-range stage QC" );
-  add_table( "HDSTATS" , "NSS,LRVAR,LRMETRIC" , "Long-range trend QC" );
-  add_table( "HDSTATS" , "NSS,LRWIN,LRVAR,LRMETRIC" , "Long-range window QC" );
-  add_var(   "HDSTATS" , "NSS,LRLAG"       , "NPAIR", "Retained pairs" );
+  add_table( "HDSTATS" , "NSS,VAR"         , "Long-range trends" );
+  add_table( "HDSTATS" , "NSS,LRWIN,VAR"   , "Long-range windows" );
+  add_table( "HDSTATS" , "NSS,LRLAG,QC" , "Long-range lag QC" );
+  add_table( "HDSTATS" , "NSS,LRLAG,SS,QC" , "Long-range stage QC" );
+  add_table( "HDSTATS" , "NSS,VAR,QC" , "Long-range trend QC" );
+  add_table( "HDSTATS" , "NSS,LRWIN,VAR,QC" , "Long-range window QC" );
+  add_table( "HDSTATS" , "NSS,LRLAG,METRIC,QC" , "Long-range lag metric QC" );
+  add_table( "HDSTATS" , "NSS,LRLAG,SS,METRIC,QC" , "Long-range stage metric QC" );
+  add_table( "HDSTATS" , "NSS,VAR,METRIC,QC" , "Long-range trend metric QC" );
+  add_table( "HDSTATS" , "NSS,LRWIN,VAR,METRIC,QC" , "Long-range window metric QC" );
+  add_table( "HDSTATS" , "UVAR,QC" , "Ultradian fit QC" );
+  add_var(   "HDSTATS" , "UVAR,QC" , "U_DESIGN_COND", "Ultradian fit design condition number" );
+  add_var(   "HDSTATS" , "UVAR,QC" , "U_STATUS", "Ultradian fit status" );
+  add_table( "HDSTATS" , "QC" , "Operational, long-range, and ultradian QC (qc=T only)" );
+  for ( const auto & variable : std::vector<std::string>{
+          "N_VALID", "PCT_VALID", "N_INVALID_LEAD", "N_INVALID_TRAIL", "N_INVALID_MID",
+          "HD_ANALYSIS", "HD_ANALYSIS_START_SEC", "HD_ANALYSIS_STOP_SEC", "HD_ANALYSIS_SEC",
+          "HD_EXCLUDED_PRE_SEC", "HD_EXCLUDED_POST_SEC", "HD_ANALYSIS_INVALID_SEC", "HD_ANALYSIS_FALLBACK",
+          "LR_CORE_SEC", "LR_POLICY", "LR_N_VALID_RUNS", "LR_VALID_SEC", "LR_INVALID_SEC",
+          "LR_LONGEST_INTERNAL_GAP_SEC", "LR_N_INTERNAL_GAPS", "U_CONDITION_WEIGHTED" } )
+    add_var( "HDSTATS", "QC", variable, "Operational diagnostic" );
+  for ( const auto & variable : std::vector<std::string>{
+          "U_N_HALF_CYCLES", "U_STRICT_NCYC", "U_N_SUPPORTED", "U_N_PHASE",
+          "U_PCT_SUPPORTED", "U_PCT_PHASE", "U_VALID_SEC", "U_SLEEP_SEC",
+          "U_PHASE_SEC", "U_N_PHASE_RUNS", "U_MEAN_RAW" } )
+    add_var( "HDSTATS", "QC", variable, "Ultradian diagnostic" );
   add_var(   "HDSTATS" , "NSS,LRLAG"       , "PS",    "Probability shift" );
   add_var(   "HDSTATS" , "NSS,LRLAG"       , "SIM",   "Posterior similarity" );
-  add_var(   "HDSTATS" , "NSS,LRLAG"       , "LR_ESTIMABLE", "Estimable" );
-  add_var(   "HDSTATS" , "NSS,LRLAG"       , "LR_NA_REASON", "NA reason" );
-  add_var(   "HDSTATS" , "NSS,LRLAG,SS"    , "NPAIR", "Retained pairs" );
   add_var(   "HDSTATS" , "NSS,LRLAG,SS"    , "ACF",   "Stage autocorrelation" );
-  add_var(   "HDSTATS" , "NSS,LRLAG,SS"    , "LR_ESTIMABLE", "Estimable" );
-  add_var(   "HDSTATS" , "NSS,LRLAG,SS"    , "LR_NA_REASON", "NA reason" );
-  add_var(   "HDSTATS" , "NSS,LRVAR"       , "SLOPE", "Overnight slope" );
-  add_var(   "HDSTATS" , "NSS,LRVAR"       , "COM", "Posterior-mass centre of mass relative to analysis start (0-1; >=2 minutes mass)" );
-  add_var(   "HDSTATS" , "NSS,LRVAR"       , "COM_M", "Posterior-mass centre of mass from analysis start (minutes; >=2 minutes mass)" );
-  add_var(   "HDSTATS" , "NSS,LRVAR"       , "T50", "Relative time by which 50% of posterior mass accrued (0-1; >=2 minutes mass)" );
-  add_var(   "HDSTATS" , "NSS,LRVAR"       , "T50_M", "Time from analysis start by which 50% of posterior mass accrued (minutes; >=2 minutes mass)" );
-  add_var(   "HDSTATS" , "NSS,LRVAR"       , "TIMING_MASS_M", "Eligible posterior mass (minutes) for COM/T50" );
-  add_var(   "HDSTATS" , "NSS,LRVAR"       , "TIMING_NVALID", "Eligible samples for COM/T50" );
-  add_var(   "HDSTATS" , "NSS,LRVAR"       , "TIMING_ESTIMABLE", "COM/T50 estimable (>=2 minutes posterior mass)" );
-  add_var(   "HDSTATS" , "NSS,LRVAR"       , "TIMING_NA_REASON", "COM/T50 NA reason" );
-  add_var(   "HDSTATS" , "NSS,LRVAR"       , "LR_ESTIMABLE", "Estimable" );
-  add_var(   "HDSTATS" , "NSS,LRVAR"       , "LR_NA_REASON", "NA reason" );
-  add_var(   "HDSTATS" , "NSS,LRWIN,LRVAR" , "NWIN", "Retained windows" );
-  add_var(   "HDSTATS" , "NSS,LRWIN,LRVAR" , "WITHIN_SD", "Within-window SD" );
-  add_var(   "HDSTATS" , "NSS,LRWIN,LRVAR" , "BETWEEN_SD", "Between-window SD" );
-  add_var(   "HDSTATS" , "NSS,LRWIN,LRVAR" , "LR_ESTIMABLE", "Estimable" );
-  add_var(   "HDSTATS" , "NSS,LRWIN,LRVAR" , "LR_NA_REASON", "NA reason" );
+  add_var(   "HDSTATS" , "NSS,VAR"         , "SLOPE", "Overnight slope" );
+  add_var(   "HDSTATS" , "NSS,VAR"         , "COM", "Posterior-mass centre of mass relative to analysis start (0-1; >=2 minutes mass)" );
+  add_var(   "HDSTATS" , "NSS,VAR"         , "COM_M", "Posterior-mass centre of mass from analysis start (minutes; >=2 minutes mass)" );
+  add_var(   "HDSTATS" , "NSS,VAR"         , "T50", "Relative time by which 50% of posterior mass accrued (0-1; >=2 minutes mass)" );
+  add_var(   "HDSTATS" , "NSS,VAR"         , "T50_M", "Time from analysis start by which 50% of posterior mass accrued (minutes; >=2 minutes mass)" );
+  add_var(   "HDSTATS" , "NSS,LRWIN,VAR"   , "WITHIN_SD", "Within-window SD" );
+  add_var(   "HDSTATS" , "NSS,LRWIN,VAR"   , "BETWEEN_SD", "Between-window SD" );
+  for ( const auto & table : std::vector<std::string>{ "NSS,LRLAG,QC", "NSS,LRLAG,SS,QC" } )
+    {
+      add_var( "HDSTATS", table, "NPAIR", "Retained pairs" );
+      add_var( "HDSTATS", table, "ESTIMABLE", "Estimable" );
+      add_var( "HDSTATS", table, "NA_REASON", "NA reason" );
+    }
+  for ( const auto & variable : std::vector<std::string>{
+          "TIMING_MASS_M", "TIMING_NVALID", "TIMING_ESTIMABLE", "TIMING_NA_REASON",
+          "ESTIMABLE", "NA_REASON" } )
+    add_var( "HDSTATS", "NSS,VAR,QC", variable,
+             variable == "ESTIMABLE" ? "Estimable" :
+             variable == "NA_REASON" ? "NA reason" : "Timing diagnostic" );
+  add_var( "HDSTATS", "NSS,LRWIN,VAR,QC", "NWIN", "Retained windows" );
+  add_var( "HDSTATS", "NSS,LRWIN,VAR,QC", "N_OFFSETS", "Contributing tiling offsets" );
+  add_var( "HDSTATS", "NSS,LRWIN,VAR,QC", "ESTIMABLE", "Estimable" );
+  add_var( "HDSTATS", "NSS,LRWIN,VAR,QC", "NA_REASON", "NA reason" );
   const std::vector<std::string> hdstats_lr_quality_tables = {
-    "NSS,LRLAG,LRMETRIC",
-    "NSS,LRLAG,SS,LRMETRIC",
-    "NSS,LRVAR,LRMETRIC",
-    "NSS,LRWIN,LRVAR,LRMETRIC"
+    "NSS,LRLAG,METRIC,QC",
+    "NSS,LRLAG,SS,METRIC,QC",
+    "NSS,VAR,METRIC,QC",
+    "NSS,LRWIN,VAR,METRIC,QC"
   };
   for ( const auto & table : hdstats_lr_quality_tables )
     {
       add_var( "HDSTATS", table, "NPAIR", "Retained pairs" );
       add_var( "HDSTATS", table, "NWIN", "Retained windows" );
       add_var( "HDSTATS", table, "NVALID", "Valid observations" );
-      add_var( "HDSTATS", table, "LR_ESTIMABLE", "Estimable" );
-      add_var( "HDSTATS", table, "LR_NA_REASON", "NA reason" );
+      add_var( "HDSTATS", table, "ESTIMABLE", "Estimable" );
+      add_var( "HDSTATS", table, "NA_REASON", "NA reason" );
     }
 
   add_table( "HDSTATS" , "SS"               , "Sleep timing (HD_MINS/HD_PCT/HD_DENS) by stage, unstratified" );

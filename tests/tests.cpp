@@ -5946,20 +5946,20 @@ static void test_hdstats_ultradian( lunapi_t * eng,
       std::ofstream out(path);
       out << "__HDSTATS_PC_V3\nNP\t2\n"
           << "PANEL\tAMBIGUITY\t3\t3\t1\t1\t1\t2\n"
-          << "I\tH__NSS_5\nF\tH__NSS_5\t1\t2\nW\t1\nV\tH__NSS_5\t1\nEND\n"
+          << "I\tH.NSS_5\nF\tH.NSS_5\t1\t2\nW\t1\nV\tH.NSS_5\t1\nEND\n"
           << "PANEL\tULTRADIAN\t3\t3\t1\t1\t1\t2\n"
           << "I\tU_MAG\nF\tU_MAG\t0\t1\nW\t1\nV\tU_MAG\t1\nEND\n";
     }
     hdstats_pc::feature_map_t values;
-    values["H__NSS_5"]=5.0;
+    values["H.NSS_5"]=5.0;
     const auto partial=hdstats_pc::project_panels(path,values);
     values["U_MAG"]=3.0;
     const auto complete=hdstats_pc::project_panels(path,values);
     const std::string old_path=temp_base_path("hdstats_v2_projection")+".txt";
     {
       std::ofstream out(old_path);
-      out << "__HDSTATS_PC_V2\nNF\t1\nF\tH__NSS_5\t1\t2\n"
-          << "NC\t1\nW\t1\nV\tH__NSS_5\t1\n";
+      out << "__HDSTATS_PC_V2\nNF\t1\nF\tH.NSS_5\t1\t2\n"
+          << "NC\t1\nW\t1\nV\tH.NSS_5\t1\n";
     }
     const auto legacy=hdstats_pc::project_panels(old_path,values);
     const bool pass=partial.size()==2 && complete.size()==2
@@ -6015,18 +6015,19 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     const double ucoverage = get_val(p,"HDSTATS","U_COVERAGE");
     const double uncyc = get_val(p,"HDSTATS","U_NCYC");
     const double uh_r2 = get_val_where(p,"HDSTATS","UVAR","UVAR","H","U_R2");
-    const double u_region_mean = get_val(p,"HDSTATS","U_MEAN");
+    const double u_region_mean = get_val_where(p,"HDSTATS","UMETRIC_UQ","UMETRIC","H","U_MEAN");
     std::ifstream pc_in("/tmp/T_hdstats_ultradian.hdpc");
     std::stringstream pc_text; pc_text << pc_in.rdbuf();
     const std::string pc_line = pc_text.str();
     const bool pc_ultra = pc_line.find("FORMAT\t__HDSTATS_FEATURES_V2") != std::string::npos
-      && pc_line.find("U_MAG__ULTRA") != std::string::npos
-      && pc_line.find("CONF__ULTRA_UQ_D1") != std::string::npos
-      && pc_line.find("U_SLOPE__ULTRA_UVAR_CONF") != std::string::npos
-      && pc_line.find("U_MOD_COS__ULTRA_UVAR_CONF3") != std::string::npos
-      && pc_line.find("U_PARTIAL_R2__ULTRA_UVAR_PS") != std::string::npos;
-    const bool short_night_pc = pc_line.find("H__NSS_5") != std::string::npos
-      && pc_line.find("PS__NSS_5__LRLAG_600") == std::string::npos;
+      && pc_line.find("U_MAG") != std::string::npos
+      && pc_line.find("U_MEAN.UQ_D1.UMETRIC_CONF") != std::string::npos
+      && pc_line.find("U_MEAN__UQ_D1__UMETRIC_CONF") == std::string::npos
+      && pc_line.find("U_SLOPE.UVAR_CONF") != std::string::npos
+      && pc_line.find("U_MOD_COS.UVAR_CONF3") != std::string::npos
+      && pc_line.find("U_PARTIAL_R2.UVAR_PS") != std::string::npos;
+    const bool short_night_pc = pc_line.find("H.NSS_5") != std::string::npos
+      && pc_line.find("PS.NSS_5.LRLAG_600") == std::string::npos;
     std::map<std::string,std::string> pc_values;
     {
       std::stringstream ss(pc_line);
@@ -6039,7 +6040,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
       for ( const auto & from : states.second ) for ( const auto & to : states.second ) if (from!=to)
         for ( const auto & family : {"TRANS","BOUT_TRANS"} )
           {
-            const std::string key=std::string(family)+"_DENS__NSS_"+states.first+"__"+family+"_"+from+"to"+to;
+            const std::string key="DENS.NSS_"+states.first+"."+family+"_"+from+"to"+to;
             const auto found=pc_values.find(key);
             if (found!=pc_values.end()) { ++directional_keys; if (found->second=="0") ++zero_directions; }
           }
@@ -6110,10 +6111,10 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",n1,1);
     p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",n3,1);
     p->insert_signal("PP_R",r,1);
-    p->eval("HDSTATS spt=F longrange=F ultra-fwhm=60");
+    p->eval("HDSTATS spt=F longrange=F ultra-fwhm=60 qc=T");
     const double uncyc = get_val(p,"HDSTATS","U_NCYC");
     const double slope = get_val_where(p,"HDSTATS","UVAR","UVAR","H","U_SLOPE");
-    const double cond = get_val_where(p,"HDSTATS","UVAR","UVAR","H","U_DESIGN_COND");
+    const double cond = get_val_where(p,"HDSTATS","QC_UVAR","UVAR","H","U_DESIGN_COND");
     const bool pass = uncyc > 0.45 && uncyc < 0.55 && !Helper::realnum(slope)
       && Helper::realnum(cond) && cond > 12.0;
     std::ostringstream m; m << "U_NCYC=" << uncyc << " H_U_SLOPE=" << slope
@@ -6172,8 +6173,8 @@ static void test_hdstats_ultradian( lunapi_t * eng,
       }
     const double want_within = sum_within / n_offsets;
     const double want_between = sum_between / n_offsets;
-    const double got_within = get_val_where(p,"HDSTATS","LRVAR_LRWIN_NSS","LRVAR","W","WITHIN_SD");
-    const double got_between = get_val_where(p,"HDSTATS","LRVAR_LRWIN_NSS","LRVAR","W","BETWEEN_SD");
+    const double got_within = get_val_where(p,"HDSTATS","LRWIN_NSS_VAR","VAR","W","WITHIN_SD");
+    const double got_between = get_val_where(p,"HDSTATS","LRWIN_NSS_VAR","VAR","W","BETWEEN_SD");
     const bool pass = approx_equal(got_within,want_within,1e-10)
       && approx_equal(got_between,want_between,1e-10);
     std::ostringstream m; m << "WITHIN got/want=" << got_within << "/" << want_within
@@ -6196,24 +6197,24 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",n1,1);
     p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",n3,1);
     p->insert_signal("PP_R",r,1);
-    p->eval("HDSTATS spt=F ultradian=F lr-lags=100 lr-windows=100 lr-min-duration=1 pc-out=/tmp");
-    const double n3_com = get_val_where(p,"HDSTATS","LRVAR_NSS","LRVAR","N3","COM");
-    const double n3_t50 = get_val_where(p,"HDSTATS","LRVAR_NSS","LRVAR","N3","T50");
-    const double n3_com_m = get_val_where(p,"HDSTATS","LRVAR_NSS","LRVAR","N3_NREM","COM_M");
-    const double r_com = get_val_where(p,"HDSTATS","LRVAR_NSS","LRVAR","R","COM");
-    const double r_t50_m = get_val_where(p,"HDSTATS","LRVAR_NSS","LRVAR","R_SLEEP","T50_M");
-    const double w_timing_ok = get_val_where(p,"HDSTATS","LRVAR_NSS","LRVAR","W","TIMING_ESTIMABLE");
+    p->eval("HDSTATS spt=F ultradian=F lr-lags=100 lr-windows=100 lr-min-duration=1 pc-out=/tmp qc=T");
+    const double n3_com = get_val_where(p,"HDSTATS","NSS_VAR","VAR","N3","COM");
+    const double n3_t50 = get_val_where(p,"HDSTATS","NSS_VAR","VAR","N3","T50");
+    const double n3_com_m = get_val_where(p,"HDSTATS","NSS_VAR","VAR","N3_NREM","COM_M");
+    const double r_com = get_val_where(p,"HDSTATS","NSS_VAR","VAR","R","COM");
+    const double r_t50_m = get_val_where(p,"HDSTATS","NSS_VAR","VAR","R_SLEEP","T50_M");
+    const double w_timing_ok = get_val_where(p,"HDSTATS","QC_NSS_VAR","VAR","W","TIMING_ESTIMABLE");
     std::ifstream pc_in("/tmp/T_hdstats_lr_timing.hdpc");
     std::stringstream pc_text; pc_text << pc_in.rdbuf();
     const std::string pc_line = pc_text.str();
-    const bool pc_timing = pc_line.find("T50__NSS_5__LRVAR_N3") != std::string::npos
-      && pc_line.find("T50__NSS_3__LRVAR_W") != std::string::npos
-      && pc_line.find("T50__NSS_3__LRVAR_R") != std::string::npos
-      && pc_line.find("T50__NSS_5__LRVAR_N3_NREM") != std::string::npos
-      && pc_line.find("T50__NSS_5__LRVAR_R_SLEEP") != std::string::npos
-      && pc_line.find("T50__NSS_3__LRVAR_NR") == std::string::npos
-      && pc_line.find("COM__NSS_5__LRVAR_N3") != std::string::npos
-      && pc_line.find("WITHIN_SD__NSS_5__LRWIN_100") == std::string::npos;
+    const bool pc_timing = pc_line.find("T50.NSS_5.VAR_N3") != std::string::npos
+      && pc_line.find("T50.NSS_3.VAR_W") != std::string::npos
+      && pc_line.find("T50.NSS_3.VAR_R") != std::string::npos
+      && pc_line.find("T50.NSS_5.VAR_N3_NREM") != std::string::npos
+      && pc_line.find("T50.NSS_5.VAR_R_SLEEP") != std::string::npos
+      && pc_line.find("T50.NSS_3.VAR_NR") == std::string::npos
+      && pc_line.find("COM.NSS_5.VAR_N3") != std::string::npos
+      && pc_line.find(".LRWIN_100") == std::string::npos;
     const bool pass = approx_equal(n3_com,75.0/600.0,1e-10)
       && approx_equal(n3_t50,75.0/600.0,1e-10)
       && approx_equal(n3_com_m,75.0/60.0,1e-10)

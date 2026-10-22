@@ -197,18 +197,24 @@ double edf_t::get_double( byte_t ** p , int sz )
 
 std::string edf_t::get_string( byte_t ** p , int sz )
 {
-  // only US-ASCII printable characters allowed: 32 .. 126 
-  // other characters mapped to '?'
+  // only US-ASCII printable characters allowed: 32 .. 126
+  // other characters mapped to '?', except NUL (0x00), which some
+  // non-conformant devices use in place of (or in addition to) the
+  // space-padding that the EDF spec requires for fixed-width header
+  // fields (e.g. a channel label like "C3 A2\x00     "); treat NUL as
+  // equivalent to a space so that trailing instances are trimmed below,
+  // rather than showing up as a literal '?' in the label
   std::vector<char> buf(sz+1);
   for (int i=0;i<sz;i++)
     {
       buf[i] = **p;
-      if ( buf[i] < 32 || buf[i] > 126 ) buf[i] = 63; // '?'
-      ++(*p);      
+      if ( buf[i] == 0 ) buf[i] = 32; // NUL -> space
+      else if ( buf[i] < 32 || buf[i] > 126 ) buf[i] = 63; // '?'
+      ++(*p);
     }
   buf[sz] = '\0';
   std::string str = &buf[0];
-  // trim trailing whitespace 
+  // trim trailing whitespace
   // (when writing header back out, we expand whitespace to desired length)
   Helper::rtrim(str);
   return str;

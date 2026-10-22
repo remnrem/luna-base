@@ -32,6 +32,7 @@
 
 #include "hdstats.h"
 #include "hdstats-pc.h"
+#include "hdstats-model.h"
 
 #include "edf/edf.h"
 #include "edf/slice.h"
@@ -112,6 +113,7 @@ struct hd_params_t
   double hd_offset_mass_th;         // mean sleep probability threshold for final-sleep detection
   std::string annot_name;           // annotation class for stratification (empty = none)
   bool verbose;                     // emit per-sample HDSIG table
+  bool qc;                          // emit operational and fit diagnostics
   int min_events_profile;           // minimum events needed to emit aligned profile
   int min_samples_region;           // minimum samples needed to emit REGION summaries
   std::string emit_annot_label;     // if non-empty, emit transition annotations under this class
@@ -140,6 +142,7 @@ struct hd_params_t
   double analysis_flank_post_sec;    // physical time retained after hypnodensity offset
   std::string pc_out;                // optional level-1 HDSTATS feature directory
   std::string pc_proj;               // optional fixed reference PCA model
+  double pc_min_loading;             // minimum absolute oriented loading for linked FTR output
   bool do_ultradian;                 // soft ultradian depth trajectory / phase
   double ultra_fwhm_sec;             // Gaussian FWHM in physical seconds
   double ultra_prominence;           // hysteretic peak/trough prominence
@@ -1910,77 +1913,19 @@ static bool hd_pc_ultra_metric( const std::string & metric )
   return std::find( metrics.begin(), metrics.end(), metric ) != metrics.end();
 }
 
-static std::string hd_pc_ultra_uq_key( const std::string & metric,
-                                       const std::string & uq )
-{
-  return metric + "__ULTRA_UQ_" + uq;
-}
-
-static std::string hd_pc_ultra_uvar_key( const std::string & statistic,
-                                         const std::string & metric )
-{
-  return statistic + "__ULTRA_UVAR_" + metric;
-}
-
 static void hd_pc_add_ultradian_placeholders( hdstats_pc::feature_map_t * out )
 {
   const double na = std::numeric_limits<double>::quiet_NaN();
-  hd_pc_add( out, "U_MAG__ULTRA", na );
-  hd_pc_add( out, "U_COVERAGE__ULTRA", na );
-  hd_pc_add( out, "U_NCYC__ULTRA", na );
   for ( const std::string & metric : hd_pc_ultra_metrics() )
     {
       for ( const std::string & uq : std::vector<std::string>{ "D1", "D2", "L1", "L2" } )
         {
-          hd_pc_add( out, hd_pc_ultra_uq_key( metric, uq ), na );
-          hd_pc_add( out, hdstats_pc::key( "U_MEAN", "UQ/" + uq + ";U_METRIC/" + metric ), na );
+          hd_pc_add( out, hdstats_pc::key( "U_MEAN", "UQ/" + uq + ";UMETRIC/" + metric ), na );
         }
       for ( const std::string & statistic : std::vector<std::string>{
               "U_SLOPE", "U_MOD", "U_MOD_COS", "U_MOD_SIN", "U_R2", "U_PARTIAL_R2" } )
-        {
-          hd_pc_add( out, hdstats_pc::key( statistic, "UVAR/" + metric ), na );
-          if ( statistic != "U_MOD" ) hd_pc_add( out, hd_pc_ultra_uvar_key( statistic, metric ), na );
-        }
+        hd_pc_add( out, hdstats_pc::key( statistic, "UVAR/" + metric ), na );
     }
-}
-
-// The PC panel distinguishes whole-night uncertainty/instability from
-// stage-conditioned summaries.  Whole-night occupancy is represented by the
-// conventional duration block below; conditioning a region on its argmax
-// stage instead contributes just that stage's posterior purity and PS.
-static void hd_pc_add_global_region( hdstats_pc::feature_map_t * out,
-                                     const hd_region_stats_t & rs,
-                                     const std::string & suffix )
-{
-  const double na = std::numeric_limits<double>::quiet_NaN();
-  hd_pc_add( out, "H" + suffix, rs.valid ? rs.mean_H : na );
-  hd_pc_add( out, "H_P90" + suffix, rs.valid ? rs.p90_H : na );
-  hd_pc_add( out, "PS" + suffix, rs.valid ? rs.mean_TV : na );
-  hd_pc_add( out, "PS_P90" + suffix, rs.valid ? rs.p90_TV : na );
-  hd_pc_add( out, "CORR_H_PS" + suffix, rs.valid ? rs.corr_H_TV : na );
-}
-
-static void hd_pc_add_stage_region( hdstats_pc::feature_map_t * out,
-                                    const hd_region_stats_t & rs,
-                                    const std::string & suffix,
-                                    const std::string & label,
-                                    const int stage )
-{
-  const double na = std::numeric_limits<double>::quiet_NaN();
-  hd_pc_add( out, "P_" + label + suffix,
-             rs.valid && stage < (int)rs.mean_p.size() ? rs.mean_p[stage] : na );
-  hd_pc_add( out, "PS" + suffix, rs.valid ? rs.mean_TV : na );
-}
-
-// When both state representations are available, use the 3-state W/NR/R
-// partition and the 5-state N1/N2/N3 partition for state-specific PCA
-// features. This avoids double-weighting W and R while retaining the two
-// distinct whole-posterior representations.
-static bool hd_pc_retain_stage( const bool threestate,
-                                const int stage,
-                                const bool hybrid_states )
-{
-  return ! hybrid_states || threestate || ( stage > 0 && stage < 4 );
 }
 
 static hdstats_pc::feature_map_t hd_pc_features(
@@ -2004,69 +1949,10 @@ static hdstats_pc::feature_map_t hd_pc_features(
   };
 
   const hd_region_stats_t rs5 = compute_region( dat, der, mask, par, false );
-  hd_pc_add_global_region( &out, rs5, "__NSS_5" );
-  int stable = 0;
-  for ( int i = 0; i < dat.N; ++i ) if ( mask[i] && tr.is_stable5[i] ) ++stable;
-  hd_pc_add( &out, "PCT_STABLE__NSS_5", rs5.valid ? 100.0 * stable / rs5.n
-             : std::numeric_limits<double>::quiet_NaN() );
-  if ( par.do_3state )
-    {
-      const hd_region_stats_t rs3 = compute_region( dat, der, mask, par, true );
-      hd_pc_add_global_region( &out, rs3, "__NSS_3" );
-      stable = 0;
-      for ( int i = 0; i < dat.N; ++i ) if ( mask[i] && tr.is_stable3[i] ) ++stable;
-      hd_pc_add( &out, "PCT_STABLE__NSS_3", rs3.valid ? 100.0 * stable / rs3.n
-                 : std::numeric_limits<double>::quiet_NaN() );
-    }
-
-  // Argmax-stage-conditioned summaries are often useful PCA inputs but do not
-  // have the sparse pair/profile problem of directional transitions.
-  for ( int st = 0; st < 5; ++st )
-    {
-      if ( ! hd_pc_retain_stage( false, st, par.do_3state ) ) continue;
-      const std::vector<bool> stage_mask = make_stage_mask( mask, der.argmax5, st );
-      const hd_region_stats_t stage_rs = compute_region( dat, der, stage_mask, par, false );
-      hd_pc_add_stage_region( &out, stage_rs,
-                              "__NSS_5__SS_" + hd_state_label( false, st ),
-                              hd_state_label( false, st ), st );
-      const std::string s = "SS/" + hd_state_label( false, st ) + ";NSS/5";
-      const bool ok = stage_rs.valid && stage_rs.n >= par.min_samples_region;
-      hd_pc_add( &out, hdstats_pc::key( "P_" + hd_state_label(false,st), s ),
-                 ok ? stage_rs.mean_p[st] : std::numeric_limits<double>::quiet_NaN() );
-      hd_pc_add( &out, hdstats_pc::key( "PS", s ),
-                 ok ? stage_rs.mean_TV : std::numeric_limits<double>::quiet_NaN() );
-    }
-  if ( par.do_3state )
-    for ( int st = 0; st < 3; ++st )
-      {
-        const std::vector<bool> stage_mask = make_stage_mask( mask, der.argmax3, st );
-        const hd_region_stats_t stage_rs = compute_region( dat, der, stage_mask, par, true );
-        hd_pc_add_stage_region( &out, stage_rs,
-                                "__NSS_3__SS_" + hd_state_label( true, st ),
-                                hd_state_label( true, st ), st );
-        const std::string s = "SS/" + hd_state_label( true, st ) + ";NSS/3";
-        const bool ok = stage_rs.valid && stage_rs.n >= par.min_samples_region;
-        hd_pc_add( &out, hdstats_pc::key( "P_" + hd_state_label(true,st), s ),
-                   ok ? stage_rs.mean_p[st] : std::numeric_limits<double>::quiet_NaN() );
-        hd_pc_add( &out, hdstats_pc::key( "PS", s ),
-                   ok ? stage_rs.mean_TV : std::numeric_limits<double>::quiet_NaN() );
-      }
-
-  hd_pc_add( &out, "TRANS_DENS__NSS_5", event_density( tr.events5 ) );
-  hd_pc_add( &out, "BOUT_TRANS_DENS__NSS_5", event_density( tr.bout_events5 ) );
-  if ( par.do_3state )
-    {
-      hd_pc_add( &out, "TRANS_DENS__NSS_3", event_density( tr.events3 ) );
-      hd_pc_add( &out, "BOUT_TRANS_DENS__NSS_3", event_density( tr.bout_events3 ) );
-    }
-
-  // Retain the non-derived conventional architecture measures. All occupancy
-  // measures use the selected analysis interval.
+  // Structured panels use exactly the selected analysis interval and the
+  // same statistics as the normal HDSTATS tables. Their schema lives in C++;
+  // docs/hdstats/hdstats.pc is only a readable inventory.
   const double na = std::numeric_limits<double>::quiet_NaN();
-  hd_pc_add( &out, "HD_SPT", hm.valid_window ? hm.hd_spt : na );
-  hd_pc_add( &out, "HD_WASO", hm.valid_window ? hm.hd_waso : na );
-  hd_pc_add( &out, "HD_REM_LAT", hm.valid_rem ? hm.hd_rem_lat : na );
-  hd_pc_add( &out, "HD_REM_LAT2", hm.valid_rem ? hm.hd_rem_lat2 : na );
   std::vector<double> mins( 7, 0.0 ); // W N1 N2 N3 R NR S
   for ( int i = 0; i < dat.N; ++i )
     if ( mask[i] )
@@ -2079,11 +1965,6 @@ static hdstats_pc::feature_map_t hd_pc_features(
       }
   mins[5] = mins[1] + mins[2] + mins[3]; mins[6] = mins[5] + mins[4];
   const std::vector<std::string> labels = { "W", "N1", "N2", "N3", "R", "NR", "S" };
-  for ( int k = 1; k <= 4; ++k ) hd_pc_add( &out, "HD_MINS__SS_" + labels[k], mins[k] );
-
-  // Structured panels use exactly the selected analysis interval and the
-  // same statistics as the normal HDSTATS tables. Their schema lives in C++;
-  // pops/hdstats.pc is only a readable inventory.
   auto add = [&]( const std::string & var, const std::string & stratum, const double value ) {
     hd_pc_add( &out, hdstats_pc::key( var, stratum ), value );
   };
@@ -2188,6 +2069,8 @@ static hdstats_pc::feature_map_t hd_pc_features(
   add( "HD_WASO", ".", spt ? mins[0] : ( hm.valid_window ? hm.hd_waso : na ) );
   add( "HD_SME", ".", spt ? ( analysis_min > 0 ? 100.0 * sleep_min / analysis_min : 0.0 )
                           : ( hm.valid_window ? hm.hd_sme : na ) );
+  add( "HD_REM_LAT", ".", hm.valid_rem ? hm.hd_rem_lat : na );
+  add( "HD_REM_LAT2", ".", hm.valid_rem ? hm.hd_rem_lat2 : na );
   for ( int k = 0; k < 5; ++k )
     {
       const std::string st = labels[k], stratum = "SS/" + st;
@@ -2199,6 +2082,21 @@ static hdstats_pc::feature_map_t hd_pc_features(
       add( "HD_DENS", stratum, ( spt ? analysis_min : hm.hd_spt ) > 0
            ? value / ( spt ? analysis_min : hm.hd_spt ) : 0.0 );
     }
+  for ( const auto & stage : std::vector<std::pair<bool,int>>{
+          { true, 0 }, { false, 2 }, { true, 2 } } )
+    if ( stage.first ? par.do_3state : true )
+      {
+        const bool three = stage.first;
+        const int k = stage.second;
+        const std::string label = hd_state_label( three, k );
+        const std::vector<bool> stage_mask = make_stage_mask(
+          mask, three ? der.argmax3 : der.argmax5, k );
+        const hd_region_stats_t region = compute_region( dat, der, stage_mask, par, three );
+        const bool ok = region.valid && region.n >= par.min_samples_region;
+        const std::string s = "SS/" + label + ";NSS/" + ( three ? "3" : "5" );
+        add( "P_" + label, s, ok ? region.mean_p[k] : na );
+        add( "PS", s, ok ? region.mean_TV : na );
+      }
   hd_pc_add_ultradian_placeholders( &out );
   return out;
 }
@@ -2706,8 +2604,13 @@ static void hd_write_ultra_conditioned_metrics( const hd_data_t & dat,
           writer.value( "U_PEAK", peak );
           writer.value( "U_R2", r2 );
           writer.value( "U_PARTIAL_R2", partial_r2 );
-          writer.value( "U_DESIGN_COND", design_condition );
-          writer.value( "U_STATUS", status );
+          if ( par.qc )
+            {
+              writer.level( 1, "QC" );
+              writer.value( "U_DESIGN_COND", design_condition );
+              writer.value( "U_STATUS", status );
+              writer.unlevel( "QC" );
+            }
           writer.unlevel( "UVAR" );
         }
 
@@ -2725,11 +2628,6 @@ static void hd_write_ultra_conditioned_metrics( const hd_data_t & dat,
           hd_pc_add( pc_features, hdstats_pc::key( "U_MOD_SIN", s ), phase_sin );
           hd_pc_add( pc_features, hdstats_pc::key( "U_R2", s ), r2 );
           hd_pc_add( pc_features, hdstats_pc::key( "U_PARTIAL_R2", s ), partial_r2 );
-          hd_pc_add( pc_features, hd_pc_ultra_uvar_key( "U_SLOPE", metric.label ), slope );
-          hd_pc_add( pc_features, hd_pc_ultra_uvar_key( "U_MOD_COS", metric.label ), phase_cos );
-          hd_pc_add( pc_features, hd_pc_ultra_uvar_key( "U_MOD_SIN", metric.label ), phase_sin );
-          hd_pc_add( pc_features, hd_pc_ultra_uvar_key( "U_R2", metric.label ), r2 );
-          hd_pc_add( pc_features, hd_pc_ultra_uvar_key( "U_PARTIAL_R2", metric.label ), partial_r2 );
         }
     }
 }
@@ -2784,15 +2682,14 @@ static void hd_write_ultra_phase_regions( const hd_data_t & dat,
             if ( emit_output )
               {
                 writer.level( region_label[q], "UQ" );
-                writer.level( metric.label, "U_METRIC" );
+                writer.level( metric.label, "UMETRIC" );
                 writer.value( "U_MEAN", mean );
-                writer.unlevel( "U_METRIC" );
+                writer.unlevel( "UMETRIC" );
                 writer.unlevel( "UQ" );
               }
             if ( pc_features != NULL && hd_pc_ultra_metric( metric.label ) )
               {
-                hd_pc_add( pc_features, hd_pc_ultra_uq_key( metric.label, region_label[q] ), mean );
-                hd_pc_add( pc_features, hdstats_pc::key( "U_MEAN", std::string("UQ/") + region_label[q] + ";U_METRIC/" + metric.label ), mean );
+                hd_pc_add( pc_features, hdstats_pc::key( "U_MEAN", std::string("UQ/") + region_label[q] + ";UMETRIC/" + metric.label ), mean );
               }
           }
     }
@@ -3449,16 +3346,21 @@ static hd_lr_timing_t hd_lr_timing( const std::vector<double> & x,
   return out;
 }
 
-static void hd_write_lr_timing( const hd_lr_timing_t & timing )
+static void hd_write_lr_timing( const hd_lr_timing_t & timing, const bool emit_qc )
 {
   writer.value( "COM", timing.com );
   writer.value( "COM_M", timing.com_m );
   writer.value( "T50", timing.t50 );
   writer.value( "T50_M", timing.t50_m );
-  writer.value( "TIMING_MASS_M", timing.mass_m );
-  writer.value( "TIMING_NVALID", timing.n_valid );
-  writer.value( "TIMING_ESTIMABLE", timing.estimable ? 1 : 0 );
-  writer.value( "TIMING_NA_REASON", timing.na_reason );
+  if ( emit_qc )
+    {
+      writer.level( 1, "QC" );
+      writer.value( "TIMING_MASS_M", timing.mass_m );
+      writer.value( "TIMING_NVALID", timing.n_valid );
+      writer.value( "TIMING_ESTIMABLE", timing.estimable ? 1 : 0 );
+      writer.value( "TIMING_NA_REASON", timing.na_reason );
+      writer.unlevel( "QC" );
+    }
 }
 
 static double hd_sample_sd_values( const std::vector<double> & x )
@@ -3467,10 +3369,19 @@ static double hd_sample_sd_values( const std::vector<double> & x )
     : hd_sample_sd( x, 0, (int)x.size() - 1 );
 }
 
-static void hd_write_lr_status( const bool estimable, const std::string & reason )
+static void hd_write_lr_status_values( const bool estimable, const std::string & reason )
 {
-  writer.value( "LR_ESTIMABLE", estimable ? 1 : 0 );
-  if ( ! estimable ) writer.value( "LR_NA_REASON", reason );
+  writer.value( "ESTIMABLE", estimable ? 1 : 0 );
+  if ( ! estimable ) writer.value( "NA_REASON", reason );
+}
+
+static void hd_write_lr_status( const bool estimable, const std::string & reason,
+                                const bool emit_qc )
+{
+  if ( !emit_qc ) return;
+  writer.level( 1, "QC" );
+  hd_write_lr_status_values( estimable, reason );
+  writer.unlevel( "QC" );
 }
 
 // A companion, metric-granular row removes any ambiguity when a shared
@@ -3480,12 +3391,16 @@ static void hd_write_lr_metric_quality( const std::string & metric,
                                         const std::string & count_name,
                                         const int count,
                                         const bool estimable,
-                                        const std::string & reason )
+                                        const std::string & reason,
+                                        const bool emit_qc )
 {
-  writer.level( metric, "LRMETRIC" );
+  if ( !emit_qc ) return;
+  writer.level( metric, "METRIC" );
+  writer.level( 1, "QC" );
   writer.value( count_name, count );
-  hd_write_lr_status( estimable, reason );
-  writer.unlevel( "LRMETRIC" );
+  hd_write_lr_status_values( estimable, reason );
+  writer.unlevel( "QC" );
+  writer.unlevel( "METRIC" );
 }
 
 static double hd_pair_corr( const std::vector<double> & x , const int lo , const int hi , const int lag )
@@ -3519,7 +3434,8 @@ static void write_hdstats_longrange(
     const hd_derived_t & der,
     const hd_params_t & par,
     const hd_lr_quality_t & quality,
-    hdstats_pc::feature_map_t * pc_features = NULL )
+    hdstats_pc::feature_map_t * pc_features = NULL,
+    const bool emit_output = true )
 {
   const int core_lo = quality.first_valid;
   const int core_hi = quality.last_valid;
@@ -3582,28 +3498,32 @@ static void write_hdstats_longrange(
             }
 
         writer.level( lag_sec, "LRLAG" );
-        writer.value( "NPAIR", npair );
+        if ( par.qc )
+          {
+            writer.level( 1, "QC" );
+            writer.value( "NPAIR", npair );
+            writer.unlevel( "QC" );
+          }
         const bool ps_ok = npair >= min_lag_pairs;
         const bool sim_ok = ps_ok && ss0 > 0.0 && ss1 > 0.0;
-        writer.value( "PS", ps_ok ? mean_l1 / npair : NaN );
-        writer.value( "SIM", sim_ok ? dot / std::sqrt( ss0 * ss1 ) : NaN );
+        if ( emit_output )
+          {
+            writer.value( "PS", ps_ok ? mean_l1 / npair : NaN );
+            writer.value( "SIM", sim_ok ? dot / std::sqrt( ss0 * ss1 ) : NaN );
+          }
         if ( pc_features != NULL )
           {
             const std::string s = "NSS/" + std::string( threestate ? "3" : "5" )
               + ";LRLAG/" + Helper::dbl2str( lag_sec );
             hd_pc_add( pc_features, hdstats_pc::key( "PS", s ), ps_ok ? mean_l1 / npair : NaN );
             hd_pc_add( pc_features, hdstats_pc::key( "SIM", s ), sim_ok ? dot / std::sqrt( ss0 * ss1 ) : NaN );
-            const std::string suffix = "__NSS_" + std::string( threestate ? "3" : "5" )
-              + "__LRLAG_" + Helper::dbl2str( lag_sec );
-            hd_pc_add( pc_features, "PS" + suffix, ps_ok ? mean_l1 / npair : NaN );
-            hd_pc_add( pc_features, "SIM" + suffix, sim_ok ? dot / std::sqrt( ss0 * ss1 ) : NaN );
           }
         hd_write_lr_status( ps_ok && sim_ok, npair < min_lag_pairs ? "INSUFFICIENT_PAIRS" :
-                            "ZERO_VARIANCE" );
+                            "ZERO_VARIANCE", par.qc );
         hd_write_lr_metric_quality( "PS", "NPAIR", npair, ps_ok,
-                                    "INSUFFICIENT_PAIRS" );
+                                    "INSUFFICIENT_PAIRS", par.qc );
         hd_write_lr_metric_quality( "SIM", "NPAIR", npair, sim_ok,
-                                    npair < min_lag_pairs ? "INSUFFICIENT_PAIRS" : "ZERO_VARIANCE" );
+                                    npair < min_lag_pairs ? "INSUFFICIENT_PAIRS" : "ZERO_VARIANCE", par.qc );
         for ( int k = 0; k < K; k++ )
           {
             writer.level( hd_state_label( threestate, k ), "SS" );
@@ -3617,21 +3537,21 @@ static void write_hdstats_longrange(
                 sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
               }
             const bool acf_ok = n >= min_lag_pairs && sxx > 0.0 && syy > 0.0;
-            writer.value( "NPAIR", n );
-            writer.value( "ACF", acf_ok ? sxy / std::sqrt( sxx * syy ) : NaN );
+            if ( par.qc )
+              {
+                writer.level( 1, "QC" );
+                writer.value( "NPAIR", n );
+                writer.unlevel( "QC" );
+              }
+            if ( emit_output ) writer.value( "ACF", acf_ok ? sxy / std::sqrt( sxx * syy ) : NaN );
             if ( pc_features != NULL )
               hd_pc_add( pc_features, hdstats_pc::key( "ACF",
                            "SS/" + hd_state_label(threestate,k) + ";NSS/"
                            + ( threestate ? "3" : "5" ) + ";LRLAG/" + Helper::dbl2str(lag_sec) ),
                          acf_ok ? sxy / std::sqrt( sxx * syy ) : NaN );
-            if ( pc_features != NULL && hd_pc_retain_stage( threestate, k, par.do_3state ) )
-              hd_pc_add( pc_features, "ACF__NSS_" + std::string( threestate ? "3" : "5" )
-                         + "__LRLAG_" + Helper::dbl2str( lag_sec )
-                         + "__SS_" + hd_state_label( threestate, k ),
-                         acf_ok ? sxy / std::sqrt( sxx * syy ) : NaN );
-            hd_write_lr_status( acf_ok, n < min_lag_pairs ? "INSUFFICIENT_PAIRS" : "ZERO_VARIANCE" );
+            hd_write_lr_status( acf_ok, n < min_lag_pairs ? "INSUFFICIENT_PAIRS" : "ZERO_VARIANCE", par.qc );
             hd_write_lr_metric_quality( "ACF", "NPAIR", n, acf_ok,
-                                        n < min_lag_pairs ? "INSUFFICIENT_PAIRS" : "ZERO_VARIANCE" );
+                                        n < min_lag_pairs ? "INSUFFICIENT_PAIRS" : "ZERO_VARIANCE", par.qc );
             writer.unlevel( "SS" );
           }
         writer.unlevel( "LRLAG" );
@@ -3672,14 +3592,14 @@ static void write_hdstats_longrange(
         const int n = (int)idx.size();
         const double den = n * sxx - sx * sx;
         const bool slope_ok = n >= 2 && den != 0.0;
-        writer.level( trend_label[q], "LRVAR" );
+        writer.level( trend_label[q], "VAR" );
         const double slope = slope_ok ? ( n * sxy - sx * sy ) / den : NaN;
-        writer.value( "SLOPE", slope );
-        if ( q < K ) hd_write_lr_timing( stage_timing[q] );
+        if ( emit_output ) writer.value( "SLOPE", slope );
+        if ( q < K ) hd_write_lr_timing( stage_timing[q], par.qc );
         if ( pc_features != NULL )
           {
             const std::string s = "NSS/" + std::string( threestate ? "3" : "5" )
-              + ";LRVAR/" + trend_label[q];
+              + ";VAR/" + trend_label[q];
             hd_pc_add( pc_features, hdstats_pc::key( "SLOPE", s ), slope );
             if ( q < K && !( threestate && trend_label[q] == "NR" ) )
               {
@@ -3687,24 +3607,10 @@ static void write_hdstats_longrange(
                 hd_pc_add( pc_features, hdstats_pc::key( "COM", s ), stage_timing[q].com );
               }
           }
-        if ( pc_features != NULL
-             && ( q >= K || hd_pc_retain_stage( threestate, q, par.do_3state ) ) )
-          {
-            const std::string suffix = "__NSS_" + std::string( threestate ? "3" : "5" )
-              + "__LRVAR_" + trend_label[q];
-            hd_pc_add( pc_features, "SLOPE" + suffix, slope );
-            // T50 is the PC timing representative: COM is retained in the
-            // descriptive LRVAR table but is largely redundant with T50.
-            // In the hybrid 3+5-state panel NR is a composite, unlike its
-            // W/R counterparts; the timing block deliberately carries only
-            // raw W/N1/N2/N3/R plus the conditional N3/REM measures below.
-            if ( q < K && !( threestate && trend_label[q] == "NR" ) )
-              hd_pc_add( pc_features, "T50" + suffix, stage_timing[q].t50 );
-          }
-        hd_write_lr_status( slope_ok, "INSUFFICIENT_TIME_VARIATION" );
+        hd_write_lr_status( slope_ok, "INSUFFICIENT_TIME_VARIATION", par.qc );
         hd_write_lr_metric_quality( "SLOPE", "NVALID", n, slope_ok,
-                                    "INSUFFICIENT_TIME_VARIATION" );
-        writer.unlevel( "LRVAR" );
+                                    "INSUFFICIENT_TIME_VARIATION", par.qc );
+        writer.unlevel( "VAR" );
       }
 
     // N3 within NREM and REM within sleep separate the timing of those stages
@@ -3727,16 +3633,15 @@ static void write_hdstats_longrange(
 
         const auto emit_conditional_timing = [&]( const std::string & label,
                                                    const std::vector<double> & x ) {
-          writer.level( label, "LRVAR" );
+          writer.level( label, "VAR" );
           const hd_lr_timing_t timing = hd_lr_timing( x, dat, quality );
-          hd_write_lr_timing( timing );
+          hd_write_lr_timing( timing, par.qc );
           if ( pc_features != NULL )
             {
-              hd_pc_add( pc_features, "T50__NSS_5__LRVAR_" + label, timing.t50 );
-              hd_pc_add( pc_features, hdstats_pc::key( "T50", "NSS/5;LRVAR/" + label ), timing.t50 );
-              hd_pc_add( pc_features, hdstats_pc::key( "COM", "NSS/5;LRVAR/" + label ), timing.com );
+              hd_pc_add( pc_features, hdstats_pc::key( "T50", "NSS/5;VAR/" + label ), timing.t50 );
+              hd_pc_add( pc_features, hdstats_pc::key( "COM", "NSS/5;VAR/" + label ), timing.com );
             }
-          writer.unlevel( "LRVAR" );
+          writer.unlevel( "VAR" );
         };
         emit_conditional_timing( "N3_NREM", n3_nrem );
         emit_conditional_timing( "R_SLEEP", r_sleep );
@@ -3777,37 +3682,35 @@ static void write_hdstats_longrange(
             // the `width` candidate phases actually contributed.
             const int nwin_mean = n_offsets_used > 0 ? (int)std::round( sum_nwin / n_offsets_used ) : 0;
             writer.level( window_sec, "LRWIN" );
-            writer.level( trend_label[q], "LRVAR" );
-            writer.value( "NWIN", nwin_mean );
-            writer.value( "N_OFFSETS", n_offsets_used );
+            writer.level( trend_label[q], "VAR" );
+            if ( par.qc )
+              {
+                writer.level( 1, "QC" );
+                writer.value( "NWIN", nwin_mean );
+                writer.value( "N_OFFSETS", n_offsets_used );
+                writer.unlevel( "QC" );
+              }
             const double within_sd  = within_ok  ? sum_within_sd  / n_offsets_used : NaN;
             const double between_sd = between_ok ? sum_between_sd / n_offsets_used : NaN;
-            writer.value( "WITHIN_SD", within_sd );
-            writer.value( "BETWEEN_SD", between_sd );
+            if ( emit_output )
+              {
+                writer.value( "WITHIN_SD", within_sd );
+                writer.value( "BETWEEN_SD", between_sd );
+              }
             if ( pc_features != NULL )
               {
                 const std::string s = "NSS/" + std::string( threestate ? "3" : "5" )
-                  + ";LRVAR/" + trend_label[q] + ";LRWIN/" + Helper::dbl2str(window_sec);
+                  + ";VAR/" + trend_label[q] + ";LRWIN/" + Helper::dbl2str(window_sec);
                 hd_pc_add( pc_features, hdstats_pc::key( "WITHIN_SD", s ), within_sd );
                 hd_pc_add( pc_features, hdstats_pc::key( "BETWEEN_SD", s ), between_sd );
               }
-            // The PC retains the 30-minute window only; the ordinary output
-            // continues to report every requested window width.
-            if ( pc_features != NULL && std::fabs( window_sec - 1800.0 ) < 1e-6
-                 && ( q >= K || hd_pc_retain_stage( threestate, q, par.do_3state ) ) )
-              {
-                const std::string suffix = "__NSS_" + std::string( threestate ? "3" : "5" )
-                  + "__LRWIN_" + Helper::dbl2str( window_sec ) + "__LRVAR_" + trend_label[q];
-                hd_pc_add( pc_features, "WITHIN_SD" + suffix, within_sd );
-                hd_pc_add( pc_features, "BETWEEN_SD" + suffix, between_sd );
-              }
             hd_write_lr_status( within_ok && between_ok,
-                                n_offsets_used == 0 ? "NO_ELIGIBLE_WINDOWS" : "INSUFFICIENT_WINDOWS" );
+                                n_offsets_used == 0 ? "NO_ELIGIBLE_WINDOWS" : "INSUFFICIENT_WINDOWS", par.qc );
             hd_write_lr_metric_quality( "WITHIN_SD", "NWIN", nwin_mean, within_ok,
-                                        n_offsets_used == 0 ? "NO_ELIGIBLE_WINDOWS" : "INSUFFICIENT_WINDOW_SAMPLES" );
+                                        n_offsets_used == 0 ? "NO_ELIGIBLE_WINDOWS" : "INSUFFICIENT_WINDOW_SAMPLES", par.qc );
             hd_write_lr_metric_quality( "BETWEEN_SD", "NWIN", nwin_mean, between_ok,
-                                        n_offsets_used == 0 ? "NO_ELIGIBLE_WINDOWS" : "INSUFFICIENT_WINDOWS" );
-            writer.unlevel( "LRVAR" );
+                                        n_offsets_used == 0 ? "NO_ELIGIBLE_WINDOWS" : "INSUFFICIENT_WINDOWS", par.qc );
+            writer.unlevel( "VAR" );
             writer.unlevel( "LRWIN" );
           }
       }
@@ -3901,6 +3804,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
   par.hd_offset_mass_th = param.has( "hd-offset-mass-th" ) ? param.requires_dbl( "hd-offset-mass-th" ) : 0.60;
   par.annot_name      = param.has( "annot"     ) ? param.value( "annot" )              : "";
   par.verbose         = param.yesno( "verbose" );
+  par.qc              = param.has( "qc" ) ? param.yesno( "qc" ) : false;
   par.min_events_profile = param.has( "min-events" ) ? param.requires_int( "min-events" ) : 3;
   par.min_samples_region = param.has( "min-samples" ) ? param.requires_int( "min-samples" ) : 20;
   par.emit_annot_typed_classes = param.has( "emit-annots-by-type" ) ? param.yesno( "emit-annots-by-type" ) : false;
@@ -3951,7 +3855,15 @@ void proc_hdstats( edf_t & edf, param_t & param )
   par.analysis_flank_pre_sec = param.has( "spt-flank-pre" ) ? param.requires_dbl( "spt-flank-pre" ) : analysis_flank_sec;
   par.analysis_flank_post_sec = param.has( "spt-flank-post" ) ? param.requires_dbl( "spt-flank-post" ) : analysis_flank_sec;
   par.pc_out = param.has( "pc-out" ) ? param.value( "pc-out" ) : "";
-  par.pc_proj = param.has( "pc-proj" ) ? param.value( "pc-proj" ) : "";
+  par.pc_proj = param.has( "pc-proj" ) ? Helper::expand( param.value( "pc-proj" ) ) : "";
+  const bool emit_model_desc = param.yesno( "model-desc" );
+  if ( emit_model_desc && par.pc_proj.empty() )
+    Helper::halt( "HDSTATS model-desc requires pc-proj=<HDSTATS-PC V3 model>" );
+  par.pc_min_loading = param.has( "pc-min-loading" ) ? param.requires_dbl( "pc-min-loading" ) : 0.10;
+  if ( ! std::isfinite(par.pc_min_loading) || par.pc_min_loading < 0.0 )
+    Helper::halt( "pc-min-loading must be a finite non-negative value" );
+  const bool emit_main_metrics = par.pc_proj.empty() ||
+    ( param.has( "pc-all" ) && param.yesno( "pc-all" ) );
   par.do_ultradian = param.has( "ultradian" ) ? param.yesno( "ultradian" ) : true;
   par.ultra_fwhm_sec = param.has( "ultra-fwhm" ) ? param.requires_dbl( "ultra-fwhm" ) : 600.0;
   par.ultra_prominence = param.has( "ultra-prominence" ) ? param.requires_dbl( "ultra-prominence" ) : 1.0;
@@ -4389,8 +4301,14 @@ void proc_hdstats( edf_t & edf, param_t & param )
   hdstats_pc::feature_map_t pc_features;
   if ( make_pc_features ) pc_features = hd_pc_features( dat, der, tr, hm, analysis, par );
 
-  // Emit validity summary
+  // Operational validity/analysis diagnostics are opt-in QC, separate from
+  // the ordinary night-level phenotype summaries below.
+  double twt_min = 0.0;
+  for ( int i = analysis.lo; i <= analysis.hi; ++i )
+    if ( analysis.valid_mask[i] ) twt_min += dat.p[0][i] / dat.Fs / 60.0;
+  if ( par.qc )
   {
+    writer.level( 1, "QC" );
     const int n_valid = (int)std::count( dat.valid.begin(), dat.valid.end(), true );
     writer.value( "N_VALID",   n_valid );
     writer.value( "PCT_VALID", dat.N > 0 ? 100.0 * n_valid / dat.N : 0.0 );
@@ -4405,11 +4323,9 @@ void proc_hdstats( edf_t & edf, param_t & param )
     writer.value( "HD_EXCLUDED_POST_SEC", ( dat.N - analysis.hi - 1 ) / dat.Fs );
     writer.value( "HD_ANALYSIS_INVALID_SEC", analysis.n_invalid / dat.Fs );
     writer.value( "HD_ANALYSIS_FALLBACK", analysis.fallback_to_recording ? 1 : 0 );
-    double twt_min = 0.0;
-    for ( int i = analysis.lo; i <= analysis.hi; ++i )
-      if ( analysis.valid_mask[i] ) twt_min += dat.p[0][i] / dat.Fs / 60.0;
-    writer.value( "HD_TWT", twt_min );
+    writer.unlevel( "QC" );
   }
+  if ( emit_main_metrics ) writer.value( "HD_TWT", twt_min );
 
   // Ultradian coverage is reported independently of excursion amplitude:
   // unsupported depth (insufficient local sleep evidence) is distinct from a
@@ -4454,22 +4370,20 @@ void proc_hdstats( edf_t & edf, param_t & param )
       // Keep the ordinary whole-night panel intentionally compact.  These
       // three are the primary ultradian phenotypes; the supporting counts and
       // conservative strict-turning-point diagnostic are verbose QC only.
-      writer.value( "U_MAG", sleep_mass > 0.0 ? amp_mass / sleep_mass : nan );
-      writer.value( "U_COVERAGE", sleep_mass > 0.0 ? covered_sleep_mass / sleep_mass : nan );
+      if ( emit_main_metrics ) writer.value( "U_MAG", sleep_mass > 0.0 ? amp_mass / sleep_mass : nan );
+      if ( emit_main_metrics ) writer.value( "U_COVERAGE", sleep_mass > 0.0 ? covered_sleep_mass / sleep_mass : nan );
       // A valid night with no phase has zero supported progression.  Missing
       // input, by contrast, cannot assess an effective cycle count.
-      writer.value( "U_NCYC", n_analysis_valid > 0 ? phase_advance / (2.0 * M_PI) : nan );
+      if ( emit_main_metrics ) writer.value( "U_NCYC", n_analysis_valid > 0 ? phase_advance / (2.0 * M_PI) : nan );
       if ( make_pc_features )
         {
           hd_pc_add( &pc_features, "U_MAG", sleep_mass > 0.0 ? amp_mass / sleep_mass : nan );
           hd_pc_add( &pc_features, "U_COVERAGE", sleep_mass > 0.0 ? covered_sleep_mass / sleep_mass : nan );
           hd_pc_add( &pc_features, "U_NCYC", n_analysis_valid > 0 ? phase_advance / (2.0 * M_PI) : nan );
-          hd_pc_add( &pc_features, "U_MAG__ULTRA", sleep_mass > 0.0 ? amp_mass / sleep_mass : nan );
-          hd_pc_add( &pc_features, "U_COVERAGE__ULTRA", sleep_mass > 0.0 ? covered_sleep_mass / sleep_mass : nan );
-          hd_pc_add( &pc_features, "U_NCYC__ULTRA", n_analysis_valid > 0 ? phase_advance / (2.0 * M_PI) : nan );
         }
-      if ( par.verbose )
+      if ( par.qc && par.verbose )
         {
+          writer.level( 1, "QC" );
           writer.value( "U_N_HALF_CYCLES", ultra.n_half_cycles );
           // This intentionally excludes edge-partial and gap-split components;
           // U_NCYC above is the primary fractional phase-progression measure.
@@ -4483,6 +4397,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
           writer.value( "U_PHASE_SEC", n_phase / dat.Fs );
           writer.value( "U_N_PHASE_RUNS", n_phase_runs );
           writer.value( "U_MEAN_RAW", covered_sleep_mass > 0.0 ? raw_amp_mass / covered_sleep_mass : nan );
+          writer.unlevel( "QC" );
         }
     }
 
@@ -4491,11 +4406,15 @@ void proc_hdstats( edf_t & edf, param_t & param )
   // table remains controlled by ultra-condition=.
   if ( par.do_ultradian && ( par.do_ultra_condition || make_pc_features ) )
     {
-      if ( par.do_ultra_condition )
-        writer.value( "U_CONDITION_WEIGHTED", par.ultra_condition_weighted ? 1 : 0 );
+      if ( par.qc && par.do_ultra_condition )
+        {
+          writer.level( 1, "QC" );
+          writer.value( "U_CONDITION_WEIGHTED", par.ultra_condition_weighted ? 1 : 0 );
+          writer.unlevel( "QC" );
+        }
       hd_write_ultra_conditioned_metrics( dat, der, ultra, analysis, par,
                                           make_pc_features ? &pc_features : NULL,
-                                          par.do_ultra_condition );
+                                          par.do_ultra_condition && emit_main_metrics );
     }
 
   // As above, the PC UQ features are calculated even when the descriptive
@@ -4503,24 +4422,31 @@ void proc_hdstats( edf_t & edf, param_t & param )
   if ( par.do_ultradian && ( par.do_ultra_regions || make_pc_features ) )
     hd_write_ultra_phase_regions( dat, der, ultra, analysis, par,
                                   make_pc_features ? &pc_features : NULL,
-                                  par.do_ultra_regions );
+                                  par.do_ultra_regions && emit_main_metrics );
 
   // Global summary
-  write_hdstats( der, tr, all_mask, all_mask, par, dat, par.do_hd_metrics ? &hm : NULL, &analysis );
+  if ( emit_main_metrics )
+    write_hdstats( der, tr, all_mask, all_mask, par, dat, par.do_hd_metrics ? &hm : NULL, &analysis );
 
   if ( par.do_longrange )
     {
-      writer.value( "LR_POLICY", par.lr_policy );
-      writer.value( "LR_N_VALID_RUNS", (int)lr_quality.runs.size() );
-      writer.value( "LR_VALID_SEC", lr_quality.n_valid / dat.Fs );
-      writer.value( "LR_INVALID_SEC", lr_quality.n_invalid / dat.Fs );
-      writer.value( "LR_LONGEST_INTERNAL_GAP_SEC", lr_quality.longest_internal_gap / dat.Fs );
-      writer.value( "LR_N_INTERNAL_GAPS", lr_quality.n_internal_gaps );
-      if ( par.lr_policy == "strict" && longrange_available )
-        writer.value( "LR_CORE_SEC", ( lr_quality.last_valid - lr_quality.first_valid + 1 ) / dat.Fs );
+      if ( par.qc )
+        {
+          writer.level( 1, "QC" );
+          writer.value( "LR_POLICY", par.lr_policy );
+          writer.value( "LR_N_VALID_RUNS", (int)lr_quality.runs.size() );
+          writer.value( "LR_VALID_SEC", lr_quality.n_valid / dat.Fs );
+          writer.value( "LR_INVALID_SEC", lr_quality.n_invalid / dat.Fs );
+          writer.value( "LR_LONGEST_INTERNAL_GAP_SEC", lr_quality.longest_internal_gap / dat.Fs );
+          writer.value( "LR_N_INTERNAL_GAPS", lr_quality.n_internal_gaps );
+          if ( par.lr_policy == "strict" && longrange_available )
+            writer.value( "LR_CORE_SEC", ( lr_quality.last_valid - lr_quality.first_valid + 1 ) / dat.Fs );
+          writer.unlevel( "QC" );
+        }
       if ( longrange_available )
         write_hdstats_longrange( dat, der, par, lr_quality,
-                                 make_pc_features ? &pc_features : NULL );
+                                 make_pc_features ? &pc_features : NULL,
+                                 emit_main_metrics );
     }
 
   // Level-1 HDSTATS-PC exchange: one compact line per individual.  This is
@@ -4536,20 +4462,72 @@ void proc_hdstats( edf_t & edf, param_t & param )
         }
       if ( ! par.pc_proj.empty() )
         {
-          for ( const auto & panel : hdstats_pc::project_panels( par.pc_proj, pc_features ) )
+          // This uses the portable V3 reader directly, rather than the
+          // projection cache, so API clients and HDSTATS interpret optional
+          // model annotations with exactly the same parser.
+          if ( emit_model_desc )
             {
-              const bool generic = panel.panel == "GENERIC";
-              if ( !generic ) writer.level( panel.panel, "PANEL" );
-              writer.value( "HDPC_COMPATIBLE", panel.missing == 0 ? 1 : 0 );
-              writer.value( "HDPC_N_MISSING", panel.missing );
-              if ( panel.missing == 0 )
-                for ( int k = 0; k < (int)panel.scores.size(); ++k )
-                  writer.value( generic
-                                ? "HDPC" + std::string( k < 9 ? "0" : "" ) + Helper::int2str( k + 1 )
-                                : "PC" + Helper::int2str( k + 1 ), panel.scores[k] );
-              else logger << "  warning: HDSTATS-PC " << panel.panel << " projection skipped ("
-                          << panel.missing << " required feature(s) missing)\n";
-              if ( !generic ) writer.unlevel( "PANEL" );
+              hdstats_model::model_t model;
+              std::string error;
+              if ( ! hdstats_model::read( par.pc_proj, &model, &error ) ) Helper::halt( error );
+              writer.level( "MODEL_DESC", "MODEL" );
+              writer.value( "N_PANEL", (int)model.panels.size() );
+              writer.value( "N_DESC", (int)model.descriptions.size() );
+              writer.value( "N_EXT_ASSOC", (int)model.external_associations.size() );
+              writer.value( "N_PC_CORR", (int)model.pc_correlations.size() );
+              writer.value( "N_FTR_CORR", (int)model.feature_correlations.size() );
+              for ( const auto & description : model.descriptions )
+                {
+                  writer.level( description.entity_type, "ENTITY" );
+                  writer.level( description.entity_id, "MODEL_ID" );
+                  writer.value( "DESC", description.text );
+                  writer.unlevel( "MODEL_ID" );
+                  writer.unlevel( "ENTITY" );
+                }
+              for ( const auto & association : model.external_associations )
+                {
+                  writer.level( association.entity_type, "ENTITY" );
+                  writer.level( association.entity_id, "MODEL_ID" );
+                  writer.level( association.factor, "FACTOR" );
+                  writer.value( "SCORE", association.score );
+                  writer.unlevel( "FACTOR" );
+                  writer.unlevel( "MODEL_ID" );
+                  writer.unlevel( "ENTITY" );
+                }
+              for ( const auto & correlation : model.pc_correlations )
+                {
+                  writer.level( correlation.first, "PC1" );
+                  writer.level( correlation.second, "PC2" );
+                  writer.value( "CORR", correlation.value );
+                  writer.unlevel( "PC2" );
+                  writer.unlevel( "PC1" );
+                }
+              for ( const auto & correlation : model.feature_correlations )
+                {
+                  writer.level( correlation.first, "FTR1" );
+                  writer.level( correlation.second, "FTR2" );
+                  writer.value( "CORR", correlation.value );
+                  writer.unlevel( "FTR2" );
+                  writer.unlevel( "FTR1" );
+                }
+              writer.unlevel( "MODEL" );
+            }
+          // Domain-coded PC IDs deliberately avoid PANEL/PC structural missingness:
+          // every declared component is emitted, with SCORE=NA when its source
+          // panel cannot be projected for this individual.
+          for ( const auto & component : hdstats_pc::project_components(
+                  par.pc_proj, pc_features, par.pc_min_loading ) )
+            {
+              writer.level( component.id, "PC" );
+              writer.value( "SCORE", component.score );
+              for ( const auto & contribution : component.contributions )
+                {
+                  writer.level( contribution.feature, "FTR" );
+                  writer.value( "VAL", contribution.value );
+                  writer.value( "RAW", contribution.raw_value );
+                  writer.unlevel( "FTR" );
+                }
+              writer.unlevel( "PC" );
             }
         }
     }
@@ -4651,7 +4629,8 @@ void proc_hdstats( edf_t & edf, param_t & param )
 
       // 3-state uses the same time mask (same sample positions)
       writer.level( lv, globals::annot_strat );
-      write_hdstats( der, tr, mask5, mask5, par, dat, NULL, &analysis );
+      if ( emit_main_metrics )
+        write_hdstats( der, tr, mask5, mask5, par, dat, NULL, &analysis );
       writer.unlevel( globals::annot_strat );
     }
 }

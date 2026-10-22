@@ -494,7 +494,12 @@ int main(int argc , char ** argv )
   // text-table mode?
   //
   
-  if ( cmd_t::plaintext_mode )
+  // --hdstats-pc-desc is a stdout-only utility.  In particular, retain
+  // compatibility with an old "-o out.db" invocation without attaching to
+  // (or truncating) that database.
+  if ( cmdline == PROC_HDSTATS_PC_DESC )
+    writer.nodb();
+  else if ( cmd_t::plaintext_mode )
     {
       writer.use_plaintext( cmd_t::plaintext_root );
     }
@@ -1714,6 +1719,7 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
   clmap[ "--psc" ]          = PROC_PSC;
   clmap[ "--nmf" ]          = PROC_NMF;
   clmap[ "--hdstats-pc" ]   = PROC_HDSTATS_PC;
+  clmap[ "--hdstats-pc-desc" ] = PROC_HDSTATS_PC_DESC;
   clmap[ "--hypno-pc" ]     = PROC_HYPNO_PC;
 
   // microstate analysis helper functions
@@ -1762,6 +1768,11 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
     // Negative marker: accept compact calibration arguments while still
     // letting the normal command-line pass process -o/-a/-t/@file/--flag.
     *param_from_command_line = -2;
+  // This utility is normally invoked in compact form, e.g.
+  //   luna --hdstats-pc-desc model=reference.txt
+  // rather than by piping its sole parameter through stdin.
+  if ( cmdline == PROC_HDSTATS_PC_DESC && *param_from_command_line == 0 )
+    *param_from_command_line = -3;
   //
   // otherwise, first element will be treated as the data source
   // (sample list, EDF or text file) 
@@ -2109,6 +2120,32 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       hdstats_pc::fit( param );
       writer.unlevel( "_HDSTATS-PC" );
       writer.commit();
+      std::exit(0);
+    }
+
+  if ( cmdline == PROC_HDSTATS_PC_DESC )
+    {
+      param_t param;
+      if ( param_from_command_line == -3 )
+        {
+          // parse_cmdline() has already handled Luna-global options.  Keep
+          // only direct parameters for this stdout-only utility.
+          for ( int i = 2; i < argc; ++i )
+            {
+              const std::string arg = argv[i];
+              if ( arg == "-o" || arg == "-a" || arg == "-t" )
+                { ++i; continue; }
+              if ( !arg.empty() && ( arg[0] == '@' ||
+                                     ( arg.size() > 1 && arg[0] == '-' && arg[1] == '-' ) ) )
+                continue;
+              param.parse( arg );
+            }
+        }
+      else
+        build_param( &param, argc, argv, param_from_command_line );
+      const std::string model = param.requires( "model" );
+      const double min_loading = param.has( "min-loading" ) ? param.requires_dbl( "min-loading" ) : 0.10;
+      hdstats_pc::describe( model, std::cout, min_loading );
       std::exit(0);
     }
 

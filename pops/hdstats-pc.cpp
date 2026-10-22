@@ -3,6 +3,7 @@
 //    --------------------------------------------------------------------
 
 #include "hdstats-pc.h"
+#include "hdstats-model.h"
 
 #include "param.h"
 #include "helper/helper.h"
@@ -22,6 +23,14 @@
 #include <mutex>
 #include <set>
 #include <sstream>
+
+// The generated registry is deliberately compiled into luna.  The editable
+// manifest lives in docs/hdstats/hdstats.pc; it is not a run-time dependency.
+namespace hdstats_pc_generated {
+struct generated_feature_t { const char * panel; const char * stratum; const char * variable; };
+struct generated_component_t { const char * id; const char * panel; int pc; int orientation; const char * label; };
+}
+#include "hdstats-pc-schema.h"
 
 extern logger_t logger;
 extern writer_t writer;
@@ -72,125 +81,35 @@ struct fitted_panel_t {
   double total_ss = 0.0;
 };
 
-// This is the executable schema. pops/hdstats.pc is its human-readable guide,
-// never an input to fitting or projection.
+std::string panel_option( std::string panel )
+{
+  std::transform( panel.begin(), panel.end(), panel.begin(), []( unsigned char c ) {
+    return c == '_' ? '-' : std::tolower( c );
+  } );
+  return "nc-" + panel;
+}
+
+// Generated from docs/hdstats/hdstats.pc.  The manifest controls both fitting
+// feature slots and the V3 projection registry.
 const std::vector<panel_def_t> & panel_definitions()
 {
   static const std::vector<panel_def_t> panels = [] {
     std::vector<panel_def_t> out;
-    auto panel = [&]( const std::string & name, const std::string & option ) -> panel_def_t & {
-      out.push_back( { name, option, {} } );
-      return out.back();
-    };
-    auto add = []( panel_def_t & p, const std::string & stratum, const std::string & var ) {
-      p.names.push_back( hdstats_pc::key( var, stratum ) );
-    };
-    const std::vector<std::string> nss = { "5", "3" };
-    panel_def_t & ambiguity = panel( "AMBIGUITY", "nc-ambiguity" );
-    for ( const auto & n : nss )
-      for ( const auto & v : { "H", "H_P90", "CONF", "FRAC_LOW_CONF", "MG" } )
-        add( ambiguity, "NSS/" + n, v );
-    for ( const auto & mix : std::vector<std::string>{ "W_N1", "W_N2", "W_N3", "W_R",
-          "N1_N2", "N1_N3", "N1_R", "N2_N3", "N2_R", "N3_R", "N1_N2_N3", "W_N1_R" } )
-      for ( const auto & v : { "HD_MINS", "HD_DENS" } ) add( ambiguity, "NSS/5;MIX/" + mix, v );
-    for ( const auto & mix : { "W_NR", "W_R", "NR_R", "W_NR_R" } )
-      for ( const auto & v : { "HD_MINS", "HD_DENS" } ) add( ambiguity, "NSS/3;MIX/" + std::string(mix), v );
-
-    panel_def_t & instability = panel( "INSTABILITY_STABILITY", "nc-instability-stability" );
-    for ( const auto & n : nss )
+    std::map<std::string,int> position;
+    for ( int i = 0; i < hdstats_pc_generated::n_features; ++i )
       {
-        const std::string s = "NSS/" + n;
-        for ( const auto & v : { "PS", "PS_P90", "PS_LAG", "CORR_H_PS", "PCT_STABLE",
-              "H_RATIO_UN_ST", "CONF_DIFF_UN_ST", "PS_RATIO_UN_ST" } ) add( instability, s, v );
-        for ( const auto & stable : { "1", "0" } )
-          for ( const auto & v : { "H", "CONF", "PS" } ) add( instability, s + ";STABLE/" + stable, v );
-      }
-
-    panel_def_t & transitions = panel( "TRANSITIONS", "nc-transitions" );
-    const std::vector<std::string> trans5 = { "W", "N1", "N2", "N3", "R" };
-    const std::vector<std::string> trans3 = { "W", "NR", "R" };
-    for ( const auto & n : nss )
-      {
-        const std::string s = "NSS/" + n;
-        for ( const auto & v : { "TRANS_N", "TRANS_DENS", "BOUT_TRANS_N", "BOUT_TRANS_DENS",
-              "TRANS_N_MATCHED", "TRANS_PCT_MATCHED", "TRANS_DUR", "TRANS_PEAK_H",
-              "TRANS_MIN_CONF", "TRANS_TOT_PS", "BOUT_TRANS_DUR", "BOUT_TRANS_PEAK_H",
-              "BOUT_TRANS_MIN_CONF", "BOUT_TRANS_TOT_PS" } ) add( transitions, s, v );
-        const auto & stages = n == "5" ? trans5 : trans3;
-        for ( const auto & from : stages ) for ( const auto & to : stages ) if ( from != to )
+        const auto & f = hdstats_pc_generated::features[i];
+        const std::string panel = f.panel;
+        if ( position.find(panel) == position.end() )
           {
-            add( transitions, s + ";TRANS/" + from + "to" + to, "TRANS_DENS" );
-            // N1 rarely qualifies as a settled bout. Its directional bout
-            // densities were constant or nearly so across three cohorts.
-            if ( n != "5" || ( from != "N1" && to != "N1" ) )
-              add( transitions, s + ";BOUT_TRANS/" + from + "to" + to, "BOUT_TRANS_DENS" );
+            position[panel] = (int)out.size();
+            out.push_back( { panel, panel_option(panel), {} } );
           }
+        out[position[panel]].names.push_back( hdstats_pc::key( f.variable, f.stratum ) );
       }
-
-    panel_def_t & architecture = panel( "SLEEP_ARCHITECTURE", "nc-sleep-architecture" );
-    for ( const auto & v : { "HD_SPT", "HD_WASO", "HD_SOL", "HD_SME", "HD_REM_LAT", "HD_REM_LAT2" } )
-      add( architecture, ".", v );
-    for ( const auto & st : trans5 )
-      for ( const auto & v : { "HD_MINS", "HD_PCT", "HD_DENS" } ) add( architecture, "SS/" + st, v );
-    const std::vector<std::pair<std::string,std::string>> timing = {
-      {"3","W"}, {"5","N1"}, {"5","N2"}, {"5","N3"}, {"3","R"},
-      {"5","N3_NREM"}, {"5","R_SLEEP"} };
-    for ( const auto & t : timing ) for ( const auto & v : { "T50", "COM" } )
-      add( architecture, "NSS/" + t.first + ";LRVAR/" + t.second, v );
-
-    panel_def_t & ultradian = panel( "ULTRADIAN", "nc-ultradian" );
-    for ( const auto & v : { "U_MAG", "U_COVERAGE", "U_NCYC" } ) add( ultradian, ".", v );
-    for ( const auto & metric : { "CONF", "CONF3", "PS", "PS3" } )
-      {
-        for ( const auto & q : { "D1", "D2", "L1", "L2" } )
-          add( ultradian, "UQ/" + std::string(q) + ";U_METRIC/" + metric, "U_MEAN" );
-        for ( const auto & v : { "U_SLOPE", "U_MOD", "U_MOD_COS", "U_MOD_SIN", "U_R2", "U_PARTIAL_R2" } )
-          add( ultradian, "UVAR/" + std::string(metric), v );
-      }
-
-    panel_def_t & overnight = panel( "OVERNIGHT", "nc-overnight" );
-    for ( const auto & n : nss )
-      {
-        const std::string s = "NSS/" + n;
-        for ( const auto & lag : { "600", "1800", "3600", "5400" } )
-          for ( const auto & v : { "PS", "SIM" } ) add( overnight, s + ";LRLAG/" + lag, v );
-        for ( const auto & metric : { "H", "PS" } )
-          {
-            add( overnight, s + ";LRVAR/" + metric, "SLOPE" );
-            for ( const auto & win : { "1800", "3600" } )
-              for ( const auto & v : { "WITHIN_SD", "BETWEEN_SD" } )
-                add( overnight, s + ";LRVAR/" + metric + ";LRWIN/" + win, v );
-          }
-      }
-    for ( const auto & t : std::vector<std::pair<std::string,std::string>>{
-          {"3","W"},{"5","N1"},{"5","N2"},{"5","N3"},{"3","R"} } )
-      add( overnight, "NSS/" + t.first + ";LRVAR/" + t.second, "SLOPE" );
-
-    for ( const auto & t : std::vector<std::pair<std::string,std::string>>{
-          {"3","W"},{"5","N1"},{"5","N2"},{"5","N3"},{"3","R"} } )
-      {
-        panel_def_t & stage = panel( "STAGE_" + t.second, "nc-stage-" + std::string(t.second == "W" ? "w" :
-          t.second == "R" ? "r" : t.second == "N1" ? "n1" : t.second == "N2" ? "n2" : "n3") );
-        for ( const auto & v : { "HD_MINS", "HD_PCT", "HD_DENS" } ) add( stage, "SS/" + t.second, v );
-        // N1/N3 argmax-conditioned summaries are unavailable for many
-        // otherwise usable recordings; keep them in HDSTATS output only.
-        if ( t.second != "N1" && t.second != "N3" )
-          for ( const auto & v : { "P_", "PS" } )
-            add( stage, "SS/" + t.second + ";NSS/" + t.first,
-                 std::string(v) == "P_" ? "P_" + t.second : v );
-        for ( const auto & lag : { "600", "1800", "3600", "5400" } )
-          add( stage, "SS/" + t.second + ";NSS/" + t.first + ";LRLAG/" + lag, "ACF" );
-        for ( const auto & v : { "SLOPE", "T50", "COM" } )
-          add( stage, "NSS/" + t.first + ";LRVAR/" + t.second, v );
-        for ( const auto & win : { "1800", "3600" } )
-          for ( const auto & v : { "WITHIN_SD", "BETWEEN_SD" } )
-            add( stage, "NSS/" + t.first + ";LRVAR/" + t.second + ";LRWIN/" + win, v );
-      }
-    const std::vector<int> expected = {42,28,72,35,43,41,16,14,16,14,16};
-    for ( int i = 0; i < (int)out.size(); ++i )
-      if ( (int)out[i].names.size() != expected[i] ||
-           std::set<std::string>(out[i].names.begin(),out[i].names.end()).size() != out[i].names.size() )
-        Helper::halt( "internal HDSTATS panel schema error: " + out[i].name );
+    for ( const auto & panel : out )
+      if ( panel.names.empty() || std::set<std::string>(panel.names.begin(),panel.names.end()).size() != panel.names.size() )
+        Helper::halt( "invalid generated HDSTATS panel schema: " + panel.name );
     return out;
   }();
   return panels;
@@ -219,6 +138,14 @@ std::string fmt( const double x )
   if ( ! std::isfinite( x ) ) return "NA";
   std::ostringstream ss;
   ss << std::setprecision( 17 ) << x;
+  return ss.str();
+}
+
+std::string fmt_display( const double x )
+{
+  if ( ! std::isfinite( x ) ) return "NA";
+  std::ostringstream ss;
+  ss << std::fixed << std::setprecision( 3 ) << x;
   return ss.str();
 }
 
@@ -391,11 +318,15 @@ const model_t & cached_model( const std::string & file, const format_t & format 
 std::string hdstats_pc::key( const std::string & variable, const std::string & stratum )
 {
   if ( stratum == "." || stratum.empty() ) return variable;
-  std::string out = variable + "__";
-  for ( const char c : stratum )
+  std::string out = variable;
+  std::stringstream fields( stratum );
+  std::string field;
+  while ( std::getline( fields, field, ';' ) )
     {
-      if ( c == ';' ) out += "__";
-      else out += c == '/' ? '_' : c;
+      const size_t slash = field.find( '/' );
+      if ( slash == std::string::npos || slash == 0 || slash + 1 == field.size() )
+        Helper::halt( "bad HDSTATS-PC stratum: " + stratum );
+      out += "." + field.substr( 0, slash ) + "_" + field.substr( slash + 1 );
     }
   return out;
 }
@@ -640,71 +571,34 @@ static void write_panels( const std::string & file, const std::vector<fitted_pan
 
 static std::vector<fitted_panel_t> read_panels( const std::string & file )
 {
-  std::ifstream in = LunaIO::open_ifstream(file,std::ios::in);
-  std::string line;
-  if ( !std::getline(in,line) || line != "__HDSTATS_PC_V3" ) Helper::halt("bad HDSTATS-PC V3 model " + file);
-  if ( !std::getline(in,line) ) Helper::halt("truncated HDSTATS-PC model " + file);
-  auto tok = split_tab(line);
-  int np;
-  if ( tok.size()!=2 || tok[0]!="NP" || !Helper::str2int(tok[1],&np) || np<1 )
-    Helper::halt("bad HDSTATS-PC panel count " + file);
+  hdstats_model::model_t source;
+  std::string error;
+  if ( !hdstats_model::read(file,&source,&error) ) Helper::halt(error);
   std::vector<fitted_panel_t> panels;
-  std::set<std::string> seen_panels;
-  for ( int p = 0; p < np; ++p )
+  for ( const auto & source_panel : source.panels )
     {
-      if ( !std::getline(in,line) ) Helper::halt("truncated HDSTATS-PC panel " + file);
-      tok = split_tab(line);
-      int n_input,n_fit,nd,nf,nc;
-      double total_ss;
-      if ( tok.size()!=8 || tok[0]!="PANEL" || tok[1].empty() || !seen_panels.insert(tok[1]).second ||
-           !Helper::str2int(tok[2],&n_input) || !Helper::str2int(tok[3],&n_fit) ||
-           !Helper::str2int(tok[4],&nd) || !Helper::str2int(tok[5],&nf) ||
-           !Helper::str2int(tok[6],&nc) || !parse_value(tok[7],&total_ss) ||
-           n_input<2 || n_fit<2 || nd<1 || nf<1 || nc<1 || nc>nf ||
-           !std::isfinite(total_ss) || total_ss<=0 ) Helper::halt("bad HDSTATS-PC panel header " + file);
       fitted_panel_t panel;
-      panel.name=tok[1]; panel.n_input=n_input; panel.n_fit=n_fit; panel.total_ss=total_ss;
-      for ( int j=0; j<nd; ++j )
+      panel.name = source_panel.id;
+      panel.n_input = source_panel.n_input;
+      panel.n_fit = source_panel.n_fit;
+      panel.total_ss = source_panel.total_ss;
+      panel.declared = source_panel.declared_features;
+      model_t & m = panel.model;
+      const int nf = (int)source_panel.features.size();
+      const int nc = (int)source_panel.singular_values.size();
+      m.names.resize(nf); m.means.resize(nf); m.sds.resize(nf);
+      m.singular_values.resize(nc); m.loadings.resize(nf,nc);
+      for ( int k = 0; k < nc; ++k ) m.singular_values(k) = source_panel.singular_values[k];
+      for ( int j = 0; j < nf; ++j )
         {
-          if ( !std::getline(in,line) ) Helper::halt("truncated HDSTATS-PC inputs " + file);
-          tok=split_tab(line);
-          if ( tok.size()!=2 || tok[0]!="I" || tok[1].empty() ||
-               std::find(panel.declared.begin(),panel.declared.end(),tok[1])!=panel.declared.end() )
-            Helper::halt("bad HDSTATS-PC input schema " + file);
-          panel.declared.push_back(tok[1]);
+          const auto & feature = source_panel.features[j];
+          m.names[j] = feature.id;
+          m.means(j) = feature.mean;
+          m.sds(j) = feature.sd;
+          for ( int k = 0; k < nc; ++k ) m.loadings(j,k) = feature.loadings[k];
         }
-      model_t & m=panel.model;
-      m.names.resize(nf);m.means.resize(nf);m.sds.resize(nf);
-      for ( int j=0; j<nf; ++j )
-        {
-          if ( !std::getline(in,line) ) Helper::halt("truncated HDSTATS-PC features " + file);
-          tok=split_tab(line);
-          if ( tok.size()!=4 || tok[0]!="F" || !parse_value(tok[2],&m.means(j)) ||
-               !parse_value(tok[3],&m.sds(j)) || !std::isfinite(m.means(j)) ||
-               !std::isfinite(m.sds(j)) || m.sds(j)<=0 ) Helper::halt("bad HDSTATS-PC feature " + file);
-          m.names[j]=tok[1];
-          if ( std::find(panel.declared.begin(),panel.declared.end(),m.names[j])==panel.declared.end() )
-            Helper::halt("HDSTATS-PC undeclared feature " + m.names[j]);
-        }
-      if ( !std::getline(in,line) ) Helper::halt("truncated HDSTATS-PC singular values " + file);
-      tok=split_tab(line);m.singular_values.resize(nc);
-      if ( (int)tok.size()!=nc+1 || tok[0]!="W" ) Helper::halt("bad HDSTATS-PC singular values " + file);
-      for ( int k=0; k<nc; ++k ) if ( !parse_value(tok[k+1],&m.singular_values(k)) ||
-          !std::isfinite(m.singular_values(k)) ) Helper::halt("bad HDSTATS-PC singular value " + file);
-      m.loadings.resize(nf,nc);
-      for ( int j=0; j<nf; ++j )
-        {
-          if ( !std::getline(in,line) ) Helper::halt("truncated HDSTATS-PC loadings " + file);
-          tok=split_tab(line);
-          if ( (int)tok.size()!=nc+2 || tok[0]!="V" || tok[1]!=m.names[j] )
-            Helper::halt("bad HDSTATS-PC loading row " + file);
-          for ( int k=0; k<nc; ++k ) if ( !parse_value(tok[k+2],&m.loadings(j,k)) ||
-              !std::isfinite(m.loadings(j,k)) ) Helper::halt("bad HDSTATS-PC loading " + file);
-        }
-      if ( !std::getline(in,line) || line!="END" ) Helper::halt("bad HDSTATS-PC panel end " + file);
       panels.push_back(std::move(panel));
     }
-  if ( std::getline(in,line) && !line.empty() ) Helper::halt("trailing HDSTATS-PC model data " + file);
   return panels;
 }
 
@@ -719,8 +613,75 @@ static const std::vector<fitted_panel_t> & cached_panels( const std::string & fi
   return cache.emplace(path,read_panels(path)).first->second;
 }
 
+static std::map<std::string,int> registry_component_counts()
+{
+  std::map<std::string,int> counts;
+  std::map<std::string,std::set<int>> local_pcs;
+  for ( int i = 0; i < hdstats_pc_generated::n_components; ++i )
+    {
+      const auto & c = hdstats_pc_generated::components[i];
+      if ( !local_pcs[c.panel].insert(c.pc).second )
+        Helper::halt( "duplicate local PC in HDSTATS-PC registry: " + std::string(c.panel) );
+      counts[c.panel] = std::max( counts[c.panel], c.pc );
+    }
+  for ( const auto & item : counts )
+    for ( int pc = 1; pc <= item.second; ++pc )
+      if ( local_pcs[item.first].find(pc) == local_pcs[item.first].end() )
+        Helper::halt( "non-contiguous local PCs in HDSTATS-PC registry: " + item.first );
+  return counts;
+}
+
+static const std::map<std::string,int> & component_counts()
+{
+  static const std::map<std::string,int> counts = registry_component_counts();
+  return counts;
+}
+
+static void validate_registry()
+{
+  static const bool valid = [] {
+    std::map<std::string,std::set<std::string>> declared;
+    for ( const auto & panel : panel_definitions() )
+      declared[panel.name] = std::set<std::string>(panel.names.begin(),panel.names.end());
+    const auto & counts = component_counts();
+    for ( const auto & item : counts )
+      if ( declared.find(item.first) == declared.end() )
+        Helper::halt( "HDSTATS-PC registry has a component for unknown panel " + item.first );
+    std::set<std::string> ids;
+    for ( int i = 0; i < hdstats_pc_generated::n_components; ++i )
+      {
+        const auto & c = hdstats_pc_generated::components[i];
+        if ( !ids.insert(c.id).second )
+          Helper::halt( "duplicate HDSTATS-PC component ID " + std::string(c.id) );
+      }
+    return true;
+  }();
+  (void)valid;
+}
+
+static void validate_projection_model( const std::vector<fitted_panel_t> & fitted )
+{
+  validate_registry();
+  const auto & definitions = panel_definitions();
+  const auto & counts = component_counts();
+  if ( fitted.size() != definitions.size() )
+    Helper::halt( "HDSTATS-PC model does not match the compiled V3 panel registry" );
+  std::map<std::string,const panel_def_t *> definitions_by_name;
+  for ( const auto & definition : definitions ) definitions_by_name[definition.name] = &definition;
+  std::set<std::string> names;
+  for ( const auto & panel : fitted )
+    {
+      const auto def = definitions_by_name.find(panel.name);
+      const auto expected = counts.find(panel.name);
+      if ( def == definitions_by_name.end() || expected == counts.end() || !names.insert(panel.name).second ||
+           panel.declared != def->second->names || panel.model.loadings.cols() != expected->second )
+        Helper::halt( "HDSTATS-PC model panel does not match the current registry: " + panel.name );
+    }
+}
+
 static void fit_hdstats_panels( param_t & param )
 {
+  validate_registry();
   const auto files=param.strvector("data");
   if ( files.empty() ) Helper::halt("--hdstats-pc requires data=<feature files>");
   const auto rows=read_rows(files,hdstats_format);
@@ -731,6 +692,10 @@ static void fit_hdstats_panels( param_t & param )
     {
       const int nc=param.has(def.option) ? param.requires_int(def.option) : default_nc;
       if ( nc<1 ) Helper::halt(def.option + " must be positive");
+      const int expected = component_counts().at(def.name);
+      if ( nc != expected )
+        Helper::halt( "HDSTATS-PC " + def.name + " requires " + Helper::int2str(expected) +
+                      " components for the current registry (got " + Helper::int2str(nc) + ")" );
       panels.push_back(fit_panel(def,rows,nc));
       logger << "  HDSTATS-PC " << def.name << ": " << panels.back().n_fit << "/" << rows.size()
              << " people, " << panels.back().model.names.size() << "/" << def.names.size()
@@ -847,6 +812,102 @@ std::vector<hdstats_pc::panel_scores_t> hdstats_pc::project_panels(
       results.push_back(std::move(result));
     }
   return results;
+}
+
+std::vector<hdstats_pc::component_score_t> hdstats_pc::project_components(
+    const std::string & file, const feature_map_t & features, const double min_loading )
+{
+  if ( ! std::isfinite(min_loading) || min_loading < 0.0 )
+    Helper::halt("pc-min-loading must be a finite non-negative value");
+  std::ifstream in=LunaIO::open_ifstream(file,std::ios::in);
+  std::string magic;
+  if ( !std::getline(in,magic) ) Helper::halt("could not read HDSTATS-PC model " + file);
+  if ( magic == hdstats_format.model_magic )
+    Helper::halt("HDSTATS-PC global component projection requires a V3 model: " + file);
+  if ( magic != "__HDSTATS_PC_V3" ) Helper::halt("unsupported HDSTATS-PC model " + file);
+
+  const auto & fitted = cached_panels(file);
+  validate_projection_model(fitted);
+  std::map<std::string,const fitted_panel_t *> panels;
+  for ( const auto & panel : fitted ) panels[panel.name] = &panel;
+
+  std::vector<component_score_t> results;
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  for ( int i = 0; i < hdstats_pc_generated::n_components; ++i )
+    {
+      const auto & definition = hdstats_pc_generated::components[i];
+      const fitted_panel_t & panel = *panels.at(definition.panel);
+      const model_t & model = panel.model;
+      component_score_t result;
+      result.id=definition.id;
+      result.panel=definition.panel;
+      result.panel_pc=definition.pc;
+      result.orientation=definition.orientation;
+      result.label=definition.label;
+      result.compatible=true;
+      result.missing=0;
+      result.score=nan;
+
+      Eigen::VectorXd z(model.names.size());
+      std::map<std::string,int> feature_index;
+      for ( int j=0; j<(int)model.names.size(); ++j )
+        {
+          feature_index[model.names[j]]=j;
+          const auto feature=features.find(model.names[j]);
+          if ( feature==features.end() || !std::isfinite(feature->second) )
+            { ++result.missing; result.compatible=false; z(j)=0.0; }
+          else z(j)=(feature->second-model.means(j))/model.sds(j);
+        }
+      if ( result.compatible )
+        result.score=definition.orientation * model.loadings.col(definition.pc-1).dot(z);
+
+      for ( int j = 0; j < (int)model.names.size(); ++j )
+        {
+          const double loading = definition.orientation * model.loadings(j,definition.pc-1);
+          if ( std::fabs(loading) < min_loading ) continue;
+          const auto raw = features.find(model.names[j]);
+          result.contributions.push_back( { model.names[j], result.compatible
+            ? loading * z(j) : nan,
+            raw == features.end() || !std::isfinite(raw->second) ? nan : raw->second } );
+        }
+      results.push_back(std::move(result));
+    }
+  return results;
+}
+
+void hdstats_pc::describe( const std::string & file, std::ostream & out, const double min_loading )
+{
+  if ( ! std::isfinite(min_loading) || min_loading < 0.0 )
+    Helper::halt("min-loading must be a finite non-negative value");
+  validate_registry();
+  const auto & fitted = cached_panels(file);
+  validate_projection_model(fitted);
+  std::map<std::string,const fitted_panel_t *> panels;
+  for ( const auto & panel : fitted ) panels[panel.name] = &panel;
+  out << "PC\tDOMAIN\tMODEL_PC\tLABEL\tORIENTATION\tFTR_LOADINGS\n";
+  for ( int i = 0; i < hdstats_pc_generated::n_components; ++i )
+    {
+      const auto & component = hdstats_pc_generated::components[i];
+      const model_t & model = panels.at(component.panel)->model;
+      std::vector<std::string> exemplar_features;
+      for ( int j = 0; j < (int)model.names.size(); ++j )
+        {
+          const double loading = component.orientation * model.loadings(j,component.pc-1);
+          if ( std::fabs(loading) >= min_loading )
+            exemplar_features.push_back( model.names[j] + "=" + fmt_display( loading ) );
+        }
+      out << component.id << '\t'
+          << component.panel << '\t'
+          << component.pc << '\t'
+          << component.label << '\t'
+          << component.orientation << '\t';
+      for ( int j = 0; j < (int)exemplar_features.size(); ++j )
+        {
+          if ( j ) out << "; ";
+          out << exemplar_features[j];
+        }
+      out << '\n';
+    }
 }
 
 void hdstats_pc::fit( param_t & param )

@@ -118,6 +118,11 @@ luna: main.o $(OBJS)
 -include $(DEPS)
 -include utils/reader2.d
 
+pops/hdstats-pc-schema.h: docs/hdstats/hdstats.pc scripts/generate_hdstats_pc_schema.py
+	python3 scripts/generate_hdstats_pc_schema.py $< $@
+
+pops/hdstats-pc.o: pops/hdstats-pc-schema.h
+
 ifeq ($(ARCH),MAC)
 $(SHARED_LIB): $(OBJS)
 	$(LD) -dynamiclib $(DEP_LIB) $(LDFLAGS) -o $(SHARED_LIB) $(OBJS)
