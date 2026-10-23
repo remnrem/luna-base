@@ -134,6 +134,11 @@ namespace Helper
   std::string search_replace( const std::string & , char a , char b );
 
   std::string search_replace( std::string s , const std::string & a , const std::string & b , const bool only_root = false );
+
+  // Commas are reserved as list delimiters in signal and annotation selectors.
+  // These helpers apply only to a single label, never to a selector expression.
+  std::string repair_label_commas( const std::string & );
+  void require_label_without_commas( const std::string & , const std::string & label_type );
   
   void swap_in_variables( std::string * , std::map<std::string,std::string> * , const bool allow_missing = false , const bool silent = false );
 

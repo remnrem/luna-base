@@ -61,20 +61,21 @@ bool project( const std::string & model,
 std::vector<panel_scores_t> project_panels( const std::string & model,
                                            const feature_map_t & features );
 
-// Registry-aware V3 projection. This is the HDSTATS command-facing API:
-// it maps local PANEL/PC coordinates to domain-coded IDs (e.g. PC_AM_1) and
-// applies the documented semantic orientation to scores and contributions.
+// Registry-aware V3 or self-contained V1 projection. This is the HDSTATS
+// command-facing API: it maps local PANEL/PC coordinates to named components
+// and applies the model's documented semantic orientation.
 std::vector<component_score_t> project_components( const std::string & model,
                                                     const feature_map_t & features,
                                                     double min_loading = 0.10 );
 
-// Write the fixed PC registry as a single TSV table. Each component row
-// includes oriented model loadings meeting the minimum absolute threshold.
-void describe( const std::string & model, std::ostream & out, double min_loading = 0.10 );
+// Write a model's PC registry as a TSV table. Each component row includes
+// oriented loadings meeting the minimum absolute threshold.
+void describe( const std::string & model, std::ostream & out, double min_loading = 0.10,
+               const std::string & descriptor = "" );
 
-// Level 2: luna --hdstats-pc --options data=all.txt model=reference.txt nc=2
-// with optional nc-<panel>=N overrides. Fitting uses the compiled manifest
-// generated from docs/hdstats/hdstats.pc.
+// Level 2 legacy fitting uses the compiled V3 manifest. Supplying spec=<JSON>
+// instead selects self-contained V1 fitting; the JSON layout owns all panel
+// and component definitions, so nc/nc-* are not accepted in that mode.
 void fit( param_t & param );
 
 }

@@ -443,7 +443,7 @@ bool annot_t::map_epoch_annotations(   edf_t & parent_edf ,
       // otherwise, create the new annotation class
       //
       
-      annot_t * a = parent_edf.annotations->add( ann[e] );
+      annot_t * a = parent_edf.annotations->add_imported( ann[e] );
 
       amap[ ann[e] ] = a;
       
@@ -865,7 +865,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	  // otherwise, create the annotation if it doesn't exist
 	  //
 
-	  annot_t * a = parent_edf.annotations->add( name );
+	  annot_t * a = parent_edf.annotations->add_imported( name );
 
 	  //
 	  // store a temporary lookup table
@@ -1184,7 +1184,7 @@ bool annot_t::load( const std::string & f , edf_t & parent_edf )
 	      const bool has_original = oo != annot_map.end();
 
 	      // make a new annot_t class
-	      annot_t * a = parent_edf.annotations->add( aname );
+	      annot_t * a = parent_edf.annotations->add_imported( aname );
 	      
 	      // add to the current map
 	      annot_map[ aname ] = a;
@@ -2843,7 +2843,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       if ( original_label != concept->value )
 	  edf->annotations->aliasing[ concept->value ] = original_label ;
 
-      annot_t * a = edf->annotations->add( concept->value );
+      annot_t * a = edf->annotations->add_imported( concept->value );
       a->description = "XML-derived";
       a->file = filename;
       a->type = globals::A_FLAG_T; // not expecting any meta-data
@@ -2889,7 +2889,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  if ( added.find( ss ) != added.end() ) continue;
 	  
 	  // otherwise, add
-	  annot_t * a = edf->annotations->add( ss );
+	  annot_t * a = edf->annotations->add_imported( ss );
 	  a->description = "XML-derived";
 	  a->file = filename;
 	  a->type = globals::A_FLAG_T; // not expecting any meta-data from XML
@@ -2951,7 +2951,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
       
       interval_t interval( start_tp , stop_tp );
       
-      annot_t * a = edf->annotations->add( concept->value );
+      annot_t * a = edf->annotations->add_imported( concept->value );
       
       if ( a == NULL ) Helper::halt( "internal error in loadxml()");
 
@@ -3047,7 +3047,7 @@ bool annot_t::loadxml( const std::string & filename , edf_t * edf )
 	  
 	  interval_t interval( start_tp , stop_tp );	  
 	  
-	  annot_t * a = edf->annotations->add( ss );
+	  annot_t * a = edf->annotations->add_imported( ss );
 		  
 	  // . indicates no associated channel
 	  instance_t * instance = a->add( ss , interval , "." );      
@@ -5654,7 +5654,7 @@ bool annot_t::loadxml_luna( const std::string & filename , edf_t * edf )
       // add this annotation
       //
       
-      annot_t * a = edf->annotations->add( cls_name );
+      annot_t * a = edf->annotations->add_imported( cls_name );
       
       a->description = desc;
       a->file = filename;
@@ -5906,6 +5906,7 @@ void annotation_set_t::clear( const std::string & name )
 	{
 	  delete ii->second;
 	  annots.erase( ii ); 
+	  imported_label_origin.erase( name );
 	}
     }
 }
@@ -5943,6 +5944,7 @@ void annotation_set_t::clear()
     }
   
   annots.clear(); 
+  imported_label_origin.clear();
   
   start_ct.reset();
   
@@ -6185,7 +6187,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 		    {
 		      // add as a new class
 		      // (no meta-info)
-		      annot_t * a = edf.annotations->add( aname );
+		      annot_t * a = edf.annotations->add_imported( aname );
 		      instance_t * instance = a->add( "." , interval , "." );
 		      edf.aoccur[ aname ]++;
 		    }
@@ -6317,7 +6319,7 @@ annot_t * annotation_set_t::from_EDF( edf_t & edf , edfz_t * edfz )
 			    {
 			      // add as a new class
 			      // (no meta-info)
-			      annot_t * a = edf.annotations->add( aname );
+		      annot_t * a = edf.annotations->add_imported( aname );
 			      instance_t * instance = a->add( "." , interval , "." );
 			      edf.aoccur[ aname ]++;
 			    }

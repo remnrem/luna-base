@@ -394,9 +394,9 @@ COMPONENT	PC_SA_3	SLEEP_ARCHITECTURE	3	1	Delayed deep-sleep timing
 COMPONENT	PC_SA_4	SLEEP_ARCHITECTURE	4	1	N2-dominant sleep
 COMPONENT	PC_SA_5	SLEEP_ARCHITECTURE	5	1	REM-dominant sleep
 COMPONENT	PC_UL_1	ULTRADIAN	1	1	Strong ultradian modulation
-COMPONENT	PC_UL_2	ULTRADIAN	2	1	Phase-linked instability / low confidence
-COMPONENT	PC_UL_3	ULTRADIAN	3	1	D1-versus-L1 PS-confidence phase contrast
-COMPONENT	PC_UL_4	ULTRADIAN	4	1	Improving confidence / declining PS over night
+COMPONENT	PC_UL_2	ULTRADIAN	2	1	Phase instability
+COMPONENT	PC_UL_3	ULTRADIAN	3	1	D1-L1 phase contrast
+COMPONENT	PC_UL_4	ULTRADIAN	4	1	Confidence up / PS down
 COMPONENT	PC_ON_1	OVERNIGHT	1	1	Short-scale instability
 COMPONENT	PC_ON_2	OVERNIGHT	2	1	Between-window heterogeneity
 COMPONENT	PC_ON_3	OVERNIGHT	3	1	Long-horizon reorganization

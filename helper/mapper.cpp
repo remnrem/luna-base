@@ -237,10 +237,14 @@ void Helper::channel_annot_mapper( const std::vector<std::string> & tok , bool h
       
       // signal label, trim leading/trailing spaces
       std::string l = Helper::trim( *cc );
+
+      // Match EDF header import: commas are selector delimiters and cannot
+      // remain in the in-memory channel namespace.
+      l = Helper::repair_label_commas( l );
       
       // annotation?
       if ( Helper::imatch( l , "EDF Annotation" , 14 ) ) {
-	chs.push_back( *cc );
+	chs.push_back( l );
 	anchan.push_back( true );
 	++cc;
 	continue;

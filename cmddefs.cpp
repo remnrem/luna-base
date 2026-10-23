@@ -4638,6 +4638,7 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "gap-aware" , "T" , "Gap-aware long-range mode" );
   add_param( "HDSTATS" , "fail-on-empty" , "F" , "Fail if no long-range values" );
   add_param( "HDSTATS" , "spt" , "T" , "Use SPT analysis interval" );
+  add_param( "HDSTATS" , "fixed" , "" , "Use an exact N-hour analysis window beginning at sustained sleep onset; recordings without the full window are excluded" );
   add_param( "HDSTATS" , "spt-flank" , "300" , "SPT flank (seconds); default 300s (5 min) on each side" );
   add_param( "HDSTATS" , "spt-flank-pre" , "300" , "Pre-SPT flank (seconds); defaults to spt-flank" );
   add_param( "HDSTATS" , "spt-flank-post" , "300" , "Post-SPT flank (seconds); defaults to spt-flank" );
@@ -4663,9 +4664,10 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "emit-all-trans", "F"   , "Emit all directed TRANS and BOUT_TRANS pairs, padding unobserved pair summaries with zero counts/densities" );
   add_param( "HDSTATS" , "emit-annots", ""       , "Emit detected transitions as annotations under this class name" );
   add_param( "HDSTATS" , "emit-annots-by-type", "F" , "Encode transition type in the emitted annotation class name" );
-  add_param( "HDSTATS" , "emit-spt", "hd"      , "Emit soft SPT annotations under this root" );
+  add_param( "HDSTATS" , "emit-spt", "hd"      , "Emit soft SPT annotations under this root, and the fixed analysis interval as <root>_fixed when fixed= is used" );
+  add_param( "HDSTATS" , "emit-cycles", "F"   , "Emit complete soft-ultradian trough-to-peak-to-trough cycle annotations as <root>_cycle (T uses root hd); these are not canonical HYPNO NREM cycles" );
   add_param( "HDSTATS" , "pc-out", ""          , "Write one HDSTATS-PC feature line per individual" );
-  add_param( "HDSTATS" , "pc-proj", ""         , "Project a V3 HDSTATS-PC model as domain-coded PC scores and loading-selected feature contributions" );
+  add_param( "HDSTATS" , "pc-proj", ""         , "Project a legacy or self-contained JSON V1 HDSTATS-PC model as named PC scores and loading-selected feature contributions" );
   add_param( "HDSTATS" , "model-desc", "F"      , "With pc-proj=, emit optional appended HDSTATS-PC model descriptions and associations" );
   add_param( "HDSTATS" , "pc-min-loading", "0.10" , "Minimum absolute oriented loading for linked PC feature contributions" );
   add_param( "HDSTATS" , "pc-all", "F"         , "With pc-proj=, also emit all ordinary HDSTATS metrics" );
@@ -4678,8 +4680,13 @@ void cmddefs_t::init()
   add_cmd( "stage" , "--hdstats-pc-desc" , "Print the HDSTATS-PC component registry as TSV" );
   add_param( "--hdstats-pc-desc" , "model" , "" , "Fitted V3 HDSTATS-PC reference model used to report oriented loadings" );
   add_param( "--hdstats-pc-desc" , "min-loading" , "0.10" , "Minimum absolute oriented loading to list for each PC" );
+  add_cmd( "stage" , "--hdstats-desc" , "Print a fitted HDSTATS-PC JSON model and optional reviewed descriptor in human-readable form" );
+  add_param( "--hdstats-desc" , "model" , "" , "Self-contained HDSTATS-PC V1 JSON model" );
+  add_param( "--hdstats-desc" , "desc" , "" , "Optional matching HDSTATS-PC V1 descriptor JSON" );
+  add_param( "--hdstats-desc" , "min-loading" , "0.10" , "Minimum absolute oriented loading to list for each component" );
   add_param( "--hdstats-pc" , "data" , "all.txt" , "HDSTATS-PC feature lines" );
   add_param( "--hdstats-pc" , "model" , "hdstats-pc.txt" , "Output PCA model" );
+  add_param( "--hdstats-pc" , "spec" , "" , "Optional self-contained JSON layout specification for a flexible V1 HDSTATS-PC model" );
   add_param( "--hdstats-pc" , "nc" , "1" , "Default components retained per panel" );
   add_param( "--hdstats-pc" , "nc-ambiguity" , "" , "Override components for posterior ambiguity" );
   add_param( "--hdstats-pc" , "nc-instability-stability" , "" , "Override components for instability and stability" );
@@ -4779,7 +4786,9 @@ void cmddefs_t::init()
   add_var(   "HDSTATS" , ""                 , "HD_REM_LAT"   , "REM latency (minutes from sleep onset)" );
   add_var(   "HDSTATS" , ""                 , "HD_REM_LAT2"  , "REM latency excluding wake (minutes)" );
   add_var(   "HDSTATS" , ""                 , "HD_TWT"       , "Expected wake time (minutes)" );
-  add_table( "HDSTATS" , "PC" , "Domain-coded HDSTATS-PC scores and semantics" );
+  add_var(   "HDSTATS" , ""                 , "HD_FIXED_AVAILABLE_HOURS", "Recording hours available after sustained sleep onset (fixed= only)" );
+  add_var(   "HDSTATS" , ""                 , "HD_FIXED_OK", "1 if the requested fixed analysis window is available, otherwise 0 (fixed= only)" );
+  add_table( "HDSTATS" , "PC" , "Named HDSTATS-PC scores and semantics" );
   add_var( "HDSTATS" , "PC" , "SCORE" , "Semantically oriented component score (NA if unavailable)" );
   add_table( "HDSTATS" , "PC,FTR" , "Curated signed standardized feature contributions" );
   add_var( "HDSTATS" , "PC,FTR" , "VAL" , "Oriented loading times standardized feature value (NA if score unavailable)" );
@@ -4835,6 +4844,7 @@ void cmddefs_t::init()
           "N_VALID", "PCT_VALID", "N_INVALID_LEAD", "N_INVALID_TRAIL", "N_INVALID_MID",
           "HD_ANALYSIS", "HD_ANALYSIS_START_SEC", "HD_ANALYSIS_STOP_SEC", "HD_ANALYSIS_SEC",
           "HD_EXCLUDED_PRE_SEC", "HD_EXCLUDED_POST_SEC", "HD_ANALYSIS_INVALID_SEC", "HD_ANALYSIS_FALLBACK",
+          "HD_FIXED_SKIPPED",
           "LR_CORE_SEC", "LR_POLICY", "LR_N_VALID_RUNS", "LR_VALID_SEC", "LR_INVALID_SEC",
           "LR_LONGEST_INTERNAL_GAP_SEC", "LR_N_INTERNAL_GAPS", "U_CONDITION_WEIGHTED" } )
     add_var( "HDSTATS", "QC", variable, "Operational diagnostic" );
@@ -8081,7 +8091,7 @@ void cmddefs_t::init()
             "signal back into an existing channel, or emit the PSD used for "
             "simulation." );
 
-  add_param( "SIMUL" , "sig" , "C3" , "Signal to create or update" );
+  add_param( "SIMUL" , "sig" , "C3,C4" , "Signal(s) to create or update; each receives an independent realization" );
   add_param( "SIMUL" , "sr" , "128" , "Sample rate for a newly created signal" );
   add_param( "SIMUL" , "add" , "" , "Add the simulated signal to an existing channel instead of replacing it" );
   add_param( "SIMUL" , "white" , "" , "Generate white noise" );

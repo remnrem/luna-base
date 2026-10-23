@@ -953,17 +953,54 @@ struct annotation_set_t
   
   // track alias swaps for this person
   std::map<std::string,std::string> aliasing;
+
+  // Imported label --> raw external source label.  This keeps distinct
+  // external labels distinct when comma repair would otherwise collide.
+  std::map<std::string,std::string> imported_label_origin;
   
   // member functions
 
   annot_t * add( const std::string & name ) 
   { 
+
+    Helper::require_label_without_commas( name , "annotation" );
     
     if ( annots.find( name ) != annots.end() )
       return annots[name];
     
     annot_t * a = new annot_t( name , this ); 
     annots[ name ] = a;
+    return a;
+  }
+
+  // External annotation files are repaired at their import boundary.  In
+  // contrast, generated annotation labels pass through add() and must be
+  // valid labels already.
+  annot_t * add_imported( const std::string & name )
+  {
+    const std::string repaired = Helper::repair_label_commas( name );
+    std::string unique = repaired;
+
+    // Repeated instances from one external class must resolve to the same
+    // class.  A different raw external label that repairs to the same name is
+    // instead uniquified, matching EDF header import behavior.
+    if ( annots.find( unique ) != annots.end() )
+      {
+	if ( imported_label_origin.find( unique ) != imported_label_origin.end()
+	     && imported_label_origin[ unique ] == name )
+	  return annots[ unique ];
+
+	int suffix = 1;
+	while ( annots.find( unique + "." + Helper::int2str( suffix ) ) != annots.end() )
+	  ++suffix;
+	unique += "." + Helper::int2str( suffix );
+      }
+
+    imported_label_origin[ unique ] = name;
+    if ( unique != name ) aliasing[ unique ] = name;
+
+    annot_t * a = new annot_t( unique , this );
+    annots[ unique ] = a;
     return a;
   }
   

@@ -9,6 +9,7 @@
 #include "helper/helper.h"
 #include "helper/logger.h"
 #include "helper/luna_io.h"
+#include "helper/json.h"
 #include "db/db.h"
 #include "stats/Eigen/Dense"
 
@@ -19,6 +20,7 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <regex>
 #include <map>
 #include <mutex>
 #include <set>
@@ -36,6 +38,8 @@ extern logger_t logger;
 extern writer_t writer;
 
 namespace {
+
+using json = nlohmann::json;
 
 struct format_t {
   const char * model_magic;
@@ -79,6 +83,23 @@ struct fitted_panel_t {
   int n_input = 0;
   int n_fit = 0;
   double total_ss = 0.0;
+};
+
+struct component_def_t {
+  std::string id;
+  std::string label;
+  int orientation = 1;
+};
+
+struct layout_panel_t {
+  panel_def_t definition;
+  int n_components = 0;
+};
+
+struct layout_t {
+  json document;
+  json feature_descriptions;
+  std::vector<layout_panel_t> panels;
 };
 
 std::string panel_option( std::string panel )
@@ -679,6 +700,142 @@ static void validate_projection_model( const std::vector<fitted_panel_t> & fitte
     }
 }
 
+static const std::set<std::string> & known_feature_universe()
+{
+  // The compiled registry is the current stable public feature universe.  A
+  // JSON layout may redistribute these features freely across panels but may
+  // not invent an unimplemented HDSTATS feature key.
+  static const std::set<std::string> known = [] {
+    std::set<std::string> values;
+    for ( int i = 0; i < hdstats_pc_generated::n_features; ++i )
+      values.insert( hdstats_pc::key( hdstats_pc_generated::features[i].variable,
+                                      hdstats_pc_generated::features[i].stratum ) );
+    return values;
+  }();
+  return known;
+}
+
+static layout_t read_layout_spec( const std::string & file )
+{
+  try
+    {
+      std::ifstream in = LunaIO::open_ifstream(file,std::ios::in);
+      if ( ! in ) Helper::halt("could not open HDSTATS-PC JSON specification " + file);
+      layout_t layout;
+      layout.document = json::parse(in);
+      const json & document = layout.document;
+      if ( ! document.is_object() || document.value("format","") != "luna-hdstats-pc-spec" ||
+           document.value("version",0) != 1 ||
+           document.value("feature_universe","") != "HDSTATS-PC-FEATURES-V1" ||
+           ! document.contains("feature_descriptions") || ! document.at("feature_descriptions").is_array() ||
+           ! document.contains("panels") || ! document.at("panels").is_array() || document.at("panels").empty() )
+        Helper::halt("invalid HDSTATS-PC JSON specification " + file + ": require format/version/feature_universe/feature_descriptions/panels");
+      const std::string component_id_style = document.value("component_id_style",std::string("legacy"));
+      if ( component_id_style != "legacy" && component_id_style != "r_safe" )
+        Helper::halt("invalid HDSTATS-PC component_id_style in " + file + ": expected legacy or r_safe");
+      layout.feature_descriptions = document.at("feature_descriptions");
+
+      std::map<std::string,std::pair<std::string,std::string>> feature_metadata;
+      for ( const auto & item : layout.feature_descriptions )
+        {
+          if ( ! item.is_object() || ! item.contains("id") || ! item.at("id").is_string() ||
+               ! item.contains("label") || ! item.at("label").is_string() ||
+               ! item.contains("description") || ! item.at("description").is_string() )
+            Helper::halt("invalid HDSTATS-PC feature description in " + file);
+          const std::string id = item.at("id").get<std::string>();
+          if ( ! known_feature_universe().count(id) || item.at("label").get<std::string>().empty() ||
+               item.at("description").get<std::string>().empty() ||
+               ! feature_metadata.emplace(id,std::make_pair(item.at("label").get<std::string>(),item.at("description").get<std::string>())).second )
+            Helper::halt("unknown, empty, or duplicate HDSTATS-PC feature description '" + id + "'");
+        }
+
+      std::set<std::string> panel_ids, used_features;
+      for ( const auto & source_panel : document.at("panels") )
+        {
+          if ( ! source_panel.is_object() || ! source_panel.contains("id") || ! source_panel.at("id").is_string() ||
+               source_panel.at("id").get<std::string>().empty() || ! source_panel.contains("features") ||
+               ! source_panel.at("features").is_array() || source_panel.at("features").empty() ||
+               ! source_panel.contains("n_components") || ! source_panel.at("n_components").is_number_integer() ||
+               source_panel.at("n_components").get<int>() < 1 )
+            Helper::halt("invalid HDSTATS-PC JSON specification panel in " + file);
+          layout_panel_t panel;
+          panel.definition.name = source_panel.at("id").get<std::string>();
+          if ( component_id_style == "r_safe" &&
+               !std::regex_match(panel.definition.name,std::regex("[A-Za-z][A-Za-z0-9_.]*")) )
+            Helper::halt("HDSTATS-PC r_safe panel IDs must be R-safe name prefixes: " + panel.definition.name);
+          if ( ! panel_ids.insert(panel.definition.name).second )
+            Helper::halt("duplicate HDSTATS-PC JSON panel " + panel.definition.name);
+          std::set<std::string> panel_features;
+          for ( const auto & source_feature : source_panel.at("features") )
+            {
+              if ( ! source_feature.is_string() || source_feature.get<std::string>().empty() )
+                Helper::halt("invalid HDSTATS-PC JSON feature in panel " + panel.definition.name);
+              const std::string feature = source_feature.get<std::string>();
+              if ( ! known_feature_universe().count(feature) )
+                Helper::halt("unknown HDSTATS-PC JSON feature '" + feature + "' in panel " + panel.definition.name);
+              if ( ! panel_features.insert(feature).second )
+                Helper::halt("duplicate HDSTATS-PC JSON feature '" + feature + "' in panel " + panel.definition.name);
+              if ( ! feature_metadata.count(feature) )
+                Helper::halt("missing HDSTATS-PC JSON feature description for '" + feature + "'");
+              used_features.insert(feature);
+              panel.definition.names.push_back(feature);
+            }
+          panel.n_components = source_panel.at("n_components").get<int>();
+          layout.panels.push_back(std::move(panel));
+        }
+      for ( const auto & item : feature_metadata )
+        if ( ! used_features.count(item.first) )
+          Helper::halt("unused HDSTATS-PC JSON feature description '" + item.first + "'");
+      return layout;
+    }
+  catch ( const std::exception & e )
+    {
+      Helper::halt("invalid HDSTATS-PC JSON specification " + file + ": " + e.what());
+    }
+  return layout_t(); // unreachable after Helper::halt(), keeps all compilers happy
+}
+
+static void write_json_panels( const std::string & file, const layout_t & layout,
+                               const std::vector<fitted_panel_t> & panels )
+{
+  json document;
+  document["format"] = "luna-hdstats-pc-model";
+  document["version"] = 1;
+  const size_t slash = file.find_last_of("/\\");
+  const std::string model_name = file.substr(slash == std::string::npos ? 0 : slash + 1);
+  document["model_id"] = model_name;
+  document["spec"] = layout.document;
+  document["panels"] = json::array();
+  for ( const auto & panel : panels )
+    {
+      const model_t & model = panel.model;
+      json item;
+      item["id"] = panel.name;
+      item["n_input"] = panel.n_input;
+      item["n_fit"] = panel.n_fit;
+      item["total_ss"] = panel.total_ss;
+      item["declared_features"] = panel.declared;
+      item["singular_values"] = json::array();
+      for ( int k = 0; k < model.singular_values.size(); ++k ) item["singular_values"].push_back(model.singular_values(k));
+      item["features"] = json::array();
+      for ( int j = 0; j < (int)model.names.size(); ++j )
+        {
+          json feature;
+          feature["id"] = model.names[j];
+          feature["mean"] = model.means(j);
+          feature["sd"] = model.sds(j);
+          feature["loadings"] = json::array();
+          for ( int k = 0; k < model.loadings.cols(); ++k ) feature["loadings"].push_back(model.loadings(j,k));
+          item["features"].push_back(std::move(feature));
+        }
+      document["panels"].push_back(std::move(item));
+    }
+  std::ofstream out = LunaIO::open_ofstream(file,std::ios::out);
+  if ( ! out ) Helper::halt("could not write HDSTATS-PC JSON model " + file);
+  out << document.dump(2) << "\n";
+  if ( ! out ) Helper::halt("error writing HDSTATS-PC JSON model " + file);
+}
+
 static void fit_hdstats_panels( param_t & param )
 {
   validate_registry();
@@ -761,6 +918,195 @@ static void fit_hdstats_panels( param_t & param )
     }
 }
 
+static void fit_json_hdstats_panels( param_t & param )
+{
+  // A JSON layout owns component counts.  Mixing it with the legacy nc knobs
+  // would make a model's declared layout ambiguous.
+  if ( param.has("nc") ) Helper::halt("HDSTATS-PC spec= cannot be combined with nc=");
+  for ( const auto & definition : panel_definitions() )
+    if ( param.has(definition.option) )
+      Helper::halt("HDSTATS-PC spec= cannot be combined with " + definition.option + "=");
+
+  const layout_t layout = read_layout_spec( Helper::expand( param.requires("spec") ) );
+  const auto files = param.strvector("data");
+  if ( files.empty() ) Helper::halt("--hdstats-pc requires data=<feature files>");
+  const auto rows = read_rows(files,hdstats_format);
+  std::vector<fitted_panel_t> panels;
+  for ( const auto & definition : layout.panels )
+    {
+      panels.push_back( fit_panel( definition.definition, rows, definition.n_components ) );
+      logger << "  HDSTATS-PC " << definition.definition.name << ": " << panels.back().n_fit << "/" << rows.size()
+             << " people, " << panels.back().model.names.size() << "/" << definition.definition.names.size()
+             << " varying inputs, nc=" << definition.n_components << "\n";
+    }
+
+  if ( param.has("corr-matrix") )
+    {
+      const std::string prefix = param.requires("corr-matrix");
+      for ( const auto & panel : panels )
+        {
+          const model_t & model = panel.model;
+          Eigen::MatrixXd z(panel.n_fit,model.names.size());
+          int i = 0;
+          for ( const auto & row : rows )
+            {
+              bool complete = true;
+              for ( const auto & name : panel.declared )
+                {
+                  const auto feature = row.values.find(name);
+                  if ( feature == row.values.end() || ! std::isfinite(feature->second) ) { complete = false; break; }
+                }
+              if ( ! complete ) continue;
+              for ( int j = 0; j < (int)model.names.size(); ++j )
+                z(i,j) = ( row.values.at(model.names[j]) - model.means(j) ) / model.sds(j);
+              ++i;
+            }
+          write_correlation_matrix(prefix + "." + panel.name + ".tsv",model.names,z,hdstats_format);
+        }
+    }
+
+  write_json_panels( param.requires("model"), layout, panels );
+  writer.value("N_PANELS",(int)panels.size());
+  writer.value("N_INPUT",(int)rows.size());
+  for ( int p = 0; p < (int)panels.size(); ++p )
+    {
+      const fitted_panel_t & panel = panels[p];
+      const model_t & model = panel.model;
+      writer.level(panel.name,"PANEL");
+      writer.value("N",panel.n_fit);
+      writer.value("N_INPUT",panel.n_input);
+      writer.value("N_DECLARED",(int)panel.declared.size());
+      writer.value("N_FEATURES",(int)model.names.size());
+      writer.value("N_COMPONENTS",(int)model.loadings.cols());
+      for ( int j = 0; j < (int)model.names.size(); ++j )
+        {
+          writer.level(model.names[j],"FTR");
+          writer.value("MEAN",model.means(j)); writer.value("SD",model.sds(j));
+          writer.unlevel("FTR");
+        }
+      double cumulative = 0.0;
+      for ( int k = 0; k < model.loadings.cols(); ++k )
+        {
+          const double ve = model.singular_values(k) * model.singular_values(k) / panel.total_ss;
+          cumulative += ve;
+          writer.level("PC" + Helper::int2str(k+1),"PC");
+          writer.value("W",model.singular_values(k)); writer.value("VE",ve); writer.value("CVE",cumulative);
+          for ( int j = 0; j < (int)model.names.size(); ++j )
+            {
+              writer.level(model.names[j],"FTR"); writer.value("LOADING",model.loadings(j,k)); writer.unlevel("FTR");
+            }
+          writer.unlevel("PC");
+        }
+      writer.unlevel("PANEL");
+    }
+}
+
+static bool is_json_hdstats_model( const std::string & file )
+{
+  std::ifstream in = LunaIO::open_ifstream(file,std::ios::in);
+  if ( ! in ) Helper::halt("could not open HDSTATS-PC model " + file);
+  in >> std::ws;
+  return in.peek() == '{';
+}
+
+static hdstats_model::model_t read_json_hdstats_model( const std::string & file )
+{
+  hdstats_model::model_t model;
+  std::string error;
+  if ( ! hdstats_model::read(file,&model,&error) ) Helper::halt(error);
+  if ( model.specification_json.empty() ) Helper::halt("expected self-contained HDSTATS-PC JSON model " + file);
+  return model;
+}
+
+static std::vector<hdstats_pc::component_score_t> project_json_components(
+    const std::string & file, const hdstats_pc::feature_map_t & features, const double min_loading )
+{
+  const hdstats_model::model_t source = read_json_hdstats_model(file);
+  std::vector<hdstats_pc::component_score_t> results;
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  for ( const auto & definition : source.components )
+    {
+      const hdstats_model::panel_t * panel = source.find_panel(definition.panel_id);
+      if ( ! panel || definition.panel_pc < 1 || definition.panel_pc > (int)panel->singular_values.size() )
+        Helper::halt("invalid embedded component layout in HDSTATS-PC JSON model " + file);
+      hdstats_pc::component_score_t result;
+      result.id = definition.id;
+      result.panel = definition.panel_id;
+      result.panel_pc = definition.panel_pc;
+      result.orientation = definition.orientation;
+      result.label = definition.label;
+      result.compatible = true;
+      result.missing = 0;
+      result.score = nan;
+      double score = 0.0;
+      for ( const auto & feature : panel->features )
+        {
+          const auto raw = features.find(feature.id);
+          const bool present = raw != features.end() && std::isfinite(raw->second);
+          if ( ! present ) { ++result.missing; result.compatible = false; }
+          const double z = present ? ( raw->second - feature.mean ) / feature.sd : 0.0;
+          const double loading = definition.orientation * feature.loadings[definition.panel_pc-1];
+          score += loading * z;
+          if ( std::fabs(loading) >= min_loading )
+            result.contributions.push_back( { feature.id, present ? loading * z : nan,
+                                               present ? raw->second : nan } );
+        }
+      if ( result.compatible ) result.score = score;
+      results.push_back(std::move(result));
+    }
+  return results;
+}
+
+static void describe_json_model( const std::string & file, std::ostream & out, const double min_loading,
+                                const std::string & descriptor )
+{
+  hdstats_model::model_t source = read_json_hdstats_model(file);
+  if ( ! descriptor.empty() )
+    {
+      std::string error;
+      if ( ! hdstats_model::read_descriptor(descriptor,&source,&error) ) Helper::halt(error);
+    }
+  out << "PC\tPANEL\tMODEL_PC\tLABEL\tORIENTATION\tDESCRIPTION\tFTR_LOADINGS\n";
+  for ( const auto & component : source.components )
+    {
+      const hdstats_model::panel_t * panel = source.find_panel(component.panel_id);
+      if ( ! panel || component.panel_pc < 1 || component.panel_pc > (int)panel->singular_values.size() )
+        Helper::halt("invalid embedded component layout in HDSTATS-PC JSON model " + file);
+      std::vector<std::string> loadings;
+      for ( const auto & feature : panel->features )
+        {
+          const double loading = component.orientation * feature.loadings[component.panel_pc-1];
+          if ( std::fabs(loading) >= min_loading ) loadings.push_back(feature.id + "=" + fmt_display(loading));
+        }
+      const auto panel_description = source.find_description("PANEL",component.panel_id);
+      out << component.id << '\t' << component.panel_id << '\t' << component.panel_pc << '\t'
+          << component.label << '\t' << component.orientation << '\t'
+          << component.description << (panel_description ? " | " + panel_description->text : "") << '\t';
+      for ( int i = 0; i < (int)loadings.size(); ++i )
+        { if ( i ) out << "; "; out << loadings[i]; }
+      out << '\n';
+    }
+  if ( ! source.descriptions.empty() )
+    {
+      out << "\n# DESCRIPTIONS\nENTITY_TYPE\tENTITY_ID\tTEXT\n";
+      for ( const auto & item : source.descriptions )
+        out << item.entity_type << '\t' << item.entity_id << '\t' << item.text << '\n';
+    }
+  if ( ! source.external_associations.empty() )
+    {
+      out << "\n# EXTERNAL ASSOCIATIONS\nENTITY_TYPE\tENTITY_ID\tFACTOR\tSCORE\n";
+      for ( const auto & item : source.external_associations )
+        out << item.entity_type << '\t' << item.entity_id << '\t' << item.factor << '\t' << fmt_display(item.score) << '\n';
+    }
+  auto print_correlations = [&]( const char * title, const std::vector<hdstats_model::correlation_t> & items ) {
+    if ( items.empty() ) return;
+    out << "\n# " << title << "\nFIRST\tSECOND\tCORRELATION\n";
+    for ( const auto & item : items ) out << item.first << '\t' << item.second << '\t' << fmt_display(item.value) << '\n';
+  };
+  print_correlations("PC CORRELATIONS",source.pc_correlations);
+  print_correlations("FEATURE CORRELATIONS",source.feature_correlations);
+}
+
 void hdstats_pc::write_features( const std::string & directory,
                                  const std::string & id,
                                  const feature_map_t & features )
@@ -779,6 +1125,7 @@ bool hdstats_pc::project( const std::string & file,
 std::vector<hdstats_pc::panel_scores_t> hdstats_pc::project_panels(
     const std::string & file, const feature_map_t & features )
 {
+  const bool json_model = is_json_hdstats_model(file);
   std::ifstream in=LunaIO::open_ifstream(file,std::ios::in);
   std::string magic;
   if ( !std::getline(in,magic) ) Helper::halt("could not read HDSTATS-PC model " + file);
@@ -789,7 +1136,7 @@ std::vector<hdstats_pc::panel_scores_t> hdstats_pc::project_panels(
       project_impl(file,features,&result.scores,&result.missing,hdstats_format);
       return {result};
     }
-  if ( magic!="__HDSTATS_PC_V3" ) Helper::halt("unsupported HDSTATS-PC model " + file);
+  if ( magic!="__HDSTATS_PC_V3" && ! json_model ) Helper::halt("unsupported HDSTATS-PC model " + file);
   std::vector<panel_scores_t> results;
   for ( const auto & p : cached_panels(file) )
     {
@@ -819,6 +1166,7 @@ std::vector<hdstats_pc::component_score_t> hdstats_pc::project_components(
 {
   if ( ! std::isfinite(min_loading) || min_loading < 0.0 )
     Helper::halt("pc-min-loading must be a finite non-negative value");
+  if ( is_json_hdstats_model(file) ) return project_json_components(file,features,min_loading);
   std::ifstream in=LunaIO::open_ifstream(file,std::ios::in);
   std::string magic;
   if ( !std::getline(in,magic) ) Helper::halt("could not read HDSTATS-PC model " + file);
@@ -875,10 +1223,14 @@ std::vector<hdstats_pc::component_score_t> hdstats_pc::project_components(
   return results;
 }
 
-void hdstats_pc::describe( const std::string & file, std::ostream & out, const double min_loading )
+void hdstats_pc::describe( const std::string & file, std::ostream & out, const double min_loading,
+                           const std::string & descriptor )
 {
   if ( ! std::isfinite(min_loading) || min_loading < 0.0 )
     Helper::halt("min-loading must be a finite non-negative value");
+  if ( is_json_hdstats_model(file) )
+    { describe_json_model(file,out,min_loading,descriptor); return; }
+  if ( ! descriptor.empty() ) Helper::halt("HDSTATS descriptors are currently supported for self-contained JSON V1 models only");
   validate_registry();
   const auto & fitted = cached_panels(file);
   validate_projection_model(fitted);
@@ -912,7 +1264,8 @@ void hdstats_pc::describe( const std::string & file, std::ostream & out, const d
 
 void hdstats_pc::fit( param_t & param )
 {
-  fit_hdstats_panels( param );
+  if ( param.has("spec") ) fit_json_hdstats_panels( param );
+  else fit_hdstats_panels( param );
 }
 
 void hypno_pc::write_features( const std::string & directory,

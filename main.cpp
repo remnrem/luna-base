@@ -497,7 +497,7 @@ int main(int argc , char ** argv )
   // --hdstats-pc-desc is a stdout-only utility.  In particular, retain
   // compatibility with an old "-o out.db" invocation without attaching to
   // (or truncating) that database.
-  if ( cmdline == PROC_HDSTATS_PC_DESC )
+  if ( cmdline == PROC_HDSTATS_PC_DESC || cmdline == PROC_HDSTATS_DESC )
     writer.nodb();
   else if ( cmd_t::plaintext_mode )
     {
@@ -1720,6 +1720,7 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
   clmap[ "--nmf" ]          = PROC_NMF;
   clmap[ "--hdstats-pc" ]   = PROC_HDSTATS_PC;
   clmap[ "--hdstats-pc-desc" ] = PROC_HDSTATS_PC_DESC;
+  clmap[ "--hdstats-desc" ] = PROC_HDSTATS_DESC;
   clmap[ "--hypno-pc" ]     = PROC_HYPNO_PC;
 
   // microstate analysis helper functions
@@ -1772,6 +1773,8 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
   //   luna --hdstats-pc-desc model=reference.txt
   // rather than by piping its sole parameter through stdin.
   if ( cmdline == PROC_HDSTATS_PC_DESC && *param_from_command_line == 0 )
+    *param_from_command_line = -3;
+  if ( cmdline == PROC_HDSTATS_DESC && *param_from_command_line == 0 )
     *param_from_command_line = -3;
   //
   // otherwise, first element will be treated as the data source
@@ -2146,6 +2149,27 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       const std::string model = param.requires( "model" );
       const double min_loading = param.has( "min-loading" ) ? param.requires_dbl( "min-loading" ) : 0.10;
       hdstats_pc::describe( model, std::cout, min_loading );
+      std::exit(0);
+    }
+
+  if ( cmdline == PROC_HDSTATS_DESC )
+    {
+      param_t param;
+      if ( param_from_command_line == -3 )
+        {
+          for ( int i = 2; i < argc; ++i )
+            {
+              const std::string arg = argv[i];
+              if ( arg == "-o" || arg == "-a" || arg == "-t" ) { ++i; continue; }
+              if ( !arg.empty() && ( arg[0] == '@' || ( arg.size() > 1 && arg[0] == '-' && arg[1] == '-' ) ) ) continue;
+              param.parse( arg );
+            }
+        }
+      else build_param( &param, argc, argv, param_from_command_line );
+      const std::string model = param.requires( "model" );
+      const std::string descriptor = param.has( "desc" ) ? Helper::expand( param.value( "desc" ) ) : "";
+      const double min_loading = param.has( "min-loading" ) ? param.requires_dbl( "min-loading" ) : 0.10;
+      hdstats_pc::describe( Helper::expand(model), std::cout, min_loading, descriptor );
       std::exit(0);
     }
 

@@ -131,13 +131,15 @@ struct hd_params_t
   bool do_emit_hypnogram;           // if true, emit hard-called (argmax) stage run annotations
   std::string hypno_prefix;         // optional prefix for those annotation classes, e.g. "hd_"
   std::string emit_spt_label;       // root for soft-SPT annotations; empty disables
+  std::string emit_cycle_label;     // root for complete soft-ultradian cycle annotations; empty disables
   bool do_longrange;                // global long-range hypnodensity dynamics
   std::vector<double> lr_lags_sec;  // physical lags (seconds)
   std::vector<double> lr_windows_sec; // non-overlapping physical windows (seconds)
   double lr_min_duration_sec;       // minimum contiguous valid-core duration
   std::string lr_policy;             // gap-aware (default) or strict
   bool lr_fail_on_empty;             // retain an optional fatal empty-panel policy
-  std::string analysis;              // spt (default) or recording
+  std::string analysis;              // spt (default), fixed, or recording
+  double fixed_duration_sec;         // fixed analysis duration, anchored at sleep onset
   double analysis_flank_pre_sec;     // physical time retained before hypnodensity onset
   double analysis_flank_post_sec;    // physical time retained after hypnodensity offset
   std::string pc_out;                // optional level-1 HDSTATS feature directory
@@ -1485,11 +1487,14 @@ struct hd_hypno_metrics_t
 
 // The analysis interval is a mask on the original clock, never a compacted
 // signal.  SPT mode uses the existing sustained sleep onset/final-sleep logic
-// and optionally retains physical-time flanks around that interval.
+// and optionally retains physical-time flanks around that interval. Fixed mode
+// is an exact-duration window whose first sample is the sustained sleep onset.
 struct hd_analysis_t
 {
   std::string mode = "recording";
   bool fallback_to_recording = false;
+  bool fixed_ok = true;
+  double fixed_available_sec = std::numeric_limits<double>::quiet_NaN();
   int lo = 0;
   int hi = -1;
   std::vector<bool> physical_mask;
@@ -1503,7 +1508,27 @@ static hd_analysis_t hd_make_analysis( const hd_data_t & dat,
 {
   hd_analysis_t out;
   out.hi = dat.N - 1;
-  if ( par.analysis == "spt" )
+  if ( par.analysis == "fixed" )
+    {
+      out.mode = "fixed";
+      if ( ! hm.valid_onset )
+        out.fixed_ok = false;
+      else
+        {
+          const int duration = std::max( 1, (int)std::round( par.fixed_duration_sec * dat.Fs ) );
+          out.lo = hm.onset_idx;
+          out.fixed_available_sec = ( dat.N - out.lo ) / dat.Fs;
+          out.hi = out.lo + duration - 1;
+          if ( out.hi >= dat.N )
+            {
+              out.fixed_ok = false;
+              // Keep the interval valid for any optional QC calculation; it
+              // represents what is available, never a shortened analysis.
+              out.hi = dat.N - 1;
+            }
+        }
+    }
+  else if ( par.analysis == "spt" )
     {
       if ( hm.valid_window )
         {
@@ -1970,6 +1995,7 @@ static hdstats_pc::feature_map_t hd_pc_features(
   };
   const double analysis_min = ( analysis.hi - analysis.lo + 1 ) / dat.Fs / 60.0;
   const double sleep_min = mins[6];
+  const bool selected_window = analysis.mode != "recording";
   for ( const bool three : { false, true } )
     {
       if ( three && !par.do_3state ) continue;
@@ -2021,7 +2047,8 @@ static hdstats_pc::feature_map_t hd_pc_features(
           for ( int i = 1; i < (int)combo.size(); ++i ) label += "_" + hd_state_label( three, combo[i] );
           const double mix_mins = compute_mix_mins( P, mask, combo, dat.Fs );
           add( "HD_MINS", s + ";MIX/" + label, mix_mins );
-          add( "HD_DENS", s + ";MIX/" + label, hm.hd_spt > 0 ? mix_mins / hm.hd_spt : 0.0 );
+          const double mix_denom = selected_window ? analysis_min : hm.hd_spt;
+          add( "HD_DENS", s + ";MIX/" + label, mix_denom > 0 ? mix_mins / mix_denom : 0.0 );
         }
 
       const auto bouts = compute_bouts( mask, bout_stable, argmax, par.bout_min_sec, par.bout_gap_sec, dat.Fs );
@@ -2064,23 +2091,24 @@ static hdstats_pc::feature_map_t hd_pc_features(
     }
 
   if ( hm.valid_onset ) add( "HD_SOL", ".", hm.hd_sol );
-  const bool spt = analysis.mode == "spt";
-  add( "HD_SPT", ".", spt ? analysis_min : ( hm.valid_window ? hm.hd_spt : na ) );
-  add( "HD_WASO", ".", spt ? mins[0] : ( hm.valid_window ? hm.hd_waso : na ) );
-  add( "HD_SME", ".", spt ? ( analysis_min > 0 ? 100.0 * sleep_min / analysis_min : 0.0 )
+  add( "HD_SPT", ".", selected_window ? analysis_min : ( hm.valid_window ? hm.hd_spt : na ) );
+  add( "HD_WASO", ".", selected_window ? mins[0] : ( hm.valid_window ? hm.hd_waso : na ) );
+  add( "HD_SME", ".", selected_window ? ( analysis_min > 0 ? 100.0 * sleep_min / analysis_min : 0.0 )
                           : ( hm.valid_window ? hm.hd_sme : na ) );
-  add( "HD_REM_LAT", ".", hm.valid_rem ? hm.hd_rem_lat : na );
-  add( "HD_REM_LAT2", ".", hm.valid_rem ? hm.hd_rem_lat2 : na );
+  const bool rem_in_analysis = hm.valid_rem &&
+    ( ! selected_window || ( hm.rem_idx >= analysis.lo && hm.rem_idx <= analysis.hi ) );
+  add( "HD_REM_LAT", ".", rem_in_analysis ? hm.hd_rem_lat : na );
+  add( "HD_REM_LAT2", ".", rem_in_analysis ? hm.hd_rem_lat2 : na );
   for ( int k = 0; k < 5; ++k )
     {
       const std::string st = labels[k], stratum = "SS/" + st;
-      const double value = spt ? mins[k] : hm.mins.at( st );
-      const double denom = spt ? ( k == 0 ? analysis_min : sleep_min )
+      const double value = selected_window ? mins[k] : hm.mins.at( st );
+      const double denom = selected_window ? ( k == 0 ? analysis_min : sleep_min )
                                : ( k == 0 ? hm.total_min : hm.hd_tst );
       add( "HD_MINS", stratum, value );
       add( "HD_PCT", stratum, denom > 0 ? 100.0 * value / denom : 0.0 );
-      add( "HD_DENS", stratum, ( spt ? analysis_min : hm.hd_spt ) > 0
-           ? value / ( spt ? analysis_min : hm.hd_spt ) : 0.0 );
+      add( "HD_DENS", stratum, ( selected_window ? analysis_min : hm.hd_spt ) > 0
+           ? value / ( selected_window ? analysis_min : hm.hd_spt ) : 0.0 );
     }
   for ( const auto & stage : std::vector<std::pair<bool,int>>{
           { true, 0 }, { false, 2 }, { true, 2 } } )
@@ -2353,6 +2381,45 @@ static void hd_emit_ultradian_signals( edf_t & edf,
 
   logger << "  HDSTATS emit-ultradian: added U_PHASE, U_PHASE_VALID and U_AMP"
          << ( par.ultra_diagnostics ? ", U_DEPTH and U_AMP_RAW" : "" ) << "\n";
+}
+
+// These are intentionally labelled as HDSTATS soft-ultradian cycles, rather
+// than canonical scored NREM cycles. A cycle requires three consecutive,
+// confirmed extrema (trough -> peak -> trough) within one contiguous,
+// selected, valid supported run. Thus it neither invents partial cycles at
+// record/window edges nor bridges invalid/wake-supported gaps.
+static int hd_emit_ultradian_cycles( edf_t & edf,
+                                     const hd_data_t & dat,
+                                     const hd_ultradian_t & ultra,
+                                     const hd_analysis_t & analysis,
+                                     const hd_params_t & par )
+{
+  if ( par.emit_cycle_label.empty() || dat.tp.empty() ) return 0;
+
+  const uint64_t sample_tp = (uint64_t)std::round( (double)globals::tp_1sec / dat.Fs );
+  const std::string class_name = par.emit_cycle_label + "_cycle";
+  int n_emitted = 0;
+  for ( int k = 0; k + 2 < (int)ultra.extrema.size(); ++k )
+    {
+      const hd_ultradian_extremum_t & a = ultra.extrema[k];
+      const hd_ultradian_extremum_t & b = ultra.extrema[k+1];
+      const hd_ultradian_extremum_t & c = ultra.extrema[k+2];
+      if ( ! a.trough || b.trough || ! c.trough || a.idx >= b.idx || b.idx >= c.idx ) continue;
+      if ( a.idx < analysis.lo || c.idx > analysis.hi ) continue;
+
+      bool contiguous_selected_support = true;
+      for ( int i = a.idx; i <= c.idx; ++i )
+        if ( ! analysis.valid_mask[i] || ! ultra.supported[i] )
+          { contiguous_selected_support = false; break; }
+      if ( ! contiguous_selected_support ) continue;
+
+      ++n_emitted;
+      edf.annotations->add( class_name )->add(
+        "C" + std::to_string( n_emitted ),
+        interval_t( dat.tp[a.idx], dat.tp[c.idx] + sample_tp ), "." );
+    }
+
+  return n_emitted;
 }
 
 struct hd_ultra_fit_t
@@ -2700,7 +2767,7 @@ static void write_hd_hypno_metrics( const hd_hypno_metrics_t & hm,
                                     const hd_analysis_t & analysis )
 {
   if ( hm.valid_onset ) writer.value( "HD_SOL" , hm.hd_sol );
-  if ( analysis.mode == "spt" )
+  if ( analysis.mode != "recording" )
     {
       const double dt_min = 1.0 / dat.Fs / 60.0;
       const double analysis_min = ( analysis.hi - analysis.lo + 1 ) * dt_min;
@@ -2721,7 +2788,7 @@ static void write_hd_hypno_metrics( const hd_hypno_metrics_t & hm,
       writer.value( "HD_SPT", analysis_min );
       writer.value( "HD_WASO", wake_min );
       writer.value( "HD_SME", analysis_min > 0.0 ? 100.0 * sleep_min / analysis_min : 0.0 );
-      if ( hm.valid_rem )
+      if ( hm.valid_rem && hm.rem_idx >= analysis.lo && hm.rem_idx <= analysis.hi )
         {
           writer.value( "HD_REM_LAT" , hm.hd_rem_lat );
           writer.value( "HD_REM_LAT2" , hm.hd_rem_lat2 );
@@ -2959,7 +3026,12 @@ static void write_hdstats(
 		    writer.level( label, "MIX" );
 		    writer.value( "HD_MINS", mix_mins );
 		    if ( hm != NULL )
-		      writer.value( "HD_DENS", hm->hd_spt > 0 ? mix_mins / hm->hd_spt : 0.0 );
+		{
+		  const double denom = analysis->mode != "recording"
+		    ? ( analysis->hi - analysis->lo + 1 ) / dat.Fs / 60.0
+		    : hm->hd_spt;
+		  writer.value( "HD_DENS", denom > 0 ? mix_mins / denom : 0.0 );
+		}
 		    writer.unlevel( "MIX" );
 		  }
 	      }
@@ -3346,12 +3418,17 @@ static hd_lr_timing_t hd_lr_timing( const std::vector<double> & x,
   return out;
 }
 
-static void hd_write_lr_timing( const hd_lr_timing_t & timing, const bool emit_qc )
+static void hd_write_lr_timing( const hd_lr_timing_t & timing,
+                                const bool emit_output,
+                                const bool emit_qc )
 {
-  writer.value( "COM", timing.com );
-  writer.value( "COM_M", timing.com_m );
-  writer.value( "T50", timing.t50 );
-  writer.value( "T50_M", timing.t50_m );
+  if ( emit_output )
+    {
+      writer.value( "COM", timing.com );
+      writer.value( "COM_M", timing.com_m );
+      writer.value( "T50", timing.t50 );
+      writer.value( "T50_M", timing.t50_m );
+    }
   if ( emit_qc )
     {
       writer.level( 1, "QC" );
@@ -3595,7 +3672,7 @@ static void write_hdstats_longrange(
         writer.level( trend_label[q], "VAR" );
         const double slope = slope_ok ? ( n * sxy - sx * sy ) / den : NaN;
         if ( emit_output ) writer.value( "SLOPE", slope );
-        if ( q < K ) hd_write_lr_timing( stage_timing[q], par.qc );
+        if ( q < K ) hd_write_lr_timing( stage_timing[q], emit_output, par.qc );
         if ( pc_features != NULL )
           {
             const std::string s = "NSS/" + std::string( threestate ? "3" : "5" )
@@ -3635,7 +3712,7 @@ static void write_hdstats_longrange(
                                                    const std::vector<double> & x ) {
           writer.level( label, "VAR" );
           const hd_lr_timing_t timing = hd_lr_timing( x, dat, quality );
-          hd_write_lr_timing( timing, par.qc );
+          hd_write_lr_timing( timing, emit_output, par.qc );
           if ( pc_features != NULL )
             {
               hd_pc_add( pc_features, hdstats_pc::key( "T50", "NSS/5;VAR/" + label ), timing.t50 );
@@ -3825,6 +3902,18 @@ void proc_hdstats( edf_t & edf, param_t & param )
       else
         par.emit_spt_label = param.value( "emit-spt" );
     }
+  // Unlike emit-spt, cycle annotation emission is opt-in. T selects the
+  // conventional "hd" root; any other non-boolean value is a caller-supplied
+  // root (e.g. emit-cycles=foo creates foo_cycle).
+  par.emit_cycle_label = "";
+  if ( param.has( "emit-cycles" ) )
+    {
+      const std::string setting = param.value( "emit-cycles", true );
+      if ( setting == "T" || setting == "Y" || setting == "1" || param.empty( "emit-cycles" ) )
+        par.emit_cycle_label = "hd";
+      else if ( setting != "F" && setting != "N" && setting != "0" )
+        par.emit_cycle_label = param.value( "emit-cycles" );
+    }
   par.stable_ps_th    = param.has( "stable-ps"   ) ? param.requires_dbl( "stable-ps"   ) : 0.05;
   par.stable_conf_th  = param.has( "stable-conf" ) ? param.requires_dbl( "stable-conf" ) : 0.70;
   par.min_shift       = param.has( "min-shift"   ) ? param.requires_dbl( "min-shift"   ) : 0.10;
@@ -3850,7 +3939,17 @@ void proc_hdstats( edf_t & edf, param_t & param )
     ? param.requires_dbl( "lr-min-duration" ) : 4.5 * 3600.0;
   par.lr_policy = ( ! param.has( "gap-aware" ) || param.yesno( "gap-aware" ) ) ? "gap-aware" : "strict";
   par.lr_fail_on_empty = param.has( "fail-on-empty" ) ? param.yesno( "fail-on-empty" ) : false;
-  par.analysis = ( ! param.has( "spt" ) || param.yesno( "spt" ) ) ? "spt" : "recording";
+  par.fixed_duration_sec = 0.0;
+  if ( param.has( "fixed" ) )
+    {
+      const double fixed_hours = param.requires_dbl( "fixed" );
+      if ( ! std::isfinite( fixed_hours ) || fixed_hours <= 0.0 )
+        Helper::halt( "HDSTATS fixed= must be a finite positive duration in hours" );
+      par.analysis = "fixed";
+      par.fixed_duration_sec = fixed_hours * 3600.0;
+    }
+  else
+    par.analysis = ( ! param.has( "spt" ) || param.yesno( "spt" ) ) ? "spt" : "recording";
   const double analysis_flank_sec = param.has( "spt-flank" ) ? param.requires_dbl( "spt-flank" ) : 300.0;
   par.analysis_flank_pre_sec = param.has( "spt-flank-pre" ) ? param.requires_dbl( "spt-flank-pre" ) : analysis_flank_sec;
   par.analysis_flank_post_sec = param.has( "spt-flank-post" ) ? param.requires_dbl( "spt-flank-post" ) : analysis_flank_sec;
@@ -4041,22 +4140,72 @@ void proc_hdstats( edf_t & edf, param_t & param )
   hm.compute( dat, par );
   const hd_analysis_t analysis = hd_make_analysis( dat, hm, par );
   const bool make_pc_features = ! par.pc_out.empty() || ! par.pc_proj.empty();
-  if ( analysis.mode == "spt" )
+  if ( par.analysis == "fixed" )
+    {
+      writer.value( "HD_FIXED_AVAILABLE_HOURS", analysis.fixed_available_sec / 3600.0 );
+      writer.value( "HD_FIXED_OK", analysis.fixed_ok ? 1 : 0 );
+      if ( ! analysis.fixed_ok )
+        {
+          if ( hm.valid_onset )
+            logger << "  warning: HDSTATS fixed="
+                   << Helper::dbl2str( par.fixed_duration_sec / 3600.0 )
+                   << " hours skips this recording: only "
+                   << Helper::dbl2str( analysis.fixed_available_sec / 3600.0 )
+                   << " hours are available after sustained sleep onset\n";
+          else
+            logger << "  warning: HDSTATS fixed= skips this recording: could not define sustained sleep onset\n";
+          if ( par.qc )
+            {
+              writer.level( 1, "QC" );
+              const int n_valid = (int)std::count( dat.valid.begin(), dat.valid.end(), true );
+              writer.value( "N_VALID", n_valid );
+              writer.value( "PCT_VALID", dat.N > 0 ? 100.0 * n_valid / dat.N : 0.0 );
+              if ( dat.n_invalid_lead  > 0 ) writer.value( "N_INVALID_LEAD",  dat.n_invalid_lead );
+              if ( dat.n_invalid_trail > 0 ) writer.value( "N_INVALID_TRAIL", dat.n_invalid_trail );
+              if ( dat.n_invalid_mid   > 0 ) writer.value( "N_INVALID_MID",   dat.n_invalid_mid );
+              writer.value( "HD_ANALYSIS", "fixed" );
+              writer.value( "HD_ANALYSIS_START_SEC", hm.valid_onset ? analysis.lo / dat.Fs : std::numeric_limits<double>::quiet_NaN() );
+              writer.value( "HD_ANALYSIS_STOP_SEC", hm.valid_onset ? ( analysis.hi + 1 ) / dat.Fs : std::numeric_limits<double>::quiet_NaN() );
+              writer.value( "HD_ANALYSIS_SEC", hm.valid_onset ? ( analysis.hi - analysis.lo + 1 ) / dat.Fs : 0.0 );
+              writer.value( "HD_ANALYSIS_INVALID_SEC", analysis.n_invalid / dat.Fs );
+              writer.value( "HD_FIXED_SKIPPED", 1 );
+              writer.unlevel( "QC" );
+            }
+          return;
+        }
+    }
+  if ( analysis.mode != "recording" )
     logger << "  HDSTATS analysis interval: " << ( analysis.hi - analysis.lo + 1 ) / dat.Fs
            << " seconds (samples " << analysis.lo << "-" << analysis.hi << ")\n";
 
-  if ( ! par.emit_spt_label.empty() && hm.valid_window && ! dat.tp.empty() )
+  if ( ! par.emit_spt_label.empty() && ! dat.tp.empty() )
     {
       const uint64_t sample_tp = (uint64_t)std::round( (double)globals::tp_1sec / dat.Fs );
-      const uint64_t onset_tp = dat.tp[hm.onset_idx];
-      const uint64_t final_wake_tp = dat.tp[hm.offset_idx] + sample_tp;
-      edf.annotations->add( par.emit_spt_label + "_sleep_onset" )->add(
-        ".", interval_t( onset_tp, onset_tp ), "." );
-      edf.annotations->add( par.emit_spt_label + "_final_wake" )->add(
-        ".", interval_t( final_wake_tp, final_wake_tp ), "." );
-      edf.annotations->add( par.emit_spt_label + "_spt" )->add(
-        ".", interval_t( onset_tp, final_wake_tp ), "." );
-      logger << "  emitted soft SPT annotations under '" << par.emit_spt_label << "'\n";
+      if ( hm.valid_window )
+        {
+          const uint64_t onset_tp = dat.tp[hm.onset_idx];
+          const uint64_t final_wake_tp = dat.tp[hm.offset_idx] + sample_tp;
+          edf.annotations->add( par.emit_spt_label + "_sleep_onset" )->add(
+            ".", interval_t( onset_tp, onset_tp ), "." );
+          edf.annotations->add( par.emit_spt_label + "_final_wake" )->add(
+            ".", interval_t( final_wake_tp, final_wake_tp ), "." );
+          edf.annotations->add( par.emit_spt_label + "_spt" )->add(
+            ".", interval_t( onset_tp, final_wake_tp ), "." );
+          logger << "  emitted soft SPT annotations under '" << par.emit_spt_label << "'\n";
+        }
+      if ( analysis.mode == "fixed" )
+        {
+          edf.annotations->add( par.emit_spt_label + "_fixed" )->add(
+            ".", interval_t( dat.tp[analysis.lo], dat.tp[analysis.hi] + sample_tp ), "." );
+          logger << "  emitted fixed analysis annotation under '" << par.emit_spt_label << "'\n";
+        }
+    }
+
+  if ( par.do_ultradian && ! par.emit_cycle_label.empty() )
+    {
+      const int n_cycles = hd_emit_ultradian_cycles( edf, dat, ultra, analysis, par );
+      logger << "  emitted " << n_cycles << " complete soft-ultradian cycle annotation(s) under '"
+             << par.emit_cycle_label << "'\n";
     }
 
   // Strict mode retains the established contiguous-core contract exactly.
@@ -4119,10 +4268,10 @@ void proc_hdstats( edf_t & edf, param_t & param )
         }
     }
 
-  // Layer 3: detect transitions.  In SPT mode no stability, support window,
+  // Layer 3: detect transitions.  In an onset-selected mode no stability, support window,
   // event or bout is allowed to borrow a sample outside the analysis interval.
   hd_trans_t tr;
-  tr.detect( dat, der, par, analysis.mode == "spt" ? &analysis.valid_mask : NULL );
+  tr.detect( dat, der, par, analysis.mode != "recording" ? &analysis.valid_mask : NULL );
 
   logger << "  detected " << tr.events5.size() << " transition events (5-state)\n";
   if ( par.do_3state )

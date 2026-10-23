@@ -194,7 +194,8 @@ void cmd_t::signal_alias( const std::string & s )
   // format canonical|alias1|alias2 , etc.
   std::vector<std::string> tok = Helper::quoted_parse( s , "|" );    
   if ( tok.size() < 2 ) Helper::halt( "bad format for signal alias:  canonical|alias 1|alias 2\n" + s );
-  const std::string primary = Helper::unquote( tok[0] );
+  // The primary is the channel label that will enter Luna's namespace.
+  const std::string primary = Helper::repair_label_commas( Helper::unquote( tok[0] ) );
 
   // has the LHS primary already been an alias?
   if ( label_aliases.find( Helper::toupper( primary ) ) != label_aliases.end() )
@@ -204,7 +205,10 @@ void cmd_t::signal_alias( const std::string & s )
     {
 
       // impose rules, use upper case version of all aliases
-      const std::string mapped = Helper::unquote( tok[j] );
+      // Secondary labels are accepted with commas for compatibility with
+      // external files, but are stored as the same repaired lookup key that
+      // EDF header import produces.
+      const std::string mapped = Helper::repair_label_commas( Helper::unquote( tok[j] ) );
       const std::string uc_mapped = Helper::toupper( mapped );
       
       if ( primary_upper2orig.find( uc_mapped ) != primary_upper2orig.end() )

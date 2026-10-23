@@ -157,7 +157,8 @@ void nsrr_t::annot_remapping( const std::string & s )
   std::vector<std::string> tok = Helper::quoted_parse( s , "|" );    
   if ( tok.size() < 2 ) Helper::halt( "bad format for annotation remapping:  canonical|alias 1|alias 2\n" + s );
   
-  const std::string primary = Helper::unquote( tok[0] );
+  // The primary is the annotation class that will enter Luna's namespace.
+  const std::string primary = Helper::repair_label_commas( Helper::unquote( tok[0] ) );
   const std::string uc_primary = Helper::toupper( primary );
 
   // check that no | characters.. will cause problems downstream, so avoid here
@@ -189,12 +190,12 @@ void nsrr_t::annot_remapping( const std::string & s )
       
       // impose rules
       // optional swap spaces for another character too
-	  const std::string mapped = globals::sanitize_everything 
+	  const std::string mapped = Helper::repair_label_commas( globals::sanitize_everything
 	    ? Helper::sanitize(  Helper::toupper( Helper::unquote( tok[j] ) ) )
 	    : ( globals::replace_annot_spaces
 		? Helper::search_replace( Helper::toupper( Helper::unquote( tok[j] ) ) , ' ' , globals::space_replacement )
 		: Helper::toupper( Helper::unquote( tok[j] ) )
-		);		
+		) );
 
       // if same, skip
       if ( mapped == uc_primary ) continue;
@@ -220,17 +221,17 @@ void nsrr_t::annot_remapping( const std::string & s )
 void nsrr_t::add( const std::string & p , const std::string & a )
 {
 
-  const std::string p2 = globals::sanitize_everything
+  const std::string p2 = Helper::repair_label_commas( globals::sanitize_everything
     ? Helper::sanitize(  Helper::unquote( p ) )
     : ( globals::replace_annot_spaces
 	? Helper::search_replace( Helper::unquote( p )  , ' ' , globals::space_replacement )
-	: Helper::unquote( p ) );
+	: Helper::unquote( p ) ) );
 	
-  const std::string a2 = globals::sanitize_everything
+  const std::string a2 = Helper::repair_label_commas( globals::sanitize_everything
     ? Helper::sanitize(  Helper::unquote( a ) )
     : ( globals::replace_annot_spaces
 	? Helper::search_replace( Helper::unquote( a )  , ' ' , globals::space_replacement )
-	: Helper::unquote( a ) );
+	: Helper::unquote( a ) ) );
 
   // swap spaces for another char?
   // const std::string p2 = globals::replace_annot_spaces ? Helper::search_replace( p , ' ' , globals::space_replacement ) : p;

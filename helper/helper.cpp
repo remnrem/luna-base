@@ -216,6 +216,19 @@ std::string Helper::search_replace( const std::string & s , char a , char b )
   return j;
 }
 
+
+std::string Helper::repair_label_commas( const std::string & s )
+{
+  return Helper::search_replace( s , ',' , '_' );
+}
+
+
+void Helper::require_label_without_commas( const std::string & s , const std::string & label_type )
+{
+  if ( s.find( ',' ) != std::string::npos )
+    Helper::halt( label_type + " labels cannot contain commas: " + s );
+}
+
 std::string Helper::search_replace( std::string s , const std::string & a , const std::string & b , const bool only_root )
 {
   // if only_root == T then only replace if 'a' matches from the start of 's' (i.e. pos == 0 )

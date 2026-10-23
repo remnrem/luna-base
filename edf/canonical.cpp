@@ -362,6 +362,8 @@ canon_rule_t::canon_rule_t( const std::vector<std::string> & lines )
   if ( ! rules_set ) 
     req_sig.push_back( Helper::unquote( Helper::toupper( canonical_label ) ) );
 
+  Helper::require_label_without_commas( canonical_label , "canonical signal" );
+
   //
   // all done
   //

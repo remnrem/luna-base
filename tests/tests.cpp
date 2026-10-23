@@ -45,6 +45,7 @@
 #include "stats/dpp-evaluation.h"
 #include "db/db.h"
 #include "pops/hdstats-pc.h"
+#include "pops/hdstats-model.h"
 
 #ifdef HAS_LGBM
 #include "pops/options.h"
@@ -5938,6 +5939,76 @@ static void test_hdstats_ultradian( lunapi_t * eng,
                                     std::vector<test_result_t> & R,
                                     bool V )
 {
+  // A V1 JSON model carries its own panel/component layout.  This deliberately
+  // uses a non-canonical panel and PC ID, proving that projection no longer
+  // depends on the compiled 11-domain/44-PC registry in this path.
+  try {
+    const std::string base = temp_base_path("hdstats_v1_json");
+    const std::string data = base + ".hdpc", spec = base + ".json", model = base + ".model.json", desc = base + ".desc.json";
+    {
+      std::ofstream out(data);
+      out << "ID\tA\tFORMAT\t__HDSTATS_FEATURES_V2\tH.NSS_5\t0.1\tCONF.NSS_5\t0.9\n"
+          << "ID\tB\tFORMAT\t__HDSTATS_FEATURES_V2\tH.NSS_5\t0.2\tCONF.NSS_5\t0.7\n"
+          << "ID\tC\tFORMAT\t__HDSTATS_FEATURES_V2\tH.NSS_5\t0.7\tCONF.NSS_5\t0.3\n"
+          << "ID\tD\tFORMAT\t__HDSTATS_FEATURES_V2\tH.NSS_5\t0.9\tCONF.NSS_5\t0.1\n";
+    }
+    {
+      std::ofstream out(spec);
+      out << "{\n"
+          << "  \"format\": \"luna-hdstats-pc-spec\",\n"
+          << "  \"version\": 1,\n"
+          << "  \"feature_universe\": \"HDSTATS-PC-FEATURES-V1\",\n"
+          << "  \"component_id_style\": \"r_safe\",\n"
+          << "  \"feature_descriptions\": [\n"
+          << "    {\"id\": \"H.NSS_5\", \"label\": \"Entropy\", \"description\": \"Entropy feature\"},\n"
+          << "    {\"id\": \"CONF.NSS_5\", \"label\": \"Confidence\", \"description\": \"Confidence feature\"}\n"
+          << "  ],\n"
+          << "  \"panels\": [{\n"
+          << "    \"id\": \"ALTERNATE\",\n"
+          << "    \"features\": [\"H.NSS_5\", \"CONF.NSS_5\"],\n"
+          << "    \"n_components\": 1\n"
+          << "  }]\n"
+          << "}\n";
+    }
+    param_t parameters;
+    parameters.add("data",data); parameters.add("spec",spec); parameters.add("model",model);
+    hdstats_pc::fit(parameters);
+    std::remove(spec.c_str()); // Projection must depend only on the embedded spec.
+    {
+      std::ofstream out(desc);
+      const std::string model_id = model.substr(model.find_last_of("/\\") + 1);
+      out << "{\n  \"format\": \"luna-hdstats-pc-desc\", \"version\": 1,\n"
+          << "  \"model\": {\"model_id\": \"" << model_id << "\"},\n"
+          << "  \"components\": [{\"key\": \"ALTERNATE/1\", \"id\": \"ALT_1\", "
+          << "\"label\": \"Synthetic alternate factor\", \"orientation\": -1, "
+          << "\"description\": \"Reviewed synthetic component\"}]\n}\n";
+    }
+    hdstats_pc::feature_map_t values;
+    values["H.NSS_5"] = 0.7; values["CONF.NSS_5"] = 0.3;
+    const auto components = hdstats_pc::project_components(model,values,0.0);
+    const auto panels = hdstats_pc::project_panels(model,values);
+    hdstats_model::model_t parsed;
+    std::string error;
+    const bool parsed_ok = hdstats_model::read(model,&parsed,&error);
+    std::ostringstream description;
+    hdstats_pc::describe(model,description,0.0,desc);
+    const bool descriptor_ok = hdstats_model::read_descriptor(desc,&parsed,&error);
+    const std::string api_model = eng->read_hdstats_pc_model(model);
+    const std::string api_descriptor = eng->read_hdstats_pc_descriptor(model,desc);
+    const bool pass = parsed_ok && !parsed.model_id.empty() && !parsed.specification_json.empty()
+      && parsed.components.size() == 1 && parsed.components[0].id == "ALTERNATE_1"
+      && descriptor_ok && parsed.components[0].id == "ALT_1" && parsed.components[0].orientation == -1
+      && components.size() == 1 && components[0].id == "ALTERNATE_1" && components[0].orientation == 1
+      && components[0].compatible && Helper::realnum(components[0].score)
+      && panels.size() == 1 && panels[0].panel == "ALTERNATE" && panels[0].scores.size() == 1
+      && api_model.find("ALTERNATE_1") != std::string::npos && api_descriptor.find("ALT_1") != std::string::npos
+      && description.str().find("ALT_1\tALTERNATE\t1\tSynthetic alternate factor\t-1") != std::string::npos;
+    record(R,"hdstats-pc/v1-self-contained-json-layout",pass,
+           "model_id=" + parsed.model_id + " components=" + Helper::int2str((int)components.size()) + " " + error,V);
+  } catch(std::exception & e) {
+    record(R,"hdstats-pc/v1-self-contained-json-layout",false,e.what(),V);
+  }
+
   // A V3 model projects panels independently and retains the component count
   // and scaling recorded for each panel. One absent panel must not hide another.
   try {
@@ -5977,7 +6048,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
   }
   try {
     const int n = 7200; // 2 h at 1 Hz; deliberately not tied to 30-s epochs
-    std::vector<double> w(n,0.0), n1(n,0.0), n2(n,0.0), n3(n,0.0), r(n,0.0);
+    std::vector<double> w(n,0.0), n1(n,0.0), n2(n,0.0), n3(n,0.0), r(n,0.0), invalid(n,0.0);
     for (int i=0; i<n; ++i)
       {
         const double d = 2.0 * std::sin( 2.0 * M_PI * i / 1000.0 );
@@ -5988,16 +6059,17 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     // A long awakening exceeds the 60-s-FWHM kernel support and must split
     // phase; it is not an intermediate-depth bridge.
     for (int i=3300; i<3700; ++i)
-      { w[i]=1.0; n1[i]=n2[i]=n3[i]=r[i]=0.0; }
+      { w[i]=1.0; n1[i]=n2[i]=n3[i]=r[i]=0.0; invalid[i]=1.0; }
 
     auto p = eng->inst("T_hdstats_ultradian");
     p->empty_edf("T_hdstats_ultradian", n, 1, "01.01.85", "22.00.00");
     p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",n1,1);
     p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",n3,1);
     p->insert_signal("PP_R",r,1);
+    p->insert_signal("PP_INVALID",invalid,1);
     // This two-hour record is too short for strict long-range summaries;
     // PC output must still be produced for its other panels.
-    p->eval("HDSTATS spt=F gap-aware=F ultra-fwhm=60 ultra-prominence=1 emit-ultradian=T ultra-diagnostics=T pc-out=/tmp");
+    p->eval("HDSTATS spt=F gap-aware=F ultra-fwhm=60 ultra-prominence=1 emit-ultradian=T ultra-diagnostics=T emit-cycles=T pc-out=/tmp");
 
     const auto have = p->has_channels({"U_PHASE","U_PHASE_VALID","U_AMP","U_DEPTH","U_AMP_RAW"});
     const auto dat = p->data({"U_PHASE_VALID","U_AMP"}, {}, false);
@@ -6014,6 +6086,13 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     const double umag = get_val(p,"HDSTATS","U_MAG");
     const double ucoverage = get_val(p,"HDSTATS","U_COVERAGE");
     const double uncyc = get_val(p,"HDSTATS","U_NCYC");
+    const auto cycles = p->fetch_annots({"hd_cycle"});
+    bool cycles_ok = ! cycles.empty();
+    for ( const auto & cycle : cycles )
+      {
+        const double start = std::get<1>(cycle), stop = std::get<2>(cycle);
+        if ( ! ( stop > start ) || ( start < 3300.0 && stop > 3700.0 ) ) cycles_ok = false;
+      }
     const double uh_r2 = get_val_where(p,"HDSTATS","UVAR","UVAR","H","U_R2");
     const double u_region_mean = get_val_where(p,"HDSTATS","UMETRIC_UQ","UMETRIC","H","U_MEAN");
     std::ifstream pc_in("/tmp/T_hdstats_ultradian.hdpc");
@@ -6050,6 +6129,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
       && Helper::realnum(umag) && umag > 0.0
       && Helper::realnum(ucoverage) && ucoverage > 0.0 && ucoverage <= 1.000001
       && Helper::realnum(uncyc) && uncyc > 1.0
+      && cycles_ok
       && Helper::realnum(uh_r2) && Helper::realnum(u_region_mean) && pc_ultra && short_night_pc
       && directional_keys==52 && zero_directions>0;
     std::ostringstream m; m << "channels=" << channels << " n_phase=" << n_phase
@@ -6057,6 +6137,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
                             << " max_amp=" << max_amp << " wake_amp=" << gap_amp
                             << " U_MAG=" << umag << " U_COVERAGE=" << ucoverage
                             << " U_NCYC=" << uncyc << " H_U_R2=" << uh_r2
+                            << " cycles=" << cycles.size() << " cycles_ok=" << cycles_ok
                             << " U_REGION_MEAN=" << u_region_mean
                             << " PC_ULTRA=" << pc_ultra << " directional=" << directional_keys
                             << " zero_directions=" << zero_directions;
@@ -6228,6 +6309,58 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     record(R,"hdstats-longrange/posterior-mass-timing",pass,m.str(),V);
   } catch (std::exception & e) {
     record(R,"hdstats-longrange/posterior-mass-timing",false,e.what(),V);
+  }
+
+  // fixed= is a third analysis selector: its exact-length window starts at
+  // sustained sleep onset, regardless of the SPT flanks, and a short record
+  // must be rejected rather than silently shortened.
+  try {
+    const int n = 500, onset = 100;
+    std::vector<double> w(n,1.0), n1(n,0.0), n2(n,0.0), n3(n,0.0), r(n,0.0);
+    for ( int i = onset; i < n; ++i ) w[i] = 0.0, n2[i] = 1.0;
+    for ( int i = 470; i < n; ++i ) n2[i] = 0.0, r[i] = 1.0;
+    auto p = eng->inst("T_hdstats_fixed");
+    p->empty_edf("T_hdstats_fixed", n, 1, "01.01.85", "22.00.00");
+    p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",n1,1);
+    p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",n3,1);
+    p->insert_signal("PP_R",r,1);
+    p->eval("HDSTATS fixed=0.1 spt-flank=300 hd-smooth=0 hd-onset-win=0.1 hd-offset-win=0.1 longrange=F ultradian=F qc=T");
+    const double start = get_val_s(p,"HDSTATS","QC","HD_ANALYSIS_START_SEC");
+    const double stop = get_val_s(p,"HDSTATS","QC","HD_ANALYSIS_STOP_SEC");
+    const double duration = get_val_s(p,"HDSTATS","QC","HD_ANALYSIS_SEC");
+    const double sol = get_val(p,"HDSTATS","HD_SOL");
+    const double spt = get_val(p,"HDSTATS","HD_SPT");
+    const double rem_lat = get_val(p,"HDSTATS","HD_REM_LAT");
+    const auto fixed_annot = p->fetch_annots({"hd_fixed"});
+    const bool window_ok = approx_equal(start,sol*60.0,1e-8) && approx_equal(stop,start+360.0,1e-8)
+      && approx_equal(duration,360.0,1e-8) && approx_equal(spt,6.0,1e-8);
+    const bool latency_ok = Helper::realnum(sol) && !Helper::realnum(rem_lat);
+    const bool annotation_ok = fixed_annot.size() == 1
+      && approx_equal(std::get<1>(fixed_annot[0]),start,1e-8)
+      && approx_equal(std::get<2>(fixed_annot[0]),stop,1e-8);
+
+    const int short_n = 400;
+    auto q = eng->inst("T_hdstats_fixed_short");
+    q->empty_edf("T_hdstats_fixed_short", short_n, 1, "01.01.85", "22.00.00");
+    q->insert_signal("PP_W",std::vector<double>(short_n,0.0),1);
+    q->insert_signal("PP_N1",std::vector<double>(short_n,0.0),1);
+    q->insert_signal("PP_N2",std::vector<double>(short_n,1.0),1);
+    q->insert_signal("PP_N3",std::vector<double>(short_n,0.0),1);
+    q->insert_signal("PP_R",std::vector<double>(short_n,0.0),1);
+    q->eval("HDSTATS fixed=0.2 hd-smooth=0 hd-onset-win=0.1 longrange=F ultradian=F qc=T");
+    const double short_available = get_val(q,"HDSTATS","HD_FIXED_AVAILABLE_HOURS");
+    const double short_ok = get_val(q,"HDSTATS","HD_FIXED_OK");
+    const double short_spt = get_val(q,"HDSTATS","HD_SPT");
+    const double short_skipped = get_val_s(q,"HDSTATS","QC","HD_FIXED_SKIPPED");
+    const bool short_skipped_ok = approx_equal(short_available,short_n/3600.0,1e-8)
+      && short_ok == 0.0 && !Helper::realnum(short_spt) && short_skipped == 1.0;
+    const bool pass = window_ok && latency_ok && annotation_ok && short_skipped_ok;
+    std::ostringstream m; m << "start/stop/duration=" << start << "/" << stop << "/" << duration
+                            << " SOL=" << sol << " REM_LAT=" << rem_lat
+                            << " annotation=" << annotation_ok << " short_skipped=" << short_skipped_ok;
+    record(R,"hdstats/fixed-window-at-sleep-onset",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/fixed-window-at-sleep-onset",false,e.what(),V);
   }
 }
 

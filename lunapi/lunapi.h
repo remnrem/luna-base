@@ -254,6 +254,13 @@ public:
                         const std::string & yvar,
                         const std::vector<std::string> & zvars ) const;
 
+  // Read HDSTATS-PC model artifacts through Luna's native validated reader.
+  // Both return normalized JSON; descriptor reads include the reviewed
+  // semantics overlaid on the matching fitted model.
+  std::string read_hdstats_pc_model( const std::string & model_file ) const;
+  std::string read_hdstats_pc_descriptor( const std::string & model_file,
+                                           const std::string & descriptor_file ) const;
+
   //
   // Command descriptions/helpers
   //

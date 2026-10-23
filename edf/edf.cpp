@@ -900,6 +900,16 @@ std::set<int> edf_header_t::read( FILE * file , edfz_t * edfz , edfz2_t * edfz2,
       // signal label, trim leading/trailing spaces
       std::string l = Helper::trim( edf_t::get_string( &p , 16 ) );
 
+      // A comma is a signal-list delimiter everywhere in Luna.  Repair it at
+      // the external-file boundary, before duplicate detection and aliases.
+      if ( l.find( ',' ) != std::string::npos )
+	{
+	  const std::string original_label = l;
+	  l = Helper::repair_label_commas( l );
+	  logger << "  replacing comma(s) in EDF channel label [" << original_label
+		 << "] with [" << l << "]\n";
+	}
+
       // swap internal spaces? (not for special EDF Annotations channel)
       bool annotation = Helper::imatch( l , "EDF Annotation" , 14 ) ;
       if ( globals::replace_channel_spaces && ! annotation )
@@ -3182,6 +3192,8 @@ void edf_record_t::drop( const int s )
 bool edf_t::init_signal( const std::string & label, const double Fs )
 {
 
+  Helper::require_label_without_commas( label , "signal" );
+
   if ( header.has_signal( label ) ) return false;
   
   const int n_samples = Fs * header.record_duration ;
@@ -3244,6 +3256,8 @@ void edf_t::add_signal( const std::string & label ,
 			double pmin , double pmax ,
 			int16_t dmin , int16_t dmax )
 {
+
+  Helper::require_label_without_commas( label , "signal" );
 
   const int ndata = data.size();
 
@@ -3382,6 +3396,8 @@ void edf_t::add_signal_int16( const std::string & label ,
 			      double pmin , double pmax ,
 			      int16_t dmin , int16_t dmax )
 {
+
+  Helper::require_label_without_commas( label , "signal" );
 
   // this function, as add_signal() except takes vector of digitial int16_t values
   //  i.e. for use in EDF-MINUS when we don't need to look at the whole signal
@@ -4210,14 +4226,13 @@ bool edf_t::load_annotations( const std::string & f0 )
       
       // create and load annotation
       
-      annot_t * a = annotations->add( feature_name );
+      annot_t * a = annotations->add_imported( feature_name );
       
-      a->name = feature_name;
       a->description = "feature-list";
       a->file = file_name;
 
       // load features, and track how many
-      aoccur[ feature_name ] = a->load_features( f  );
+      aoccur[ a->name ] = a->load_features( f  );
       
       return true;
     }
@@ -4596,6 +4611,9 @@ signal_list_t edf_header_t::signal_list( const std::string & s ,
 
 void edf_header_t::rename_channel( const std::string & old_label , const std::string & new_label )
 {
+
+  Helper::require_label_without_commas( new_label , "signal" );
+
   // expects exact match (i.e. this only called from XML <Signals> / <CanonicalLabel> information  
   // also by SIGNALS pick/rename
   for (int s=0;s<label.size();s++) if ( label[s] == old_label ) label[s] = new_label;

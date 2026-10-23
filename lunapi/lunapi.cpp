@@ -24,6 +24,8 @@
 // 3) error/handling/checkpoints
 
 #include "lunapi/lunapi.h"
+#include "pops/hdstats-model.h"
+#include "helper/json.h"
 
 #include "param.h"
 #include <stdexcept>
@@ -1146,6 +1148,81 @@ lunapi_t::gpa_get_xy_partial( const std::string & xvar,
     }
 
   return { ids_out, x_out, y_out };
+}
+
+namespace {
+
+std::string hdstats_model_json( const hdstats_model::model_t & model )
+{
+  nlohmann::json result;
+  result["format"] = "luna-hdstats-pc-api-model";
+  result["version"] = 1;
+  result["model_id"] = model.model_id;
+  if ( ! model.fingerprint.empty() ) result["fingerprint"] = model.fingerprint;
+  if ( ! model.specification_json.empty() ) result["spec"] = nlohmann::json::parse(model.specification_json);
+  result["panels"] = nlohmann::json::array();
+  for ( const auto & panel : model.panels )
+    {
+      nlohmann::json p;
+      p["id"] = panel.id;
+      p["n_input"] = panel.n_input;
+      p["n_fit"] = panel.n_fit;
+      p["total_ss"] = panel.total_ss;
+      p["declared_features"] = panel.declared_features;
+      p["singular_values"] = panel.singular_values;
+      p["features"] = nlohmann::json::array();
+      for ( const auto & feature : panel.features )
+        p["features"].push_back({{"id",feature.id},{"mean",feature.mean},{"sd",feature.sd},{"loadings",feature.loadings}});
+      result["panels"].push_back(std::move(p));
+    }
+  result["components"] = nlohmann::json::array();
+  for ( const auto & component : model.components )
+    {
+      nlohmann::json c = {{"id",component.id},{"key",component.panel_id + "/" + std::to_string(component.panel_pc)},
+        {"panel",component.panel_id},{"panel_pc",component.panel_pc},{"label",component.label},
+        {"orientation",component.orientation},{"description",component.description}};
+      c["loadings"] = nlohmann::json::array();
+      const hdstats_model::panel_t * panel = model.find_panel(component.panel_id);
+      if ( panel && component.panel_pc >= 1 && component.panel_pc <= (int)panel->singular_values.size() )
+        for ( const auto & feature : panel->features )
+          c["loadings"].push_back({{"feature",feature.id},
+            {"loading",component.orientation * feature.loadings[component.panel_pc-1]}});
+      result["components"].push_back(std::move(c));
+    }
+  result["descriptions"] = nlohmann::json::array();
+  for ( const auto & item : model.descriptions )
+    result["descriptions"].push_back({{"entity_type",item.entity_type},{"entity_id",item.entity_id},{"text",item.text}});
+  result["external_associations"] = nlohmann::json::array();
+  for ( const auto & item : model.external_associations )
+    result["external_associations"].push_back({{"entity_type",item.entity_type},{"entity_id",item.entity_id},
+      {"factor",item.factor},{"score",item.score}});
+  result["pc_correlations"] = nlohmann::json::array();
+  for ( const auto & item : model.pc_correlations )
+    result["pc_correlations"].push_back({{"first",item.first},{"second",item.second},{"value",item.value}});
+  result["feature_correlations"] = nlohmann::json::array();
+  for ( const auto & item : model.feature_correlations )
+    result["feature_correlations"].push_back({{"first",item.first},{"second",item.second},{"value",item.value}});
+  return result.dump();
+}
+
+}
+
+std::string lunapi_t::read_hdstats_pc_model( const std::string & model_file ) const
+{
+  hdstats_model::model_t model;
+  std::string error;
+  if ( ! hdstats_model::read(model_file,&model,&error) ) throw std::runtime_error(error);
+  return hdstats_model_json(model);
+}
+
+std::string lunapi_t::read_hdstats_pc_descriptor( const std::string & model_file,
+                                                   const std::string & descriptor_file ) const
+{
+  hdstats_model::model_t model;
+  std::string error;
+  if ( ! hdstats_model::read(model_file,&model,&error) ) throw std::runtime_error(error);
+  if ( ! hdstats_model::read_descriptor(descriptor_file,&model,&error) ) throw std::runtime_error(error);
+  return hdstats_model_json(model);
 }
 
 

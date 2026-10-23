@@ -38,12 +38,20 @@ extern writer_t writer;
 void dsptools::simul( edf_t & edf , param_t & param )
 {
 
+  // Direct simulation can create or update several explicitly named channels.
+  // Each pass through the loop constructs a fresh realization, including a
+  // fresh set of random phases (or random white-noise values).
+  const std::vector<std::string> siglabs = param.strvector( "sig" );
+  if ( siglabs.size() == 0 ) Helper::halt( "need to specify at least one channel" );
+
   //
   // Epochwise cache-based simulation? Use a different fn()
   //
   
   if ( param.has( "cache" ) )
     {
+      if ( siglabs.size() != 1 )
+	Helper::halt( "cache mode requires a single channel" );
       simul_cached( edf , param );
       return;
     }
@@ -54,6 +62,8 @@ void dsptools::simul( edf_t & edf , param_t & param )
 
   if ( param.has( "fft" ) )
     {
+      if ( siglabs.size() != 1 )
+	Helper::halt( "fft mode requires a single channel" );
       simul_fft( edf , param );
       return;
     }
@@ -63,37 +73,37 @@ void dsptools::simul( edf_t & edf , param_t & param )
   // Update or create a signal
   //
  
-  std::string siglab = param.requires( "sig" );
+  for (int sigidx=0; sigidx<siglabs.size(); sigidx++)
+    {
+      const std::string & siglab = siglabs[sigidx];
 
-  const bool channel_mode = siglab != "*" ;
+      if ( siglab == "*" ) Helper::halt( "need to specify a channel name" );
 
-  if ( ! channel_mode ) Helper::halt( "need to specify a single channel" ) ;
-  
-  const bool update_existing_channel = edf.header.has_signal( siglab );
+      const bool update_existing_channel = edf.header.has_signal( siglab );
 
   // add to an existing signal (versus replace)?
 
-  const bool add_to_existing = param.has( "add" ) ;
+      const bool add_to_existing = param.has( "add" ) ;
 
-  if ( add_to_existing && ! update_existing_channel )
-    Helper::halt( "specified 'add' to modify an existing signal, but it does not exist" );
+      if ( add_to_existing && ! update_existing_channel )
+	Helper::halt( "specified 'add' to modify an existing signal, but it does not exist" );
 
   //
   // special case: white noise
   //
 
-  const bool white_noise = param.has( "white" );
+      const bool white_noise = param.has( "white" );
 
-  if ( white_noise )
-    {      
-      const int fs = param.requires_int( "sr" );
-      const int n = edf.header.record_duration * edf.header.nr * fs ;
-      std::vector<double> rdat( n );
-      for (int i=0; i<n; i++) rdat[i] = Statistics::ltqnorm( CRandom::rand() );
-      logger << "  creating new channel " << siglab << " with white noise, SR = " << fs << "\n";
-      edf.add_signal( siglab , fs , rdat );
-      return;
-    }
+      if ( white_noise )
+	{
+	  const int fs = param.requires_int( "sr" );
+	  const int n = edf.header.record_duration * edf.header.nr * fs ;
+	  std::vector<double> rdat( n );
+	  for (int i=0; i<n; i++) rdat[i] = Statistics::ltqnorm( CRandom::rand() );
+	  logger << "  creating new channel " << siglab << " with white noise, SR = " << fs << "\n";
+	  edf.add_signal( siglab , fs , rdat );
+	  continue;
+	}
   
   //
   // baseline signal from a specified PSD, either:
@@ -593,6 +603,8 @@ void dsptools::simul( edf_t & edf , param_t & param )
       edf.add_signal( siglab , fs , rdat );
     }
   
+
+    } // next requested signal
 
   
 }

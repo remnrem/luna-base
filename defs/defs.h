@@ -146,6 +146,7 @@ enum cmdline_proc_t
     PROC_POPS_CALIBRATION,
     PROC_HDSTATS_PC,
     PROC_HDSTATS_PC_DESC,
+    PROC_HDSTATS_DESC,
     PROC_HYPNO_PC
   };
 
