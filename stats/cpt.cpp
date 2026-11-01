@@ -1052,7 +1052,7 @@ void cpt_wrapper( param_t & param )
 
   logger << "  running permutations, assuming a " << ( one_sided_test ? "one" : "two" ) << "-sided test...\n";
   
-  cpt_results_t results = cpt.run( nreps , cl_threshold , ! one_sided_test , verbose );
+  cpt_results_t results = cpt.run( nreps , no_clustering ? -1 : cl_threshold , ! one_sided_test , verbose );
 
   logger << "  all done.\n";
   
