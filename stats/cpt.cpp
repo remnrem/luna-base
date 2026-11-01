@@ -1308,7 +1308,7 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 	  std::map<std::string,double>::const_iterator tt = t2num.find( ff->first );
           bool time_adjacent = false;
           if      ( time[i] <= -998 && tt->second <= -998 ) time_adjacent = true;  // if F not defined, then they are 'adjacent'
-          else if ( freq[i] <= -998 != tt->second <= -998 ) time_adjacent = false; // but both variables must be freq agnostic
+          else if ( time[i] <= -998 != tt->second <= -998 ) time_adjacent = false; // but both variables must be time agnostic
           else if ( fabs( time[i]  - tt->second ) <= tth ) time_adjacent = true;
 	  
 	  if ( freq_adjacent && time_adjacent )
