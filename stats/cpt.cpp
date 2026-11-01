@@ -1377,7 +1377,7 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 			      //  either A1/A2 AND B1/B2 must match
 			      //      OR A1/B2 AND A2/B1
 
-			      if ( ( d11 < sth && d22 < sth ) || ( d12 < sth || d21 < sth ) ) 
+			      if ( ( d11 < sth && d22 < sth ) || ( d12 < sth && d21 < sth ) )
 				spatial_adjacent = true;
 			    }
 			}
