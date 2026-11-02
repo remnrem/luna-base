@@ -929,7 +929,7 @@ static void select_panel_components( fitted_panel_t * panel, const std::vector<i
   for ( const int axis : axes )
     if ( axis < 1 || axis > full.loadings.cols() )
       Helper::halt("HDSTATS-PC selection requests PC" + Helper::int2str(axis) +
-                   " but only " + Helper::int2str(full.loadings.cols()) + " axes were fitted for " + panel->name);
+                   " but only " + Helper::int2str((int)full.loadings.cols()) + " axes were fitted for " + panel->name);
 
   model_t retained = full;
   retained.loadings.resize(full.loadings.rows(),axes.size());
