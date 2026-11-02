@@ -1170,9 +1170,15 @@ std::string hdstats_model_json( const hdstats_model::model_t & model )
       p["total_ss"] = panel.total_ss;
       p["declared_features"] = panel.declared_features;
       p["singular_values"] = panel.singular_values;
+      p["score_sds"] = panel.score_sds;
+      p["source_components"] = panel.source_components;
+      p["rotation_method"] = panel.rotation_method;
+      if ( !panel.rotation.empty() ) p["rotation"] = panel.rotation;
+      if ( panel.n_basis ) p["n_basis"] = panel.n_basis;
+      if ( !panel.selected_components.empty() ) p["selected_components"] = panel.selected_components;
       p["features"] = nlohmann::json::array();
       for ( const auto & feature : panel.features )
-        p["features"].push_back({{"id",feature.id},{"mean",feature.mean},{"sd",feature.sd},{"loadings",feature.loadings}});
+        p["features"].push_back({{"id",feature.id},{"mean",feature.mean},{"sd",feature.sd},{"weight",feature.weight},{"loadings",feature.loadings}});
       result["panels"].push_back(std::move(p));
     }
   result["components"] = nlohmann::json::array();

@@ -4638,10 +4638,17 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "gap-aware" , "T" , "Gap-aware long-range mode" );
   add_param( "HDSTATS" , "fail-on-empty" , "F" , "Fail if no long-range values" );
   add_param( "HDSTATS" , "spt" , "T" , "Use SPT analysis interval" );
-  add_param( "HDSTATS" , "fixed" , "" , "Use an exact N-hour analysis window beginning at sustained sleep onset; recordings without the full window are excluded" );
-  add_param( "HDSTATS" , "spt-flank" , "300" , "SPT flank (seconds); default 300s (5 min) on each side" );
-  add_param( "HDSTATS" , "spt-flank-pre" , "300" , "Pre-SPT flank (seconds); defaults to spt-flank" );
-  add_param( "HDSTATS" , "spt-flank-post" , "300" , "Post-SPT flank (seconds); defaults to spt-flank" );
+  add_param( "HDSTATS" , "fixed" , "" , "Use an exact N-hour core window beginning at sustained sleep onset; spt-flank-pre/post are retained around it for analysis, and recordings without the full core are excluded" );
+  add_param( "HDSTATS" , "spt-mode" , "legacy" , "SPT selector: legacy or primary-island (select largest qualifying soft-sleep island)" );
+  add_param( "HDSTATS" , "spt-island-min" , "60" , "primary-island: minimum soft sleep mass (minutes) for a candidate island" );
+  add_param( "HDSTATS" , "spt-gap" , "120" , "primary-island: maximum physical gap (minutes) retained within an SPT; wake and invalid samples are bridgeable" );
+  add_param( "HDSTATS" , "spt-qc" , "F" , "Emit SPT_QC primary-island and split-night diagnostics without changing the legacy selector" );
+  add_param( "HDSTATS" , "spt-flank" , "300" , "SPT flank (seconds); default 300s (5 min) on each side, but 0 in fixed= mode unless explicitly set" );
+  add_param( "HDSTATS" , "spt-flank-mins" , "" , "SPT flank (minutes); alias for spt-flank, mutually exclusive with it" );
+  add_param( "HDSTATS" , "spt-flank-pre" , "300" , "Pre-SPT flank (seconds); defaults to spt-flank (or 0 in fixed= mode)" );
+  add_param( "HDSTATS" , "spt-flank-pre-mins" , "" , "Pre-SPT flank (minutes); alias for spt-flank-pre, mutually exclusive with it" );
+  add_param( "HDSTATS" , "spt-flank-post" , "300" , "Post-SPT flank (seconds); defaults to spt-flank (or 0 in fixed= mode)" );
+  add_param( "HDSTATS" , "spt-flank-post-mins" , "" , "Post-SPT flank (minutes); alias for spt-flank-post, mutually exclusive with it" );
   add_param( "HDSTATS" , "stable-min" , "30"     , "Minimum contiguous flank duration (seconds) for a stable-to-stable transition" );
   add_param( "HDSTATS" , "stable-ps"  , "0.05"   , "Per-sample PS must be below this to qualify as stable-core" );
   add_param( "HDSTATS" , "stable-conf", "0.70"   , "Per-sample confidence threshold to qualify as stable-core" );
@@ -4664,10 +4671,10 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "emit-all-trans", "F"   , "Emit all directed TRANS and BOUT_TRANS pairs, padding unobserved pair summaries with zero counts/densities" );
   add_param( "HDSTATS" , "emit-annots", ""       , "Emit detected transitions as annotations under this class name" );
   add_param( "HDSTATS" , "emit-annots-by-type", "F" , "Encode transition type in the emitted annotation class name" );
-  add_param( "HDSTATS" , "emit-spt", "hd"      , "Emit soft SPT annotations under this root, and the fixed analysis interval as <root>_fixed when fixed= is used" );
+  add_param( "HDSTATS" , "emit-spt", "hd"      , "Emit <root>_spt, <root>_sleep_onset, <root>_final_wake, and flanked <root>_lights_out/_lights_on annotations; fixed= also emits <root>_fixed" );
   add_param( "HDSTATS" , "emit-cycles", "F"   , "Emit complete soft-ultradian trough-to-peak-to-trough cycle annotations as <root>_cycle (T uses root hd); these are not canonical HYPNO NREM cycles" );
   add_param( "HDSTATS" , "pc-out", ""          , "Write one HDSTATS-PC feature line per individual" );
-  add_param( "HDSTATS" , "pc-proj", ""         , "Project a legacy or self-contained JSON V1 HDSTATS-PC model as named PC scores and loading-selected feature contributions" );
+  add_param( "HDSTATS" , "pc-proj", ""         , "Project a legacy or self-contained JSON (V1/V2/V3) HDSTATS-PC model as named PC scores and loading-selected feature contributions; a sibling PANEL.desc.json next to the model, if present, is applied automatically" );
   add_param( "HDSTATS" , "model-desc", "F"      , "With pc-proj=, emit optional appended HDSTATS-PC model descriptions and associations" );
   add_param( "HDSTATS" , "pc-min-loading", "0.10" , "Minimum absolute oriented loading for linked PC feature contributions" );
   add_param( "HDSTATS" , "pc-all", "F"         , "With pc-proj=, also emit all ordinary HDSTATS metrics" );
@@ -4681,12 +4688,15 @@ void cmddefs_t::init()
   add_param( "--hdstats-pc-desc" , "model" , "" , "Fitted V3 HDSTATS-PC reference model used to report oriented loadings" );
   add_param( "--hdstats-pc-desc" , "min-loading" , "0.10" , "Minimum absolute oriented loading to list for each PC" );
   add_cmd( "stage" , "--hdstats-desc" , "Print a fitted HDSTATS-PC JSON model and optional reviewed descriptor in human-readable form" );
-  add_param( "--hdstats-desc" , "model" , "" , "Self-contained HDSTATS-PC V1 JSON model" );
-  add_param( "--hdstats-desc" , "desc" , "" , "Optional matching HDSTATS-PC V1 descriptor JSON" );
+  add_param( "--hdstats-desc" , "model" , "" , "Self-contained HDSTATS-PC JSON model (V1/V2/V3); a sibling PANEL.desc.json next to it, if present, is applied automatically" );
+  add_param( "--hdstats-desc" , "desc" , "" , "Optional descriptor JSON to preview instead of (applied after, so it wins over) any sibling PANEL.desc.json" );
   add_param( "--hdstats-desc" , "min-loading" , "0.10" , "Minimum absolute oriented loading to list for each component" );
   add_param( "--hdstats-pc" , "data" , "all.txt" , "HDSTATS-PC feature lines" );
   add_param( "--hdstats-pc" , "model" , "hdstats-pc.txt" , "Output PCA model" );
-  add_param( "--hdstats-pc" , "spec" , "" , "Optional self-contained JSON layout specification for a flexible V1 HDSTATS-PC model" );
+  add_param( "--hdstats-pc" , "spec" , "" , "Required HDSTATS-PC v2 JSON layout and feature-group specification" );
+  add_param( "--hdstats-pc" , "rotate" , "T" , "Deterministic group-quartimax rotation within retained panel subspaces; F retains ordinary PCA" );
+  add_param( "--hdstats-pc" , "pc-select" , "" , "Optional JSON selection of PCA axes; the stage they are selected from is set by pc-select-stage" );
+  add_param( "--hdstats-pc" , "pc-select-stage" , "pre-rotation" , "Selection stage for pc-select=: pre-rotation selects original PCA axes before rotation (default, unchanged); post-rotation selects final rotated discovery PCs after fitting and rotating the full panel, without rotating again" );
   add_param( "--hdstats-pc" , "nc" , "1" , "Default components retained per panel" );
   add_param( "--hdstats-pc" , "nc-ambiguity" , "" , "Override components for posterior ambiguity" );
   add_param( "--hdstats-pc" , "nc-instability-stability" , "" , "Override components for instability and stability" );
@@ -4809,7 +4819,16 @@ void cmddefs_t::init()
   add_var( "HDSTATS-PC" , "PANEL,FTR" , "MEAN" , "Reference mean" );
   add_var( "HDSTATS-PC" , "PANEL,FTR" , "SD" , "Reference SD" );
   add_table( "HDSTATS-PC" , "PANEL,PC" , "Per-panel component summary" );
-  add_var( "HDSTATS-PC" , "PANEL,PC" , "W" , "Singular value" );
+  add_var( "HDSTATS-PC" , "PANEL" , "ROTATED" , "Whether final components are group rotated" );
+  add_var( "HDSTATS-PC" , "PANEL,PC" , "SOURCE_PC" , "Original axis (unrotated models only)" );
+  add_var( "HDSTATS-PC" , "PANEL,PC" , "SCORE_SD" , "Training SD of the raw final score" );
+  add_var( "HDSTATS-PC" , "PANEL,PC" , "GROUP" , "Group with greatest squared-loading mass" );
+  add_var( "HDSTATS-PC" , "PANEL,PC" , "GROUP_MASS" , "Largest group squared-loading mass" );
+  add_table( "HDSTATS-PC" , "PANEL,PC,GROUP" , "Rotated loading mass by spec group" );
+  add_var( "HDSTATS-PC" , "PANEL,PC,GROUP" , "MASS" , "Sum of squared loadings in the group" );
+  add_table( "HDSTATS-PC" , "PANEL,PC,BASIS_PC" , "Rotation from original PCA axes" );
+  add_var( "HDSTATS-PC" , "PANEL,PC,BASIS_PC" , "ROTATION" , "Coefficient mapping the original raw PCA score into this component" );
+  add_var( "HDSTATS-PC" , "PANEL,PC" , "W" , "Square root of component score sum of squares (singular value for ordinary PCA)" );
   add_var( "HDSTATS-PC" , "PANEL,PC" , "VE" , "Variance explained" );
   add_var( "HDSTATS-PC" , "PANEL,PC" , "CVE" , "Cumulative variance explained" );
   add_table( "HDSTATS-PC" , "PANEL,PC,FTR" , "Per-panel loadings" );
@@ -4853,6 +4872,15 @@ void cmddefs_t::init()
           "U_PCT_SUPPORTED", "U_PCT_PHASE", "U_VALID_SEC", "U_SLEEP_SEC",
           "U_PHASE_SEC", "U_N_PHASE_RUNS", "U_MEAN_RAW" } )
     add_var( "HDSTATS", "QC", variable, "Ultradian diagnostic" );
+  add_table( "HDSTATS" , "SPT_QC" , "Primary-island SPT and split-night diagnostics (spt-mode=primary-island or spt-qc=T only)" );
+  for ( const auto & variable : std::vector<std::string>{
+          "PRIMARY_VALID", "FALLBACK_LEGACY", "N_ISLANDS", "PRIMARY_INDEX",
+          "TOTAL_SLEEP_MIN", "PRIMARY_SLEEP_MIN", "PRIMARY_MASS_PCT",
+          "PRIMARY_SPT_MIN", "LEGACY_SPT_MIN", "SPT_DELTA_MIN",
+          "ONSET_DELTA_MIN", "FINAL_WAKE_DELTA_MIN", "OUTSIDE_SLEEP_MIN",
+          "INTERNAL_WAKE_MIN", "INTERNAL_WAKE_PCT", "MAX_WAKE_GAP_MIN", "SPLIT_NIGHT",
+          "PRIMARY_START_SEC", "PRIMARY_STOP_SEC" } )
+    add_var( "HDSTATS", "SPT_QC", variable, "Primary-island SPT diagnostic" );
   add_var(   "HDSTATS" , "NSS,LRLAG"       , "PS",    "Probability shift" );
   add_var(   "HDSTATS" , "NSS,LRLAG"       , "SIM",   "Posterior similarity" );
   add_var(   "HDSTATS" , "NSS,LRLAG,SS"    , "ACF",   "Stage autocorrelation" );

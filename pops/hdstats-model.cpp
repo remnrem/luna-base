@@ -186,10 +186,11 @@ bool read_json_model( const std::string & file, model_t * model, std::string * e
       if ( ! in )
         { if ( error ) *error = "could not open HDSTATS model " + file; return false; }
       const json document = json::parse(in);
+      const int document_version = document.value("version",0);
       if ( ! document.is_object() || document.value("format","") != "luna-hdstats-pc-model" ||
-           document.value("version",0) != 1 || ! document.contains("spec") ||
+           (document_version != 1 && document_version != 2 && document_version != 3) || ! document.contains("spec") ||
            ! document.at("spec").is_object() || ! document.contains("panels") || ! document.at("panels").is_array() )
-        { if ( error ) *error = "HDSTATS JSON model " + file + ": expected V1 model object"; return false; }
+        { if ( error ) *error = "HDSTATS JSON model " + file + ": expected JSON model object (version 1, 2, or 3)"; return false; }
 
       const std::string component_id_style = document.at("spec").value("component_id_style",std::string("legacy"));
       if ( component_id_style != "legacy" && component_id_style != "r_safe" )
@@ -198,11 +199,12 @@ bool read_json_model( const std::string & file, model_t * model, std::string * e
       model_t parsed;
       if ( ! json_string(document,"model_id",&parsed.model_id) ||
            document.at("spec").value("format","") != "luna-hdstats-pc-spec" ||
-           document.at("spec").value("version",0) != 1 ||
-           document.at("spec").value("feature_universe","") != "HDSTATS-PC-FEATURES-V1" ||
+           document.at("spec").value("version",0) != 2 ||
+           document.at("spec").value("feature_universe","") != "HDSTATS-PC-FEATURES-V2" ||
            ! document.at("spec").contains("feature_descriptions") || ! document.at("spec").at("feature_descriptions").is_array() ||
            ! document.at("spec").contains("panels") || ! document.at("spec").at("panels").is_array() ||
-           document.at("spec").at("panels").empty() )
+           document.at("spec").at("panels").empty() || !document.at("spec").contains("derived_features") ||
+           !document.at("spec").at("derived_features").is_array() )
         { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid embedded specification"; return false; }
       if ( document.contains("fingerprint") )
         {
@@ -212,6 +214,12 @@ bool read_json_model( const std::string & file, model_t * model, std::string * e
         }
       parsed.specification_json = document.at("spec").dump();
       parsed.component_id_style = component_id_style;
+
+      const json & weighting = document.at("spec").value("weighting",json::object());
+      const std::string weighting_method = weighting.value("method",std::string("inverse_group_size"));
+      if ( weighting_method != "inverse_group_size" && weighting_method != "equal_component_variance" )
+        { if ( error ) *error = "HDSTATS JSON model " + file + ": unsupported weighting method"; return false; }
+      parsed.score_unit_variance = weighting_method == "equal_component_variance";
 
       std::map<std::string,std::pair<std::string,std::string>> metadata;
       for ( const auto & item : document.at("spec").at("feature_descriptions") )
@@ -236,7 +244,7 @@ bool read_json_model( const std::string & file, model_t * model, std::string * e
         {
           std::string panel_id;
           if ( ! spec_panel.is_object() || ! json_string(spec_panel,"id",&panel_id) ||
-               ! spec_panel.contains("features") || ! spec_panel.at("features").is_array() || spec_panel.at("features").empty() ||
+               ! spec_panel.contains("weight_groups") || ! spec_panel.at("weight_groups").is_array() || spec_panel.at("weight_groups").empty() ||
                ! spec_panel.contains("n_components") || ! spec_panel.at("n_components").is_number_integer() ||
                spec_panel.at("n_components").get<int>() < 1 )
             { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid specification panel"; return false; }
@@ -255,6 +263,27 @@ bool read_json_model( const std::string & file, model_t * model, std::string * e
                ! source.contains("singular_values") || ! source.at("singular_values").is_array() )
             { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid fitted panel " + panel_id; return false; }
 
+          const int n_groups = (int)spec_panel.at("weight_groups").size();
+          std::vector<std::string> expected_declared;
+          std::map<std::string,double> expected_weights;
+          std::set<std::string> group_ids;
+          for ( const auto & group : spec_panel.at("weight_groups") )
+            {
+              std::string group_id;
+              if ( !group.is_object() || !json_string(group,"id",&group_id) || !group_ids.insert(group_id).second ||
+                   !group.contains("features") || !group.at("features").is_array() || group.at("features").empty() )
+                { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid weight group"; return false; }
+              const double weight = weighting_method == "equal_component_variance"
+                ? 1.0 / std::sqrt( n_groups * (int)group.at("features").size() )
+                : 1.0 / group.at("features").size();
+              for ( const auto & feature : group.at("features") )
+                {
+                  if ( !feature.is_string() || feature.get<std::string>().empty() ||
+                       !expected_weights.emplace(feature.get<std::string>(),weight).second )
+                    { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid declared feature"; return false; }
+                  expected_declared.push_back(feature.get<std::string>());
+                }
+            }
           std::set<std::string> declared;
           for ( const auto & feature : source.at("declared_features") )
             if ( ! feature.is_string() || feature.get<std::string>().empty() || ! declared.insert(feature.get<std::string>()).second )
@@ -262,14 +291,114 @@ bool read_json_model( const std::string & file, model_t * model, std::string * e
             else panel.declared_features.push_back(feature.get<std::string>());
           if ( panel.declared_features.empty() )
             { if ( error ) *error = "HDSTATS JSON model " + file + ": no declared features"; return false; }
+          if ( panel.declared_features != expected_declared )
+            { if ( error ) *error = "HDSTATS JSON model " + file + ": declared features disagree with v2 weight groups"; return false; }
 
           const int n_components = spec_panel.at("n_components").get<int>();
-          if ( (int)source.at("singular_values").size() != n_components || n_components > (int)source.at("features").size() )
+          if ( n_components > (int)source.at("features").size() )
             { if ( error ) *error = "HDSTATS JSON model " + file + ": component/loading dimensions disagree"; return false; }
+
+          const bool version3 = document_version == 3;
+          int n_basis = n_components;
+          if ( version3 )
+            {
+              if ( ! json_positive_int(source,"n_basis",&n_basis) || n_basis < n_components )
+                { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid rotated basis width"; return false; }
+            }
+          panel.n_basis = version3 ? n_basis : 0;
+          if ( (int)source.at("singular_values").size() != n_basis )
+            { if ( error ) *error = "HDSTATS JSON model " + file + ": component/loading dimensions disagree"; return false; }
+
+          if ( source.contains("source_components") )
+            {
+              if ( ! source.at("source_components").is_array() ||
+                   (int)source.at("source_components").size() != n_basis )
+                { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid source component provenance"; return false; }
+              int previous = 0;
+              for ( const auto & value : source.at("source_components") )
+                {
+                  if ( ! value.is_number_integer() || value.get<int>() <= previous )
+                    { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid source component provenance"; return false; }
+                  previous = value.get<int>();
+                  panel.source_components.push_back(previous);
+                }
+            }
+          else
+            for ( int pc = 1; pc <= n_basis; ++pc ) panel.source_components.push_back(pc);
           for ( const auto & value : source.at("singular_values") )
             if ( ! value.is_number() || ! std::isfinite(value.get<double>()) )
               { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid singular value"; return false; }
             else panel.singular_values.push_back(value.get<double>());
+
+          const bool rotated = document_version == 2 || document_version == 3;
+          if ( !rotated && (source.contains("rotation") || source.contains("score_sds")) )
+            { if ( error ) *error = "HDSTATS JSON model " + file + ": rotation requires model version 2 or 3"; return false; }
+          for ( const double w : panel.singular_values )
+            if ( parsed.score_unit_variance && w <= 0 )
+              { if ( error ) *error = "HDSTATS JSON model " + file + ": nonpositive score scale"; return false; }
+          if ( !rotated )
+            // V1: singular_values has exactly n_components entries (n_basis == n_components).
+            for ( const double w : panel.singular_values ) panel.score_sds.push_back(w/std::sqrt(panel.n_fit-1.0));
+          else
+            panel.score_sds.assign(n_components,0.0); // placeholder; overwritten below
+          if ( rotated )
+            {
+              if ( !parsed.score_unit_variance || !source.contains("rotation") || !source.at("rotation").is_object() ||
+                   source.at("rotation").value("method","") != "group_quartimax_v1" ||
+                   !source.at("rotation").contains("matrix") || !source.at("rotation").at("matrix").is_array() ||
+                   (int)source.at("rotation").at("matrix").size() != n_basis ||
+                   !source.contains("score_sds") || !source.at("score_sds").is_array() ||
+                   (int)source.at("score_sds").size() != n_components )
+                { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid rotation or score scales"; return false; }
+              panel.rotation_method = "group_quartimax_v1";
+              for ( const auto & row : source.at("rotation").at("matrix") )
+                {
+                  if ( !row.is_array() || (int)row.size() != n_components )
+                    { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid rotation dimensions"; return false; }
+                  std::vector<double> values;
+                  for ( const auto & value : row )
+                    {
+                      if ( !value.is_number() || !std::isfinite(value.get<double>()) )
+                        { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid rotation coefficient"; return false; }
+                      values.push_back(value.get<double>());
+                    }
+                  panel.rotation.push_back(std::move(values));
+                }
+              if ( version3 )
+                {
+                  if ( ! source.contains("selected_components") || ! source.at("selected_components").is_array() ||
+                       (int)source.at("selected_components").size() != n_components )
+                    { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid selected component provenance"; return false; }
+                  int previous = 0;
+                  for ( const auto & value : source.at("selected_components") )
+                    {
+                      if ( ! value.is_number_integer() || value.get<int>() <= previous || value.get<int>() > n_basis )
+                        { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid selected component provenance"; return false; }
+                      previous = value.get<int>();
+                      panel.selected_components.push_back(previous);
+                    }
+                }
+              for ( int k = 0; k < n_components; ++k )
+                {
+                  const auto & value = source.at("score_sds")[k];
+                  if ( !value.is_number() || !std::isfinite(value.get<double>()) || value.get<double>() <= 0 )
+                    { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid rotated score SD"; return false; }
+                  panel.score_sds[k] = value.get<double>();
+                  double ss = 0;
+                  for ( int b = 0; b < n_basis; ++b )
+                    ss += std::pow(panel.rotation[b][k]*panel.singular_values[b],2);
+                  const double expected_sd = std::sqrt(ss/(panel.n_fit-1.0));
+                  if ( std::fabs(panel.score_sds[k]/expected_sd-1.0) > 1e-8 )
+                    { if ( error ) *error = "HDSTATS JSON model " + file + ": rotated score SD disagrees with basis"; return false; }
+                  for ( int l = 0; l <= k; ++l )
+                    {
+                      double dot = 0;
+                      for ( int b = 0; b < n_basis; ++b ) dot += panel.rotation[b][k]*panel.rotation[b][l];
+                      if ( std::fabs(dot-(k==l ? 1.0 : 0.0)) > 1e-8 )
+                        { if ( error ) *error = "HDSTATS JSON model " + file + ": nonorthogonal rotation"; return false; }
+                    }
+                }
+            }
 
           std::set<std::string> feature_ids;
           for ( const auto & source_feature : source.at("features") )
@@ -278,6 +407,8 @@ bool read_json_model( const std::string & file, model_t * model, std::string * e
               if ( ! source_feature.is_object() || ! json_string(source_feature,"id",&feature.id) ||
                    ! declared.count(feature.id) || ! feature_ids.insert(feature.id).second ||
                    ! json_number(source_feature,"mean",&feature.mean) || ! json_number(source_feature,"sd",&feature.sd) || feature.sd <= 0 ||
+                   ! json_number(source_feature,"weight",&feature.weight) || feature.weight <= 0 ||
+                   std::fabs(feature.weight - expected_weights.at(feature.id)) > 1e-12 ||
                    ! source_feature.contains("loadings") || ! source_feature.at("loadings").is_array() ||
                    (int)source_feature.at("loadings").size() != n_components )
                 { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid fitted feature"; return false; }
@@ -289,28 +420,37 @@ bool read_json_model( const std::string & file, model_t * model, std::string * e
             }
           if ( panel.features.empty() )
             { if ( error ) *error = "HDSTATS JSON model " + file + ": no fitted features"; return false; }
+          if ( rotated )
+            for ( int k = 0; k < n_components; ++k )
+              for ( int l = 0; l <= k; ++l )
+                {
+                  double dot = 0;
+                  for ( const auto & f : panel.features ) dot += f.loadings[k]*f.loadings[l];
+                  if ( std::fabs(dot-(k==l ? 1.0 : 0.0)) > 1e-8 )
+                    { if ( error ) *error = "HDSTATS JSON model " + file + ": nonorthonormal rotated loadings"; return false; }
+                }
           for ( const auto & declared_feature : panel.declared_features )
             {
               if ( ! metadata.count(declared_feature) )
                 { if ( error ) *error = "HDSTATS JSON model " + file + ": missing feature metadata for " + declared_feature; return false; }
               used_features.insert(declared_feature);
             }
-          parsed.panels.push_back(std::move(panel));
-
           for ( int pc = 1; pc <= n_components; ++pc )
             {
               component_t component;
               component.id = component_id_style == "r_safe"
                 ? panel_id + "_" + std::to_string(pc)
                 : panel_id + "/" + std::to_string(pc);
-              component.label = component.id;
+              component.label.clear();
               component.orientation = 1;
               if ( ! component_ids.insert(component.id).second )
                 { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid or duplicate component ID"; return false; }
               component.panel_id = panel_id;
               component.panel_pc = pc;
+              component.source_panel_pc = rotated ? 0 : panel.source_components[pc-1];
               parsed.components.push_back(std::move(component));
             }
+          parsed.panels.push_back(std::move(panel));
         }
       if ( used_features.size() != metadata.size() )
         { if ( error ) *error = "HDSTATS JSON model " + file + ": embedded feature metadata does not match specification panels"; return false; }
@@ -324,6 +464,23 @@ bool read_json_model( const std::string & file, model_t * model, std::string * e
       if ( error ) *error = "HDSTATS JSON model " + file + ": " + e.what();
       return false;
     }
+}
+
+// The descriptor sibling of PANEL.model.json is PANEL.desc.json: strip a
+// trailing ".model.json" (or just ".json") and append ".desc.json". Loading
+// it is optional; a model with no sibling descriptor keeps every component's
+// default orientation of +1.
+std::string sibling_descriptor_path( const std::string & model_file )
+{
+  const std::string model_suffix = ".model.json";
+  if ( model_file.size() > model_suffix.size() &&
+       model_file.compare(model_file.size()-model_suffix.size(),model_suffix.size(),model_suffix) == 0 )
+    return model_file.substr(0,model_file.size()-model_suffix.size()) + ".desc.json";
+  const std::string json_suffix = ".json";
+  if ( model_file.size() > json_suffix.size() &&
+       model_file.compare(model_file.size()-json_suffix.size(),json_suffix.size(),json_suffix) == 0 )
+    return model_file.substr(0,model_file.size()-json_suffix.size()) + ".desc.json";
+  return model_file + ".desc.json";
 }
 
 }
@@ -366,7 +523,14 @@ bool read( const std::string & file, model_t * model, std::string * error )
       return false;
     }
   probe >> std::ws;
-  if ( probe.peek() == '{' ) return read_json_model(file,model,error);
+  if ( probe.peek() == '{' )
+    {
+      if ( ! read_json_model(file,model,error) ) return false;
+      const std::string descriptor_file = sibling_descriptor_path(file);
+      std::ifstream descriptor_probe(descriptor_file.c_str());
+      if ( ! descriptor_probe ) return true;
+      return read_descriptor(descriptor_file,model,error);
+    }
 
   reader_t reader(file);
   if ( !reader.in )
@@ -457,7 +621,7 @@ bool read_descriptor( const std::string & file, model_t * model, std::string * e
 {
   if ( error ) error->clear();
   if ( ! model || model->specification_json.empty() )
-    { if ( error ) *error = "HDSTATS descriptor requires a self-contained JSON V1 model"; return false; }
+    { if ( error ) *error = "HDSTATS descriptor requires a self-contained JSON model"; return false; }
   try
     {
       std::ifstream in(file.c_str());

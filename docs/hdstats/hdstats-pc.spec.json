@@ -1,0 +1,2753 @@
+{
+  "format": "luna-hdstats-pc-spec",
+  "version": 2,
+  "spec_id": "hdstats-pc-v2",
+  "feature_universe": "HDSTATS-PC-FEATURES-V2",
+  "component_id_style": "r_safe",
+  "feature_descriptions": [
+    {
+      "id": "H.NSS_5",
+      "label": "Entropy",
+      "description": "Hypnodensity entropy (5-stage)"
+    },
+    {
+      "id": "H_P90.NSS_5",
+      "label": "Entropy p90",
+      "description": "90th-percentile hypnodensity entropy (5-stage)"
+    },
+    {
+      "id": "CONF.NSS_5",
+      "label": "Confidence",
+      "description": "Posterior confidence (5-stage)"
+    },
+    {
+      "id": "FRAC_LOW_CONF.NSS_5",
+      "label": "Low confidence",
+      "description": "Fraction low-confidence (5-stage)"
+    },
+    {
+      "id": "MG.NSS_5",
+      "label": "Margin",
+      "description": "Posterior probability margin (5-stage)"
+    },
+    {
+      "id": "H.NSS_3",
+      "label": "Entropy [3-stage]",
+      "description": "Hypnodensity entropy (3-stage)"
+    },
+    {
+      "id": "H_P90.NSS_3",
+      "label": "Entropy p90 [3-stage]",
+      "description": "90th-percentile hypnodensity entropy (3-stage)"
+    },
+    {
+      "id": "CONF.NSS_3",
+      "label": "Confidence [3-stage]",
+      "description": "Posterior confidence (3-stage)"
+    },
+    {
+      "id": "FRAC_LOW_CONF.NSS_3",
+      "label": "Low confidence [3-stage]",
+      "description": "Fraction low-confidence (3-stage)"
+    },
+    {
+      "id": "MG.NSS_3",
+      "label": "Margin [3-stage]",
+      "description": "Posterior probability margin (3-stage)"
+    },
+    {
+      "id": "HD_MINS.NSS_5.MIX_W_N1",
+      "label": "W/N1 ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across W/N1"
+    },
+    {
+      "id": "HD_DENS.NSS_5.MIX_W_N1",
+      "label": "W/N1 ambiguity density",
+      "description": "Expected time jointly ambiguous across W/N1, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_5.MIX_W_N2",
+      "label": "W/N2 ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across W/N2"
+    },
+    {
+      "id": "HD_DENS.NSS_5.MIX_W_N2",
+      "label": "W/N2 ambiguity density",
+      "description": "Expected time jointly ambiguous across W/N2, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_5.MIX_W_N3",
+      "label": "W/N3 ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across W/N3"
+    },
+    {
+      "id": "HD_DENS.NSS_5.MIX_W_N3",
+      "label": "W/N3 ambiguity density",
+      "description": "Expected time jointly ambiguous across W/N3, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_5.MIX_W_R",
+      "label": "W/R ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across W/R"
+    },
+    {
+      "id": "HD_DENS.NSS_5.MIX_W_R",
+      "label": "W/R ambiguity density",
+      "description": "Expected time jointly ambiguous across W/R, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_5.MIX_N1_N2",
+      "label": "N1/N2 ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across N1/N2"
+    },
+    {
+      "id": "HD_DENS.NSS_5.MIX_N1_N2",
+      "label": "N1/N2 ambiguity density",
+      "description": "Expected time jointly ambiguous across N1/N2, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_5.MIX_N1_N3",
+      "label": "N1/N3 ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across N1/N3"
+    },
+    {
+      "id": "HD_DENS.NSS_5.MIX_N1_N3",
+      "label": "N1/N3 ambiguity density",
+      "description": "Expected time jointly ambiguous across N1/N3, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_5.MIX_N1_R",
+      "label": "N1/R ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across N1/R"
+    },
+    {
+      "id": "HD_DENS.NSS_5.MIX_N1_R",
+      "label": "N1/R ambiguity density",
+      "description": "Expected time jointly ambiguous across N1/R, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_5.MIX_N2_N3",
+      "label": "N2/N3 ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across N2/N3"
+    },
+    {
+      "id": "HD_DENS.NSS_5.MIX_N2_N3",
+      "label": "N2/N3 ambiguity density",
+      "description": "Expected time jointly ambiguous across N2/N3, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_5.MIX_N2_R",
+      "label": "N2/R ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across N2/R"
+    },
+    {
+      "id": "HD_DENS.NSS_5.MIX_N2_R",
+      "label": "N2/R ambiguity density",
+      "description": "Expected time jointly ambiguous across N2/R, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_5.MIX_N3_R",
+      "label": "N3/R ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across N3/R"
+    },
+    {
+      "id": "HD_DENS.NSS_5.MIX_N3_R",
+      "label": "N3/R ambiguity density",
+      "description": "Expected time jointly ambiguous across N3/R, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_5.MIX_W_N1_R",
+      "label": "W/N1/R ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across W/N1/R"
+    },
+    {
+      "id": "HD_DENS.NSS_5.MIX_W_N1_R",
+      "label": "W/N1/R ambiguity density",
+      "description": "Expected time jointly ambiguous across W/N1/R, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_3.MIX_W_NR",
+      "label": "W/NR ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across W/NR"
+    },
+    {
+      "id": "HD_DENS.NSS_3.MIX_W_NR",
+      "label": "W/NR ambiguity density",
+      "description": "Expected time jointly ambiguous across W/NR, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_3.MIX_NR_R",
+      "label": "NR/R ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across NR/R"
+    },
+    {
+      "id": "HD_DENS.NSS_3.MIX_NR_R",
+      "label": "NR/R ambiguity density",
+      "description": "Expected time jointly ambiguous across NR/R, as a proportion of SPT"
+    },
+    {
+      "id": "HD_MINS.NSS_3.MIX_W_NR_R",
+      "label": "W/NR/R ambiguous minutes",
+      "description": "Expected minutes jointly ambiguous across W/NR/R"
+    },
+    {
+      "id": "HD_DENS.NSS_3.MIX_W_NR_R",
+      "label": "W/NR/R ambiguity density",
+      "description": "Expected time jointly ambiguous across W/NR/R, as a proportion of SPT"
+    },
+    {
+      "id": "PS.NSS_5",
+      "label": "PS",
+      "description": "Posterior shift (5-stage)"
+    },
+    {
+      "id": "PS_P90.NSS_5",
+      "label": "PS p90",
+      "description": "90th-percentile posterior shift (5-stage)"
+    },
+    {
+      "id": "PS_LAG.NSS_5",
+      "label": "PS lag",
+      "description": "Posterior-shift lag (5-stage)"
+    },
+    {
+      "id": "CORR_H_PS.NSS_5",
+      "label": "Entropy-PS corr",
+      "description": "Entropy/posterior-shift correlation (5-stage)"
+    },
+    {
+      "id": "PCT_STABLE.NSS_5",
+      "label": "Stable %",
+      "description": "Percentage stable (5-stage)"
+    },
+    {
+      "id": "H_RATIO_UN_ST.NSS_5",
+      "label": "Entropy ratio (U/S)",
+      "description": "Entropy ratio, unstable versus stable (5-stage)"
+    },
+    {
+      "id": "CONF_DIFF_UN_ST.NSS_5",
+      "label": "Confidence diff (U/S)",
+      "description": "Confidence difference, unstable versus stable (5-stage)"
+    },
+    {
+      "id": "PS_RATIO_UN_ST.NSS_5",
+      "label": "PS ratio (U/S)",
+      "description": "Posterior-shift ratio, unstable versus stable (5-stage)"
+    },
+    {
+      "id": "H.NSS_5.STABLE_1",
+      "label": "Entropy(stable)",
+      "description": "Hypnodensity entropy (5-stage; stable)"
+    },
+    {
+      "id": "CONF.NSS_5.STABLE_1",
+      "label": "Confidence(stable)",
+      "description": "Posterior confidence (5-stage; stable)"
+    },
+    {
+      "id": "PS.NSS_5.STABLE_1",
+      "label": "PS(stable)",
+      "description": "Posterior shift (5-stage; stable)"
+    },
+    {
+      "id": "H.NSS_5.STABLE_0",
+      "label": "Entropy(unstable)",
+      "description": "Hypnodensity entropy (5-stage; unstable)"
+    },
+    {
+      "id": "CONF.NSS_5.STABLE_0",
+      "label": "Confidence(unstable)",
+      "description": "Posterior confidence (5-stage; unstable)"
+    },
+    {
+      "id": "PS.NSS_5.STABLE_0",
+      "label": "PS(unstable)",
+      "description": "Posterior shift (5-stage; unstable)"
+    },
+    {
+      "id": "PS.NSS_3",
+      "label": "PS [3-stage]",
+      "description": "Posterior shift (3-stage)"
+    },
+    {
+      "id": "PS_P90.NSS_3",
+      "label": "PS p90 [3-stage]",
+      "description": "90th-percentile posterior shift (3-stage)"
+    },
+    {
+      "id": "PS_LAG.NSS_3",
+      "label": "PS lag [3-stage]",
+      "description": "Posterior-shift lag (3-stage)"
+    },
+    {
+      "id": "CORR_H_PS.NSS_3",
+      "label": "Entropy-PS corr [3-stage]",
+      "description": "Entropy/posterior-shift correlation (3-stage)"
+    },
+    {
+      "id": "PCT_STABLE.NSS_3",
+      "label": "Stable % [3-stage]",
+      "description": "Percentage stable (3-stage)"
+    },
+    {
+      "id": "H_RATIO_UN_ST.NSS_3",
+      "label": "Entropy ratio (U/S) [3-stage]",
+      "description": "Entropy ratio, unstable versus stable (3-stage)"
+    },
+    {
+      "id": "CONF_DIFF_UN_ST.NSS_3",
+      "label": "Confidence diff (U/S) [3-stage]",
+      "description": "Confidence difference, unstable versus stable (3-stage)"
+    },
+    {
+      "id": "PS_RATIO_UN_ST.NSS_3",
+      "label": "PS ratio (U/S) [3-stage]",
+      "description": "Posterior-shift ratio, unstable versus stable (3-stage)"
+    },
+    {
+      "id": "H.NSS_3.STABLE_1",
+      "label": "Entropy(stable) [3-stage]",
+      "description": "Hypnodensity entropy (3-stage; stable)"
+    },
+    {
+      "id": "CONF.NSS_3.STABLE_1",
+      "label": "Confidence(stable) [3-stage]",
+      "description": "Posterior confidence (3-stage; stable)"
+    },
+    {
+      "id": "PS.NSS_3.STABLE_1",
+      "label": "PS(stable) [3-stage]",
+      "description": "Posterior shift (3-stage; stable)"
+    },
+    {
+      "id": "H.NSS_3.STABLE_0",
+      "label": "Entropy(unstable) [3-stage]",
+      "description": "Hypnodensity entropy (3-stage; unstable)"
+    },
+    {
+      "id": "CONF.NSS_3.STABLE_0",
+      "label": "Confidence(unstable) [3-stage]",
+      "description": "Posterior confidence (3-stage; unstable)"
+    },
+    {
+      "id": "PS.NSS_3.STABLE_0",
+      "label": "PS(unstable) [3-stage]",
+      "description": "Posterior shift (3-stage; unstable)"
+    },
+    {
+      "id": "TRANS_N.NSS_5",
+      "label": "Transition count",
+      "description": "Transition count (5-stage)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5",
+      "label": "Transition density",
+      "description": "Transition density (5-stage)"
+    },
+    {
+      "id": "BOUT_TRANS_N.NSS_5",
+      "label": "Bout trans count",
+      "description": "Bout-transition count (5-stage)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5",
+      "label": "Bout trans density",
+      "description": "Bout-transition density (5-stage)"
+    },
+    {
+      "id": "TRANS_N_MATCHED.NSS_5",
+      "label": "Matched transitions",
+      "description": "Matched transition count (5-stage)"
+    },
+    {
+      "id": "TRANS_PCT_MATCHED.NSS_5",
+      "label": "Matched transitions (%)",
+      "description": "Percentage matched transitions (5-stage)"
+    },
+    {
+      "id": "TRANS_DUR.NSS_5",
+      "label": "Transition duration",
+      "description": "Transition duration (5-stage)"
+    },
+    {
+      "id": "TRANS_PEAK_H.NSS_5",
+      "label": "Transition peak entropy",
+      "description": "Transition peak entropy (5-stage)"
+    },
+    {
+      "id": "TRANS_MIN_CONF.NSS_5",
+      "label": "Transition min confidence",
+      "description": "Transition minimum confidence (5-stage)"
+    },
+    {
+      "id": "TRANS_TOT_PS.NSS_5",
+      "label": "Transition total PS",
+      "description": "Transition total posterior shift (5-stage)"
+    },
+    {
+      "id": "BOUT_TRANS_DUR.NSS_5",
+      "label": "Bout trans duration",
+      "description": "Bout-transition duration (5-stage)"
+    },
+    {
+      "id": "BOUT_TRANS_PEAK_H.NSS_5",
+      "label": "Bout trans peak entropy",
+      "description": "Bout-transition peak entropy (5-stage)"
+    },
+    {
+      "id": "BOUT_TRANS_MIN_CONF.NSS_5",
+      "label": "Bout trans min confidence",
+      "description": "Bout-transition minimum confidence (5-stage)"
+    },
+    {
+      "id": "BOUT_TRANS_TOT_PS.NSS_5",
+      "label": "Bout trans total PS",
+      "description": "Bout-transition total posterior shift (5-stage)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_WtoN1",
+      "label": "W->N1 transition density",
+      "description": "Transition density (5-stage; trans W to N1)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_WtoN2",
+      "label": "W->N2 transition density",
+      "description": "Transition density (5-stage; trans W to N2)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_WtoN2",
+      "label": "W->N2 bout trans density",
+      "description": "Bout-transition density (5-stage; bout trans W to N2)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_WtoN3",
+      "label": "W->N3 transition density",
+      "description": "Transition density (5-stage; trans W to N3)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_WtoN3",
+      "label": "W->N3 bout trans density",
+      "description": "Bout-transition density (5-stage; bout trans W to N3)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_WtoR",
+      "label": "W->R transition density",
+      "description": "Transition density (5-stage; trans W to R)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_WtoR",
+      "label": "W->R bout trans density",
+      "description": "Bout-transition density (5-stage; bout trans W to R)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_N1toW",
+      "label": "N1->W transition density",
+      "description": "Transition density (5-stage; trans N1 to W)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_N1toN2",
+      "label": "N1->N2 transition density",
+      "description": "Transition density (5-stage; trans N1 to N2)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_N1toN3",
+      "label": "N1->N3 transition density",
+      "description": "Transition density (5-stage; trans N1 to N3)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_N1toR",
+      "label": "N1->R transition density",
+      "description": "Transition density (5-stage; trans N1 to R)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_N2toW",
+      "label": "N2->W transition density",
+      "description": "Transition density (5-stage; trans N2 to W)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_N2toW",
+      "label": "N2->W bout trans density",
+      "description": "Bout-transition density (5-stage; bout trans N2 to W)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_N2toN1",
+      "label": "N2->N1 transition density",
+      "description": "Transition density (5-stage; trans N2 to N1)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_N2toN3",
+      "label": "N2->N3 transition density",
+      "description": "Transition density (5-stage; trans N2 to N3)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_N2toN3",
+      "label": "N2->N3 bout trans density",
+      "description": "Bout-transition density (5-stage; bout trans N2 to N3)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_N2toR",
+      "label": "N2->R transition density",
+      "description": "Transition density (5-stage; trans N2 to R)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_N2toR",
+      "label": "N2->R bout trans density",
+      "description": "Bout-transition density (5-stage; bout trans N2 to R)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_N3toW",
+      "label": "N3->W transition density",
+      "description": "Transition density (5-stage; trans N3 to W)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_N3toW",
+      "label": "N3->W bout trans density",
+      "description": "Bout-transition density (5-stage; bout trans N3 to W)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_N3toN1",
+      "label": "N3->N1 transition density",
+      "description": "Transition density (5-stage; trans N3 to N1)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_N3toN2",
+      "label": "N3->N2 transition density",
+      "description": "Transition density (5-stage; trans N3 to N2)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_N3toN2",
+      "label": "N3->N2 bout trans density",
+      "description": "Bout-transition density (5-stage; bout trans N3 to N2)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_N3toR",
+      "label": "N3->R transition density",
+      "description": "Transition density (5-stage; trans N3 to R)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_N3toR",
+      "label": "N3->R bout trans density",
+      "description": "Bout-transition density (5-stage; bout trans N3 to R)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_RtoW",
+      "label": "R->W transition density",
+      "description": "Transition density (5-stage; trans R to W)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_RtoW",
+      "label": "R->W bout trans density",
+      "description": "Bout-transition density (5-stage; bout trans R to W)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_RtoN1",
+      "label": "R->N1 transition density",
+      "description": "Transition density (5-stage; trans R to N1)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_RtoN2",
+      "label": "R->N2 transition density",
+      "description": "Transition density (5-stage; trans R to N2)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_RtoN2",
+      "label": "R->N2 bout trans density",
+      "description": "Bout-transition density (5-stage; bout trans R to N2)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_5.TRANS_RtoN3",
+      "label": "R->N3 transition density",
+      "description": "Transition density (5-stage; trans R to N3)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_RtoN3",
+      "label": "R->N3 bout trans density",
+      "description": "Bout-transition density (5-stage; bout trans R to N3)"
+    },
+    {
+      "id": "TRANS_N.NSS_3",
+      "label": "Transition count [3-stage]",
+      "description": "Transition count (3-stage)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_3",
+      "label": "Transition density [3-stage]",
+      "description": "Transition density (3-stage)"
+    },
+    {
+      "id": "BOUT_TRANS_N.NSS_3",
+      "label": "Bout trans count [3-stage]",
+      "description": "Bout-transition count (3-stage)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_3",
+      "label": "Bout trans density [3-stage]",
+      "description": "Bout-transition density (3-stage)"
+    },
+    {
+      "id": "TRANS_N_MATCHED.NSS_3",
+      "label": "Matched transitions [3-stage]",
+      "description": "Matched transition count (3-stage)"
+    },
+    {
+      "id": "TRANS_PCT_MATCHED.NSS_3",
+      "label": "Matched transitions (%) [3-stage]",
+      "description": "Percentage matched transitions (3-stage)"
+    },
+    {
+      "id": "TRANS_DUR.NSS_3",
+      "label": "Transition duration [3-stage]",
+      "description": "Transition duration (3-stage)"
+    },
+    {
+      "id": "TRANS_PEAK_H.NSS_3",
+      "label": "Transition peak entropy [3-stage]",
+      "description": "Transition peak entropy (3-stage)"
+    },
+    {
+      "id": "TRANS_MIN_CONF.NSS_3",
+      "label": "Transition min confidence [3-stage]",
+      "description": "Transition minimum confidence (3-stage)"
+    },
+    {
+      "id": "TRANS_TOT_PS.NSS_3",
+      "label": "Transition total PS [3-stage]",
+      "description": "Transition total posterior shift (3-stage)"
+    },
+    {
+      "id": "BOUT_TRANS_DUR.NSS_3",
+      "label": "Bout trans duration [3-stage]",
+      "description": "Bout-transition duration (3-stage)"
+    },
+    {
+      "id": "BOUT_TRANS_PEAK_H.NSS_3",
+      "label": "Bout trans peak entropy [3-stage]",
+      "description": "Bout-transition peak entropy (3-stage)"
+    },
+    {
+      "id": "BOUT_TRANS_MIN_CONF.NSS_3",
+      "label": "Bout trans min confidence [3-stage]",
+      "description": "Bout-transition minimum confidence (3-stage)"
+    },
+    {
+      "id": "BOUT_TRANS_TOT_PS.NSS_3",
+      "label": "Bout trans total PS [3-stage]",
+      "description": "Bout-transition total posterior shift (3-stage)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_3.TRANS_WtoNR",
+      "label": "W->NR transition density",
+      "description": "Transition density (3-stage; trans W to NR)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_3.BOUT_TRANS_WtoNR",
+      "label": "W->NR bout trans density",
+      "description": "Bout-transition density (3-stage; bout trans W to NR)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_3.TRANS_WtoR",
+      "label": "W->R transition density [3-stage]",
+      "description": "Transition density (3-stage; trans W to R)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_3.BOUT_TRANS_WtoR",
+      "label": "W->R bout trans density [3-stage]",
+      "description": "Bout-transition density (3-stage; bout trans W to R)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_3.TRANS_NRtoW",
+      "label": "NR->W transition density",
+      "description": "Transition density (3-stage; trans NR to W)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_3.BOUT_TRANS_NRtoW",
+      "label": "NR->W bout trans density",
+      "description": "Bout-transition density (3-stage; bout trans NR to W)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_3.TRANS_NRtoR",
+      "label": "NR->R transition density",
+      "description": "Transition density (3-stage; trans NR to R)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_3.BOUT_TRANS_NRtoR",
+      "label": "NR->R bout trans density",
+      "description": "Bout-transition density (3-stage; bout trans NR to R)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_3.TRANS_RtoW",
+      "label": "R->W transition density [3-stage]",
+      "description": "Transition density (3-stage; trans R to W)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_3.BOUT_TRANS_RtoW",
+      "label": "R->W bout trans density [3-stage]",
+      "description": "Bout-transition density (3-stage; bout trans R to W)"
+    },
+    {
+      "id": "TRANS_DENS.NSS_3.TRANS_RtoNR",
+      "label": "R->NR transition density",
+      "description": "Transition density (3-stage; trans R to NR)"
+    },
+    {
+      "id": "BOUT_TRANS_DENS.NSS_3.BOUT_TRANS_RtoNR",
+      "label": "R->NR bout trans density",
+      "description": "Bout-transition density (3-stage; bout trans R to NR)"
+    },
+    {
+      "id": "U_MAG",
+      "label": "Ultradian magnitude",
+      "description": "Ultradian magnitude"
+    },
+    {
+      "id": "U_COVERAGE",
+      "label": "Ultradian coverage",
+      "description": "Ultradian coverage"
+    },
+    {
+      "id": "U_NCYC",
+      "label": "Ultradian cycle count",
+      "description": "Ultradian cycle count"
+    },
+    {
+      "id": "U_MEAN.UQ_D1.UMETRIC_CONF",
+      "label": "CONF ultradian mean (D1)",
+      "description": "Ultradian mean (ultradian D1; ultradian CONF)"
+    },
+    {
+      "id": "U_MEAN.UQ_D2.UMETRIC_CONF",
+      "label": "CONF ultradian mean (D2)",
+      "description": "Ultradian mean (ultradian D2; ultradian CONF)"
+    },
+    {
+      "id": "U_MEAN.UQ_L1.UMETRIC_CONF",
+      "label": "CONF ultradian mean (L1)",
+      "description": "Ultradian mean (ultradian L1; ultradian CONF)"
+    },
+    {
+      "id": "U_MEAN.UQ_L2.UMETRIC_CONF",
+      "label": "CONF ultradian mean (L2)",
+      "description": "Ultradian mean (ultradian L2; ultradian CONF)"
+    },
+    {
+      "id": "U_SLOPE.UVAR_CONF",
+      "label": "CONF ultradian slope",
+      "description": "Ultradian slope (ultradian CONF variability)"
+    },
+    {
+      "id": "U_MOD.UVAR_CONF",
+      "label": "CONF ultradian mod",
+      "description": "Ultradian modulation (ultradian CONF variability)"
+    },
+    {
+      "id": "U_MOD_COS.UVAR_CONF",
+      "label": "CONF ultradian mod cos",
+      "description": "Cosine ultradian modulation (ultradian CONF variability)"
+    },
+    {
+      "id": "U_MOD_SIN.UVAR_CONF",
+      "label": "CONF ultradian mod sin",
+      "description": "Sine ultradian modulation (ultradian CONF variability)"
+    },
+    {
+      "id": "U_R2.UVAR_CONF",
+      "label": "CONF ultradian R2",
+      "description": "Ultradian R-squared (ultradian CONF variability)"
+    },
+    {
+      "id": "U_PARTIAL_R2.UVAR_CONF",
+      "label": "CONF partial ultradian R2",
+      "description": "Partial ultradian R-squared (ultradian CONF variability)"
+    },
+    {
+      "id": "U_MEAN.UQ_D1.UMETRIC_CONF3",
+      "label": "CONF3 ultradian mean (D1)",
+      "description": "Ultradian mean (ultradian D1; ultradian CONF3)"
+    },
+    {
+      "id": "U_MEAN.UQ_D2.UMETRIC_CONF3",
+      "label": "CONF3 ultradian mean (D2)",
+      "description": "Ultradian mean (ultradian D2; ultradian CONF3)"
+    },
+    {
+      "id": "U_MEAN.UQ_L1.UMETRIC_CONF3",
+      "label": "CONF3 ultradian mean (L1)",
+      "description": "Ultradian mean (ultradian L1; ultradian CONF3)"
+    },
+    {
+      "id": "U_MEAN.UQ_L2.UMETRIC_CONF3",
+      "label": "CONF3 ultradian mean (L2)",
+      "description": "Ultradian mean (ultradian L2; ultradian CONF3)"
+    },
+    {
+      "id": "U_SLOPE.UVAR_CONF3",
+      "label": "CONF3 ultradian slope",
+      "description": "Ultradian slope (ultradian CONF3 variability)"
+    },
+    {
+      "id": "U_MOD.UVAR_CONF3",
+      "label": "CONF3 ultradian mod",
+      "description": "Ultradian modulation (ultradian CONF3 variability)"
+    },
+    {
+      "id": "U_MOD_COS.UVAR_CONF3",
+      "label": "CONF3 ultradian mod cos",
+      "description": "Cosine ultradian modulation (ultradian CONF3 variability)"
+    },
+    {
+      "id": "U_MOD_SIN.UVAR_CONF3",
+      "label": "CONF3 ultradian mod sin",
+      "description": "Sine ultradian modulation (ultradian CONF3 variability)"
+    },
+    {
+      "id": "U_R2.UVAR_CONF3",
+      "label": "CONF3 ultradian R2",
+      "description": "Ultradian R-squared (ultradian CONF3 variability)"
+    },
+    {
+      "id": "U_PARTIAL_R2.UVAR_CONF3",
+      "label": "CONF3 partial ultradian R2",
+      "description": "Partial ultradian R-squared (ultradian CONF3 variability)"
+    },
+    {
+      "id": "U_MEAN.UQ_D1.UMETRIC_PS",
+      "label": "PS ultradian mean (D1)",
+      "description": "Ultradian mean (ultradian D1; ultradian PS)"
+    },
+    {
+      "id": "U_MEAN.UQ_D2.UMETRIC_PS",
+      "label": "PS ultradian mean (D2)",
+      "description": "Ultradian mean (ultradian D2; ultradian PS)"
+    },
+    {
+      "id": "U_MEAN.UQ_L1.UMETRIC_PS",
+      "label": "PS ultradian mean (L1)",
+      "description": "Ultradian mean (ultradian L1; ultradian PS)"
+    },
+    {
+      "id": "U_MEAN.UQ_L2.UMETRIC_PS",
+      "label": "PS ultradian mean (L2)",
+      "description": "Ultradian mean (ultradian L2; ultradian PS)"
+    },
+    {
+      "id": "U_SLOPE.UVAR_PS",
+      "label": "PS ultradian slope",
+      "description": "Ultradian slope (ultradian PS variability)"
+    },
+    {
+      "id": "U_MOD.UVAR_PS",
+      "label": "PS ultradian mod",
+      "description": "Ultradian modulation (ultradian PS variability)"
+    },
+    {
+      "id": "U_MOD_COS.UVAR_PS",
+      "label": "PS ultradian mod cos",
+      "description": "Cosine ultradian modulation (ultradian PS variability)"
+    },
+    {
+      "id": "U_MOD_SIN.UVAR_PS",
+      "label": "PS ultradian mod sin",
+      "description": "Sine ultradian modulation (ultradian PS variability)"
+    },
+    {
+      "id": "U_R2.UVAR_PS",
+      "label": "PS ultradian R2",
+      "description": "Ultradian R-squared (ultradian PS variability)"
+    },
+    {
+      "id": "U_PARTIAL_R2.UVAR_PS",
+      "label": "PS partial ultradian R2",
+      "description": "Partial ultradian R-squared (ultradian PS variability)"
+    },
+    {
+      "id": "U_MEAN.UQ_D1.UMETRIC_PS3",
+      "label": "PS3 ultradian mean (D1)",
+      "description": "Ultradian mean (ultradian D1; ultradian PS3)"
+    },
+    {
+      "id": "U_MEAN.UQ_D2.UMETRIC_PS3",
+      "label": "PS3 ultradian mean (D2)",
+      "description": "Ultradian mean (ultradian D2; ultradian PS3)"
+    },
+    {
+      "id": "U_MEAN.UQ_L1.UMETRIC_PS3",
+      "label": "PS3 ultradian mean (L1)",
+      "description": "Ultradian mean (ultradian L1; ultradian PS3)"
+    },
+    {
+      "id": "U_MEAN.UQ_L2.UMETRIC_PS3",
+      "label": "PS3 ultradian mean (L2)",
+      "description": "Ultradian mean (ultradian L2; ultradian PS3)"
+    },
+    {
+      "id": "U_SLOPE.UVAR_PS3",
+      "label": "PS3 ultradian slope",
+      "description": "Ultradian slope (ultradian PS3 variability)"
+    },
+    {
+      "id": "U_MOD.UVAR_PS3",
+      "label": "PS3 ultradian mod",
+      "description": "Ultradian modulation (ultradian PS3 variability)"
+    },
+    {
+      "id": "U_MOD_COS.UVAR_PS3",
+      "label": "PS3 ultradian mod cos",
+      "description": "Cosine ultradian modulation (ultradian PS3 variability)"
+    },
+    {
+      "id": "U_MOD_SIN.UVAR_PS3",
+      "label": "PS3 ultradian mod sin",
+      "description": "Sine ultradian modulation (ultradian PS3 variability)"
+    },
+    {
+      "id": "U_R2.UVAR_PS3",
+      "label": "PS3 ultradian R2",
+      "description": "Ultradian R-squared (ultradian PS3 variability)"
+    },
+    {
+      "id": "U_PARTIAL_R2.UVAR_PS3",
+      "label": "PS3 partial ultradian R2",
+      "description": "Partial ultradian R-squared (ultradian PS3 variability)"
+    },
+    {
+      "id": "PS.NSS_5.LRLAG_600",
+      "label": "PS(10min)",
+      "description": "Posterior shift (5-stage; long-range lag 10 minutes)"
+    },
+    {
+      "id": "SIM.NSS_5.LRLAG_600",
+      "label": "Similarity(10min)",
+      "description": "Posterior similarity (5-stage; long-range lag 10 minutes)"
+    },
+    {
+      "id": "PS.NSS_5.LRLAG_1800",
+      "label": "PS(30min)",
+      "description": "Posterior shift (5-stage; long-range lag 30 minutes)"
+    },
+    {
+      "id": "SIM.NSS_5.LRLAG_1800",
+      "label": "Similarity(30min)",
+      "description": "Posterior similarity (5-stage; long-range lag 30 minutes)"
+    },
+    {
+      "id": "PS.NSS_5.LRLAG_3600",
+      "label": "PS(60min)",
+      "description": "Posterior shift (5-stage; long-range lag 1 hour)"
+    },
+    {
+      "id": "SIM.NSS_5.LRLAG_3600",
+      "label": "Similarity(60min)",
+      "description": "Posterior similarity (5-stage; long-range lag 1 hour)"
+    },
+    {
+      "id": "PS.NSS_5.LRLAG_5400",
+      "label": "PS(90min)",
+      "description": "Posterior shift (5-stage; long-range lag 90 minutes)"
+    },
+    {
+      "id": "SIM.NSS_5.LRLAG_5400",
+      "label": "Similarity(90min)",
+      "description": "Posterior similarity (5-stage; long-range lag 90 minutes)"
+    },
+    {
+      "id": "SLOPE.NSS_5.VAR_H",
+      "label": "Entropy slope",
+      "description": "Overnight slope (5-stage; H variability)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_5.VAR_H.LRWIN_1800",
+      "label": "Entropy within-block SD (30min)",
+      "description": "Within-block standard deviation (5-stage; H variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_5.VAR_H.LRWIN_1800",
+      "label": "Entropy between-block SD (30min)",
+      "description": "Between-block standard deviation (5-stage; H variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_5.VAR_H.LRWIN_3600",
+      "label": "Entropy within-block SD (60min)",
+      "description": "Within-block standard deviation (5-stage; H variability; long-range window 1 hour)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_5.VAR_H.LRWIN_3600",
+      "label": "Entropy between-block SD (60min)",
+      "description": "Between-block standard deviation (5-stage; H variability; long-range window 1 hour)"
+    },
+    {
+      "id": "SLOPE.NSS_5.VAR_PS",
+      "label": "PS slope",
+      "description": "Overnight slope (5-stage; PS variability)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_5.VAR_PS.LRWIN_1800",
+      "label": "PS within-block SD (30min)",
+      "description": "Within-block standard deviation (5-stage; PS variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_5.VAR_PS.LRWIN_1800",
+      "label": "PS between-block SD (30min)",
+      "description": "Between-block standard deviation (5-stage; PS variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_5.VAR_PS.LRWIN_3600",
+      "label": "PS within-block SD (60min)",
+      "description": "Within-block standard deviation (5-stage; PS variability; long-range window 1 hour)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_5.VAR_PS.LRWIN_3600",
+      "label": "PS between-block SD (60min)",
+      "description": "Between-block standard deviation (5-stage; PS variability; long-range window 1 hour)"
+    },
+    {
+      "id": "PS.NSS_3.LRLAG_600",
+      "label": "PS(10min) [3-stage]",
+      "description": "Posterior shift (3-stage; long-range lag 10 minutes)"
+    },
+    {
+      "id": "SIM.NSS_3.LRLAG_600",
+      "label": "Similarity(10min) [3-stage]",
+      "description": "Posterior similarity (3-stage; long-range lag 10 minutes)"
+    },
+    {
+      "id": "PS.NSS_3.LRLAG_1800",
+      "label": "PS(30min) [3-stage]",
+      "description": "Posterior shift (3-stage; long-range lag 30 minutes)"
+    },
+    {
+      "id": "SIM.NSS_3.LRLAG_1800",
+      "label": "Similarity(30min) [3-stage]",
+      "description": "Posterior similarity (3-stage; long-range lag 30 minutes)"
+    },
+    {
+      "id": "PS.NSS_3.LRLAG_3600",
+      "label": "PS(60min) [3-stage]",
+      "description": "Posterior shift (3-stage; long-range lag 1 hour)"
+    },
+    {
+      "id": "SIM.NSS_3.LRLAG_3600",
+      "label": "Similarity(60min) [3-stage]",
+      "description": "Posterior similarity (3-stage; long-range lag 1 hour)"
+    },
+    {
+      "id": "PS.NSS_3.LRLAG_5400",
+      "label": "PS(90min) [3-stage]",
+      "description": "Posterior shift (3-stage; long-range lag 90 minutes)"
+    },
+    {
+      "id": "SIM.NSS_3.LRLAG_5400",
+      "label": "Similarity(90min) [3-stage]",
+      "description": "Posterior similarity (3-stage; long-range lag 90 minutes)"
+    },
+    {
+      "id": "SLOPE.NSS_3.VAR_H",
+      "label": "Entropy slope [3-stage]",
+      "description": "Overnight slope (3-stage; H variability)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_3.VAR_H.LRWIN_1800",
+      "label": "Entropy within-block SD (30min) [3-stage]",
+      "description": "Within-block standard deviation (3-stage; H variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_3.VAR_H.LRWIN_1800",
+      "label": "Entropy between-block SD (30min) [3-stage]",
+      "description": "Between-block standard deviation (3-stage; H variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_3.VAR_H.LRWIN_3600",
+      "label": "Entropy within-block SD (60min) [3-stage]",
+      "description": "Within-block standard deviation (3-stage; H variability; long-range window 1 hour)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_3.VAR_H.LRWIN_3600",
+      "label": "Entropy between-block SD (60min) [3-stage]",
+      "description": "Between-block standard deviation (3-stage; H variability; long-range window 1 hour)"
+    },
+    {
+      "id": "SLOPE.NSS_3.VAR_PS",
+      "label": "PS slope [3-stage]",
+      "description": "Overnight slope (3-stage; PS variability)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_3.VAR_PS.LRWIN_1800",
+      "label": "PS within-block SD (30min) [3-stage]",
+      "description": "Within-block standard deviation (3-stage; PS variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_3.VAR_PS.LRWIN_1800",
+      "label": "PS between-block SD (30min) [3-stage]",
+      "description": "Between-block standard deviation (3-stage; PS variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_3.VAR_PS.LRWIN_3600",
+      "label": "PS within-block SD (60min) [3-stage]",
+      "description": "Within-block standard deviation (3-stage; PS variability; long-range window 1 hour)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_3.VAR_PS.LRWIN_3600",
+      "label": "PS between-block SD (60min) [3-stage]",
+      "description": "Between-block standard deviation (3-stage; PS variability; long-range window 1 hour)"
+    },
+    {
+      "id": "SLOPE.NSS_3.VAR_W",
+      "label": "P(W) slope",
+      "description": "Overnight slope (3-stage; W variability)"
+    },
+    {
+      "id": "SLOPE.NSS_5.VAR_N1",
+      "label": "P(N1) slope",
+      "description": "Overnight slope (5-stage; N1 variability)"
+    },
+    {
+      "id": "SLOPE.NSS_5.VAR_N2",
+      "label": "P(N2) slope",
+      "description": "Overnight slope (5-stage; N2 variability)"
+    },
+    {
+      "id": "SLOPE.NSS_5.VAR_N3",
+      "label": "P(N3) slope",
+      "description": "Overnight slope (5-stage; N3 variability)"
+    },
+    {
+      "id": "SLOPE.NSS_3.VAR_R",
+      "label": "P(R) slope",
+      "description": "Overnight slope (3-stage; R variability)"
+    },
+    {
+      "id": "HD_MINS.SS_W",
+      "label": "W minutes",
+      "description": "Expected W duration from posterior mass (minutes)"
+    },
+    {
+      "id": "HD_PCT.SS_W",
+      "label": "W %",
+      "description": "Hypnodensity percentage (scored W)"
+    },
+    {
+      "id": "HD_DENS.SS_W",
+      "label": "W Posterior density",
+      "description": "Soft posterior posterior density for W"
+    },
+    {
+      "id": "P_W.SS_W.NSS_3",
+      "label": "Wake probability(W)",
+      "description": "Wake posterior probability (scored W; 3-stage)"
+    },
+    {
+      "id": "P_NR.SS_W.NSS_3",
+      "label": "NREM probability(W)",
+      "description": "NREM posterior probability (scored W; 3-stage)"
+    },
+    {
+      "id": "P_R.SS_W.NSS_3",
+      "label": "REM probability(W)",
+      "description": "REM posterior probability (scored W; 3-stage)"
+    },
+    {
+      "id": "CONF.SS_W.NSS_3",
+      "label": "Confidence",
+      "description": "Confidence for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "H.SS_W.NSS_3",
+      "label": "Entropy",
+      "description": "Entropy for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "H_P90.SS_W.NSS_3",
+      "label": "Entropy p90",
+      "description": "Entropy p90 for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "MG.SS_W.NSS_3",
+      "label": "Margin",
+      "description": "Margin for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "FRAC_LOW_CONF.SS_W.NSS_3",
+      "label": "Low confidence",
+      "description": "Low confidence for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "PS.SS_W.NSS_3",
+      "label": "PS(W)",
+      "description": "Posterior shift (scored W; 3-stage)"
+    },
+    {
+      "id": "PS_P90.SS_W.NSS_3",
+      "label": "PS p90",
+      "description": "PS p90 for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "PS_LAG.SS_W.NSS_3",
+      "label": "PS lag",
+      "description": "PS lag for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "CORR_H_PS.SS_W.NSS_3",
+      "label": "Entropy-PS correlation",
+      "description": "Entropy-PS correlation for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "PCT_STABLE.SS_W.NSS_3",
+      "label": "Stable %",
+      "description": "Stable % for hard-called W epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "H_RATIO_UN_ST.SS_W.NSS_3",
+      "label": "Entropy ratio (U/S)",
+      "description": "Entropy ratio (U/S) for hard-called W epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "CONF_DIFF_UN_ST.SS_W.NSS_3",
+      "label": "Confidence difference (U-S)",
+      "description": "Confidence difference (U-S) for hard-called W epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "PS_RATIO_UN_ST.SS_W.NSS_3",
+      "label": "PS ratio (U/S)",
+      "description": "PS ratio (U/S) for hard-called W epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "ACF.SS_W.NSS_3.LRLAG_600",
+      "label": "ACF(W, 10min)",
+      "description": "Autocorrelation (scored W; 3-stage; long-range lag 10 minutes)"
+    },
+    {
+      "id": "ACF.SS_W.NSS_3.LRLAG_1800",
+      "label": "ACF(W, 30min)",
+      "description": "Autocorrelation (scored W; 3-stage; long-range lag 30 minutes)"
+    },
+    {
+      "id": "ACF.SS_W.NSS_3.LRLAG_3600",
+      "label": "ACF(W, 60min)",
+      "description": "Autocorrelation (scored W; 3-stage; long-range lag 1 hour)"
+    },
+    {
+      "id": "ACF.SS_W.NSS_3.LRLAG_5400",
+      "label": "ACF(W, 90min)",
+      "description": "Autocorrelation (scored W; 3-stage; long-range lag 90 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_3.VAR_W.LRWIN_1800",
+      "label": "P(W) within-block SD (30min)",
+      "description": "Within-block standard deviation (3-stage; W variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_3.VAR_W.LRWIN_3600",
+      "label": "P(W) within-block SD (60min)",
+      "description": "Within-block standard deviation (3-stage; W variability; long-range window 1 hour)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_3.VAR_W.LRWIN_1800",
+      "label": "P(W) between-block SD (30min)",
+      "description": "Between-block standard deviation (3-stage; W variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_3.VAR_W.LRWIN_3600",
+      "label": "P(W) between-block SD (60min)",
+      "description": "Between-block standard deviation (3-stage; W variability; long-range window 1 hour)"
+    },
+    {
+      "id": "COM.NSS_3.VAR_W",
+      "label": "W CoM",
+      "description": "Centre of mass (3-stage; W variability)"
+    },
+    {
+      "id": "COM_M.NSS_3.VAR_W",
+      "label": "Centre of mass (min)",
+      "description": "Centre of mass (min) of the soft W posterior trajectory (3-state)"
+    },
+    {
+      "id": "T50.NSS_3.VAR_W",
+      "label": "W T50",
+      "description": "Median time (3-stage; W variability)"
+    },
+    {
+      "id": "T50_M.NSS_3.VAR_W",
+      "label": "T50 (min)",
+      "description": "T50 (min) of the soft W posterior trajectory (3-state)"
+    },
+    {
+      "id": "HD_MINS.SS_N1",
+      "label": "N1 minutes",
+      "description": "Expected N1 duration from posterior mass (minutes)"
+    },
+    {
+      "id": "HD_PCT.SS_N1",
+      "label": "N1 %",
+      "description": "Hypnodensity percentage (scored N1)"
+    },
+    {
+      "id": "HD_DENS.SS_N1",
+      "label": "N1 density",
+      "description": "Expected N1 duration as a proportion of SPT"
+    },
+    {
+      "id": "ACF.SS_N1.NSS_5.LRLAG_600",
+      "label": "ACF(N1, 10min)",
+      "description": "Autocorrelation (scored N1; 5-stage; long-range lag 10 minutes)"
+    },
+    {
+      "id": "ACF.SS_N1.NSS_5.LRLAG_1800",
+      "label": "ACF(N1, 30min)",
+      "description": "Autocorrelation (scored N1; 5-stage; long-range lag 30 minutes)"
+    },
+    {
+      "id": "ACF.SS_N1.NSS_5.LRLAG_3600",
+      "label": "ACF(N1, 60min)",
+      "description": "Autocorrelation (scored N1; 5-stage; long-range lag 1 hour)"
+    },
+    {
+      "id": "ACF.SS_N1.NSS_5.LRLAG_5400",
+      "label": "ACF(N1, 90min)",
+      "description": "Autocorrelation (scored N1; 5-stage; long-range lag 90 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_5.VAR_N1.LRWIN_1800",
+      "label": "P(N1) within-block SD (30min)",
+      "description": "Within-block standard deviation (5-stage; N1 variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_5.VAR_N1.LRWIN_3600",
+      "label": "P(N1) within-block SD (60min)",
+      "description": "Within-block standard deviation (5-stage; N1 variability; long-range window 1 hour)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_5.VAR_N1.LRWIN_1800",
+      "label": "P(N1) between-block SD (30min)",
+      "description": "Between-block standard deviation (5-stage; N1 variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_5.VAR_N1.LRWIN_3600",
+      "label": "P(N1) between-block SD (60min)",
+      "description": "Between-block standard deviation (5-stage; N1 variability; long-range window 1 hour)"
+    },
+    {
+      "id": "COM.NSS_5.VAR_N1",
+      "label": "N1 CoM",
+      "description": "Centre of mass (5-stage; N1 variability)"
+    },
+    {
+      "id": "COM_M.NSS_5.VAR_N1",
+      "label": "Centre of mass (min)",
+      "description": "Centre of mass (min) of the soft N1 posterior trajectory (5-state)"
+    },
+    {
+      "id": "T50.NSS_5.VAR_N1",
+      "label": "N1 T50",
+      "description": "Median time (5-stage; N1 variability)"
+    },
+    {
+      "id": "T50_M.NSS_5.VAR_N1",
+      "label": "T50 (min)",
+      "description": "T50 (min) of the soft N1 posterior trajectory (5-state)"
+    },
+    {
+      "id": "HD_MINS.SS_N2",
+      "label": "N2 minutes",
+      "description": "Expected N2 duration from posterior mass (minutes)"
+    },
+    {
+      "id": "HD_PCT.SS_N2",
+      "label": "N2 %",
+      "description": "Hypnodensity percentage (scored N2)"
+    },
+    {
+      "id": "HD_DENS.SS_N2",
+      "label": "N2 density",
+      "description": "Expected N2 duration as a proportion of SPT"
+    },
+    {
+      "id": "P_W.SS_N2.NSS_5",
+      "label": "Wake probability(N2)",
+      "description": "Wake posterior probability (scored N2; 5-stage)"
+    },
+    {
+      "id": "P_N1.SS_N2.NSS_5",
+      "label": "N1 probability(N2)",
+      "description": "N1 posterior probability (scored N2; 5-stage)"
+    },
+    {
+      "id": "P_N2.SS_N2.NSS_5",
+      "label": "N2 probability(N2)",
+      "description": "N2 posterior probability (scored N2; 5-stage)"
+    },
+    {
+      "id": "P_N3.SS_N2.NSS_5",
+      "label": "N3 probability(N2)",
+      "description": "N3 posterior probability (scored N2; 5-stage)"
+    },
+    {
+      "id": "P_R.SS_N2.NSS_5",
+      "label": "REM probability(N2)",
+      "description": "REM posterior probability (scored N2; 5-stage)"
+    },
+    {
+      "id": "CONF.SS_N2.NSS_5",
+      "label": "Confidence",
+      "description": "Confidence for hard-called N2 epochs (5-state)"
+    },
+    {
+      "id": "H.SS_N2.NSS_5",
+      "label": "Entropy",
+      "description": "Entropy for hard-called N2 epochs (5-state)"
+    },
+    {
+      "id": "H_P90.SS_N2.NSS_5",
+      "label": "Entropy p90",
+      "description": "Entropy p90 for hard-called N2 epochs (5-state)"
+    },
+    {
+      "id": "MG.SS_N2.NSS_5",
+      "label": "Margin",
+      "description": "Margin for hard-called N2 epochs (5-state)"
+    },
+    {
+      "id": "FRAC_LOW_CONF.SS_N2.NSS_5",
+      "label": "Low confidence",
+      "description": "Low confidence for hard-called N2 epochs (5-state)"
+    },
+    {
+      "id": "PS.SS_N2.NSS_5",
+      "label": "PS(N2)",
+      "description": "Posterior shift (scored N2; 5-stage)"
+    },
+    {
+      "id": "PS_P90.SS_N2.NSS_5",
+      "label": "PS p90",
+      "description": "PS p90 for hard-called N2 epochs (5-state)"
+    },
+    {
+      "id": "PS_LAG.SS_N2.NSS_5",
+      "label": "PS lag",
+      "description": "PS lag for hard-called N2 epochs (5-state)"
+    },
+    {
+      "id": "CORR_H_PS.SS_N2.NSS_5",
+      "label": "Entropy-PS correlation",
+      "description": "Entropy-PS correlation for hard-called N2 epochs (5-state)"
+    },
+    {
+      "id": "ACF.SS_N2.NSS_5.LRLAG_600",
+      "label": "ACF(N2, 10min)",
+      "description": "Autocorrelation (scored N2; 5-stage; long-range lag 10 minutes)"
+    },
+    {
+      "id": "ACF.SS_N2.NSS_5.LRLAG_1800",
+      "label": "ACF(N2, 30min)",
+      "description": "Autocorrelation (scored N2; 5-stage; long-range lag 30 minutes)"
+    },
+    {
+      "id": "ACF.SS_N2.NSS_5.LRLAG_3600",
+      "label": "ACF(N2, 60min)",
+      "description": "Autocorrelation (scored N2; 5-stage; long-range lag 1 hour)"
+    },
+    {
+      "id": "ACF.SS_N2.NSS_5.LRLAG_5400",
+      "label": "ACF(N2, 90min)",
+      "description": "Autocorrelation (scored N2; 5-stage; long-range lag 90 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_5.VAR_N2.LRWIN_1800",
+      "label": "P(N2) within-block SD (30min)",
+      "description": "Within-block standard deviation (5-stage; N2 variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_5.VAR_N2.LRWIN_3600",
+      "label": "P(N2) within-block SD (60min)",
+      "description": "Within-block standard deviation (5-stage; N2 variability; long-range window 1 hour)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_5.VAR_N2.LRWIN_1800",
+      "label": "P(N2) between-block SD (30min)",
+      "description": "Between-block standard deviation (5-stage; N2 variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_5.VAR_N2.LRWIN_3600",
+      "label": "P(N2) between-block SD (60min)",
+      "description": "Between-block standard deviation (5-stage; N2 variability; long-range window 1 hour)"
+    },
+    {
+      "id": "COM.NSS_5.VAR_N2",
+      "label": "N2 CoM",
+      "description": "Centre of mass (5-stage; N2 variability)"
+    },
+    {
+      "id": "COM_M.NSS_5.VAR_N2",
+      "label": "Centre of mass (min)",
+      "description": "Centre of mass (min) of the soft N2 posterior trajectory (5-state)"
+    },
+    {
+      "id": "T50.NSS_5.VAR_N2",
+      "label": "N2 T50",
+      "description": "Median time (5-stage; N2 variability)"
+    },
+    {
+      "id": "T50_M.NSS_5.VAR_N2",
+      "label": "T50 (min)",
+      "description": "T50 (min) of the soft N2 posterior trajectory (5-state)"
+    },
+    {
+      "id": "HD_MINS.SS_N3",
+      "label": "N3 minutes",
+      "description": "Expected N3 duration from posterior mass (minutes)"
+    },
+    {
+      "id": "HD_PCT.SS_N3",
+      "label": "N3 %",
+      "description": "Hypnodensity percentage (scored N3)"
+    },
+    {
+      "id": "HD_DENS.SS_N3",
+      "label": "N3 density",
+      "description": "Expected N3 duration as a proportion of SPT"
+    },
+    {
+      "id": "P_W.SS_N3.NSS_5",
+      "label": "P(W|N3)",
+      "description": "Mean posterior probability of W among hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "P_N1.SS_N3.NSS_5",
+      "label": "P(N1|N3)",
+      "description": "Mean posterior probability of N1 among hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "P_N2.SS_N3.NSS_5",
+      "label": "P(N2|N3)",
+      "description": "Mean posterior probability of N2 among hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "P_N3.SS_N3.NSS_5",
+      "label": "P(N3|N3)",
+      "description": "Mean posterior probability of N3 among hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "P_R.SS_N3.NSS_5",
+      "label": "P(R|N3)",
+      "description": "Mean posterior probability of R among hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "CONF.SS_N3.NSS_5",
+      "label": "Confidence",
+      "description": "Confidence for hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "H.SS_N3.NSS_5",
+      "label": "Entropy",
+      "description": "Entropy for hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "H_P90.SS_N3.NSS_5",
+      "label": "Entropy p90",
+      "description": "Entropy p90 for hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "MG.SS_N3.NSS_5",
+      "label": "Margin",
+      "description": "Margin for hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "FRAC_LOW_CONF.SS_N3.NSS_5",
+      "label": "Low confidence",
+      "description": "Low confidence for hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "PS.SS_N3.NSS_5",
+      "label": "PS",
+      "description": "PS for hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "PS_P90.SS_N3.NSS_5",
+      "label": "PS p90",
+      "description": "PS p90 for hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "PS_LAG.SS_N3.NSS_5",
+      "label": "PS lag",
+      "description": "PS lag for hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "CORR_H_PS.SS_N3.NSS_5",
+      "label": "Entropy-PS correlation",
+      "description": "Entropy-PS correlation for hard-called N3 epochs (5-state)"
+    },
+    {
+      "id": "ACF.SS_N3.NSS_5.LRLAG_600",
+      "label": "ACF(N3, 10min)",
+      "description": "Autocorrelation (scored N3; 5-stage; long-range lag 10 minutes)"
+    },
+    {
+      "id": "ACF.SS_N3.NSS_5.LRLAG_1800",
+      "label": "ACF(N3, 30min)",
+      "description": "Autocorrelation (scored N3; 5-stage; long-range lag 30 minutes)"
+    },
+    {
+      "id": "ACF.SS_N3.NSS_5.LRLAG_3600",
+      "label": "ACF(N3, 60min)",
+      "description": "Autocorrelation (scored N3; 5-stage; long-range lag 1 hour)"
+    },
+    {
+      "id": "ACF.SS_N3.NSS_5.LRLAG_5400",
+      "label": "ACF(N3, 90min)",
+      "description": "Autocorrelation (scored N3; 5-stage; long-range lag 90 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_5.VAR_N3.LRWIN_1800",
+      "label": "P(N3) within-block SD (30min)",
+      "description": "Within-block standard deviation (5-stage; N3 variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_5.VAR_N3.LRWIN_3600",
+      "label": "P(N3) within-block SD (60min)",
+      "description": "Within-block standard deviation (5-stage; N3 variability; long-range window 1 hour)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_5.VAR_N3.LRWIN_1800",
+      "label": "P(N3) between-block SD (30min)",
+      "description": "Between-block standard deviation (5-stage; N3 variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_5.VAR_N3.LRWIN_3600",
+      "label": "P(N3) between-block SD (60min)",
+      "description": "Between-block standard deviation (5-stage; N3 variability; long-range window 1 hour)"
+    },
+    {
+      "id": "COM.NSS_5.VAR_N3",
+      "label": "N3 CoM",
+      "description": "Centre of mass (5-stage; N3 variability)"
+    },
+    {
+      "id": "COM_M.NSS_5.VAR_N3",
+      "label": "Centre of mass (min)",
+      "description": "Centre of mass (min) of the soft N3 posterior trajectory (5-state)"
+    },
+    {
+      "id": "T50.NSS_5.VAR_N3",
+      "label": "N3 T50",
+      "description": "Median time (5-stage; N3 variability)"
+    },
+    {
+      "id": "T50_M.NSS_5.VAR_N3",
+      "label": "T50 (min)",
+      "description": "T50 (min) of the soft N3 posterior trajectory (5-state)"
+    },
+    {
+      "id": "HD_MINS.SS_R",
+      "label": "R minutes",
+      "description": "Expected R duration from posterior mass (minutes)"
+    },
+    {
+      "id": "HD_PCT.SS_R",
+      "label": "R %",
+      "description": "Hypnodensity percentage (scored R)"
+    },
+    {
+      "id": "HD_DENS.SS_R",
+      "label": "R density",
+      "description": "Expected R duration as a proportion of SPT"
+    },
+    {
+      "id": "P_W.SS_R.NSS_3",
+      "label": "Wake probability(R)",
+      "description": "Wake posterior probability (scored R; 3-stage)"
+    },
+    {
+      "id": "P_NR.SS_R.NSS_3",
+      "label": "NREM probability(R)",
+      "description": "NREM posterior probability (scored R; 3-stage)"
+    },
+    {
+      "id": "P_R.SS_R.NSS_3",
+      "label": "REM probability(R)",
+      "description": "REM posterior probability (scored R; 3-stage)"
+    },
+    {
+      "id": "CONF.SS_R.NSS_3",
+      "label": "Confidence",
+      "description": "Confidence for hard-called R epochs (3-state)"
+    },
+    {
+      "id": "H.SS_R.NSS_3",
+      "label": "Entropy",
+      "description": "Entropy for hard-called R epochs (3-state)"
+    },
+    {
+      "id": "H_P90.SS_R.NSS_3",
+      "label": "Entropy p90",
+      "description": "Entropy p90 for hard-called R epochs (3-state)"
+    },
+    {
+      "id": "MG.SS_R.NSS_3",
+      "label": "Margin",
+      "description": "Margin for hard-called R epochs (3-state)"
+    },
+    {
+      "id": "FRAC_LOW_CONF.SS_R.NSS_3",
+      "label": "Low confidence",
+      "description": "Low confidence for hard-called R epochs (3-state)"
+    },
+    {
+      "id": "PS.SS_R.NSS_3",
+      "label": "PS(R)",
+      "description": "Posterior shift (scored R; 3-stage)"
+    },
+    {
+      "id": "PS_P90.SS_R.NSS_3",
+      "label": "PS p90",
+      "description": "PS p90 for hard-called R epochs (3-state)"
+    },
+    {
+      "id": "PS_LAG.SS_R.NSS_3",
+      "label": "PS lag",
+      "description": "PS lag for hard-called R epochs (3-state)"
+    },
+    {
+      "id": "CORR_H_PS.SS_R.NSS_3",
+      "label": "Entropy-PS correlation",
+      "description": "Entropy-PS correlation for hard-called R epochs (3-state)"
+    },
+    {
+      "id": "PCT_STABLE.SS_R.NSS_3",
+      "label": "Stable %",
+      "description": "Stable % for hard-called R epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "H_RATIO_UN_ST.SS_R.NSS_3",
+      "label": "Entropy ratio (U/S)",
+      "description": "Entropy ratio (U/S) for hard-called R epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "CONF_DIFF_UN_ST.SS_R.NSS_3",
+      "label": "Confidence difference (U-S)",
+      "description": "Confidence difference (U-S) for hard-called R epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "PS_RATIO_UN_ST.SS_R.NSS_3",
+      "label": "PS ratio (U/S)",
+      "description": "PS ratio (U/S) for hard-called R epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "ACF.SS_R.NSS_3.LRLAG_600",
+      "label": "ACF(R, 10min)",
+      "description": "Autocorrelation (scored R; 3-stage; long-range lag 10 minutes)"
+    },
+    {
+      "id": "ACF.SS_R.NSS_3.LRLAG_1800",
+      "label": "ACF(R, 30min)",
+      "description": "Autocorrelation (scored R; 3-stage; long-range lag 30 minutes)"
+    },
+    {
+      "id": "ACF.SS_R.NSS_3.LRLAG_3600",
+      "label": "ACF(R, 60min)",
+      "description": "Autocorrelation (scored R; 3-stage; long-range lag 1 hour)"
+    },
+    {
+      "id": "ACF.SS_R.NSS_3.LRLAG_5400",
+      "label": "ACF(R, 90min)",
+      "description": "Autocorrelation (scored R; 3-stage; long-range lag 90 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_3.VAR_R.LRWIN_1800",
+      "label": "P(R) within-block SD (30min)",
+      "description": "Within-block standard deviation (3-stage; R variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_3.VAR_R.LRWIN_3600",
+      "label": "P(R) within-block SD (60min)",
+      "description": "Within-block standard deviation (3-stage; R variability; long-range window 1 hour)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_3.VAR_R.LRWIN_1800",
+      "label": "P(R) between-block SD (30min)",
+      "description": "Between-block standard deviation (3-stage; R variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_3.VAR_R.LRWIN_3600",
+      "label": "P(R) between-block SD (60min)",
+      "description": "Between-block standard deviation (3-stage; R variability; long-range window 1 hour)"
+    },
+    {
+      "id": "COM.NSS_3.VAR_R",
+      "label": "R CoM",
+      "description": "Centre of mass (3-stage; R variability)"
+    },
+    {
+      "id": "COM_M.NSS_3.VAR_R",
+      "label": "Centre of mass (min)",
+      "description": "Centre of mass (min) of the soft R posterior trajectory (3-state)"
+    },
+    {
+      "id": "T50.NSS_3.VAR_R",
+      "label": "R T50",
+      "description": "Median time (3-stage; R variability)"
+    },
+    {
+      "id": "T50_M.NSS_3.VAR_R",
+      "label": "T50 (min)",
+      "description": "T50 (min) of the soft R posterior trajectory (3-state)"
+    },
+    {
+      "id": "HD_MINS.SS_NR",
+      "label": "NREM minutes",
+      "description": "Expected posterior NREM duration"
+    },
+    {
+      "id": "HD_PCT.SS_NR",
+      "label": "NREM % TST",
+      "description": "Expected posterior NREM percentage of total sleep time"
+    },
+    {
+      "id": "HD_DENS.SS_NR",
+      "label": "NREM density",
+      "description": "Expected posterior NREM density relative to hypnodensity sleep period time"
+    },
+    {
+      "id": "NREM_ILR_N1_VS_N2N3",
+      "label": "N1 versus N2+N3 balance",
+      "description": "Isometric log-ratio contrast of N1 minutes versus combined N2 and N3 minutes"
+    },
+    {
+      "id": "NREM_ILR_N2_VS_N3",
+      "label": "N2 versus N3 balance",
+      "description": "Isometric log-ratio contrast of N2 versus N3 minutes"
+    },
+    {
+      "id": "P_W.SS_NR.NSS_3",
+      "label": "Wake probability(NREM)",
+      "description": "Wake posterior probability (scored NREM; 3-stage)"
+    },
+    {
+      "id": "P_NR.SS_NR.NSS_3",
+      "label": "NREM posterior probability",
+      "description": "NREM posterior probability (scored NREM; 3-stage)"
+    },
+    {
+      "id": "P_R.SS_NR.NSS_3",
+      "label": "REM probability(NREM)",
+      "description": "REM posterior probability (scored NREM; 3-stage)"
+    },
+    {
+      "id": "CONF.SS_NR.NSS_3",
+      "label": "Confidence",
+      "description": "Confidence for hard-called NR epochs (3-state)"
+    },
+    {
+      "id": "H.SS_NR.NSS_3",
+      "label": "Entropy",
+      "description": "Entropy for hard-called NR epochs (3-state)"
+    },
+    {
+      "id": "H_P90.SS_NR.NSS_3",
+      "label": "Entropy p90",
+      "description": "Entropy p90 for hard-called NR epochs (3-state)"
+    },
+    {
+      "id": "MG.SS_NR.NSS_3",
+      "label": "Margin",
+      "description": "Margin for hard-called NR epochs (3-state)"
+    },
+    {
+      "id": "FRAC_LOW_CONF.SS_NR.NSS_3",
+      "label": "Low confidence",
+      "description": "Low confidence for hard-called NR epochs (3-state)"
+    },
+    {
+      "id": "PS.SS_NR.NSS_3",
+      "label": "NREM posterior separation",
+      "description": "Posterior separation / confidence for NREM in 3-state scoring"
+    },
+    {
+      "id": "PS_P90.SS_NR.NSS_3",
+      "label": "PS p90",
+      "description": "PS p90 for hard-called NR epochs (3-state)"
+    },
+    {
+      "id": "PS_LAG.SS_NR.NSS_3",
+      "label": "PS lag",
+      "description": "PS lag for hard-called NR epochs (3-state)"
+    },
+    {
+      "id": "CORR_H_PS.SS_NR.NSS_3",
+      "label": "Entropy-PS correlation",
+      "description": "Entropy-PS correlation for hard-called NR epochs (3-state)"
+    },
+    {
+      "id": "PCT_STABLE.SS_NR.NSS_3",
+      "label": "Stable %",
+      "description": "Stable % for hard-called NR epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "H_RATIO_UN_ST.SS_NR.NSS_3",
+      "label": "Entropy ratio (U/S)",
+      "description": "Entropy ratio (U/S) for hard-called NR epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "CONF_DIFF_UN_ST.SS_NR.NSS_3",
+      "label": "Confidence difference (U-S)",
+      "description": "Confidence difference (U-S) for hard-called NR epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "PS_RATIO_UN_ST.SS_NR.NSS_3",
+      "label": "PS ratio (U/S)",
+      "description": "PS ratio (U/S) for hard-called NR epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "ACF.SS_NR.NSS_3.LRLAG_600",
+      "label": "NREM ACF (10min)",
+      "description": "Autocorrelation of NREM state at 10-minute lag in 3-state scoring"
+    },
+    {
+      "id": "ACF.SS_NR.NSS_3.LRLAG_1800",
+      "label": "NREM ACF (30min)",
+      "description": "Autocorrelation of NREM state at 30-minute lag in 3-state scoring"
+    },
+    {
+      "id": "ACF.SS_NR.NSS_3.LRLAG_3600",
+      "label": "NREM ACF (60min)",
+      "description": "Autocorrelation of NREM state at 60-minute lag in 3-state scoring"
+    },
+    {
+      "id": "ACF.SS_NR.NSS_3.LRLAG_5400",
+      "label": "NREM ACF (90min)",
+      "description": "Autocorrelation of NREM state at 90-minute lag in 3-state scoring"
+    },
+    {
+      "id": "WITHIN_SD.NSS_3.VAR_NR.LRWIN_1800",
+      "label": "NREM within-window SD (30min)",
+      "description": "Within-window variability of NREM state using 30-minute windows"
+    },
+    {
+      "id": "WITHIN_SD.NSS_3.VAR_NR.LRWIN_3600",
+      "label": "NREM within-window SD (60min)",
+      "description": "Within-window variability of NREM state using 60-minute windows"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_3.VAR_NR.LRWIN_1800",
+      "label": "NREM between-window SD (30min)",
+      "description": "Between-window heterogeneity of NREM state using 30-minute windows"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_3.VAR_NR.LRWIN_3600",
+      "label": "NREM between-window SD (60min)",
+      "description": "Between-window heterogeneity of NREM state using 60-minute windows"
+    },
+    {
+      "id": "SLOPE.NSS_3.VAR_NR",
+      "label": "NREM overnight slope",
+      "description": "Linear overnight trend in NREM state in 3-state scoring"
+    },
+    {
+      "id": "COM.NSS_3.VAR_NR",
+      "label": "NREM center of mass",
+      "description": "Center-of-mass timing of NREM state in 3-state scoring"
+    },
+    {
+      "id": "COM_M.NSS_3.VAR_NR",
+      "label": "Centre of mass (min)",
+      "description": "Centre of mass (min) of the soft NR posterior trajectory (3-state)"
+    },
+    {
+      "id": "T50.NSS_3.VAR_NR",
+      "label": "NREM half-time",
+      "description": "Midpoint timing of NREM state in 3-state scoring"
+    },
+    {
+      "id": "T50_M.NSS_3.VAR_NR",
+      "label": "T50 (min)",
+      "description": "T50 (min) of the soft NR posterior trajectory (3-state)"
+    },
+    {
+      "id": "NREM_COM_N1_MINUS_N2",
+      "label": "N1 minus N2 timing",
+      "description": "Difference in center-of-mass timing: N1 minus N2"
+    },
+    {
+      "id": "NREM_COM_N2_MINUS_N3",
+      "label": "N2 minus N3 timing",
+      "description": "Difference in center-of-mass timing: N2 minus N3"
+    }
+  ],
+  "component_selection": {
+    "n_components_status": "temporary exploration baseline; update these panel values after nc= review",
+    "labels_and_orientations": "not specified here; use the optional post-fit description JSON"
+  },
+  "weighting": {
+    "method": "equal_component_variance",
+    "feature_multiplier": "1 / sqrt(G * p_g)",
+    "scope": "within_panel",
+    "score_normalization": "divide each fitted PC score by its training SD (singular_value / sqrt(n_fit - 1))",
+    "contract_status": "implemented by the HDSTATS-PC fitting and JSON projection code"
+  },
+  "derived_features": [
+    {
+      "id": "NREM_ILR_N1_VS_N2N3",
+      "inputs": [
+        "HD_MINS.SS_N1",
+        "HD_MINS.SS_N2",
+        "HD_MINS.SS_N3"
+      ],
+      "formula": "sqrt(2/3) * log(N1 / sqrt(N2 * N3))",
+      "floor": "prespecified positive posterior-minute floor"
+    },
+    {
+      "id": "NREM_ILR_N2_VS_N3",
+      "inputs": [
+        "HD_MINS.SS_N1",
+        "HD_MINS.SS_N2",
+        "HD_MINS.SS_N3"
+      ],
+      "formula": "sqrt(1/2) * log(N2 / N3)",
+      "floor": "prespecified positive posterior-minute floor"
+    },
+    {
+      "id": "NREM_COM_N1_MINUS_N2",
+      "inputs": [
+        "COM.NSS_5.VAR_N1",
+        "COM.NSS_5.VAR_N2"
+      ],
+      "formula": "COM_N1 - COM_N2"
+    },
+    {
+      "id": "NREM_COM_N2_MINUS_N3",
+      "inputs": [
+        "COM.NSS_5.VAR_N2",
+        "COM.NSS_5.VAR_N3"
+      ],
+      "formula": "COM_N2 - COM_N3"
+    }
+  ],
+  "panels": [
+    {
+      "id": "AMIN",
+      "n_components": 1,
+      "weight_groups": [
+        {
+          "id": "AM_5_GLOBAL",
+          "features": [
+            "H.NSS_5",
+            "H_P90.NSS_5",
+            "CONF.NSS_5",
+            "FRAC_LOW_CONF.NSS_5",
+            "MG.NSS_5"
+          ]
+        },
+        {
+          "id": "AM_3_GLOBAL",
+          "features": [
+            "H.NSS_3",
+            "H_P90.NSS_3",
+            "CONF.NSS_3",
+            "FRAC_LOW_CONF.NSS_3",
+            "MG.NSS_3"
+          ]
+        },
+        {
+          "id": "AM_5_MIX",
+          "features": [
+            "HD_MINS.NSS_5.MIX_W_N1",
+            "HD_DENS.NSS_5.MIX_W_N1",
+            "HD_MINS.NSS_5.MIX_W_N2",
+            "HD_DENS.NSS_5.MIX_W_N2",
+            "HD_MINS.NSS_5.MIX_W_N3",
+            "HD_DENS.NSS_5.MIX_W_N3",
+            "HD_MINS.NSS_5.MIX_W_R",
+            "HD_DENS.NSS_5.MIX_W_R",
+            "HD_MINS.NSS_5.MIX_N1_N2",
+            "HD_DENS.NSS_5.MIX_N1_N2",
+            "HD_MINS.NSS_5.MIX_N1_N3",
+            "HD_DENS.NSS_5.MIX_N1_N3",
+            "HD_MINS.NSS_5.MIX_N1_R",
+            "HD_DENS.NSS_5.MIX_N1_R",
+            "HD_MINS.NSS_5.MIX_N2_N3",
+            "HD_DENS.NSS_5.MIX_N2_N3",
+            "HD_MINS.NSS_5.MIX_N2_R",
+            "HD_DENS.NSS_5.MIX_N2_R",
+            "HD_MINS.NSS_5.MIX_N3_R",
+            "HD_DENS.NSS_5.MIX_N3_R",
+            "HD_MINS.NSS_5.MIX_W_N1_R",
+            "HD_DENS.NSS_5.MIX_W_N1_R"
+          ]
+        },
+        {
+          "id": "AM_3_MIX",
+          "features": [
+            "HD_MINS.NSS_3.MIX_W_NR",
+            "HD_DENS.NSS_3.MIX_W_NR",
+            "HD_MINS.NSS_3.MIX_NR_R",
+            "HD_DENS.NSS_3.MIX_NR_R",
+            "HD_MINS.NSS_3.MIX_W_NR_R",
+            "HD_DENS.NSS_3.MIX_W_NR_R"
+          ]
+        },
+        {
+          "id": "IN_5_CORE",
+          "features": [
+            "PS.NSS_5",
+            "PS_P90.NSS_5",
+            "PS_LAG.NSS_5",
+            "CORR_H_PS.NSS_5",
+            "PCT_STABLE.NSS_5",
+            "H_RATIO_UN_ST.NSS_5",
+            "CONF_DIFF_UN_ST.NSS_5",
+            "PS_RATIO_UN_ST.NSS_5"
+          ]
+        },
+        {
+          "id": "IN_5_STABLE",
+          "features": [
+            "H.NSS_5.STABLE_1",
+            "CONF.NSS_5.STABLE_1",
+            "PS.NSS_5.STABLE_1",
+            "H.NSS_5.STABLE_0",
+            "CONF.NSS_5.STABLE_0",
+            "PS.NSS_5.STABLE_0"
+          ]
+        },
+        {
+          "id": "IN_3_CORE",
+          "features": [
+            "PS.NSS_3",
+            "PS_P90.NSS_3",
+            "PS_LAG.NSS_3",
+            "CORR_H_PS.NSS_3",
+            "PCT_STABLE.NSS_3",
+            "H_RATIO_UN_ST.NSS_3",
+            "CONF_DIFF_UN_ST.NSS_3",
+            "PS_RATIO_UN_ST.NSS_3"
+          ]
+        },
+        {
+          "id": "IN_3_STABLE",
+          "features": [
+            "H.NSS_3.STABLE_1",
+            "CONF.NSS_3.STABLE_1",
+            "PS.NSS_3.STABLE_1",
+            "H.NSS_3.STABLE_0",
+            "CONF.NSS_3.STABLE_0",
+            "PS.NSS_3.STABLE_0"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "TR",
+      "n_components": 1,
+      "weight_groups": [
+        {
+          "id": "TR_5_GLOBAL",
+          "features": [
+            "TRANS_N.NSS_5",
+            "TRANS_DENS.NSS_5",
+            "BOUT_TRANS_N.NSS_5",
+            "BOUT_TRANS_DENS.NSS_5",
+            "TRANS_N_MATCHED.NSS_5",
+            "TRANS_PCT_MATCHED.NSS_5",
+            "TRANS_DUR.NSS_5",
+            "TRANS_PEAK_H.NSS_5",
+            "TRANS_MIN_CONF.NSS_5",
+            "TRANS_TOT_PS.NSS_5",
+            "BOUT_TRANS_DUR.NSS_5",
+            "BOUT_TRANS_PEAK_H.NSS_5",
+            "BOUT_TRANS_MIN_CONF.NSS_5",
+            "BOUT_TRANS_TOT_PS.NSS_5"
+          ]
+        },
+        {
+          "id": "TR_5_PAIR",
+          "features": [
+            "TRANS_DENS.NSS_5.TRANS_WtoN1",
+            "TRANS_DENS.NSS_5.TRANS_WtoN2",
+            "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_WtoN2",
+            "TRANS_DENS.NSS_5.TRANS_WtoN3",
+            "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_WtoN3",
+            "TRANS_DENS.NSS_5.TRANS_WtoR",
+            "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_WtoR",
+            "TRANS_DENS.NSS_5.TRANS_N1toW",
+            "TRANS_DENS.NSS_5.TRANS_N1toN2",
+            "TRANS_DENS.NSS_5.TRANS_N1toN3",
+            "TRANS_DENS.NSS_5.TRANS_N1toR",
+            "TRANS_DENS.NSS_5.TRANS_N2toW",
+            "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_N2toW",
+            "TRANS_DENS.NSS_5.TRANS_N2toN1",
+            "TRANS_DENS.NSS_5.TRANS_N2toN3",
+            "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_N2toN3",
+            "TRANS_DENS.NSS_5.TRANS_N2toR",
+            "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_N2toR",
+            "TRANS_DENS.NSS_5.TRANS_N3toW",
+            "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_N3toW",
+            "TRANS_DENS.NSS_5.TRANS_N3toN1",
+            "TRANS_DENS.NSS_5.TRANS_N3toN2",
+            "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_N3toN2",
+            "TRANS_DENS.NSS_5.TRANS_N3toR",
+            "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_N3toR",
+            "TRANS_DENS.NSS_5.TRANS_RtoW",
+            "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_RtoW",
+            "TRANS_DENS.NSS_5.TRANS_RtoN1",
+            "TRANS_DENS.NSS_5.TRANS_RtoN2",
+            "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_RtoN2",
+            "TRANS_DENS.NSS_5.TRANS_RtoN3",
+            "BOUT_TRANS_DENS.NSS_5.BOUT_TRANS_RtoN3"
+          ]
+        },
+        {
+          "id": "TR_3_GLOBAL",
+          "features": [
+            "TRANS_N.NSS_3",
+            "TRANS_DENS.NSS_3",
+            "BOUT_TRANS_N.NSS_3",
+            "BOUT_TRANS_DENS.NSS_3",
+            "TRANS_N_MATCHED.NSS_3",
+            "TRANS_PCT_MATCHED.NSS_3",
+            "TRANS_DUR.NSS_3",
+            "TRANS_PEAK_H.NSS_3",
+            "TRANS_MIN_CONF.NSS_3",
+            "TRANS_TOT_PS.NSS_3",
+            "BOUT_TRANS_DUR.NSS_3",
+            "BOUT_TRANS_PEAK_H.NSS_3",
+            "BOUT_TRANS_MIN_CONF.NSS_3",
+            "BOUT_TRANS_TOT_PS.NSS_3"
+          ]
+        },
+        {
+          "id": "TR_3_PAIR",
+          "features": [
+            "TRANS_DENS.NSS_3.TRANS_WtoNR",
+            "BOUT_TRANS_DENS.NSS_3.BOUT_TRANS_WtoNR",
+            "TRANS_DENS.NSS_3.TRANS_WtoR",
+            "BOUT_TRANS_DENS.NSS_3.BOUT_TRANS_WtoR",
+            "TRANS_DENS.NSS_3.TRANS_NRtoW",
+            "BOUT_TRANS_DENS.NSS_3.BOUT_TRANS_NRtoW",
+            "TRANS_DENS.NSS_3.TRANS_NRtoR",
+            "BOUT_TRANS_DENS.NSS_3.BOUT_TRANS_NRtoR",
+            "TRANS_DENS.NSS_3.TRANS_RtoW",
+            "BOUT_TRANS_DENS.NSS_3.BOUT_TRANS_RtoW",
+            "TRANS_DENS.NSS_3.TRANS_RtoNR",
+            "BOUT_TRANS_DENS.NSS_3.BOUT_TRANS_RtoNR"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "UL",
+      "n_components": 1,
+      "weight_groups": [
+        {
+          "id": "UL_SUMMARY",
+          "features": [
+            "U_MAG",
+            "U_COVERAGE",
+            "U_NCYC"
+          ]
+        },
+        {
+          "id": "UL_CONF",
+          "features": [
+            "U_MEAN.UQ_D1.UMETRIC_CONF",
+            "U_MEAN.UQ_D2.UMETRIC_CONF",
+            "U_MEAN.UQ_L1.UMETRIC_CONF",
+            "U_MEAN.UQ_L2.UMETRIC_CONF"
+          ]
+        },
+        {
+          "id": "UL_UVAR/CONF",
+          "features": [
+            "U_SLOPE.UVAR_CONF",
+            "U_MOD.UVAR_CONF",
+            "U_MOD_COS.UVAR_CONF",
+            "U_MOD_SIN.UVAR_CONF",
+            "U_R2.UVAR_CONF",
+            "U_PARTIAL_R2.UVAR_CONF"
+          ]
+        },
+        {
+          "id": "UL_CONF3",
+          "features": [
+            "U_MEAN.UQ_D1.UMETRIC_CONF3",
+            "U_MEAN.UQ_D2.UMETRIC_CONF3",
+            "U_MEAN.UQ_L1.UMETRIC_CONF3",
+            "U_MEAN.UQ_L2.UMETRIC_CONF3"
+          ]
+        },
+        {
+          "id": "UL_UVAR/CONF3",
+          "features": [
+            "U_SLOPE.UVAR_CONF3",
+            "U_MOD.UVAR_CONF3",
+            "U_MOD_COS.UVAR_CONF3",
+            "U_MOD_SIN.UVAR_CONF3",
+            "U_R2.UVAR_CONF3",
+            "U_PARTIAL_R2.UVAR_CONF3"
+          ]
+        },
+        {
+          "id": "UL_PS",
+          "features": [
+            "U_MEAN.UQ_D1.UMETRIC_PS",
+            "U_MEAN.UQ_D2.UMETRIC_PS",
+            "U_MEAN.UQ_L1.UMETRIC_PS",
+            "U_MEAN.UQ_L2.UMETRIC_PS"
+          ]
+        },
+        {
+          "id": "UL_UVAR/PS",
+          "features": [
+            "U_SLOPE.UVAR_PS",
+            "U_MOD.UVAR_PS",
+            "U_MOD_COS.UVAR_PS",
+            "U_MOD_SIN.UVAR_PS",
+            "U_R2.UVAR_PS",
+            "U_PARTIAL_R2.UVAR_PS"
+          ]
+        },
+        {
+          "id": "UL_PS3",
+          "features": [
+            "U_MEAN.UQ_D1.UMETRIC_PS3",
+            "U_MEAN.UQ_D2.UMETRIC_PS3",
+            "U_MEAN.UQ_L1.UMETRIC_PS3",
+            "U_MEAN.UQ_L2.UMETRIC_PS3"
+          ]
+        },
+        {
+          "id": "UL_UVAR/PS3",
+          "features": [
+            "U_SLOPE.UVAR_PS3",
+            "U_MOD.UVAR_PS3",
+            "U_MOD_COS.UVAR_PS3",
+            "U_MOD_SIN.UVAR_PS3",
+            "U_R2.UVAR_PS3",
+            "U_PARTIAL_R2.UVAR_PS3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ON",
+      "n_components": 1,
+      "weight_groups": [
+        {
+          "id": "ON_5_LAG",
+          "features": [
+            "PS.NSS_5.LRLAG_600",
+            "SIM.NSS_5.LRLAG_600",
+            "PS.NSS_5.LRLAG_1800",
+            "SIM.NSS_5.LRLAG_1800",
+            "PS.NSS_5.LRLAG_3600",
+            "SIM.NSS_5.LRLAG_3600",
+            "PS.NSS_5.LRLAG_5400",
+            "SIM.NSS_5.LRLAG_5400"
+          ]
+        },
+        {
+          "id": "ON_5_H_VAR",
+          "features": [
+            "SLOPE.NSS_5.VAR_H",
+            "WITHIN_SD.NSS_5.VAR_H.LRWIN_1800",
+            "BETWEEN_SD.NSS_5.VAR_H.LRWIN_1800",
+            "WITHIN_SD.NSS_5.VAR_H.LRWIN_3600",
+            "BETWEEN_SD.NSS_5.VAR_H.LRWIN_3600"
+          ]
+        },
+        {
+          "id": "ON_5_PS_VAR",
+          "features": [
+            "SLOPE.NSS_5.VAR_PS",
+            "WITHIN_SD.NSS_5.VAR_PS.LRWIN_1800",
+            "BETWEEN_SD.NSS_5.VAR_PS.LRWIN_1800",
+            "WITHIN_SD.NSS_5.VAR_PS.LRWIN_3600",
+            "BETWEEN_SD.NSS_5.VAR_PS.LRWIN_3600"
+          ]
+        },
+        {
+          "id": "ON_3_LAG",
+          "features": [
+            "PS.NSS_3.LRLAG_600",
+            "SIM.NSS_3.LRLAG_600",
+            "PS.NSS_3.LRLAG_1800",
+            "SIM.NSS_3.LRLAG_1800",
+            "PS.NSS_3.LRLAG_3600",
+            "SIM.NSS_3.LRLAG_3600",
+            "PS.NSS_3.LRLAG_5400",
+            "SIM.NSS_3.LRLAG_5400"
+          ]
+        },
+        {
+          "id": "ON_3_H_VAR",
+          "features": [
+            "SLOPE.NSS_3.VAR_H",
+            "WITHIN_SD.NSS_3.VAR_H.LRWIN_1800",
+            "BETWEEN_SD.NSS_3.VAR_H.LRWIN_1800",
+            "WITHIN_SD.NSS_3.VAR_H.LRWIN_3600",
+            "BETWEEN_SD.NSS_3.VAR_H.LRWIN_3600"
+          ]
+        },
+        {
+          "id": "ON_3_PS_VAR",
+          "features": [
+            "SLOPE.NSS_3.VAR_PS",
+            "WITHIN_SD.NSS_3.VAR_PS.LRWIN_1800",
+            "BETWEEN_SD.NSS_3.VAR_PS.LRWIN_1800",
+            "WITHIN_SD.NSS_3.VAR_PS.LRWIN_3600",
+            "BETWEEN_SD.NSS_3.VAR_PS.LRWIN_3600"
+          ]
+        },
+        {
+          "id": "ON_STAGE_TREND",
+          "features": [
+            "SLOPE.NSS_3.VAR_W",
+            "SLOPE.NSS_5.VAR_N1",
+            "SLOPE.NSS_5.VAR_N2",
+            "SLOPE.NSS_5.VAR_N3",
+            "SLOPE.NSS_3.VAR_R"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "W",
+      "n_components": 1,
+      "weight_groups": [
+        {
+          "id": "W_AMOUNT",
+          "features": [
+            "HD_MINS.SS_W",
+            "HD_PCT.SS_W",
+            "HD_DENS.SS_W"
+          ]
+        },
+        {
+          "id": "W_PURITY",
+          "features": [
+            "P_W.SS_W.NSS_3",
+            "P_NR.SS_W.NSS_3",
+            "P_R.SS_W.NSS_3",
+            "CONF.SS_W.NSS_3",
+            "H.SS_W.NSS_3",
+            "H_P90.SS_W.NSS_3",
+            "MG.SS_W.NSS_3",
+            "FRAC_LOW_CONF.SS_W.NSS_3"
+          ]
+        },
+        {
+          "id": "W_LOCAL_INSTABILITY",
+          "features": [
+            "PS.SS_W.NSS_3",
+            "PS_P90.SS_W.NSS_3",
+            "PS_LAG.SS_W.NSS_3",
+            "CORR_H_PS.SS_W.NSS_3",
+            "PCT_STABLE.SS_W.NSS_3",
+            "H_RATIO_UN_ST.SS_W.NSS_3",
+            "CONF_DIFF_UN_ST.SS_W.NSS_3",
+            "PS_RATIO_UN_ST.SS_W.NSS_3"
+          ]
+        },
+        {
+          "id": "W_LONG_RANGE_ORGANIZATION",
+          "features": [
+            "ACF.SS_W.NSS_3.LRLAG_600",
+            "ACF.SS_W.NSS_3.LRLAG_1800",
+            "ACF.SS_W.NSS_3.LRLAG_3600",
+            "ACF.SS_W.NSS_3.LRLAG_5400",
+            "WITHIN_SD.NSS_3.VAR_W.LRWIN_1800",
+            "WITHIN_SD.NSS_3.VAR_W.LRWIN_3600",
+            "BETWEEN_SD.NSS_3.VAR_W.LRWIN_1800",
+            "BETWEEN_SD.NSS_3.VAR_W.LRWIN_3600",
+            "SLOPE.NSS_3.VAR_W",
+            "COM.NSS_3.VAR_W",
+            "COM_M.NSS_3.VAR_W",
+            "T50.NSS_3.VAR_W",
+            "T50_M.NSS_3.VAR_W"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "N1",
+      "n_components": 1,
+      "weight_groups": [
+        {
+          "id": "N1_AMOUNT",
+          "features": [
+            "HD_MINS.SS_N1",
+            "HD_PCT.SS_N1",
+            "HD_DENS.SS_N1"
+          ]
+        },
+        {
+          "id": "N1_LONG_RANGE_ORGANIZATION",
+          "features": [
+            "ACF.SS_N1.NSS_5.LRLAG_600",
+            "ACF.SS_N1.NSS_5.LRLAG_1800",
+            "ACF.SS_N1.NSS_5.LRLAG_3600",
+            "ACF.SS_N1.NSS_5.LRLAG_5400",
+            "WITHIN_SD.NSS_5.VAR_N1.LRWIN_1800",
+            "WITHIN_SD.NSS_5.VAR_N1.LRWIN_3600",
+            "BETWEEN_SD.NSS_5.VAR_N1.LRWIN_1800",
+            "BETWEEN_SD.NSS_5.VAR_N1.LRWIN_3600",
+            "SLOPE.NSS_5.VAR_N1",
+            "COM.NSS_5.VAR_N1",
+            "COM_M.NSS_5.VAR_N1",
+            "T50.NSS_5.VAR_N1",
+            "T50_M.NSS_5.VAR_N1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "N2",
+      "n_components": 1,
+      "weight_groups": [
+        {
+          "id": "N2_AMOUNT",
+          "features": [
+            "HD_MINS.SS_N2",
+            "HD_PCT.SS_N2",
+            "HD_DENS.SS_N2"
+          ]
+        },
+        {
+          "id": "N2_PURITY",
+          "features": [
+            "P_W.SS_N2.NSS_5",
+            "P_N1.SS_N2.NSS_5",
+            "P_N2.SS_N2.NSS_5",
+            "P_N3.SS_N2.NSS_5",
+            "P_R.SS_N2.NSS_5",
+            "CONF.SS_N2.NSS_5",
+            "H.SS_N2.NSS_5",
+            "H_P90.SS_N2.NSS_5",
+            "MG.SS_N2.NSS_5",
+            "FRAC_LOW_CONF.SS_N2.NSS_5"
+          ]
+        },
+        {
+          "id": "N2_LOCAL_INSTABILITY",
+          "features": [
+            "PS.SS_N2.NSS_5",
+            "PS_P90.SS_N2.NSS_5",
+            "PS_LAG.SS_N2.NSS_5",
+            "CORR_H_PS.SS_N2.NSS_5"
+          ]
+        },
+        {
+          "id": "N2_LONG_RANGE_ORGANIZATION",
+          "features": [
+            "ACF.SS_N2.NSS_5.LRLAG_600",
+            "ACF.SS_N2.NSS_5.LRLAG_1800",
+            "ACF.SS_N2.NSS_5.LRLAG_3600",
+            "ACF.SS_N2.NSS_5.LRLAG_5400",
+            "WITHIN_SD.NSS_5.VAR_N2.LRWIN_1800",
+            "WITHIN_SD.NSS_5.VAR_N2.LRWIN_3600",
+            "BETWEEN_SD.NSS_5.VAR_N2.LRWIN_1800",
+            "BETWEEN_SD.NSS_5.VAR_N2.LRWIN_3600",
+            "SLOPE.NSS_5.VAR_N2",
+            "COM.NSS_5.VAR_N2",
+            "COM_M.NSS_5.VAR_N2",
+            "T50.NSS_5.VAR_N2",
+            "T50_M.NSS_5.VAR_N2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "N3",
+      "n_components": 1,
+      "weight_groups": [
+        {
+          "id": "N3_AMOUNT",
+          "features": [
+            "HD_MINS.SS_N3",
+            "HD_PCT.SS_N3",
+            "HD_DENS.SS_N3"
+          ]
+        },
+        {
+          "id": "N3_PURITY",
+          "features": [
+            "P_W.SS_N3.NSS_5",
+            "P_N1.SS_N3.NSS_5",
+            "P_N2.SS_N3.NSS_5",
+            "P_N3.SS_N3.NSS_5",
+            "P_R.SS_N3.NSS_5",
+            "CONF.SS_N3.NSS_5",
+            "H.SS_N3.NSS_5",
+            "H_P90.SS_N3.NSS_5",
+            "MG.SS_N3.NSS_5",
+            "FRAC_LOW_CONF.SS_N3.NSS_5"
+          ]
+        },
+        {
+          "id": "N3_LOCAL_INSTABILITY",
+          "features": [
+            "PS.SS_N3.NSS_5",
+            "PS_P90.SS_N3.NSS_5",
+            "PS_LAG.SS_N3.NSS_5",
+            "CORR_H_PS.SS_N3.NSS_5"
+          ]
+        },
+        {
+          "id": "N3_LONG_RANGE_ORGANIZATION",
+          "features": [
+            "ACF.SS_N3.NSS_5.LRLAG_600",
+            "ACF.SS_N3.NSS_5.LRLAG_1800",
+            "ACF.SS_N3.NSS_5.LRLAG_3600",
+            "ACF.SS_N3.NSS_5.LRLAG_5400",
+            "WITHIN_SD.NSS_5.VAR_N3.LRWIN_1800",
+            "WITHIN_SD.NSS_5.VAR_N3.LRWIN_3600",
+            "BETWEEN_SD.NSS_5.VAR_N3.LRWIN_1800",
+            "BETWEEN_SD.NSS_5.VAR_N3.LRWIN_3600",
+            "SLOPE.NSS_5.VAR_N3",
+            "COM.NSS_5.VAR_N3",
+            "COM_M.NSS_5.VAR_N3",
+            "T50.NSS_5.VAR_N3",
+            "T50_M.NSS_5.VAR_N3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "R",
+      "n_components": 1,
+      "weight_groups": [
+        {
+          "id": "R_AMOUNT",
+          "features": [
+            "HD_MINS.SS_R",
+            "HD_PCT.SS_R",
+            "HD_DENS.SS_R"
+          ]
+        },
+        {
+          "id": "R_PURITY",
+          "features": [
+            "P_W.SS_R.NSS_3",
+            "P_NR.SS_R.NSS_3",
+            "P_R.SS_R.NSS_3",
+            "CONF.SS_R.NSS_3",
+            "H.SS_R.NSS_3",
+            "H_P90.SS_R.NSS_3",
+            "MG.SS_R.NSS_3",
+            "FRAC_LOW_CONF.SS_R.NSS_3"
+          ]
+        },
+        {
+          "id": "R_LOCAL_INSTABILITY",
+          "features": [
+            "PS.SS_R.NSS_3",
+            "PS_P90.SS_R.NSS_3",
+            "PS_LAG.SS_R.NSS_3",
+            "CORR_H_PS.SS_R.NSS_3",
+            "PCT_STABLE.SS_R.NSS_3",
+            "H_RATIO_UN_ST.SS_R.NSS_3",
+            "CONF_DIFF_UN_ST.SS_R.NSS_3",
+            "PS_RATIO_UN_ST.SS_R.NSS_3"
+          ]
+        },
+        {
+          "id": "R_LONG_RANGE_ORGANIZATION",
+          "features": [
+            "ACF.SS_R.NSS_3.LRLAG_600",
+            "ACF.SS_R.NSS_3.LRLAG_1800",
+            "ACF.SS_R.NSS_3.LRLAG_3600",
+            "ACF.SS_R.NSS_3.LRLAG_5400",
+            "WITHIN_SD.NSS_3.VAR_R.LRWIN_1800",
+            "WITHIN_SD.NSS_3.VAR_R.LRWIN_3600",
+            "BETWEEN_SD.NSS_3.VAR_R.LRWIN_1800",
+            "BETWEEN_SD.NSS_3.VAR_R.LRWIN_3600",
+            "SLOPE.NSS_3.VAR_R",
+            "COM.NSS_3.VAR_R",
+            "COM_M.NSS_3.VAR_R",
+            "T50.NSS_3.VAR_R",
+            "T50_M.NSS_3.VAR_R"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "NR",
+      "n_components": 1,
+      "weight_groups": [
+        {
+          "id": "NR_AMOUNT",
+          "features": [
+            "HD_MINS.SS_NR",
+            "HD_PCT.SS_NR",
+            "HD_DENS.SS_NR",
+            "NREM_ILR_N1_VS_N2N3",
+            "NREM_ILR_N2_VS_N3"
+          ]
+        },
+        {
+          "id": "NR_PURITY",
+          "features": [
+            "P_W.SS_NR.NSS_3",
+            "P_NR.SS_NR.NSS_3",
+            "P_R.SS_NR.NSS_3",
+            "CONF.SS_NR.NSS_3",
+            "H.SS_NR.NSS_3",
+            "H_P90.SS_NR.NSS_3",
+            "MG.SS_NR.NSS_3",
+            "FRAC_LOW_CONF.SS_NR.NSS_3"
+          ]
+        },
+        {
+          "id": "NR_LOCAL_INSTABILITY",
+          "features": [
+            "PS.SS_NR.NSS_3",
+            "PS_P90.SS_NR.NSS_3",
+            "PS_LAG.SS_NR.NSS_3",
+            "CORR_H_PS.SS_NR.NSS_3",
+            "PCT_STABLE.SS_NR.NSS_3",
+            "H_RATIO_UN_ST.SS_NR.NSS_3",
+            "CONF_DIFF_UN_ST.SS_NR.NSS_3",
+            "PS_RATIO_UN_ST.SS_NR.NSS_3"
+          ]
+        },
+        {
+          "id": "NR_LONG_RANGE_ORGANIZATION",
+          "features": [
+            "ACF.SS_NR.NSS_3.LRLAG_600",
+            "ACF.SS_NR.NSS_3.LRLAG_1800",
+            "ACF.SS_NR.NSS_3.LRLAG_3600",
+            "ACF.SS_NR.NSS_3.LRLAG_5400",
+            "WITHIN_SD.NSS_3.VAR_NR.LRWIN_1800",
+            "WITHIN_SD.NSS_3.VAR_NR.LRWIN_3600",
+            "BETWEEN_SD.NSS_3.VAR_NR.LRWIN_1800",
+            "BETWEEN_SD.NSS_3.VAR_NR.LRWIN_3600",
+            "SLOPE.NSS_3.VAR_NR",
+            "COM.NSS_3.VAR_NR",
+            "COM_M.NSS_3.VAR_NR",
+            "T50.NSS_3.VAR_NR",
+            "T50_M.NSS_3.VAR_NR",
+            "NREM_COM_N1_MINUS_N2",
+            "NREM_COM_N2_MINUS_N3"
+          ]
+        }
+      ]
+    }
+  ],
+  "stage_component_contract": {
+    "terminology": {
+      "domain": "A top-level PC family (e.g. W, N2, NR, TR, UL).",
+      "component": "A conceptual subclass within a domain; component weight groups receive equal total weight.",
+      "measure": "An individual PC input variable."
+    },
+    "components": [
+      "AMOUNT",
+      "PURITY",
+      "LOCAL_INSTABILITY",
+      "LONG_RANGE_ORGANIZATION"
+    ],
+    "stage_rules": {
+      "W_R_NR": "Use NSS=3 hard-called stage conditioning. Stable/unstable refinements are included only here and remain part of LOCAL_INSTABILITY.",
+      "N2_N3": "Use ordinary NSS=5 hard-called stage conditioning. Do not use stable/unstable refinements.",
+      "N1": "Use only posterior amount and soft long-range organization; exclude all N1 arg-max-conditioned and stable/unstable measures.",
+      "NR": "Keep NR as a distinct NREM domain. Include its NSS=3 purity measures and NREM depth/composition features; N2 predominance within NR is expected."
+    },
+    "weighting": "Each listed component has equal input-variance budget within its domain. For G components and p_g measures in a component, use 1 / sqrt(G * p_g) per standardized measure; normalize fitted PC scores to unit training-sample variance."
+  }
+}

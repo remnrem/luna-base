@@ -25,9 +25,8 @@ struct feature_contribution_t {
   double raw_value;
 };
 
-// A globally named, semantically oriented component from the V3 HDSTATS-PC
-// registry.  A score is deliberately present even when unavailable (as NA),
-// so a DESTRAT result retains the row for every declared component.
+// A component coordinate from a fitted model. Semantic labels/orientations are
+// optional post-fit descriptor data, not part of the fitting specification.
 struct component_score_t {
   std::string id;
   std::string panel;
@@ -61,9 +60,8 @@ bool project( const std::string & model,
 std::vector<panel_scores_t> project_panels( const std::string & model,
                                            const feature_map_t & features );
 
-// Registry-aware V3 or self-contained V1 projection. This is the HDSTATS
-// command-facing API: it maps local PANEL/PC coordinates to named components
-// and applies the model's documented semantic orientation.
+// Projection of self-contained JSON models. IDs are PANEL_N coordinates until
+// optional post-fit descriptor data provides reviewed semantics.
 std::vector<component_score_t> project_components( const std::string & model,
                                                     const feature_map_t & features,
                                                     double min_loading = 0.10 );
@@ -73,9 +71,12 @@ std::vector<component_score_t> project_components( const std::string & model,
 void describe( const std::string & model, std::ostream & out, double min_loading = 0.10,
                const std::string & descriptor = "" );
 
-// Level 2 legacy fitting uses the compiled V3 manifest. Supplying spec=<JSON>
-// instead selects self-contained V1 fitting; the JSON layout owns all panel
-// and component definitions, so nc/nc-* are not accepted in that mode.
+// Level 2 fitting requires spec=<JSON>. The v2 layout owns panel membership
+// and weights; nc=N optionally overrides every panel's default count.
+// pc-select=<JSON> retains reviewed exploratory axes before rotation.
+// rotate=T (default) performs deterministic group-quartimax within that subspace;
+// rotate=F preserves ordinary PCA. JSON V2 embeds final loadings, score SDs, and
+// rotation provenance; projection has no spec/selection/rotation-time dependency.
 void fit( param_t & param );
 
 }

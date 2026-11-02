@@ -27,10 +27,11 @@
 #include <sstream>
 
 // The generated registry is deliberately compiled into luna.  The editable
-// manifest lives in docs/hdstats/hdstats.pc; it is not a run-time dependency.
+// JSON specification lives in docs/hdstats/hdstats-pc.spec.json; it is not a
+// run-time dependency.
 namespace hdstats_pc_generated {
-struct generated_feature_t { const char * panel; const char * stratum; const char * variable; };
-struct generated_component_t { const char * id; const char * panel; int pc; int orientation; const char * label; };
+struct generated_panel_t { const char * id; int n_components; };
+struct generated_feature_t { const char * panel; const char * weight_group; const char * id; };
 }
 #include "hdstats-pc-schema.h"
 
@@ -66,6 +67,7 @@ struct model_t {
   std::vector<std::string> names;
   Eigen::VectorXd means;
   Eigen::VectorXd sds;
+  Eigen::VectorXd weights;
   Eigen::MatrixXd loadings;
   Eigen::VectorXd singular_values;
 };
@@ -74,15 +76,32 @@ struct panel_def_t {
   std::string name;
   std::string option;
   std::vector<std::string> names;
+  std::vector<double> weights;
+  std::vector<std::string> groups; // parallel to names, from the fitting spec
 };
 
 struct fitted_panel_t {
   std::string name;
   std::vector<std::string> declared;
   model_t model;
+  // One-based axes selected before rotation. For rotated models these index
+  // the ROWS of rotation, not the final output columns.
+  std::vector<int> source_components;
+  // post-rotation selection only: one-based indices into the rotated basis
+  // (rotation's ROWS, i.e. the PANEL,PC numbering of the full nc rotated
+  // fit) that were kept as this panel's final output COLUMNS. Empty unless
+  // pc-select-stage=post-rotation was used.
+  std::vector<int> selected_components;
   int n_input = 0;
   int n_fit = 0;
   double total_ss = 0.0;
+  Eigen::MatrixXd rotation; // empty for ordinary PCA; final loadings = V * rotation
+  Eigen::VectorXd score_sds;
+  Eigen::MatrixXd score_correlations;
+  std::vector<std::string> group_ids;
+  Eigen::MatrixXd group_mass; // rows = groups, columns = final components
+  double rotation_before = 0.0, rotation_after = 0.0;
+  int rotation_sweeps = 0;
 };
 
 struct component_def_t {
@@ -102,6 +121,17 @@ struct layout_t {
   std::vector<layout_panel_t> panels;
 };
 
+using component_selection_t = std::map<std::string,std::vector<int>>;
+
+// Standardized inputs in a component with p measures receive
+// 1/sqrt(G*p), where G is the panel's component count.  Each component then
+// contributes 1/G to the trace of the weighted input covariance matrix.
+static double equal_component_weight( const int n_groups, const int group_size )
+{
+  if ( n_groups < 1 || group_size < 1 ) Helper::halt("invalid HDSTATS-PC weight group");
+  return 1.0 / std::sqrt( (double)n_groups * group_size );
+}
+
 std::string panel_option( std::string panel )
 {
   std::transform( panel.begin(), panel.end(), panel.begin(), []( unsigned char c ) {
@@ -110,13 +140,21 @@ std::string panel_option( std::string panel )
   return "nc-" + panel;
 }
 
-// Generated from docs/hdstats/hdstats.pc.  The manifest controls both fitting
-// feature slots and the V3 projection registry.
+// Generated from the v2 JSON specification.  The registry controls the
+// feature producer contract, while fitted JSON models retain their own layout.
 const std::vector<panel_def_t> & panel_definitions()
 {
   static const std::vector<panel_def_t> panels = [] {
     std::vector<panel_def_t> out;
     std::map<std::string,int> position;
+    std::map<std::string,int> group_sizes;
+    std::map<std::string,std::set<std::string>> panel_groups;
+    for ( int i = 0; i < hdstats_pc_generated::n_features; ++i )
+      {
+        const auto & f = hdstats_pc_generated::features[i];
+        ++group_sizes[std::string(f.panel) + "\t" + f.weight_group];
+        panel_groups[f.panel].insert(f.weight_group);
+      }
     for ( int i = 0; i < hdstats_pc_generated::n_features; ++i )
       {
         const auto & f = hdstats_pc_generated::features[i];
@@ -126,10 +164,14 @@ const std::vector<panel_def_t> & panel_definitions()
             position[panel] = (int)out.size();
             out.push_back( { panel, panel_option(panel), {} } );
           }
-        out[position[panel]].names.push_back( hdstats_pc::key( f.variable, f.stratum ) );
+        out[position[panel]].names.push_back( f.id );
+        out[position[panel]].weights.push_back(
+          equal_component_weight( (int)panel_groups[panel].size(),
+                                  group_sizes[panel + "\t" + f.weight_group] ) );
       }
     for ( const auto & panel : out )
-      if ( panel.names.empty() || std::set<std::string>(panel.names.begin(),panel.names.end()).size() != panel.names.size() )
+      if ( panel.names.empty() || panel.names.size() != panel.weights.size() ||
+           std::set<std::string>(panel.names.begin(),panel.names.end()).size() != panel.names.size() )
         Helper::halt( "invalid generated HDSTATS panel schema: " + panel.name );
     return out;
   }();
@@ -292,7 +334,7 @@ model_t read_model( const std::string & file, const format_t & format )
   int nf = 0;
   if ( ! Helper::str2int( tok[1], &nf ) || nf < 1 ) Helper::halt( "bad " + std::string( format.label ) + " feature count " + file );
   model_t m;
-  m.names.resize( nf ); m.means.resize( nf ); m.sds.resize( nf );
+  m.names.resize( nf ); m.means.resize( nf ); m.sds.resize( nf ); m.weights = Eigen::VectorXd::Ones( nf );
   for ( int j = 0; j < nf; ++j )
     {
       if ( ! std::getline( in, line ) ) Helper::halt( "truncated " + std::string( format.label ) + " model " + file );
@@ -383,7 +425,7 @@ bool project_impl( const std::string & file,
     {
       const auto f = features.find( m.names[j] );
       if ( f == features.end() || ! std::isfinite( f->second ) ) { ++nmissing; z(j) = 0.0; }
-      else z(j) = ( f->second - m.means(j) ) / m.sds(j);
+      else z(j) = m.weights(j) * ( f->second - m.means(j) ) / m.sds(j);
     }
   if ( missing != NULL ) *missing = nmissing;
   if ( nmissing ) return false;
@@ -435,6 +477,7 @@ void fit_impl( param_t & param, const format_t & format )
   Eigen::MatrixXd z( x.rows(), keep.size() );
   model_t m;
   m.names.resize( keep.size() ); m.means.resize( keep.size() ); m.sds.resize( keep.size() );
+  m.weights = Eigen::VectorXd::Ones( keep.size() );
   for ( int j = 0; j < (int)keep.size(); ++j )
     {
       m.names[j] = names[keep[j]]; m.means(j) = means(keep[j]); m.sds(j) = sds(keep[j]);
@@ -534,11 +577,13 @@ static fitted_panel_t fit_panel( const panel_def_t & def,
   model_t & m = panel.model;
   Eigen::MatrixXd z( x.rows(), keep.size() );
   m.names.resize(keep.size()); m.means.resize(keep.size()); m.sds.resize(keep.size());
+  m.weights.resize(keep.size());
   for ( int j = 0; j < (int)keep.size(); ++j )
     {
       const int k = keep[j];
       m.names[j] = def.names[k]; m.means(j) = means(k); m.sds(j) = sds(k);
-      z.col(j) = (x.col(k).array() - means(k)) / sds(k);
+      m.weights(j) = def.weights[k];
+      z.col(j) = m.weights(j) * (x.col(k).array() - means(k)) / sds(k);
     }
   const int max_nc = std::min((int)z.cols(),(int)z.rows()-1);
   if ( requested_nc > max_nc )
@@ -606,16 +651,22 @@ static std::vector<fitted_panel_t> read_panels( const std::string & file )
       panel.declared = source_panel.declared_features;
       model_t & m = panel.model;
       const int nf = (int)source_panel.features.size();
-      const int nc = (int)source_panel.singular_values.size();
-      m.names.resize(nf); m.means.resize(nf); m.sds.resize(nf);
+      // The FINAL output width is the loadings length, not singular_values'
+      // length: for a JSON V3 post-rotation-selected panel, singular_values
+      // is the (wider) rotated basis, while loadings/score_sds are the
+      // selected K columns actually used for projection.
+      const int nc = nf ? (int)source_panel.features.front().loadings.size() : 0;
+      m.names.resize(nf); m.means.resize(nf); m.sds.resize(nf); m.weights = Eigen::VectorXd::Ones(nf);
       m.singular_values.resize(nc); m.loadings.resize(nf,nc);
-      for ( int k = 0; k < nc; ++k ) m.singular_values(k) = source_panel.singular_values[k];
+      for ( int k = 0; k < nc && k < (int)source_panel.singular_values.size(); ++k )
+        m.singular_values(k) = source_panel.singular_values[k];
       for ( int j = 0; j < nf; ++j )
         {
           const auto & feature = source_panel.features[j];
           m.names[j] = feature.id;
           m.means(j) = feature.mean;
           m.sds(j) = feature.sd;
+          m.weights(j) = feature.weight;
           for ( int k = 0; k < nc; ++k ) m.loadings(j,k) = feature.loadings[k];
         }
       panels.push_back(std::move(panel));
@@ -634,82 +685,22 @@ static const std::vector<fitted_panel_t> & cached_panels( const std::string & fi
   return cache.emplace(path,read_panels(path)).first->second;
 }
 
-static std::map<std::string,int> registry_component_counts()
-{
-  std::map<std::string,int> counts;
-  std::map<std::string,std::set<int>> local_pcs;
-  for ( int i = 0; i < hdstats_pc_generated::n_components; ++i )
-    {
-      const auto & c = hdstats_pc_generated::components[i];
-      if ( !local_pcs[c.panel].insert(c.pc).second )
-        Helper::halt( "duplicate local PC in HDSTATS-PC registry: " + std::string(c.panel) );
-      counts[c.panel] = std::max( counts[c.panel], c.pc );
-    }
-  for ( const auto & item : counts )
-    for ( int pc = 1; pc <= item.second; ++pc )
-      if ( local_pcs[item.first].find(pc) == local_pcs[item.first].end() )
-        Helper::halt( "non-contiguous local PCs in HDSTATS-PC registry: " + item.first );
-  return counts;
-}
-
-static const std::map<std::string,int> & component_counts()
-{
-  static const std::map<std::string,int> counts = registry_component_counts();
-  return counts;
-}
-
-static void validate_registry()
-{
-  static const bool valid = [] {
-    std::map<std::string,std::set<std::string>> declared;
-    for ( const auto & panel : panel_definitions() )
-      declared[panel.name] = std::set<std::string>(panel.names.begin(),panel.names.end());
-    const auto & counts = component_counts();
-    for ( const auto & item : counts )
-      if ( declared.find(item.first) == declared.end() )
-        Helper::halt( "HDSTATS-PC registry has a component for unknown panel " + item.first );
-    std::set<std::string> ids;
-    for ( int i = 0; i < hdstats_pc_generated::n_components; ++i )
-      {
-        const auto & c = hdstats_pc_generated::components[i];
-        if ( !ids.insert(c.id).second )
-          Helper::halt( "duplicate HDSTATS-PC component ID " + std::string(c.id) );
-      }
-    return true;
-  }();
-  (void)valid;
-}
-
 static void validate_projection_model( const std::vector<fitted_panel_t> & fitted )
 {
-  validate_registry();
-  const auto & definitions = panel_definitions();
-  const auto & counts = component_counts();
-  if ( fitted.size() != definitions.size() )
-    Helper::halt( "HDSTATS-PC model does not match the compiled V3 panel registry" );
-  std::map<std::string,const panel_def_t *> definitions_by_name;
-  for ( const auto & definition : definitions ) definitions_by_name[definition.name] = &definition;
   std::set<std::string> names;
   for ( const auto & panel : fitted )
-    {
-      const auto def = definitions_by_name.find(panel.name);
-      const auto expected = counts.find(panel.name);
-      if ( def == definitions_by_name.end() || expected == counts.end() || !names.insert(panel.name).second ||
-           panel.declared != def->second->names || panel.model.loadings.cols() != expected->second )
-        Helper::halt( "HDSTATS-PC model panel does not match the current registry: " + panel.name );
-    }
+    if ( panel.name.empty() || !names.insert(panel.name).second || panel.model.names.empty() ||
+         panel.model.weights.size() != panel.model.names.size() || panel.model.loadings.cols() < 1 )
+      Helper::halt( "invalid HDSTATS-PC panel model: " + panel.name );
 }
 
 static const std::set<std::string> & known_feature_universe()
 {
-  // The compiled registry is the current stable public feature universe.  A
-  // JSON layout may redistribute these features freely across panels but may
-  // not invent an unimplemented HDSTATS feature key.
+  // The compiled registry is generated directly from the v2 JSON source.
   static const std::set<std::string> known = [] {
     std::set<std::string> values;
     for ( int i = 0; i < hdstats_pc_generated::n_features; ++i )
-      values.insert( hdstats_pc::key( hdstats_pc_generated::features[i].variable,
-                                      hdstats_pc_generated::features[i].stratum ) );
+      values.insert( hdstats_pc_generated::features[i].id );
     return values;
   }();
   return known;
@@ -725,14 +716,15 @@ static layout_t read_layout_spec( const std::string & file )
       layout.document = json::parse(in);
       const json & document = layout.document;
       if ( ! document.is_object() || document.value("format","") != "luna-hdstats-pc-spec" ||
-           document.value("version",0) != 1 ||
-           document.value("feature_universe","") != "HDSTATS-PC-FEATURES-V1" ||
+           document.value("version",0) != 2 ||
+           document.value("feature_universe","") != "HDSTATS-PC-FEATURES-V2" ||
            ! document.contains("feature_descriptions") || ! document.at("feature_descriptions").is_array() ||
-           ! document.contains("panels") || ! document.at("panels").is_array() || document.at("panels").empty() )
-        Helper::halt("invalid HDSTATS-PC JSON specification " + file + ": require format/version/feature_universe/feature_descriptions/panels");
-      const std::string component_id_style = document.value("component_id_style",std::string("legacy"));
-      if ( component_id_style != "legacy" && component_id_style != "r_safe" )
-        Helper::halt("invalid HDSTATS-PC component_id_style in " + file + ": expected legacy or r_safe");
+           ! document.contains("panels") || ! document.at("panels").is_array() || document.at("panels").empty() ||
+           ! document.contains("derived_features") || ! document.at("derived_features").is_array() )
+        Helper::halt("invalid HDSTATS-PC JSON specification " + file + ": require v2 format, feature descriptions, panels, and derived features");
+      if ( ! document.contains("weighting") || ! document.at("weighting").is_object() ||
+           document.at("weighting").value("method","") != "equal_component_variance" )
+        Helper::halt("HDSTATS-PC JSON specification " + file + ": require equal_component_variance weighting");
       layout.feature_descriptions = document.at("feature_descriptions");
 
       std::map<std::string,std::pair<std::string,std::string>> feature_metadata;
@@ -749,40 +741,90 @@ static layout_t read_layout_spec( const std::string & file )
             Helper::halt("unknown, empty, or duplicate HDSTATS-PC feature description '" + id + "'");
         }
 
+      std::map<std::string,std::vector<std::pair<std::string,std::string>>> compiled;
+      for ( int i = 0; i < hdstats_pc_generated::n_features; ++i )
+        compiled[hdstats_pc_generated::features[i].panel].push_back(
+          { hdstats_pc_generated::features[i].weight_group, hdstats_pc_generated::features[i].id } );
+      std::map<std::string,int> compiled_counts;
+      for ( int i = 0; i < hdstats_pc_generated::n_panels; ++i )
+        compiled_counts[hdstats_pc_generated::panels[i].id] = hdstats_pc_generated::panels[i].n_components;
       std::set<std::string> panel_ids, used_features;
       for ( const auto & source_panel : document.at("panels") )
         {
           if ( ! source_panel.is_object() || ! source_panel.contains("id") || ! source_panel.at("id").is_string() ||
-               source_panel.at("id").get<std::string>().empty() || ! source_panel.contains("features") ||
-               ! source_panel.at("features").is_array() || source_panel.at("features").empty() ||
+               source_panel.at("id").get<std::string>().empty() || ! source_panel.contains("weight_groups") ||
+               ! source_panel.at("weight_groups").is_array() || source_panel.at("weight_groups").empty() ||
                ! source_panel.contains("n_components") || ! source_panel.at("n_components").is_number_integer() ||
                source_panel.at("n_components").get<int>() < 1 )
             Helper::halt("invalid HDSTATS-PC JSON specification panel in " + file);
           layout_panel_t panel;
           panel.definition.name = source_panel.at("id").get<std::string>();
-          if ( component_id_style == "r_safe" &&
-               !std::regex_match(panel.definition.name,std::regex("[A-Za-z][A-Za-z0-9_.]*")) )
-            Helper::halt("HDSTATS-PC r_safe panel IDs must be R-safe name prefixes: " + panel.definition.name);
           if ( ! panel_ids.insert(panel.definition.name).second )
             Helper::halt("duplicate HDSTATS-PC JSON panel " + panel.definition.name);
-          std::set<std::string> panel_features;
-          for ( const auto & source_feature : source_panel.at("features") )
+          std::set<std::string> panel_features, group_ids;
+          std::vector<std::pair<std::string,std::string>> observed;
+          const int n_groups = (int)source_panel.at("weight_groups").size();
+          for ( const auto & group : source_panel.at("weight_groups") )
             {
-              if ( ! source_feature.is_string() || source_feature.get<std::string>().empty() )
-                Helper::halt("invalid HDSTATS-PC JSON feature in panel " + panel.definition.name);
-              const std::string feature = source_feature.get<std::string>();
-              if ( ! known_feature_universe().count(feature) )
-                Helper::halt("unknown HDSTATS-PC JSON feature '" + feature + "' in panel " + panel.definition.name);
-              if ( ! panel_features.insert(feature).second )
-                Helper::halt("duplicate HDSTATS-PC JSON feature '" + feature + "' in panel " + panel.definition.name);
-              if ( ! feature_metadata.count(feature) )
-                Helper::halt("missing HDSTATS-PC JSON feature description for '" + feature + "'");
-              used_features.insert(feature);
-              panel.definition.names.push_back(feature);
+              if ( ! group.is_object() || ! group.contains("id") || !group.at("id").is_string() ||
+                   group.at("id").get<std::string>().empty() || !group.contains("features") ||
+                   !group.at("features").is_array() || group.at("features").empty() )
+                Helper::halt("invalid HDSTATS-PC weight group in panel " + panel.definition.name);
+              const std::string group_id = group.at("id").get<std::string>();
+              if ( !group_ids.insert(group_id).second ) Helper::halt("duplicate HDSTATS-PC weight group " + group_id);
+              const double weight = equal_component_weight( n_groups, (int)group.at("features").size() );
+              for ( const auto & source_feature : group.at("features") )
+                {
+                  if ( !source_feature.is_string() || source_feature.get<std::string>().empty() )
+                    Helper::halt("invalid HDSTATS-PC JSON feature in panel " + panel.definition.name);
+                  const std::string feature = source_feature.get<std::string>();
+                  if ( !known_feature_universe().count(feature) || !feature_metadata.count(feature) ||
+                       !panel_features.insert(feature).second )
+                    Helper::halt("unknown, undescribed, or duplicate HDSTATS-PC feature '" + feature + "' in panel " + panel.definition.name);
+                  used_features.insert(feature);
+                  observed.push_back({group_id,feature});
+                  panel.definition.names.push_back(feature);
+                  panel.definition.weights.push_back(weight);
+                  panel.definition.groups.push_back(group_id);
+                }
             }
+          if ( compiled.find(panel.definition.name) == compiled.end() || observed != compiled.at(panel.definition.name) )
+            Helper::halt("HDSTATS-PC JSON panel does not match the generated v2 registry: " + panel.definition.name);
           panel.n_components = source_panel.at("n_components").get<int>();
+          if ( panel.n_components != compiled_counts.at(panel.definition.name) )
+            Helper::halt("HDSTATS-PC JSON panel count does not match the generated v2 registry: " + panel.definition.name);
           layout.panels.push_back(std::move(panel));
         }
+      if ( panel_ids.size() != compiled.size() || compiled.size() != compiled_counts.size() )
+        Helper::halt("HDSTATS-PC JSON panels do not match the generated v2 registry");
+      if ( (int)document.at("derived_features").size() != 4 )
+        Helper::halt("HDSTATS-PC v2 requires its four declared NREM derived features");
+      const std::map<std::string,std::pair<std::vector<std::string>,std::string>> expected_derived = {
+        { "NREM_ILR_N1_VS_N2N3", {{"HD_MINS.SS_N1","HD_MINS.SS_N2","HD_MINS.SS_N3"}, "sqrt(2/3) * log(N1 / sqrt(N2 * N3))"} },
+        { "NREM_ILR_N2_VS_N3", {{"HD_MINS.SS_N1","HD_MINS.SS_N2","HD_MINS.SS_N3"}, "sqrt(1/2) * log(N2 / N3)"} },
+        { "NREM_COM_N1_MINUS_N2", {{"COM.NSS_5.VAR_N1","COM.NSS_5.VAR_N2"}, "COM_N1 - COM_N2"} },
+        { "NREM_COM_N2_MINUS_N3", {{"COM.NSS_5.VAR_N2","COM.NSS_5.VAR_N3"}, "COM_N2 - COM_N3"} }
+      };
+      std::set<std::string> derived_ids;
+      for ( const auto & item : document.at("derived_features") )
+        {
+          if ( !item.is_object() || !item.contains("id") || !item.at("id").is_string() ||
+               !item.contains("inputs") || !item.at("inputs").is_array() || !item.contains("formula") || !item.at("formula").is_string() )
+            Helper::halt("invalid HDSTATS-PC v2 derived feature");
+          const std::string id = item.at("id").get<std::string>();
+          const auto expected = expected_derived.find(id);
+          if ( expected == expected_derived.end() || !derived_ids.insert(id).second ||
+               item.at("formula").get<std::string>() != expected->second.second )
+            Helper::halt("unsupported HDSTATS-PC v2 derived feature " + id);
+          std::vector<std::string> inputs;
+          for ( const auto & input : item.at("inputs") )
+            {
+              if ( !input.is_string() ) Helper::halt("invalid input for HDSTATS-PC derived feature " + id);
+              inputs.push_back(input.get<std::string>());
+            }
+          if ( inputs != expected->second.first ) Helper::halt("unexpected inputs for HDSTATS-PC derived feature " + id);
+        }
+      if ( derived_ids.size() != expected_derived.size() ) Helper::halt("missing HDSTATS-PC v2 derived feature");
       for ( const auto & item : feature_metadata )
         if ( ! used_features.count(item.first) )
           Helper::halt("unused HDSTATS-PC JSON feature description '" + item.first + "'");
@@ -795,12 +837,289 @@ static layout_t read_layout_spec( const std::string & file )
   return layout_t(); // unreachable after Helper::halt(), keeps all compilers happy
 }
 
+static void derive_nrem_features( hdstats_pc::feature_map_t * values )
+{
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const auto value = [&]( const char * id ) {
+    const auto found = values->find(id);
+    return found == values->end() ? nan : found->second;
+  };
+  const double n1 = value("HD_MINS.SS_N1");
+  const double n2 = value("HD_MINS.SS_N2");
+  const double n3 = value("HD_MINS.SS_N3");
+  // Posterior-minute masses are non-negative.  This fixed positive floor
+  // makes the documented ILR transform finite at an empty stage boundary.
+  const double floor = 1e-6;
+  if ( std::isfinite(n1) && std::isfinite(n2) && std::isfinite(n3) )
+    {
+      const double a = std::max(n1,floor), b = std::max(n2,floor), c = std::max(n3,floor);
+      (*values)["NREM_ILR_N1_VS_N2N3"] = std::sqrt(2.0/3.0) * std::log(a / std::sqrt(b*c));
+      (*values)["NREM_ILR_N2_VS_N3"] = std::sqrt(1.0/2.0) * std::log(b / c);
+    }
+  else
+    (*values)["NREM_ILR_N1_VS_N2N3"] = (*values)["NREM_ILR_N2_VS_N3"] = nan;
+  const double com_n1 = value("COM.NSS_5.VAR_N1");
+  const double com_n2 = value("COM.NSS_5.VAR_N2");
+  const double com_n3 = value("COM.NSS_5.VAR_N3");
+  (*values)["NREM_COM_N1_MINUS_N2"] = std::isfinite(com_n1) && std::isfinite(com_n2) ? com_n1 - com_n2 : nan;
+  (*values)["NREM_COM_N2_MINUS_N3"] = std::isfinite(com_n2) && std::isfinite(com_n3) ? com_n2 - com_n3 : nan;
+}
+
+static std::vector<row_t> with_nrem_features( std::vector<row_t> rows )
+{
+  for ( auto & row : rows ) derive_nrem_features(&row.values);
+  return rows;
+}
+
+// pc-select= is deliberately a fit-time input rather than a projection-time
+// dependency.  The emitted JSON model contains the selected columns, so a
+// deployed pc-proj= model is entirely self-contained.
+static component_selection_t read_component_selection( const std::string & file,
+                                                        const layout_t & layout )
+{
+  try
+    {
+      std::ifstream in = LunaIO::open_ifstream(file,std::ios::in);
+      if ( ! in ) Helper::halt("could not open HDSTATS-PC selection " + file);
+      const json document = json::parse(in);
+      if ( ! document.is_object() || document.value("format","") != "luna-hdstats-pc-selection" ||
+           document.value("version",0) != 1 || ! document.contains("panels") ||
+           ! document.at("panels").is_object() )
+        Helper::halt("invalid HDSTATS-PC selection " + file + ": require V1 format and panels object");
+
+      std::set<std::string> known_panels;
+      for ( const auto & panel : layout.panels ) known_panels.insert(panel.definition.name);
+      component_selection_t selected;
+      for ( auto it = document.at("panels").begin(); it != document.at("panels").end(); ++it )
+        {
+          const std::string panel = it.key();
+          if ( ! known_panels.count(panel) || ! it.value().is_array() || it.value().empty() )
+            Helper::halt("invalid HDSTATS-PC selection panel " + panel);
+          int previous = 0;
+          std::vector<int> axes;
+          for ( const auto & value : it.value() )
+            {
+              if ( ! value.is_number_integer() || value.get<int>() <= previous )
+                Helper::halt("HDSTATS-PC selection axes must be positive and ascending in panel " + panel);
+              previous = value.get<int>();
+              axes.push_back(previous);
+            }
+          selected.emplace(panel,std::move(axes));
+        }
+      return selected;
+    }
+  catch ( const std::exception & e )
+    {
+      Helper::halt("invalid HDSTATS-PC selection " + file + ": " + e.what());
+    }
+  return component_selection_t(); // unreachable after Helper::halt()
+}
+
+static std::vector<int> identity_components( const int n )
+{
+  std::vector<int> axes;
+  for ( int i = 1; i <= n; ++i ) axes.push_back(i);
+  return axes;
+}
+
+static void select_panel_components( fitted_panel_t * panel, const std::vector<int> & axes )
+{
+  const model_t & full = panel->model;
+  if ( axes.empty() ) Helper::halt("HDSTATS-PC selection cannot remove every component from " + panel->name);
+  for ( const int axis : axes )
+    if ( axis < 1 || axis > full.loadings.cols() )
+      Helper::halt("HDSTATS-PC selection requests PC" + Helper::int2str(axis) +
+                   " but only " + Helper::int2str(full.loadings.cols()) + " axes were fitted for " + panel->name);
+
+  model_t retained = full;
+  retained.loadings.resize(full.loadings.rows(),axes.size());
+  retained.singular_values.resize(axes.size());
+  for ( int k = 0; k < (int)axes.size(); ++k )
+    {
+      retained.loadings.col(k) = full.loadings.col(axes[k]-1);
+      retained.singular_values(k) = full.singular_values(axes[k]-1);
+    }
+  panel->model = std::move(retained);
+  panel->source_components = axes;
+}
+
+// Group-quartimax: maximize sum_{g,k} (sum_{j in g} B(j,k)^2)^2,
+// where B = V*R and R is orthogonal. Each unit-length column then favors a
+// small number of the spec's groups, without favoring single-feature sparsity.
+// There is no requirement for one axis per group, nor a signed target template.
+static Eigen::MatrixXd loading_group_mass( const Eigen::MatrixXd & b,
+                                           const std::vector<int> & groups,
+                                           const int n_groups )
+{
+  Eigen::MatrixXd mass = Eigen::MatrixXd::Zero(n_groups,b.cols());
+  for ( int j = 0; j < b.rows(); ++j ) mass.row(groups[j]) += b.row(j).array().square().matrix();
+  return mass;
+}
+
+static void rotate_columns( Eigen::MatrixXd * b, const int i, const int j, const double angle )
+{
+  const Eigen::VectorXd x = b->col(i), y = b->col(j);
+  const double c = std::cos(angle), s = std::sin(angle);
+  b->col(i) = c*x + s*y;
+  b->col(j) = -s*x + c*y;
+}
+
+static void rotate_panel( fitted_panel_t * panel, const panel_def_t & definition )
+{
+  const Eigen::MatrixXd v = panel->model.loadings;
+  const int nc = v.cols();
+  std::map<std::string,int> feature_group;
+  for ( int j = 0; j < (int)definition.names.size(); ++j )
+    {
+      const auto & id = definition.groups[j];
+      auto pos = std::find(panel->group_ids.begin(),panel->group_ids.end(),id);
+      if ( pos == panel->group_ids.end() )
+        { panel->group_ids.push_back(id); pos = panel->group_ids.end()-1; }
+      feature_group[definition.names[j]] = pos-panel->group_ids.begin();
+    }
+  std::vector<int> groups;
+  for ( const auto & id : panel->model.names ) groups.push_back(feature_group.at(id));
+  const int ng = panel->group_ids.size();
+  const auto objective = [&]( const Eigen::MatrixXd & b ) {
+    return loading_group_mass(b,groups,ng).squaredNorm();
+  };
+  panel->rotation_before = objective(v);
+  double best = -1.0;
+  Eigen::MatrixXd best_rotation;
+  // Fixed starts, fixed pair order, exact two-column updates: no RNG or new
+  // user input. Ties retain the earliest start (ordinary PCA is start zero).
+  // The finite search is reproducible, but is not a global-optimum guarantee.
+  const int starts = nc > 1 && ng > 1 ? 8 : 1;
+  const int max_sweeps = 1000;
+  const double tolerance = 1e-10;
+  for ( int start = 0; start < starts; ++start )
+    {
+      Eigen::MatrixXd rotation = Eigen::MatrixXd::Identity(nc,nc);
+      if ( start )
+        for ( int i = 0; i < nc; ++i )
+          for ( int j = i+1; j < nc; ++j )
+            rotate_columns(&rotation,i,j,0.7*std::sin(1.0*start*(i+1)*(j+2)));
+      Eigen::MatrixXd b = v*rotation;
+      double value = objective(b);
+      bool converged = false;
+      int sweeps = 0;
+      for ( ; sweeps < max_sweeps; ++sweeps )
+        {
+          const double before = value;
+          for ( int i = 0; i < nc; ++i )
+            for ( int j = i+1; j < nc; ++j )
+              {
+                Eigen::VectorXd a = Eigen::VectorXd::Zero(ng), d = a;
+                for ( int f = 0; f < b.rows(); ++f )
+                  {
+                    a(groups[f]) += b(f,i)*b(f,i)-b(f,j)*b(f,j);
+                    d(groups[f]) += 2*b(f,i)*b(f,j);
+                  }
+                const double aa = a.squaredNorm()-d.squaredNorm(), bb = 2*a.dot(d);
+                const double gain = 0.25*(std::hypot(aa,bb)-aa);
+                // Avoid arbitrary rotations in an exactly flat group subspace.
+                if ( gain <= 1e-14 ) continue;
+                const double angle = 0.25*std::atan2(bb,aa);
+                rotate_columns(&b,i,j,angle);
+                rotate_columns(&rotation,i,j,angle);
+              }
+          value = objective(b);
+          if ( value-before <= tolerance*std::max(1.0,before) )
+            { converged = true; ++sweeps; break; }
+        }
+      if ( converged && value > best + tolerance )
+        { best = value; best_rotation = rotation; panel->rotation_sweeps = sweeps; }
+    }
+  if ( best_rotation.size() == 0 || best + 1e-8 < panel->rotation_before )
+    Helper::halt("HDSTATS-PC group rotation did not converge for " + panel->name);
+
+  // Rotating unit eigenvectors preserves the orthonormal basis and its total
+  // variance; scores are generally correlated. Their SDs must be recomputed.
+  const Eigen::VectorXd ss = panel->model.singular_values.array().square();
+  const Eigen::MatrixXd gram = best_rotation.transpose()*ss.asDiagonal()*best_rotation;
+  std::vector<int> order;
+  for ( int k = 0; k < nc; ++k ) order.push_back(k);
+  std::stable_sort(order.begin(),order.end(),[&](int a,int b) { return gram(a,a)>gram(b,b); });
+  panel->rotation.resize(nc,nc);
+  for ( int k = 0; k < nc; ++k ) panel->rotation.col(k) = best_rotation.col(order[k]);
+  panel->model.loadings = v*panel->rotation;
+  for ( int k = 0; k < nc; ++k )
+    {
+      Eigen::Index anchor;
+      panel->model.loadings.col(k).cwiseAbs().maxCoeff(&anchor);
+      if ( panel->model.loadings(anchor,k) < 0 )
+        { panel->model.loadings.col(k) *= -1; panel->rotation.col(k) *= -1; }
+    }
+  const Eigen::MatrixXd covariance = panel->rotation.transpose()*ss.asDiagonal()*panel->rotation/(panel->n_fit-1.0);
+  panel->score_sds = covariance.diagonal().array().sqrt();
+  panel->score_correlations = panel->score_sds.cwiseInverse().asDiagonal()*covariance*panel->score_sds.cwiseInverse().asDiagonal();
+  panel->group_mass = loading_group_mass(panel->model.loadings,groups,ng);
+  panel->rotation_after = panel->group_mass.squaredNorm();
+}
+
+// Post-rotation selection: pick a subset of an ALREADY ROTATED panel's
+// columns (axes are one-based indices into the rotated PANEL,PC numbering,
+// i.e. rotation's columns / model.loadings' columns). Unlike
+// select_panel_components(), this never triggers a further rotation: the
+// retained axes are exactly the ones the caller chose to keep. The full
+// rotated basis width is preserved in model.singular_values and in
+// rotation's row count, so the saved model can still report basis
+// provenance separately from the final (reduced) score scaling.
+static void select_rotated_components( fitted_panel_t * panel, const std::vector<int> & axes )
+{
+  const int basis = (int)panel->model.loadings.cols();
+  if ( axes.empty() ) Helper::halt("HDSTATS-PC post-rotation selection cannot remove every component from " + panel->name);
+  for ( const int axis : axes )
+    if ( axis < 1 || axis > basis )
+      Helper::halt("HDSTATS-PC post-rotation selection requests PC" + Helper::int2str(axis) +
+                   " but only " + Helper::int2str(basis) + " rotated axes were fitted for " + panel->name);
+
+  const Eigen::MatrixXd loadings = panel->model.loadings;
+  const Eigen::MatrixXd rotation = panel->rotation;
+  const Eigen::VectorXd score_sds = panel->score_sds;
+  const Eigen::MatrixXd score_correlations = panel->score_correlations;
+  const Eigen::MatrixXd group_mass = panel->group_mass;
+  const int k = (int)axes.size();
+
+  panel->model.loadings.resize(loadings.rows(),k);
+  panel->rotation.resize(rotation.rows(),k);
+  panel->score_sds.resize(k);
+  panel->score_correlations.resize(k,k);
+  panel->group_mass.resize(group_mass.rows(),k);
+  for ( int a = 0; a < k; ++a )
+    {
+      panel->model.loadings.col(a) = loadings.col(axes[a]-1);
+      panel->rotation.col(a) = rotation.col(axes[a]-1);
+      panel->score_sds(a) = score_sds(axes[a]-1);
+      panel->group_mass.col(a) = group_mass.col(axes[a]-1);
+      for ( int b = 0; b < k; ++b )
+        panel->score_correlations(a,b) = score_correlations(axes[a]-1,axes[b]-1);
+    }
+  // model.singular_values, rotation_before/after, rotation_sweeps, group_ids,
+  // and source_components are deliberately left untouched: they describe
+  // the full rotated basis this selection was taken from.
+  panel->selected_components = axes;
+}
+
+static json matrix_json( const Eigen::MatrixXd & matrix )
+{
+  json result = json::array();
+  for ( int i = 0; i < matrix.rows(); ++i )
+    {
+      json row = json::array();
+      for ( int j = 0; j < matrix.cols(); ++j ) row.push_back(matrix(i,j));
+      result.push_back(std::move(row));
+    }
+  return result;
+}
+
 static void write_json_panels( const std::string & file, const layout_t & layout,
-                               const std::vector<fitted_panel_t> & panels )
+                               const std::vector<fitted_panel_t> & panels,
+                               const bool post_rotation_selection = false )
 {
   json document;
   document["format"] = "luna-hdstats-pc-model";
-  document["version"] = 1;
+  document["version"] = post_rotation_selection ? 3 : ( panels.front().rotation.size() ? 2 : 1 );
   const size_t slash = file.find_last_of("/\\");
   const std::string model_name = file.substr(slash == std::string::npos ? 0 : slash + 1);
   document["model_id"] = model_name;
@@ -815,8 +1134,29 @@ static void write_json_panels( const std::string & file, const layout_t & layout
       item["n_fit"] = panel.n_fit;
       item["total_ss"] = panel.total_ss;
       item["declared_features"] = panel.declared;
+      item["source_components"] = panel.source_components.empty()
+        ? identity_components((int)model.singular_values.size()) : panel.source_components;
       item["singular_values"] = json::array();
       for ( int k = 0; k < model.singular_values.size(); ++k ) item["singular_values"].push_back(model.singular_values(k));
+      if ( post_rotation_selection )
+        {
+          item["n_basis"] = (int)model.singular_values.size();
+          item["selected_components"] = panel.selected_components.empty()
+            ? identity_components(model.loadings.cols()) : panel.selected_components;
+        }
+      if ( panel.rotation.size() )
+        {
+          item["rotation"] = {
+            {"method","group_quartimax_v1"}, {"matrix",matrix_json(panel.rotation)},
+            {"objective_before",panel.rotation_before}, {"objective_after",panel.rotation_after},
+            {"starts",panel.rotation.cols()>1 && panel.group_ids.size()>1 ? 8 : 1},
+            {"sweeps",panel.rotation_sweeps}, {"converged",true},
+            {"group_ids",panel.group_ids}, {"group_mass",matrix_json(panel.group_mass)}
+          };
+          item["score_sds"] = json::array();
+          for ( int k = 0; k < panel.score_sds.size(); ++k ) item["score_sds"].push_back(panel.score_sds(k));
+          item["score_correlations"] = matrix_json(panel.score_correlations);
+        }
       item["features"] = json::array();
       for ( int j = 0; j < (int)model.names.size(); ++j )
         {
@@ -824,6 +1164,7 @@ static void write_json_panels( const std::string & file, const layout_t & layout
           feature["id"] = model.names[j];
           feature["mean"] = model.means(j);
           feature["sd"] = model.sds(j);
+          feature["weight"] = model.weights(j);
           feature["loadings"] = json::array();
           for ( int k = 0; k < model.loadings.cols(); ++k ) feature["loadings"].push_back(model.loadings(j,k));
           item["features"].push_back(std::move(feature));
@@ -838,7 +1179,6 @@ static void write_json_panels( const std::string & file, const layout_t & layout
 
 static void fit_hdstats_panels( param_t & param )
 {
-  validate_registry();
   const auto files=param.strvector("data");
   if ( files.empty() ) Helper::halt("--hdstats-pc requires data=<feature files>");
   const auto rows=read_rows(files,hdstats_format);
@@ -849,10 +1189,6 @@ static void fit_hdstats_panels( param_t & param )
     {
       const int nc=param.has(def.option) ? param.requires_int(def.option) : default_nc;
       if ( nc<1 ) Helper::halt(def.option + " must be positive");
-      const int expected = component_counts().at(def.name);
-      if ( nc != expected )
-        Helper::halt( "HDSTATS-PC " + def.name + " requires " + Helper::int2str(expected) +
-                      " components for the current registry (got " + Helper::int2str(nc) + ")" );
       panels.push_back(fit_panel(def,rows,nc));
       logger << "  HDSTATS-PC " << def.name << ": " << panels.back().n_fit << "/" << rows.size()
              << " people, " << panels.back().model.names.size() << "/" << def.names.size()
@@ -876,7 +1212,7 @@ static void fit_hdstats_panels( param_t & param )
                 }
               if ( !complete ) continue;
               for ( int j=0; j<(int)m.names.size(); ++j )
-                z(i,j)=(row.values.at(m.names[j])-m.means(j))/m.sds(j);
+                z(i,j)=m.weights(j) * (row.values.at(m.names[j])-m.means(j))/m.sds(j);
               ++i;
             }
           write_correlation_matrix(prefix+"."+p.name+".tsv",m.names,z,hdstats_format);
@@ -920,24 +1256,89 @@ static void fit_hdstats_panels( param_t & param )
 
 static void fit_json_hdstats_panels( param_t & param )
 {
-  // A JSON layout owns component counts.  Mixing it with the legacy nc knobs
-  // would make a model's declared layout ambiguous.
-  if ( param.has("nc") ) Helper::halt("HDSTATS-PC spec= cannot be combined with nc=");
+  // `nc=` is an intentional exploratory override.  Persist it in the embedded
+  // specification so projection never needs the source specification again.
   for ( const auto & definition : panel_definitions() )
     if ( param.has(definition.option) )
       Helper::halt("HDSTATS-PC spec= cannot be combined with " + definition.option + "=");
 
-  const layout_t layout = read_layout_spec( Helper::expand( param.requires("spec") ) );
+  layout_t layout = read_layout_spec( Helper::expand( param.requires("spec") ) );
+  if ( param.has("nc") )
+    {
+      const int nc = param.requires_int("nc");
+      if ( nc < 1 ) Helper::halt("nc must be positive");
+      for ( int i = 0; i < (int)layout.panels.size(); ++i )
+        {
+          layout.panels[i].n_components = nc;
+          layout.document["panels"][i]["n_components"] = nc;
+        }
+    }
+  const bool rotate = param.yesno("rotate",true);
+  const std::string pc_select_stage = param.has("pc-select-stage") ? param.requires("pc-select-stage") : "pre-rotation";
+  if ( pc_select_stage != "pre-rotation" && pc_select_stage != "post-rotation" )
+    Helper::halt("pc-select-stage must be pre-rotation or post-rotation");
+  const bool post_rotation_selection = pc_select_stage == "post-rotation";
+  if ( post_rotation_selection && !rotate )
+    Helper::halt("pc-select-stage=post-rotation requires rotate=T");
+  const component_selection_t selection = param.has("pc-select")
+    ? read_component_selection( Helper::expand(param.requires("pc-select")), layout )
+    : component_selection_t();
   const auto files = param.strvector("data");
   if ( files.empty() ) Helper::halt("--hdstats-pc requires data=<feature files>");
-  const auto rows = read_rows(files,hdstats_format);
+  const auto rows = with_nrem_features( read_rows(files,hdstats_format) );
   std::vector<fitted_panel_t> panels;
-  for ( const auto & definition : layout.panels )
+  for ( int p = 0; p < (int)layout.panels.size(); ++p )
     {
+      layout_panel_t & definition = layout.panels[p];
       panels.push_back( fit_panel( definition.definition, rows, definition.n_components ) );
+      const auto found = selection.find(definition.definition.name);
+
+      if ( post_rotation_selection )
+        {
+          // Fit and rotate the FULL requested basis first; selection then
+          // only drops already-rotated columns, never triggering a further
+          // rotation of the hand-picked subset.
+          select_panel_components(&panels.back(),identity_components(definition.n_components));
+          rotate_panel(&panels.back(),definition.definition);
+          const int basis = definition.n_components;
+          const std::vector<int> axes = found == selection.end()
+            ? identity_components(basis) : found->second;
+          select_rotated_components(&panels.back(),axes);
+          definition.n_components = (int)axes.size();
+          layout.document["panels"][p]["n_components"] = definition.n_components;
+          logger << "  HDSTATS-PC " << definition.definition.name << ": " << panels.back().n_fit << "/" << rows.size()
+                 << " people, " << panels.back().model.names.size() << "/" << definition.definition.names.size()
+                 << " varying inputs, nc=" << definition.n_components << " of " << basis << " rotated PCs";
+          if ( found != selection.end() )
+            {
+              logger << " (post-rotation selection from";
+              for ( const int axis : axes ) logger << " PC" << axis;
+              logger << ")";
+            }
+          logger << ", group rotation " << panels.back().rotation_before << " -> " << panels.back().rotation_after << "\n";
+          continue;
+        }
+
+      const std::vector<int> axes = found == selection.end()
+        ? identity_components(definition.n_components) : found->second;
+      select_panel_components(&panels.back(),axes);
+      if ( rotate ) rotate_panel(&panels.back(),definition.definition);
+      // The embedded spec defines the columns in this deployed model, not the
+      // larger exploratory PCA used while choosing them.
+      definition.n_components = (int)axes.size();
+      layout.document["panels"][p]["n_components"] = definition.n_components;
       logger << "  HDSTATS-PC " << definition.definition.name << ": " << panels.back().n_fit << "/" << rows.size()
              << " people, " << panels.back().model.names.size() << "/" << definition.definition.names.size()
-             << " varying inputs, nc=" << definition.n_components << "\n";
+             << " varying inputs, nc=" << definition.n_components;
+      if ( found != selection.end() )
+        {
+          logger << " (selected from";
+          for ( const int axis : axes ) logger << " PC" << axis;
+          logger << ")";
+        }
+      if ( rotate )
+        logger << ", group rotation " << panels.back().rotation_before << " -> " << panels.back().rotation_after;
+      logger << "\n";
     }
 
   if ( param.has("corr-matrix") )
@@ -958,14 +1359,14 @@ static void fit_json_hdstats_panels( param_t & param )
                 }
               if ( ! complete ) continue;
               for ( int j = 0; j < (int)model.names.size(); ++j )
-                z(i,j) = ( row.values.at(model.names[j]) - model.means(j) ) / model.sds(j);
+                z(i,j) = model.weights(j) * ( row.values.at(model.names[j]) - model.means(j) ) / model.sds(j);
               ++i;
             }
           write_correlation_matrix(prefix + "." + panel.name + ".tsv",model.names,z,hdstats_format);
         }
     }
 
-  write_json_panels( param.requires("model"), layout, panels );
+  write_json_panels( param.requires("model"), layout, panels, post_rotation_selection );
   writer.value("N_PANELS",(int)panels.size());
   writer.value("N_INPUT",(int)rows.size());
   for ( int p = 0; p < (int)panels.size(); ++p )
@@ -978,6 +1379,7 @@ static void fit_json_hdstats_panels( param_t & param )
       writer.value("N_DECLARED",(int)panel.declared.size());
       writer.value("N_FEATURES",(int)model.names.size());
       writer.value("N_COMPONENTS",(int)model.loadings.cols());
+      writer.value("ROTATED",panel.rotation.size() ? 1 : 0);
       for ( int j = 0; j < (int)model.names.size(); ++j )
         {
           writer.level(model.names[j],"FTR");
@@ -987,10 +1389,25 @@ static void fit_json_hdstats_panels( param_t & param )
       double cumulative = 0.0;
       for ( int k = 0; k < model.loadings.cols(); ++k )
         {
-          const double ve = model.singular_values(k) * model.singular_values(k) / panel.total_ss;
+          const double score_sd = panel.rotation.size() ? panel.score_sds(k)
+            : model.singular_values(k)/std::sqrt(panel.n_fit-1.0);
+          const double w = panel.rotation.size() ? score_sd*std::sqrt(panel.n_fit-1.0) : model.singular_values(k);
+          const double ve = w*w / panel.total_ss;
           cumulative += ve;
           writer.level("PC" + Helper::int2str(k+1),"PC");
-          writer.value("W",model.singular_values(k)); writer.value("VE",ve); writer.value("CVE",cumulative);
+          if ( ! panel.rotation.size() ) writer.value("SOURCE_PC",panel.source_components.empty() ? k+1 : panel.source_components[k]);
+          writer.value("W",w); writer.value("SCORE_SD",score_sd); writer.value("VE",ve); writer.value("CVE",cumulative);
+          if ( panel.rotation.size() )
+            {
+              Eigen::Index dominant;
+              const double mass = panel.group_mass.col(k).maxCoeff(&dominant);
+              writer.value("GROUP",panel.group_ids[dominant]); writer.value("GROUP_MASS",mass);
+              if ( !panel.selected_components.empty() ) writer.value("DISCOVERY_PC",panel.selected_components[k]);
+              for ( int g = 0; g < (int)panel.group_ids.size(); ++g )
+                { writer.level(panel.group_ids[g],"GROUP"); writer.value("MASS",panel.group_mass(g,k)); writer.unlevel("GROUP"); }
+              for ( int b = 0; b < panel.rotation.rows(); ++b )
+                { writer.level(panel.source_components[b],"BASIS_PC"); writer.value("ROTATION",panel.rotation(b,k)); writer.unlevel("BASIS_PC"); }
+            }
           for ( int j = 0; j < (int)model.names.size(); ++j )
             {
               writer.level(model.names[j],"FTR"); writer.value("LOADING",model.loadings(j,k)); writer.unlevel("FTR");
@@ -1038,20 +1455,24 @@ static std::vector<hdstats_pc::component_score_t> project_json_components(
       result.compatible = true;
       result.missing = 0;
       result.score = nan;
+      const double score_sd = source.score_unit_variance
+        ? panel->score_sds[definition.panel_pc-1] : 1.0;
+      if ( ! std::isfinite(score_sd) || score_sd <= 0.0 )
+        Helper::halt("invalid HDSTATS-PC score scale in " + file);
       double score = 0.0;
       for ( const auto & feature : panel->features )
         {
           const auto raw = features.find(feature.id);
           const bool present = raw != features.end() && std::isfinite(raw->second);
           if ( ! present ) { ++result.missing; result.compatible = false; }
-          const double z = present ? ( raw->second - feature.mean ) / feature.sd : 0.0;
+          const double z = present ? feature.weight * ( raw->second - feature.mean ) / feature.sd : 0.0;
           const double loading = definition.orientation * feature.loadings[definition.panel_pc-1];
           score += loading * z;
           if ( std::fabs(loading) >= min_loading )
-            result.contributions.push_back( { feature.id, present ? loading * z : nan,
+            result.contributions.push_back( { feature.id, present ? loading * z / score_sd : nan,
                                                present ? raw->second : nan } );
         }
-      if ( result.compatible ) result.score = score;
+      if ( result.compatible ) result.score = score / score_sd;
       results.push_back(std::move(result));
     }
   return results;
@@ -1066,6 +1487,8 @@ static void describe_json_model( const std::string & file, std::ostream & out, c
       std::string error;
       if ( ! hdstats_model::read_descriptor(descriptor,&source,&error) ) Helper::halt(error);
     }
+  if ( !source.panels.empty() && source.panels.front().rotation_method != "none" )
+    out << "# Rotated components (group_quartimax_v1); PC indices refer to final model columns.\n";
   out << "PC\tPANEL\tMODEL_PC\tLABEL\tORIENTATION\tDESCRIPTION\tFTR_LOADINGS\n";
   for ( const auto & component : source.components )
     {
@@ -1125,7 +1548,10 @@ bool hdstats_pc::project( const std::string & file,
 std::vector<hdstats_pc::panel_scores_t> hdstats_pc::project_panels(
     const std::string & file, const feature_map_t & features )
 {
+  feature_map_t effective_features = features;
+  derive_nrem_features(&effective_features);
   const bool json_model = is_json_hdstats_model(file);
+  const hdstats_model::model_t json_source = json_model ? read_json_hdstats_model(file) : hdstats_model::model_t();
   std::ifstream in=LunaIO::open_ifstream(file,std::ios::in);
   std::string magic;
   if ( !std::getline(in,magic) ) Helper::halt("could not read HDSTATS-PC model " + file);
@@ -1133,7 +1559,7 @@ std::vector<hdstats_pc::panel_scores_t> hdstats_pc::project_panels(
     {
       panel_scores_t result;
       result.panel="GENERIC";
-      project_impl(file,features,&result.scores,&result.missing,hdstats_format);
+      project_impl(file,effective_features,&result.scores,&result.missing,hdstats_format);
       return {result};
     }
   if ( magic!="__HDSTATS_PC_V3" && ! json_model ) Helper::halt("unsupported HDSTATS-PC model " + file);
@@ -1146,15 +1572,24 @@ std::vector<hdstats_pc::panel_scores_t> hdstats_pc::project_panels(
       Eigen::VectorXd z(m.names.size());
       for ( int j=0; j<(int)m.names.size(); ++j )
         {
-          const auto f=features.find(m.names[j]);
-          if ( f==features.end() || !std::isfinite(f->second) )
+          const auto f=effective_features.find(m.names[j]);
+          if ( f==effective_features.end() || !std::isfinite(f->second) )
             { ++result.missing; z(j)=0.0; }
-          else z(j)=(f->second-m.means(j))/m.sds(j);
+          else z(j)=m.weights(j) * (f->second-m.means(j))/m.sds(j);
         }
       if ( result.missing==0 )
         {
           const Eigen::VectorXd s=m.loadings.transpose()*z;
-          result.scores.assign(s.data(),s.data()+s.size());
+          result.scores.resize(s.size());
+          const hdstats_model::panel_t * source_panel = json_model ? json_source.find_panel(p.name) : NULL;
+          for ( int k = 0; k < s.size(); ++k )
+            {
+              const double score_sd = json_model && json_source.score_unit_variance
+                ? source_panel->score_sds[k] : 1.0;
+              if ( ! std::isfinite(score_sd) || score_sd <= 0.0 )
+                Helper::halt("invalid HDSTATS-PC score scale in " + file);
+              result.scores[k] = s(k) / score_sd;
+            }
         }
       results.push_back(std::move(result));
     }
@@ -1166,7 +1601,9 @@ std::vector<hdstats_pc::component_score_t> hdstats_pc::project_components(
 {
   if ( ! std::isfinite(min_loading) || min_loading < 0.0 )
     Helper::halt("pc-min-loading must be a finite non-negative value");
-  if ( is_json_hdstats_model(file) ) return project_json_components(file,features,min_loading);
+  feature_map_t effective_features = features;
+  derive_nrem_features(&effective_features);
+  if ( is_json_hdstats_model(file) ) return project_json_components(file,effective_features,min_loading);
   std::ifstream in=LunaIO::open_ifstream(file,std::ios::in);
   std::string magic;
   if ( !std::getline(in,magic) ) Helper::halt("could not read HDSTATS-PC model " + file);
@@ -1176,49 +1613,40 @@ std::vector<hdstats_pc::component_score_t> hdstats_pc::project_components(
 
   const auto & fitted = cached_panels(file);
   validate_projection_model(fitted);
-  std::map<std::string,const fitted_panel_t *> panels;
-  for ( const auto & panel : fitted ) panels[panel.name] = &panel;
-
   std::vector<component_score_t> results;
   const double nan = std::numeric_limits<double>::quiet_NaN();
-  for ( int i = 0; i < hdstats_pc_generated::n_components; ++i )
+  for ( const auto & panel : fitted )
     {
-      const auto & definition = hdstats_pc_generated::components[i];
-      const fitted_panel_t & panel = *panels.at(definition.panel);
       const model_t & model = panel.model;
-      component_score_t result;
-      result.id=definition.id;
-      result.panel=definition.panel;
-      result.panel_pc=definition.pc;
-      result.orientation=definition.orientation;
-      result.label=definition.label;
-      result.compatible=true;
-      result.missing=0;
-      result.score=nan;
-
       Eigen::VectorXd z(model.names.size());
-      std::map<std::string,int> feature_index;
+      int missing = 0;
       for ( int j=0; j<(int)model.names.size(); ++j )
         {
-          feature_index[model.names[j]]=j;
-          const auto feature=features.find(model.names[j]);
-          if ( feature==features.end() || !std::isfinite(feature->second) )
-            { ++result.missing; result.compatible=false; z(j)=0.0; }
-          else z(j)=(feature->second-model.means(j))/model.sds(j);
+          const auto feature=effective_features.find(model.names[j]);
+          if ( feature==effective_features.end() || !std::isfinite(feature->second) )
+            { ++missing; z(j)=0.0; }
+          else z(j)=model.weights(j) * (feature->second-model.means(j))/model.sds(j);
         }
-      if ( result.compatible )
-        result.score=definition.orientation * model.loadings.col(definition.pc-1).dot(z);
-
-      for ( int j = 0; j < (int)model.names.size(); ++j )
+      for ( int pc = 0; pc < model.loadings.cols(); ++pc )
         {
-          const double loading = definition.orientation * model.loadings(j,definition.pc-1);
-          if ( std::fabs(loading) < min_loading ) continue;
-          const auto raw = features.find(model.names[j]);
-          result.contributions.push_back( { model.names[j], result.compatible
-            ? loading * z(j) : nan,
-            raw == features.end() || !std::isfinite(raw->second) ? nan : raw->second } );
+          component_score_t result;
+          result.id=panel.name + "_" + Helper::int2str(pc+1);
+          result.panel=panel.name;
+          result.panel_pc=pc+1;
+          result.orientation=1;
+          result.compatible=missing == 0;
+          result.missing=missing;
+          result.score=result.compatible ? model.loadings.col(pc).dot(z) : nan;
+          for ( int j = 0; j < (int)model.names.size(); ++j )
+            {
+              const double loading = model.loadings(j,pc);
+              if ( std::fabs(loading) < min_loading ) continue;
+              const auto raw = effective_features.find(model.names[j]);
+              result.contributions.push_back( { model.names[j], result.compatible ? loading * z(j) : nan,
+                raw == effective_features.end() || !std::isfinite(raw->second) ? nan : raw->second } );
+            }
+          results.push_back(std::move(result));
         }
-      results.push_back(std::move(result));
     }
   return results;
 }
@@ -1230,42 +1658,32 @@ void hdstats_pc::describe( const std::string & file, std::ostream & out, const d
     Helper::halt("min-loading must be a finite non-negative value");
   if ( is_json_hdstats_model(file) )
     { describe_json_model(file,out,min_loading,descriptor); return; }
-  if ( ! descriptor.empty() ) Helper::halt("HDSTATS descriptors are currently supported for self-contained JSON V1 models only");
-  validate_registry();
+  if ( ! descriptor.empty() ) Helper::halt("HDSTATS descriptors are supported for self-contained JSON models only");
   const auto & fitted = cached_panels(file);
   validate_projection_model(fitted);
-  std::map<std::string,const fitted_panel_t *> panels;
-  for ( const auto & panel : fitted ) panels[panel.name] = &panel;
   out << "PC\tDOMAIN\tMODEL_PC\tLABEL\tORIENTATION\tFTR_LOADINGS\n";
-  for ( int i = 0; i < hdstats_pc_generated::n_components; ++i )
+  for ( const auto & panel : fitted )
     {
-      const auto & component = hdstats_pc_generated::components[i];
-      const model_t & model = panels.at(component.panel)->model;
-      std::vector<std::string> exemplar_features;
-      for ( int j = 0; j < (int)model.names.size(); ++j )
+      const model_t & model = panel.model;
+      for ( int pc = 0; pc < model.loadings.cols(); ++pc )
         {
-          const double loading = component.orientation * model.loadings(j,component.pc-1);
-          if ( std::fabs(loading) >= min_loading )
-            exemplar_features.push_back( model.names[j] + "=" + fmt_display( loading ) );
+          std::vector<std::string> exemplar_features;
+          for ( int j = 0; j < (int)model.names.size(); ++j )
+            if ( std::fabs(model.loadings(j,pc)) >= min_loading )
+              exemplar_features.push_back(model.names[j] + "=" + fmt_display(model.loadings(j,pc)));
+          out << panel.name << '_' << pc + 1 << '\t' << panel.name << '\t' << pc + 1 << "\t\t1\t";
+          for ( int j = 0; j < (int)exemplar_features.size(); ++j )
+            { if ( j ) out << "; "; out << exemplar_features[j]; }
+          out << '\n';
         }
-      out << component.id << '\t'
-          << component.panel << '\t'
-          << component.pc << '\t'
-          << component.label << '\t'
-          << component.orientation << '\t';
-      for ( int j = 0; j < (int)exemplar_features.size(); ++j )
-        {
-          if ( j ) out << "; ";
-          out << exemplar_features[j];
-        }
-      out << '\n';
     }
 }
 
 void hdstats_pc::fit( param_t & param )
 {
-  if ( param.has("spec") ) fit_json_hdstats_panels( param );
-  else fit_hdstats_panels( param );
+  if ( !param.has("spec") )
+    Helper::halt("--hdstats-pc requires spec=docs/hdstats/hdstats-pc.spec.json");
+  fit_json_hdstats_panels( param );
 }
 
 void hypno_pc::write_features( const std::string & directory,

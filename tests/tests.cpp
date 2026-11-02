@@ -34,6 +34,7 @@
 #include "lunapi/lunapi.h"
 #include "lunapi/segsrv.h"
 #include "helper/token-eval.h"
+#include "helper/json.h"
 #include "miscmath/crandom.h"
 #include "miscmath/miscmath.h"
 #include "dsp/ipc.h"
@@ -5930,6 +5931,361 @@ static void test_pops_posterior_weights( lunapi_t * /*eng*/,
 }
 #endif
 
+static void test_hdstats_pc_rotation( lunapi_t * eng, std::vector<test_result_t> & R, bool V )
+{
+  // Group rotation is fitted once, then both public projection paths must
+  // reproduce final unit-variance scores from the self-contained saved model.
+  try {
+    const std::string base = temp_base_path("hdstats_rotation");
+    const std::string spec = "docs/hdstats/hdstats-pc.spec.json", data = base+".hdpc";
+    nlohmann::json specification;
+    { std::ifstream in(spec); specification = nlohmann::json::parse(in); }
+    std::set<std::string> derived, inputs;
+    for ( const auto & d : specification.at("derived_features") ) derived.insert(d.at("id").get<std::string>());
+    for ( const auto & p : specification.at("panels") )
+      for ( const auto & g : p.at("weight_groups") )
+        for ( const auto & f : g.at("features") )
+          if ( !derived.count(f.get<std::string>()) ) inputs.insert(f.get<std::string>());
+    // A four-factor W panel has an exactly recoverable group-simple basis.
+    // Correlated factors ensure its initial PCA directions are mixed.
+    std::map<std::string,int> wake_groups;
+    for ( const auto & p : specification.at("panels") )
+      if ( p.at("id")=="W" )
+        for ( int g = 0; g < (int)p.at("weight_groups").size(); ++g )
+          for ( const auto & f : p.at("weight_groups")[g].at("features") ) wake_groups[f.get<std::string>()] = g;
+    std::vector<hdstats_pc::feature_map_t> rows(80);
+    {
+      std::ofstream out(data);
+      out << std::setprecision(17);
+      for ( int i = 0; i < (int)rows.size(); ++i )
+        {
+          out << "ID\tR" << i << "\tFORMAT\t__HDSTATS_FEATURES_V2";
+          int j = 0;
+          for ( const auto & id : inputs )
+            {
+              ++j;
+              double value = id == "MG.NSS_5" ? 50.0 : 50.0 +
+                3*std::sin((i+1)*0.17*(1+j%5)) + std::cos((i+1)*0.11*(1+j%7)) +
+                0.1*std::sin((i+1)*(j+1)*0.37);
+              if ( wake_groups.count(id) )
+                value = 50 + 3*std::sin((i+1)*0.17*(1+wake_groups.at(id))) + 2*std::sin((i+1)*0.31);
+              rows[i][id] = value;
+              out << '\t' << id << '\t' << value;
+            }
+          out << '\n';
+        }
+    }
+    const std::string selection = base+".selection.json";
+    { std::ofstream out(selection); out << "{\"format\":\"luna-hdstats-pc-selection\",\"version\":1,\"panels\":{\"AMIN\":[1,3]}}"; }
+    auto fit = [&](const std::string & suffix, const std::string & rotate, const int nc) {
+      const std::string file = base+suffix+".json";
+      param_t p; p.add("data",data); p.add("spec",spec); p.add("model",file); p.add("nc",Helper::int2str(nc));
+      if ( !rotate.empty() ) p.add("rotate",rotate);
+      if ( nc > 1 ) p.add("pc-select",selection);
+      hdstats_pc::fit(p);
+      nlohmann::json document; { std::ifstream in(file); document = nlohmann::json::parse(in); }
+      return document;
+    };
+    const auto plain = fit(".plain","F",4);
+    const auto rotated = fit(".rotated","",4);
+    const auto repeat = fit(".repeat","T",4);
+    const auto single = fit(".single","T",1);
+    bool invariant = plain.at("version") == 1 && rotated.at("version") == 2;
+    bool improved = false, deterministic = true, degenerate = true;
+    for ( size_t p = 0; p < rotated.at("panels").size(); ++p )
+      {
+        const auto & a = plain.at("panels")[p], & b = rotated.at("panels")[p];
+        deterministic = deterministic && b == repeat.at("panels")[p];
+        const int n = b.at("singular_values").size();
+        invariant = invariant && a.at("source_components") == b.at("source_components") && a.at("features").size() == b.at("features").size();
+        if ( b.at("id")=="W" )
+          for ( int k = 0; k < n; ++k )
+            {
+              double largest = 0;
+              for ( const auto & g : b.at("rotation").at("group_mass") ) largest = std::max(largest,g[k].get<double>());
+              invariant = invariant && largest>1.0-1e-8;
+            }
+        const auto & r = b.at("rotation").at("matrix");
+        const double before = b.at("rotation").at("objective_before"), after = b.at("rotation").at("objective_after");
+        invariant = invariant && after+1e-8 >= before;
+        improved = improved || after>before+1e-4;
+        double original_ss = 0, rotated_ss = 0;
+        for ( int k = 0; k < n; ++k )
+          {
+            original_ss += std::pow(a.at("singular_values")[k].get<double>(),2);
+            rotated_ss += std::pow(b.at("score_sds")[k].get<double>(),2)*(rows.size()-1);
+            for ( int l = 0; l < n; ++l )
+              {
+                double dot = 0;
+                for ( int i = 0; i < n; ++i ) dot += r[i][k].get<double>()*r[i][l].get<double>();
+                invariant = invariant && std::fabs(dot-(k==l ? 1.0 : 0.0))<1e-8;
+              }
+            for ( size_t j = 0; j < b.at("features").size(); ++j )
+              {
+                double expected = 0;
+                for ( int i = 0; i < n; ++i ) expected += a.at("features")[j].at("loadings")[i].get<double>()*r[i][k].get<double>();
+                invariant = invariant && std::fabs(expected-b.at("features")[j].at("loadings")[k].get<double>())<1e-8;
+              }
+          }
+        invariant = invariant && std::fabs(original_ss-rotated_ss)<1e-8*original_ss;
+        const auto & one = single.at("panels")[p].at("rotation").at("matrix");
+        degenerate = degenerate && one.size()==1 && std::fabs(one[0][0].get<double>()-1.0)<1e-8;
+      }
+    record(R,"hdstats-pc/rotation-subspace-objective-and-determinism",invariant && improved && deterministic && degenerate,
+           "subspace="+std::to_string(invariant)+" improved="+std::to_string(improved)+" deterministic="+std::to_string(deterministic),V);
+    bool projection = true;
+    std::map<std::string,std::vector<double>> scores;
+    for ( const auto & row : rows )
+      {
+        const auto components = hdstats_pc::project_components(base+".rotated.json",row,0.0);
+        const auto panels = hdstats_pc::project_panels(base+".rotated.json",row);
+        for ( const auto & c : components )
+          {
+            double sum = 0; for ( const auto & f : c.contributions ) sum += f.value;
+            projection = projection && c.compatible && std::isfinite(c.score) && std::fabs(sum-c.score)<1e-8;
+            auto p = std::find_if(panels.begin(),panels.end(),[&](const hdstats_pc::panel_scores_t & p) { return p.panel==c.panel; });
+            projection = projection && p!=panels.end() && std::fabs(p->scores[c.panel_pc-1]-c.score)<1e-8;
+            scores[c.id].push_back(c.score);
+          }
+      }
+    for ( const auto & item : scores )
+      {
+        double sum = 0, ss = 0;
+        for ( double v : item.second ) { sum += v; ss += v*v; }
+        projection = projection && std::fabs(sum/item.second.size())<1e-8 && std::fabs(ss/(item.second.size()-1)-1)<1e-8;
+      }
+    auto missing = rows.front(); missing.erase("HD_MINS.SS_W");
+    const auto incomplete = hdstats_pc::project_panels(base+".rotated.json",missing);
+    for ( const auto & p : incomplete )
+      if ( p.panel=="W" ) projection = projection && p.missing>0 && p.scores.empty();
+      else if ( p.panel=="R" ) projection = projection && p.missing==0 && !p.scores.empty();
+    hdstats_model::model_t parsed;
+    std::string error;
+    projection = projection && hdstats_model::read(base+".rotated.json",&parsed,&error) && parsed.components[0].source_panel_pc==0;
+    const std::string api = eng->read_hdstats_pc_model(base+".rotated.json");
+    projection = projection && api.find("group_quartimax_v1")!=std::string::npos && api.find("score_sds")!=std::string::npos;
+    record(R,"hdstats-pc/rotated-model-projection-and-scaling",projection,"scores="+std::to_string(scores.size())+" "+error,V);
+    bool rejects = true;
+    for ( int invalid = 0; invalid < 5; ++invalid )
+      {
+        auto bad = rotated;
+        if ( invalid==0 ) bad["panels"][0]["score_sds"][0] = 0;
+        if ( invalid==1 ) bad["panels"][0]["rotation"]["matrix"][0][0] = 5;
+        if ( invalid==2 ) bad["panels"][0].erase("rotation");
+        if ( invalid==3 ) bad["version"] = 1;
+        if ( invalid==4 ) bad["panels"][0]["features"][0]["loadings"][0] = 5;
+        const std::string file = base+".bad.json";
+        { std::ofstream out(file); out << bad.dump(); }
+        rejects = rejects && !hdstats_model::read(file,&parsed,&error);
+      }
+    record(R,"hdstats-pc/invalid-rotated-model-rejected",rejects,error,V);
+  } catch(std::exception & e) {
+    record(R,"hdstats-pc/group-rotation",false,e.what(),V);
+  }
+
+}
+
+// ============================================================
+// Post-rotation selection (pc-select-stage=post-rotation): fit and rotate
+// the FULL requested basis, then pick a subset of the already-rotated
+// discovery PCs (the PANEL,PC numbering an nc=N exploratory fit shows) and
+// never rotate again. The retained columns, score scales, and projected
+// scores must be *exactly* the selected columns of the full rotated fit.
+static void test_hdstats_pc_post_rotation_selection( lunapi_t * eng, std::vector<test_result_t> & R, bool V )
+{
+  try {
+    const std::string base = temp_base_path("hdstats_post_rotation");
+    const std::string spec = "docs/hdstats/hdstats-pc.spec.json", data = base+".hdpc";
+    nlohmann::json specification;
+    { std::ifstream in(spec); specification = nlohmann::json::parse(in); }
+    std::set<std::string> derived, inputs;
+    for ( const auto & d : specification.at("derived_features") ) derived.insert(d.at("id").get<std::string>());
+    for ( const auto & p : specification.at("panels") )
+      for ( const auto & g : p.at("weight_groups") )
+        for ( const auto & f : g.at("features") )
+          if ( !derived.count(f.get<std::string>()) ) inputs.insert(f.get<std::string>());
+    std::map<std::string,int> wake_groups;
+    for ( const auto & p : specification.at("panels") )
+      if ( p.at("id")=="W" )
+        for ( int g = 0; g < (int)p.at("weight_groups").size(); ++g )
+          for ( const auto & f : p.at("weight_groups")[g].at("features") ) wake_groups[f.get<std::string>()] = g;
+    const int n_rows = 80;
+    std::vector<hdstats_pc::feature_map_t> rows(n_rows);
+    {
+      std::ofstream out(data);
+      out << std::setprecision(17);
+      for ( int i = 0; i < n_rows; ++i )
+        {
+          out << "ID\tP" << i << "\tFORMAT\t__HDSTATS_FEATURES_V2";
+          int j = 0;
+          for ( const auto & id : inputs )
+            {
+              ++j;
+              double value = id == "MG.NSS_5" ? 50.0 : 50.0 +
+                3*std::sin((i+1)*0.17*(1+j%5)) + std::cos((i+1)*0.11*(1+j%7)) +
+                0.1*std::sin((i+1)*(j+1)*0.37);
+              if ( wake_groups.count(id) )
+                value = 50 + 3*std::sin((i+1)*0.17*(1+wake_groups.at(id))) + 2*std::sin((i+1)*0.31);
+              rows[i][id] = value;
+              out << '\t' << id << '\t' << value;
+            }
+          out << '\n';
+        }
+    }
+    auto fit = [&](const std::string & suffix, const std::string & stage, const std::string & select_file, const int nc = 4) {
+      const std::string file = base+suffix+".json";
+      param_t p; p.add("data",data); p.add("spec",spec); p.add("model",file); p.add("nc",Helper::int2str(nc));
+      if ( !stage.empty() ) p.add("pc-select-stage",stage);
+      if ( !select_file.empty() ) p.add("pc-select",select_file);
+      hdstats_pc::fit(p);
+      nlohmann::json document; { std::ifstream in(file); document = nlohmann::json::parse(in); }
+      return document;
+    };
+    auto find_panel = [&](const nlohmann::json & doc, const std::string & id) {
+      for ( const auto & panel : doc.at("panels") ) if ( panel.at("id") == id ) return panel;
+      throw std::runtime_error("test panel not found: "+id);
+    };
+    auto halts = [&]( auto action ) {
+      try { action(); return false; } catch(std::exception &) { return true; }
+    };
+
+    const std::string selection = base+".selection.json";
+    { std::ofstream out(selection) ; out << "{\"format\":\"luna-hdstats-pc-selection\",\"version\":1,\"panels\":{\"W\":[1,3]}}"; }
+
+    const auto reference = fit(".reference","","");
+    const auto reduced = fit(".reduced","post-rotation",selection);
+    const auto implicit_pre = fit(".implicit","","");
+    const auto explicit_pre = fit(".explicit-pre","pre-rotation","");
+
+    const bool regression = implicit_pre.at("panels") == explicit_pre.at("panels") &&
+      implicit_pre.at("panels") == reference.at("panels");
+    const bool version_ok = reduced.at("version") == 3 && reference.at("version") == 2;
+
+    const auto ref_w = find_panel(reference,"W");
+    const auto red_w = find_panel(reduced,"W");
+    const auto ref_other = find_panel(reference,"AMIN");
+    const auto red_other = find_panel(reduced,"AMIN");
+
+    const int basis = (int)ref_w.at("singular_values").size();
+    const std::vector<int> axes = {1,3};
+    bool exact_subset = red_w.at("n_basis") == basis &&
+      red_w.at("singular_values") == ref_w.at("singular_values") &&
+      red_w.at("selected_components") == nlohmann::json::array({1,3}) &&
+      red_w.at("rotation").at("matrix").size() == (size_t)basis &&
+      red_w.at("features").size() == ref_w.at("features").size();
+    for ( int a = 0; a < (int)axes.size() && exact_subset; ++a )
+      {
+        const int src = axes[a]-1;
+        for ( int b = 0; b < basis; ++b )
+          exact_subset = exact_subset && approx_equal(
+            red_w.at("rotation").at("matrix")[b][a].get<double>(),
+            ref_w.at("rotation").at("matrix")[b][src].get<double>(),1e-10);
+        exact_subset = exact_subset && approx_equal(
+          red_w.at("score_sds")[a].get<double>(),ref_w.at("score_sds")[src].get<double>(),1e-10);
+        for ( size_t j = 0; j < red_w.at("features").size(); ++j )
+          exact_subset = exact_subset && approx_equal(
+            red_w.at("features")[j].at("loadings")[a].get<double>(),
+            ref_w.at("features")[j].at("loadings")[src].get<double>(),1e-10);
+        for ( size_t g = 0; g < red_w.at("rotation").at("group_mass").size(); ++g )
+          exact_subset = exact_subset && approx_equal(
+            red_w.at("rotation").at("group_mass")[g][a].get<double>(),
+            ref_w.at("rotation").at("group_mass")[g][src].get<double>(),1e-10);
+        for ( int a2 = 0; a2 < (int)axes.size(); ++a2 )
+          exact_subset = exact_subset && approx_equal(
+            red_w.at("score_correlations")[a][a2].get<double>(),
+            ref_w.at("score_correlations")[src][axes[a2]-1].get<double>(),1e-10);
+      }
+
+    const bool absent_panel_keeps_all = red_other.at("n_basis") == (int)ref_other.at("singular_values").size() &&
+      red_other.at("selected_components").size() == ref_other.at("singular_values").size() &&
+      red_other.at("features")[0].at("loadings").size() == ref_other.at("features")[0].at("loadings").size();
+
+    record(R,"hdstats-pc/post-rotation-selection-matches-full-rotated-fit",
+           version_ok && exact_subset && absent_panel_keeps_all && regression,
+           "version_ok="+std::to_string(version_ok)+" exact_subset="+std::to_string(exact_subset)+
+           " absent_panel="+std::to_string(absent_panel_keeps_all)+" regression="+std::to_string(regression),V);
+
+    bool projection = true;
+    for ( const auto & row : rows )
+      {
+        const auto full_panels = hdstats_pc::project_panels(base+".reference.json",row);
+        const auto reduced_panels = hdstats_pc::project_panels(base+".reduced.json",row);
+        const auto full_w = std::find_if(full_panels.begin(),full_panels.end(),
+          [](const hdstats_pc::panel_scores_t & p) { return p.panel=="W"; });
+        const auto red_w_scores = std::find_if(reduced_panels.begin(),reduced_panels.end(),
+          [](const hdstats_pc::panel_scores_t & p) { return p.panel=="W"; });
+        projection = projection && full_w!=full_panels.end() && red_w_scores!=reduced_panels.end() &&
+          full_w->scores.size()==4 && red_w_scores->scores.size()==2 &&
+          approx_equal(red_w_scores->scores[0],full_w->scores[0],1e-8) &&
+          approx_equal(red_w_scores->scores[1],full_w->scores[2],1e-8);
+      }
+    record(R,"hdstats-pc/post-rotation-selection-projection",projection,"",V);
+
+    hdstats_model::model_t parsed; std::string error;
+    const bool read_ok = hdstats_model::read(base+".reduced.json",&parsed,&error);
+    const hdstats_model::panel_t * w = read_ok ? parsed.find_panel("W") : nullptr;
+    const bool round_trip = read_ok && w && w->n_basis==basis && w->selected_components==axes &&
+      std::all_of(parsed.components.begin(),parsed.components.end(),
+        [](const hdstats_model::component_t & c) { return c.source_panel_pc==0; });
+    record(R,"hdstats-pc/post-rotation-selection-model-read",round_trip,error,V);
+
+    bool degenerate;
+    {
+      const std::string selection1 = base+".selection1.json";
+      { std::ofstream out(selection1); out << "{\"format\":\"luna-hdstats-pc-selection\",\"version\":1,\"panels\":{\"W\":[1]}}"; }
+      const auto document = fit(".single","post-rotation",selection1,1);
+      const auto w1 = find_panel(document,"W");
+      degenerate = document.at("version")==3 && w1.at("n_basis")==1 &&
+        w1.at("selected_components")==nlohmann::json::array({1});
+    }
+    record(R,"hdstats-pc/post-rotation-selection-single-component",degenerate,"",V);
+
+    const bool bad_stage = halts([&]{
+      param_t p; p.add("data",data); p.add("spec",spec); p.add("model",base+".bad1.json");
+      p.add("nc","4"); p.add("pc-select-stage","sideways"); p.add("pc-select",selection);
+      hdstats_pc::fit(p);
+    });
+    const bool stage_needs_rotate = halts([&]{
+      param_t p; p.add("data",data); p.add("spec",spec); p.add("model",base+".bad2.json");
+      p.add("nc","4"); p.add("pc-select-stage","post-rotation"); p.add("pc-select",selection); p.add("rotate","F");
+      hdstats_pc::fit(p);
+    });
+    const bool out_of_range = halts([&]{
+      const std::string bad_selection = base+".bad-selection.json";
+      { std::ofstream out(bad_selection); out << "{\"format\":\"luna-hdstats-pc-selection\",\"version\":1,\"panels\":{\"W\":[1,9]}}"; }
+      param_t p; p.add("data",data); p.add("spec",spec); p.add("model",base+".bad3.json");
+      p.add("nc","4"); p.add("pc-select-stage","post-rotation"); p.add("pc-select",bad_selection);
+      hdstats_pc::fit(p);
+    });
+    record(R,"hdstats-pc/post-rotation-selection-rejects-malformed-fits",
+           bad_stage && stage_needs_rotate && out_of_range,
+           "stage="+std::to_string(bad_stage)+" rotate="+std::to_string(stage_needs_rotate)+" range="+std::to_string(out_of_range),V);
+
+    bool model_rejects = true;
+    for ( int invalid = 0; invalid < 6; ++invalid )
+      {
+        auto bad = reduced;
+        int idx = 0;
+        for ( size_t i = 0; i < bad.at("panels").size(); ++i ) if ( bad["panels"][i].at("id")=="W" ) idx = (int)i;
+        auto & target = bad["panels"][idx];
+        if ( invalid==0 ) target.erase("n_basis");
+        if ( invalid==1 ) target["n_basis"] = 99;
+        if ( invalid==2 ) target["selected_components"] = nlohmann::json::array({3,1});
+        if ( invalid==3 ) target["selected_components"] = nlohmann::json::array({1,99});
+        if ( invalid==4 ) target["selected_components"] = nlohmann::json::array({1});
+        if ( invalid==5 ) target["rotation"]["matrix"].erase(target["rotation"]["matrix"].begin());
+        const std::string file = base+".bad-model.json";
+        { std::ofstream out(file); out << bad.dump(); }
+        hdstats_model::model_t discard;
+        model_rejects = model_rejects && !hdstats_model::read(file,&discard,&error);
+      }
+    record(R,"hdstats-pc/invalid-post-rotation-model-rejected",model_rejects,error,V);
+
+  } catch(std::exception & e) {
+    record(R,"hdstats-pc/post-rotation-selection",false,e.what(),V);
+  }
+}
+
 // ============================================================
 // HDSTATS soft-ultradian integration: drive the public command over synthetic
 // five-state posterior signals rather than testing an internal helper.  The
@@ -5939,52 +6295,58 @@ static void test_hdstats_ultradian( lunapi_t * eng,
                                     std::vector<test_result_t> & R,
                                     bool V )
 {
-  // A V1 JSON model carries its own panel/component layout.  This deliberately
-  // uses a non-canonical panel and PC ID, proving that projection no longer
-  // depends on the compiled 11-domain/44-PC registry in this path.
+  // A v2 JSON model carries its own panel layout and effective feature weights.
+  // The canonical source is used only while fitting; projection then reads the
+  // embedded specification and does not consult the source file.
   try {
-    const std::string base = temp_base_path("hdstats_v1_json");
-    const std::string data = base + ".hdpc", spec = base + ".json", model = base + ".model.json", desc = base + ".desc.json";
+    const std::string base = temp_base_path("hdstats_v2_json");
+    const std::string data = base + ".hdpc", spec = "docs/hdstats/hdstats-pc.spec.json", model = base + ".model.json", desc = base + ".desc.json", selection = base + ".selection.json";
+    nlohmann::json specification;
+    { std::ifstream in(spec); specification = nlohmann::json::parse(in); }
+    std::set<std::string> derived, inputs;
+    for ( const auto & item : specification.at("derived_features") ) derived.insert(item.at("id").get<std::string>());
+    for ( const auto & panel : specification.at("panels") )
+      for ( const auto & group : panel.at("weight_groups") )
+        for ( const auto & feature : group.at("features") )
+          if ( !derived.count(feature.get<std::string>()) ) inputs.insert(feature.get<std::string>());
+    const auto synthetic_value = []( const int row, const int feature ) {
+      const double r = row + 1.0;
+      return r * (1.0 + 0.001 * feature) + r * r * 0.0001 * (feature % 7);
+    };
     {
       std::ofstream out(data);
-      out << "ID\tA\tFORMAT\t__HDSTATS_FEATURES_V2\tH.NSS_5\t0.1\tCONF.NSS_5\t0.9\n"
-          << "ID\tB\tFORMAT\t__HDSTATS_FEATURES_V2\tH.NSS_5\t0.2\tCONF.NSS_5\t0.7\n"
-          << "ID\tC\tFORMAT\t__HDSTATS_FEATURES_V2\tH.NSS_5\t0.7\tCONF.NSS_5\t0.3\n"
-          << "ID\tD\tFORMAT\t__HDSTATS_FEATURES_V2\tH.NSS_5\t0.9\tCONF.NSS_5\t0.1\n";
+      for ( int row = 0; row < 4; ++row )
+        {
+          out << "ID\t" << char('A' + row) << "\tFORMAT\t__HDSTATS_FEATURES_V2";
+          int feature = 0;
+          for ( const auto & id : inputs )
+            out << '\t' << id << '\t' << synthetic_value(row,++feature);
+          out << '\n';
+        }
     }
     {
-      std::ofstream out(spec);
-      out << "{\n"
-          << "  \"format\": \"luna-hdstats-pc-spec\",\n"
-          << "  \"version\": 1,\n"
-          << "  \"feature_universe\": \"HDSTATS-PC-FEATURES-V1\",\n"
-          << "  \"component_id_style\": \"r_safe\",\n"
-          << "  \"feature_descriptions\": [\n"
-          << "    {\"id\": \"H.NSS_5\", \"label\": \"Entropy\", \"description\": \"Entropy feature\"},\n"
-          << "    {\"id\": \"CONF.NSS_5\", \"label\": \"Confidence\", \"description\": \"Confidence feature\"}\n"
-          << "  ],\n"
-          << "  \"panels\": [{\n"
-          << "    \"id\": \"ALTERNATE\",\n"
-          << "    \"features\": [\"H.NSS_5\", \"CONF.NSS_5\"],\n"
-          << "    \"n_components\": 1\n"
-          << "  }]\n"
-          << "}\n";
+      std::ofstream out(selection);
+      // Keep the second exploratory AMIN axis as the deployable AMIN PC1.
+      // Panels absent from this optional profile retain their fitted axes.
+      out << "{\"format\":\"luna-hdstats-pc-selection\",\"version\":1,"
+          << "\"panels\":{\"AMIN\":[2]}}\n";
     }
     param_t parameters;
-    parameters.add("data",data); parameters.add("spec",spec); parameters.add("model",model);
+    parameters.add("data",data); parameters.add("spec",spec); parameters.add("model",model); parameters.add("nc","2"); parameters.add("pc-select",selection);
+    parameters.add("rotate","F"); // this case checks original-PCA provenance
     hdstats_pc::fit(parameters);
-    std::remove(spec.c_str()); // Projection must depend only on the embedded spec.
     {
       std::ofstream out(desc);
       const std::string model_id = model.substr(model.find_last_of("/\\") + 1);
       out << "{\n  \"format\": \"luna-hdstats-pc-desc\", \"version\": 1,\n"
           << "  \"model\": {\"model_id\": \"" << model_id << "\"},\n"
-          << "  \"components\": [{\"key\": \"ALTERNATE/1\", \"id\": \"ALT_1\", "
-          << "\"label\": \"Synthetic alternate factor\", \"orientation\": -1, "
+          << "  \"components\": [{\"key\": \"AMIN/1\", \"id\": \"AMIN_FACTOR\", "
+          << "\"label\": \"Synthetic AMIN factor\", \"orientation\": -1, "
           << "\"description\": \"Reviewed synthetic component\"}]\n}\n";
     }
     hdstats_pc::feature_map_t values;
-    values["H.NSS_5"] = 0.7; values["CONF.NSS_5"] = 0.3;
+    int feature = 0;
+    for ( const auto & id : inputs ) values[id] = synthetic_value(2,++feature);
     const auto components = hdstats_pc::project_components(model,values,0.0);
     const auto panels = hdstats_pc::project_panels(model,values);
     hdstats_model::model_t parsed;
@@ -5995,18 +6357,22 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     const bool descriptor_ok = hdstats_model::read_descriptor(desc,&parsed,&error);
     const std::string api_model = eng->read_hdstats_pc_model(model);
     const std::string api_descriptor = eng->read_hdstats_pc_descriptor(model,desc);
+    const auto amin = std::find_if(components.begin(),components.end(),[](const hdstats_pc::component_score_t & c) { return c.id == "AMIN_1"; });
+    const auto amin_panel = std::find_if(panels.begin(),panels.end(),[](const hdstats_pc::panel_scores_t & p) { return p.panel == "AMIN"; });
     const bool pass = parsed_ok && !parsed.model_id.empty() && !parsed.specification_json.empty()
-      && parsed.components.size() == 1 && parsed.components[0].id == "ALTERNATE_1"
-      && descriptor_ok && parsed.components[0].id == "ALT_1" && parsed.components[0].orientation == -1
-      && components.size() == 1 && components[0].id == "ALTERNATE_1" && components[0].orientation == 1
-      && components[0].compatible && Helper::realnum(components[0].score)
-      && panels.size() == 1 && panels[0].panel == "ALTERNATE" && panels[0].scores.size() == 1
-      && api_model.find("ALTERNATE_1") != std::string::npos && api_descriptor.find("ALT_1") != std::string::npos
-      && description.str().find("ALT_1\tALTERNATE\t1\tSynthetic alternate factor\t-1") != std::string::npos;
-    record(R,"hdstats-pc/v1-self-contained-json-layout",pass,
+      && parsed.components.size() == 19 && parsed.components[0].id == "AMIN_1"
+      && !parsed.panels.empty() && parsed.panels[0].source_components == std::vector<int>{2}
+      && parsed.components[0].source_panel_pc == 2
+      && descriptor_ok && parsed.components[0].id == "AMIN_FACTOR" && parsed.components[0].orientation == -1
+      && components.size() == 19 && amin != components.end() && amin->orientation == 1
+      && amin->compatible && Helper::realnum(amin->score)
+      && panels.size() == 10 && amin_panel != panels.end() && amin_panel->scores.size() == 1
+      && api_model.find("AMIN_1") != std::string::npos && api_descriptor.find("AMIN_FACTOR") != std::string::npos
+      && description.str().find("AMIN_FACTOR\tAMIN\t1\tSynthetic AMIN factor\t-1") != std::string::npos;
+    record(R,"hdstats-pc/v2-self-contained-json-layout",pass,
            "model_id=" + parsed.model_id + " components=" + Helper::int2str((int)components.size()) + " " + error,V);
   } catch(std::exception & e) {
-    record(R,"hdstats-pc/v1-self-contained-json-layout",false,e.what(),V);
+    record(R,"hdstats-pc/v2-self-contained-json-layout",false,e.what(),V);
   }
 
   // A V3 model projects panels independently and retains the component count
@@ -6364,6 +6730,123 @@ static void test_hdstats_ultradian( lunapi_t * eng,
   }
 }
 
+// ============================================================
+// Sibling descriptor auto-loading: a JSON model PANEL.json automatically
+// picks up PANEL.desc.json in the same directory (or none, which keeps every
+// orientation at +1) via hdstats_model::read() itself -- not just the
+// display-only --hdstats-desc/--hdstats-pc-desc path. The flip is real: it
+// changes hdstats_pc::project_components' actual SCORE, not just the id/
+// label hdstats_pc::describe() prints.
+static void test_hdstats_pc_sibling_descriptor( lunapi_t * eng, std::vector<test_result_t> & R, bool V )
+{
+  try {
+    const std::string base = temp_base_path("hdstats_sibling_desc");
+    const std::string spec = "docs/hdstats/hdstats-pc.spec.json", data = base+".hdpc";
+    nlohmann::json specification;
+    { std::ifstream in(spec); specification = nlohmann::json::parse(in); }
+    std::set<std::string> derived, inputs;
+    for ( const auto & d : specification.at("derived_features") ) derived.insert(d.at("id").get<std::string>());
+    for ( const auto & p : specification.at("panels") )
+      for ( const auto & g : p.at("weight_groups") )
+        for ( const auto & f : g.at("features") )
+          if ( !derived.count(f.get<std::string>()) ) inputs.insert(f.get<std::string>());
+    const int n_rows = 80;
+    std::vector<hdstats_pc::feature_map_t> rows(n_rows);
+    {
+      std::ofstream out(data);
+      out << std::setprecision(17);
+      for ( int i = 0; i < n_rows; ++i )
+        {
+          out << "ID\tS" << i << "\tFORMAT\t__HDSTATS_FEATURES_V2";
+          int j = 0;
+          for ( const auto & id : inputs )
+            {
+              ++j;
+              const double value = id == "MG.NSS_5" ? 50.0 : 50.0 +
+                3*std::sin((i+1)*0.19*(1+j%5)) + std::cos((i+1)*0.13*(1+j%7)) +
+                0.1*std::sin((i+1)*(j+1)*0.41);
+              rows[i][id] = value;
+              out << '\t' << id << '\t' << value;
+            }
+          out << '\n';
+        }
+    }
+    auto fit = [&](const std::string & suffix) {
+      const std::string file = base+suffix+".json";
+      param_t p; p.add("data",data); p.add("spec",spec); p.add("model",file); p.add("nc",Helper::int2str(4));
+      hdstats_pc::fit(p);
+      return file;
+    };
+    auto write_file = [&](const std::string & path, const std::string & content) {
+      std::ofstream out(path); out << content;
+    };
+
+    // No sibling: default orientation everywhere, matching the documented
+    // "optional, assume +1" contract.
+    const std::string plain_file = fit(".plain");
+    hdstats_model::model_t plain_model;
+    std::string error;
+    const bool plain_ok = hdstats_model::read(plain_file,&plain_model,&error);
+    bool default_orientation = plain_ok;
+    for ( const auto & component : plain_model.components )
+      default_orientation = default_orientation && component.orientation == 1 && component.label.empty();
+
+    // With a sibling PANEL.desc.json naming only W/1: that one component's
+    // id/label/orientation are overlaid; every other component is untouched.
+    const std::string sib_file = fit(".sib");
+    const std::string sib_model_id = sib_file.substr(sib_file.find_last_of('/')+1);
+    const std::string sib_desc_file = sib_file.substr(0,sib_file.size()-5)+".desc.json"; // strip ".json"
+    write_file(sib_desc_file,
+      "{\"format\":\"luna-hdstats-pc-desc\",\"version\":1,"
+      "\"model\":{\"model_id\":\""+sib_model_id+"\"},"
+      "\"components\":[{\"key\":\"W/1\",\"id\":\"W_FLIPPED\",\"label\":\"flipped for test\","
+      "\"orientation\":-1,\"description\":\"\"}]}");
+    hdstats_model::model_t sib_model;
+    const bool sib_ok = hdstats_model::read(sib_file,&sib_model,&error);
+    const auto w1 = std::find_if(sib_model.components.begin(),sib_model.components.end(),
+      [&](const hdstats_model::component_t & c) { return c.panel_id=="W" && c.panel_pc==1; });
+    const auto w2 = std::find_if(sib_model.components.begin(),sib_model.components.end(),
+      [&](const hdstats_model::component_t & c) { return c.panel_id=="W" && c.panel_pc==2; });
+    const bool overlay_applied = sib_ok && w1 != sib_model.components.end() && w2 != sib_model.components.end() &&
+      w1->id=="W_FLIPPED" && w1->label=="flipped for test" && w1->orientation==-1 &&
+      w2->id=="W_2" && w2->label.empty() && w2->orientation==1;
+
+    // The flip is real: W_FLIPPED's projected SCORE is the exact negation of
+    // the same (deterministic) fit's unflipped W/1 score, for every row.
+    bool score_flipped = true;
+    for ( const auto & row : rows )
+      {
+        const auto plain_components = hdstats_pc::project_components(plain_file,row,0.0);
+        const auto sib_components = hdstats_pc::project_components(sib_file,row,0.0);
+        const auto plain_w1 = std::find_if(plain_components.begin(),plain_components.end(),
+          [&](const hdstats_pc::component_score_t & c) { return c.panel=="W" && c.panel_pc==1; });
+        const auto sib_w1 = std::find_if(sib_components.begin(),sib_components.end(),
+          [&](const hdstats_pc::component_score_t & c) { return c.panel=="W" && c.panel_pc==1; });
+        score_flipped = score_flipped && plain_w1 != plain_components.end() && sib_w1 != sib_components.end() &&
+          sib_w1->id=="W_FLIPPED" && approx_equal(sib_w1->score,-plain_w1->score,1e-8);
+      }
+    record(R,"hdstats-pc/sibling-descriptor-auto-loaded",default_orientation && overlay_applied && score_flipped,
+           "default="+std::to_string(default_orientation)+" overlay="+std::to_string(overlay_applied)+
+           " flipped="+std::to_string(score_flipped),V);
+
+    // A malformed sibling is an error, not a silently-ignored one: read()
+    // must fail rather than project with the wrong (default) sign.
+    const std::string bad_file = fit(".bad");
+    const std::string bad_model_id = bad_file.substr(bad_file.find_last_of('/')+1);
+    const std::string bad_desc_file = bad_file.substr(0,bad_file.size()-5)+".desc.json";
+    write_file(bad_desc_file,
+      "{\"format\":\"luna-hdstats-pc-desc\",\"version\":1,"
+      "\"model\":{\"model_id\":\""+bad_model_id+"\"},"
+      "\"components\":[{\"key\":\"W/1\",\"id\":\"W_FLIPPED\",\"label\":\"bad\",\"orientation\":2,\"description\":\"\"}]}");
+    hdstats_model::model_t bad_model;
+    const bool malformed_rejected = ! hdstats_model::read(bad_file,&bad_model,&error);
+    record(R,"hdstats-pc/sibling-descriptor-malformed-rejected",malformed_rejected,error,V);
+
+  } catch(std::exception & e) {
+    record(R,"hdstats-pc/sibling-descriptor",false,e.what(),V);
+  }
+}
+
 // Main entry point
 // ============================================================
 
@@ -6403,6 +6886,9 @@ void proc_tests( const std::string & group, const bool verbose )
   RUN("plm",      test_plm)
   RUN("sigdyn",   test_sigdyn)
   RUN("hdstats-ultradian", test_hdstats_ultradian)
+  RUN("hdstats-pc-rotation", test_hdstats_pc_rotation)
+  RUN("hdstats-pc-post-rotation-selection", test_hdstats_pc_post_rotation_selection)
+  RUN("hdstats-pc-sibling-descriptor", test_hdstats_pc_sibling_descriptor)
   RUN("pops-calibration", test_pops_calibration)
 #ifdef HAS_LGBM
   RUN("pops-weights", test_pops_posterior_weights)

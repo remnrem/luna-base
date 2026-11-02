@@ -118,13 +118,10 @@ luna: main.o $(OBJS)
 -include $(DEPS)
 -include utils/reader2.d
 
-pops/hdstats-pc-schema.h: docs/hdstats/hdstats.pc scripts/generate_hdstats_pc_schema.py
-	python3 scripts/generate_hdstats_pc_schema.py $< $@
+.PHONY: hdstats-pc-schema
 
-docs/hdstats/hdstats-pc-v1-canonical.json: docs/hdstats/hdstats.pc scripts/generate_hdstats_pc_schema.py
-	python3 scripts/generate_hdstats_pc_schema.py $< --json-output $@
-
-pops/hdstats-pc.o: pops/hdstats-pc-schema.h
+hdstats-pc-schema:
+	python3 scripts/generate_hdstats_pc_schema.py docs/hdstats/hdstats-pc.spec.json pops/hdstats-pc-schema.h
 
 ifeq ($(ARCH),MAC)
 $(SHARED_LIB): $(OBJS)
