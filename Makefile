@@ -115,7 +115,7 @@ luna: main.o $(OBJS)
 	$(CXX) -o $@ $^ $(DEP_LIB) $(LDFLAGS)
 
 # Auto-generated header dependency files produced by `-MMD -MP`.
--include $(DEPS)
+-include main.d $(DEPS)
 -include utils/reader2.d
 
 .PHONY: hdstats-pc-schema
@@ -199,6 +199,6 @@ test-destrat2: test-destrat
 
 clean:
 	-$(RM) $(TARGETS) destrat2 regional tocol cgi-mapper dmerge simassoc \
-		libluna.dylib libluna.so libluna.a luna-static main.o \
+		libluna.dylib libluna.so libluna.a luna-static main.o main.d \
 		$(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))
 	-$(RM) utils/*.o utils/*.d utils/*~

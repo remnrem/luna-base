@@ -1322,7 +1322,10 @@ std::string pops_t::resolve_coda_model_file( const param_t & param ,
   if ( param.has( "coda" ) && !param.empty( "coda" ) )
     return update_filepath( param.value( "coda" ) );
 
-  const std::string coda_tag = pops_opt_t::resolution_is_5s() ? "coda5" : "coda30";
+  // only 30s-trained CODA models exist/are supported for auto-resolution
+  // (used for both resolution=30 and resolution=5, the latter applying the
+  // 30s model once per 5s stride -- see hypnodensity.cpp)
+  const std::string coda_tag = "coda30";
 
   if ( pops_opt_t::pops_root != "" )
     return update_filepath( pops_opt_t::pops_root + "." + coda_tag + ".mod" );

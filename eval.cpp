@@ -7562,11 +7562,53 @@ void proc_has_signals( edf_t & edf , param_t & param )
   //    - or set a variable
 
   const bool skip = param.has( "skip" ) || param.has( "skip-if-none" ) ;
-  
+
   const bool skip_if_none = param.has( "skip-if-none" );
-   
+
+  //
+  // basic sanity checks: any epochs / any channels left at all?
+  // (e.g. to catch an EDF that masking/restructuring or a prior
+  // SIGNALS has reduced to nothing, before a later command such as
+  // WRITE halts on it)
+  //
+
+  if ( param.has( "epochs" ) || param.has( "channels" ) )
+    {
+      bool okay = true;
+
+      if ( param.has( "epochs" ) )
+	{
+	  const int ne = edf.timeline.num_epochs();
+	  writer.value( "NE" , ne );
+	  if ( ne == 0 ) okay = false;
+	}
+
+      if ( param.has( "channels" ) )
+	{
+	  writer.value( "NS_TOT" , edf.header.ns );
+	  if ( edf.header.ns == 0 ) okay = false;
+	}
+
+      if ( ! okay )
+	{
+	  if ( skip )
+	    {
+	      globals::problem = true;
+	      return;
+	    }
+
+	  globals::retcode = 2;
+	}
+
+      // if that is all that was requested (no stages/annots/sig check
+      // also given -- note 'sig' always defaults to "*", so test for an
+      // explicit, non-default value, not mere presence), we are done
+      if ( ! ( param.has( "stages" ) || param.has( "annots" ) || param.has( "annot" ) || param.value( "sig" ) != "*" ) )
+	return;
+    }
+
   // check this EDF has the signals OR annots OR stage information
-  
+
   const bool check_stages = param.has( "stages" );
 
   const bool check_annots = param.has( "annots" ) || param.has( "annot" );

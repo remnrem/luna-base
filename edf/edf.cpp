@@ -4345,48 +4345,116 @@ signal_list_t edf_header_t::signal_list( const std::string & s ,
   
   if ( s == "*" )
     {
+      // Pass 1: work out what each channel's label *would become* after
+      // alias substitution, without yet mutating header state.  Aliasing
+      // can map two originally-distinct channels onto the same primary
+      // label (or map one channel onto a primary that another channel
+      // already natively bears), so we cannot safely commit each swap as
+      // we go -- a later-processed channel might turn out to collide with
+      // one we already wrote.
+
+      std::vector<int> idx;
+      std::vector<std::string> newlabel;   // primary name, pre-uniquification
+      std::vector<std::string> origlabel;  // label before any swap (for aliasing[] bookkeeping)
+      std::vector<bool> did_alias;
+
       for (int s=0;s<label.size();s++)
 	{
-	  
+
 	  // ? only consider data tracks
-	  
-	  if ( no_annotation_channels  && 
+
+	  if ( no_annotation_channels  &&
 	       is_annotation_channel( s ) ) continue;
-	  
+
 	  std::string lb = label[s];
-	  
+	  const std::string orig_lb = lb;
+
 	  std::string uppercase_lb = Helper::toupper( lb );
 	  //	  std::cout << " search uppercase_lb [ " << uppercase_lb << " | lb = " << lb << "\n" ;
-	  
+
+	  bool aliased = false;
+
 	  // swap in alias? [ aliases are always stored as UPPERCASE ]
-	  if ( cmd_t::label_aliases.find( uppercase_lb ) != cmd_t::label_aliases.end() ) 
+	  if ( cmd_t::label_aliases.find( uppercase_lb ) != cmd_t::label_aliases.end() )
 	    {
-	      // track
-	      aliasing[ cmd_t::label_aliases[ uppercase_lb ] ] = lb;
-	      
 	      // swap in the primary
-	      //std::cout << " setting " << uppercase_lb << " " << lb << " " << cmd_t::label_aliases[ uppercase_lb ] << "\n";
 	      lb = cmd_t::label_aliases[ uppercase_lb ];
-	      label2header[ Helper::toupper( lb ) ] = s;
-	      label[s] = lb;
-	      
+	      aliased = true;
 	    }
 
 	  // special case, if matches the primary but is of different case ( and not retaining case of query)
 	  if ( ! globals::retain_alias_case )
-	    {	      
+	    {
 	      if ( cmd_t::primary_upper2orig.find( uppercase_lb ) != cmd_t::primary_upper2orig.end() )
 		{
 		  if ( cmd_t::primary_upper2orig[ uppercase_lb ] != lb ) // case mismatch?
 		    {
-		      aliasing[ cmd_t::primary_upper2orig[ uppercase_lb ] ] = lb;
 		      lb = cmd_t::primary_upper2orig[ uppercase_lb ];
-		      label2header[ Helper::toupper( lb ) ] = s;
-		      label[s] = lb;
+		      aliased = true;
 		    }
 		}
 	    }
-	  
+
+	  idx.push_back( s );
+	  newlabel.push_back( lb );
+	  origlabel.push_back( orig_lb );
+	  did_alias.push_back( aliased );
+	}
+
+      // Pass 2: commit labels, uniquifying any alias-induced collision
+      // exactly as genuine duplicate labels are uniquified when an EDF
+      // header is first read (e.g. "C3_M2", "C3_M2.1", ... -- see the
+      // uniquification loop above).  Channels that are *not* being
+      // aliased (i.e. already natively named this way) are committed
+      // first, in index order, so a channel that already, natively,
+      // bears a given name always keeps it as-is: only the channel(s)
+      // being aliased onto that name can be bumped to a ".1", ".2", ...
+      // suffix.  Only among several channels that all arrive at the same
+      // label purely via aliasing does plain index order decide which
+      // keeps the unsuffixed name.
+
+      std::set<std::string> seen;
+      for ( int phase = 0 ; phase < 2 ; ++phase )
+      for (size_t i=0; i<idx.size(); i++)
+	{
+	  // phase 0: commit non-aliased (native) labels; phase 1: aliased ones
+	  if ( did_alias[i] != (bool)phase ) continue;
+
+	  const int s = idx[i];
+	  std::string lb = newlabel[i];
+	  std::string uc_l = Helper::toupper( lb );
+
+	  if ( did_alias[i] )
+	    aliasing[ lb ] = origlabel[i];
+
+	  if ( seen.find( uc_l ) != seen.end() )
+	    {
+	      int inc = 1;
+	      while ( 1 )
+		{
+		  const std::string cand_uc = uc_l + "." + Helper::int2str( inc );
+		  if ( seen.find( cand_uc ) == seen.end() )
+		    {
+		      if ( ! globals::validation_mode )
+			logger << " uniquifying " << lb;
+
+		      lb = lb + "." + Helper::int2str( inc );
+		      uc_l = cand_uc;
+
+		      if ( ! globals::validation_mode )
+			logger << " to " << lb << "\n";
+
+		      break;
+		    }
+		  else
+		    ++inc;
+		}
+	    }
+
+	  seen.insert( uc_l );
+	  label2header[ uc_l ] = s;
+	  label[s] = lb;
+
 	  r.add( s, lb );
 	}
     }

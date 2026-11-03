@@ -966,9 +966,11 @@ void pops_hypnodensity( edf_t & edf , param_t & param , const pops_indiv_t * bas
 
 
   //
-  // If a 5-second CODA model was applied, back-project the final 5-second posterior
-  // stream to one posterior per original 30-second epoch by averaging each block of
-  // N stride rows, then score that against the original observed 30-second staging.
+  // If a CODA model was applied -- whether rescoring each 30 s stride
+  // (coda_rescore_per_stride) or the final 5 s stream (coda_rescore_final_5s) --
+  // back-project the resulting posterior stream to one posterior per original
+  // 30-second epoch by averaging each block of N stride rows, then score that
+  // against the original observed 30-second staging.
   //
 
   if ( coda != NULL &&

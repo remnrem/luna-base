@@ -299,6 +299,8 @@ void cmddefs_t::init()
   add_param( "CONTAINS" , "annot" , "apnea,hypopnea" , "Test for these annotations" );
   add_param( "CONTAINS" , "annots" , "apnea,hypopnea" , "Test for these annotations" );
   add_param( "CONTAINS" , "stages" , "" , "Test for valid staging" );
+  add_param( "CONTAINS" , "epochs" , "" , "Test that at least one epoch is present" );
+  add_param( "CONTAINS" , "channels" , "" , "Test that at least one channel is present" );
   add_param( "CONTAINS" , "var" , "HAS_SIGS" , "Set this variable to T/F instead of using the return code" );
   add_param( "CONTAINS" , "skip" , "" , "Skip to next EDF on failure" );
   add_param( "CONTAINS" , "skip-if-none" , "" , "Skip only if none of the requested signals are present" );
@@ -314,6 +316,7 @@ void cmddefs_t::init()
   add_var( "CONTAINS" , "" , "NS_OBS" , "Number of observed channels" );
   add_var( "CONTAINS" , "" , "NS_REQ" , "Number of required channels" );
   add_var( "CONTAINS" , "" , "NS_TOT" , "Total number of channels" );
+  add_var( "CONTAINS" , "" , "NE" , "Total number of epochs" );
 
   add_table( "CONTAINS" , "ANNOT" , "Annotation information" );
   add_var( "CONTAINS" , "ANNOT" , "PRESENT" , "Annotation present" );
