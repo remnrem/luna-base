@@ -30,6 +30,8 @@
 #include "clocs/clocs.h"
 #include "miscmath/crandom.h"
 
+#include <limits>
+
 extern writer_t writer;
 extern logger_t logger;
 
@@ -1052,7 +1054,7 @@ void cpt_wrapper( param_t & param )
 
   logger << "  running permutations, assuming a " << ( one_sided_test ? "one" : "two" ) << "-sided test...\n";
   
-  cpt_results_t results = cpt.run( nreps , cl_threshold , ! one_sided_test , verbose );
+  cpt_results_t results = cpt.run( nreps , no_clustering ? -1 : cl_threshold , ! one_sided_test , verbose );
 
   logger << "  all done.\n";
   
@@ -1308,7 +1310,7 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 	  std::map<std::string,double>::const_iterator tt = t2num.find( ff->first );
           bool time_adjacent = false;
           if      ( time[i] <= -998 && tt->second <= -998 ) time_adjacent = true;  // if F not defined, then they are 'adjacent'
-          else if ( freq[i] <= -998 != tt->second <= -998 ) time_adjacent = false; // but both variables must be freq agnostic
+          else if ( time[i] <= -998 != tt->second <= -998 ) time_adjacent = false; // but both variables must be time agnostic
           else if ( fabs( time[i]  - tt->second ) <= tth ) time_adjacent = true;
 	  
 	  if ( freq_adjacent && time_adjacent )
@@ -1377,7 +1379,7 @@ void cpt_t::calc_adjacencies( const std::vector<std::string> & vname_ ,
 			      //  either A1/A2 AND B1/B2 must match
 			      //      OR A1/B2 AND A2/B1
 
-			      if ( ( d11 < sth && d22 < sth ) || ( d12 < sth || d21 < sth ) ) 
+			      if ( ( d11 < sth && d22 < sth ) || ( d12 < sth && d21 < sth ) )
 				spatial_adjacent = true;
 			    }
 			}
@@ -1532,6 +1534,10 @@ cpt_results_t cpt_t::run( int nreps , double cl_threshold , bool two_sided_test 
   // family-wise
   Eigen::ArrayXd F = Eigen::ArrayXd::Ones( ny );  
 
+  // one-sided tests (B > 0) compare signed statistics
+  Eigen::ArrayXd Tobs = T.array();
+  if ( two_sided_test ) Tobs = Tobs.abs();
+
   logger << "  ";
   for (int r=0; r<nreps; r++)
     {
@@ -1560,16 +1566,16 @@ cpt_results_t cpt_t::run( int nreps , double cl_threshold , bool two_sided_test 
       Eigen::VectorXd T_perm = get_tstats( B_perm.row(idx) , Yres_perm , VX(idx,idx) , ni - nterms );
       
       // accumulate
-      double max_t = 0;
+      double max_t = -std::numeric_limits<double>::max();
       for (int y=0; y<ny; y++)
 	{
-	  double abs_t = fabs( T_perm[y] );
-	  if ( abs_t >= fabs( T[y] ) ) ++U[y];
-	  if ( abs_t > max_t ) max_t = abs_t ;
+	  const double t = two_sided_test ? fabs( T_perm[y] ) : T_perm[y];
+	  if ( t >= Tobs[y] ) ++U[y];
+	  if ( t > max_t ) max_t = t ;
 	}
       
       for (int y=0; y<ny; y++)
-	if ( max_t >= fabs( T[y] ) ) ++F[y];
+	if ( max_t >= Tobs[y] ) ++F[y];
 
 
       //
@@ -1688,7 +1694,7 @@ Eigen::VectorXd cpt_t::get_tstats( const Eigen::VectorXd & B ,
 //
 
 struct cpt_sorter_t {
-  cpt_sorter_t( double s , int v ) : stat( fabs(s) ) , v(v) { } 
+  cpt_sorter_t( double s , int v ) : stat( s ) , v(v) { }
   double stat;
   int v;
   bool operator< ( const cpt_sorter_t & rhs ) const
@@ -1714,12 +1720,14 @@ cpt_clusters_t::cpt_clusters_t( const Eigen::VectorXd & T ,
   // no clustering if threhsold is neg.
   if ( threshold < 0 ) return;
 
-  // get ordered statstics
+  // get ordered statstics (signed if one-sided, i.e. only B > 0 forms clusters)
+
+  auto st = [two_sided]( double t ) { return two_sided ? fabs( t ) : t; };
   
   std::set<cpt_sorter_t> o;
   const int n = T.size();
   for (int i=0; i<n; i++)
-    o.insert( cpt_sorter_t( T[i] , i ) );
+    o.insert( cpt_sorter_t( st( T[i] ) , i ) );
 
   // start looking through 
   std::set<cpt_sorter_t>::const_iterator oo = o.begin();
@@ -1769,7 +1777,7 @@ cpt_clusters_t::cpt_clusters_t( const Eigen::VectorXd & T ,
 		  if ( verbose ) std::cout << "     -- " << (*labels)[ *ff ] << " ";
 		  
 		  if ( clustered.find( *ff ) == clustered.end() &&
-		       fabs( T[ *ff ] ) >= threshold )
+		       st( T[ *ff ] ) >= threshold )
 		    {
 		      
 		      if ( verbose ) std::cout << " above threshold ";
@@ -1789,7 +1797,7 @@ cpt_clusters_t::cpt_clusters_t( const Eigen::VectorXd & T ,
 			    {
 			      if ( clustered.find( *nn ) == clustered.end() )
 				{
-				  bool above_threshold = fabs( T[ *nn ] ) >= threshold ;
+				  bool above_threshold = st( T[ *nn ] ) >= threshold ;
 				  bool direction = (!two_sided) || ( T[ *nn ] <= 0 == T[ cluster.seed ] <= 0 );
 				  if ( above_threshold && direction ) 
 				    newfriends.insert( *nn );
