@@ -77,7 +77,13 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          install: zip mingw-w64-x86_64-cmake git gcc mingw-w64-x86_64-toolchain mingw-w64-x86_64-zlib mingw-w64-x86_64-fftw
+          install: zip mingw-w64-x86_64-cmake git mingw-w64-x86_64-gcc mingw-w64-x86_64-make mingw-w64-x86_64-toolchain mingw-w64-x86_64-zlib mingw-w64-x86_64-fftw
+      - name: Verify Windows toolchain
+        run: |
+          /mingw64/bin/cmake.exe --version
+          /mingw64/bin/mingw32-make.exe --version
+          /mingw64/bin/gcc.exe --version
+          /mingw64/bin/g++.exe --version
       - name: Cache native deps
         id: cache-native
         uses: actions/cache@v5
