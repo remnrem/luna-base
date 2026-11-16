@@ -63,7 +63,7 @@
     {
       "id": "HD_DENS.NSS_5.MIX_W_N1",
       "label": "W/N1 ambiguity density",
-      "description": "Expected time jointly ambiguous across W/N1, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across W/N1, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_5.MIX_W_N2",
@@ -73,7 +73,7 @@
     {
       "id": "HD_DENS.NSS_5.MIX_W_N2",
       "label": "W/N2 ambiguity density",
-      "description": "Expected time jointly ambiguous across W/N2, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across W/N2, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_5.MIX_W_N3",
@@ -83,7 +83,7 @@
     {
       "id": "HD_DENS.NSS_5.MIX_W_N3",
       "label": "W/N3 ambiguity density",
-      "description": "Expected time jointly ambiguous across W/N3, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across W/N3, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_5.MIX_W_R",
@@ -93,7 +93,7 @@
     {
       "id": "HD_DENS.NSS_5.MIX_W_R",
       "label": "W/R ambiguity density",
-      "description": "Expected time jointly ambiguous across W/R, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across W/R, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_5.MIX_N1_N2",
@@ -103,7 +103,7 @@
     {
       "id": "HD_DENS.NSS_5.MIX_N1_N2",
       "label": "N1/N2 ambiguity density",
-      "description": "Expected time jointly ambiguous across N1/N2, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across N1/N2, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_5.MIX_N1_N3",
@@ -113,7 +113,7 @@
     {
       "id": "HD_DENS.NSS_5.MIX_N1_N3",
       "label": "N1/N3 ambiguity density",
-      "description": "Expected time jointly ambiguous across N1/N3, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across N1/N3, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_5.MIX_N1_R",
@@ -123,7 +123,7 @@
     {
       "id": "HD_DENS.NSS_5.MIX_N1_R",
       "label": "N1/R ambiguity density",
-      "description": "Expected time jointly ambiguous across N1/R, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across N1/R, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_5.MIX_N2_N3",
@@ -133,7 +133,7 @@
     {
       "id": "HD_DENS.NSS_5.MIX_N2_N3",
       "label": "N2/N3 ambiguity density",
-      "description": "Expected time jointly ambiguous across N2/N3, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across N2/N3, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_5.MIX_N2_R",
@@ -143,7 +143,7 @@
     {
       "id": "HD_DENS.NSS_5.MIX_N2_R",
       "label": "N2/R ambiguity density",
-      "description": "Expected time jointly ambiguous across N2/R, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across N2/R, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_5.MIX_N3_R",
@@ -153,7 +153,7 @@
     {
       "id": "HD_DENS.NSS_5.MIX_N3_R",
       "label": "N3/R ambiguity density",
-      "description": "Expected time jointly ambiguous across N3/R, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across N3/R, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_5.MIX_W_N1_R",
@@ -163,7 +163,7 @@
     {
       "id": "HD_DENS.NSS_5.MIX_W_N1_R",
       "label": "W/N1/R ambiguity density",
-      "description": "Expected time jointly ambiguous across W/N1/R, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across W/N1/R, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_3.MIX_W_NR",
@@ -173,7 +173,7 @@
     {
       "id": "HD_DENS.NSS_3.MIX_W_NR",
       "label": "W/NR ambiguity density",
-      "description": "Expected time jointly ambiguous across W/NR, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across W/NR, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_3.MIX_NR_R",
@@ -183,7 +183,7 @@
     {
       "id": "HD_DENS.NSS_3.MIX_NR_R",
       "label": "NR/R ambiguity density",
-      "description": "Expected time jointly ambiguous across NR/R, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across NR/R, as a proportion of physical analysis-window duration"
     },
     {
       "id": "HD_MINS.NSS_3.MIX_W_NR_R",
@@ -193,7 +193,7 @@
     {
       "id": "HD_DENS.NSS_3.MIX_W_NR_R",
       "label": "W/NR/R ambiguity density",
-      "description": "Expected time jointly ambiguous across W/NR/R, as a proportion of SPT"
+      "description": "Expected time jointly ambiguous across W/NR/R, as a proportion of physical analysis-window duration"
     },
     {
       "id": "PS.NSS_5",
@@ -1118,17 +1118,17 @@
     {
       "id": "HD_MINS.SS_W",
       "label": "W minutes",
-      "description": "Expected W duration from posterior mass (minutes)"
+      "description": "Expected wake duration from posterior mass across the analysis window (minutes)"
     },
     {
       "id": "HD_PCT.SS_W",
       "label": "W %",
-      "description": "Hypnodensity percentage (scored W)"
+      "description": "Expected wake duration across the analysis window as a percentage of physical analysis-window duration"
     },
     {
       "id": "HD_DENS.SS_W",
       "label": "W Posterior density",
-      "description": "Soft posterior posterior density for W"
+      "description": "Expected wake duration across the analysis window divided by physical analysis-window duration"
     },
     {
       "id": "P_W.SS_W.NSS_3",
@@ -1283,7 +1283,7 @@
     {
       "id": "HD_DENS.SS_N1",
       "label": "N1 density",
-      "description": "Expected N1 duration as a proportion of SPT"
+      "description": "Expected N1 duration as a proportion of physical analysis-window duration"
     },
     {
       "id": "ACF.SS_N1.NSS_5.LRLAG_600",
@@ -1358,7 +1358,7 @@
     {
       "id": "HD_DENS.SS_N2",
       "label": "N2 density",
-      "description": "Expected N2 duration as a proportion of SPT"
+      "description": "Expected N2 duration as a proportion of physical analysis-window duration"
     },
     {
       "id": "P_W.SS_N2.NSS_5",
@@ -1503,7 +1503,7 @@
     {
       "id": "HD_DENS.SS_N3",
       "label": "N3 density",
-      "description": "Expected N3 duration as a proportion of SPT"
+      "description": "Expected N3 duration as a proportion of physical analysis-window duration"
     },
     {
       "id": "P_W.SS_N3.NSS_5",
@@ -1648,7 +1648,7 @@
     {
       "id": "HD_DENS.SS_R",
       "label": "R density",
-      "description": "Expected R duration as a proportion of SPT"
+      "description": "Expected R duration as a proportion of physical analysis-window duration"
     },
     {
       "id": "P_W.SS_R.NSS_3",
@@ -1969,6 +1969,301 @@
       "id": "NREM_COM_N2_MINUS_N3",
       "label": "N2 minus N3 timing",
       "description": "Difference in center-of-mass timing: N2 minus N3"
+    },
+    {
+      "id": "BOUT_DENS.NSS_5.BOUT_WASO",
+      "label": "WASO bout density",
+      "description": "Qualifying wake bouts within the sleep period, per hour of valid context observations (5-stage)"
+    },
+    {
+      "id": "BOUT_PCT.NSS_5.BOUT_WASO",
+      "label": "WASO time in bouts",
+      "description": "Percentage covered by qualifying bouts: full bout duration divided by the union of dominant-stage time and full qualifying bout spans, including absorbed deviations and invalid gaps; wake-zone bouts assigned whole."
+    },
+    {
+      "id": "BOUT_05.NSS_5.BOUT_WASO",
+      "label": "WASO in 5+ min bouts",
+      "description": "Minutes of within-sleep-period wake in bouts of at least 5 minutes (5-stage)"
+    },
+    {
+      "id": "BOUT_10.NSS_5.BOUT_WASO",
+      "label": "WASO in 10+ min bouts",
+      "description": "Minutes of within-sleep-period wake in bouts of at least 10 minutes (5-stage)"
+    },
+    {
+      "id": "BOUT_DENS.NSS_5.BOUT_N1",
+      "label": "N1 bout density",
+      "description": "Qualifying N1 bouts per hour of valid context observations (5-stage)"
+    },
+    {
+      "id": "BOUT_PCT.NSS_5.BOUT_N1",
+      "label": "N1 time in bouts",
+      "description": "Percentage covered by qualifying bouts: full bout duration divided by the union of dominant-stage time and full qualifying bout spans, including absorbed deviations and invalid gaps; wake-zone bouts assigned whole."
+    },
+    {
+      "id": "BOUT_05.NSS_5.BOUT_N1",
+      "label": "N1 in 5+ min bouts",
+      "description": "Minutes of N1 in bouts of at least 5 minutes (5-stage)"
+    },
+    {
+      "id": "BOUT_DENS.NSS_5.BOUT_N2",
+      "label": "N2 bout density",
+      "description": "Qualifying N2 bouts per hour of valid context observations (5-stage)"
+    },
+    {
+      "id": "BOUT_PCT.NSS_5.BOUT_N2",
+      "label": "N2 time in bouts",
+      "description": "Percentage covered by qualifying bouts: full bout duration divided by the union of dominant-stage time and full qualifying bout spans, including absorbed deviations and invalid gaps; wake-zone bouts assigned whole."
+    },
+    {
+      "id": "BOUT_05.NSS_5.BOUT_N2",
+      "label": "N2 in 5+ min bouts",
+      "description": "Minutes of N2 in bouts of at least 5 minutes (5-stage)"
+    },
+    {
+      "id": "BOUT_10.NSS_5.BOUT_N2",
+      "label": "N2 in 10+ min bouts",
+      "description": "Minutes of N2 in bouts of at least 10 minutes (5-stage)"
+    },
+    {
+      "id": "BOUT_DENS.NSS_5.BOUT_N3",
+      "label": "N3 bout density",
+      "description": "Qualifying N3 bouts per hour of valid context observations (5-stage)"
+    },
+    {
+      "id": "BOUT_PCT.NSS_5.BOUT_N3",
+      "label": "N3 time in bouts",
+      "description": "Percentage covered by qualifying bouts: full bout duration divided by the union of dominant-stage time and full qualifying bout spans, including absorbed deviations and invalid gaps; wake-zone bouts assigned whole."
+    },
+    {
+      "id": "BOUT_05.NSS_5.BOUT_N3",
+      "label": "N3 in 5+ min bouts",
+      "description": "Minutes of N3 in bouts of at least 5 minutes (5-stage)"
+    },
+    {
+      "id": "BOUT_10.NSS_5.BOUT_N3",
+      "label": "N3 in 10+ min bouts",
+      "description": "Minutes of N3 in bouts of at least 10 minutes (5-stage)"
+    },
+    {
+      "id": "BOUT_DENS.NSS_5.BOUT_R",
+      "label": "REM bout density",
+      "description": "Qualifying REM bouts per hour of valid context observations (5-stage)"
+    },
+    {
+      "id": "BOUT_PCT.NSS_5.BOUT_R",
+      "label": "REM time in bouts",
+      "description": "Percentage covered by qualifying bouts: full bout duration divided by the union of dominant-stage time and full qualifying bout spans, including absorbed deviations and invalid gaps; wake-zone bouts assigned whole."
+    },
+    {
+      "id": "BOUT_05.NSS_5.BOUT_R",
+      "label": "REM in 5+ min bouts",
+      "description": "Minutes of REM in bouts of at least 5 minutes (5-stage)"
+    },
+    {
+      "id": "BOUT_10.NSS_5.BOUT_R",
+      "label": "REM in 10+ min bouts",
+      "description": "Minutes of REM in bouts of at least 10 minutes (5-stage)"
+    },
+    {
+      "id": "BOUT_DENS.NSS_3.BOUT_NR",
+      "label": "NREM bout density",
+      "description": "Qualifying NREM bouts per hour of valid context observations (3-stage)"
+    },
+    {
+      "id": "BOUT_PCT.NSS_3.BOUT_NR",
+      "label": "NREM time in bouts",
+      "description": "Percentage covered by qualifying bouts: full bout duration divided by the union of dominant-stage time and full qualifying bout spans, including absorbed deviations and invalid gaps; wake-zone bouts assigned whole."
+    },
+    {
+      "id": "BOUT_05.NSS_3.BOUT_NR",
+      "label": "NREM in 5+ min bouts",
+      "description": "Minutes of NREM in bouts of at least 5 minutes (3-stage)"
+    },
+    {
+      "id": "BOUT_10.NSS_3.BOUT_NR",
+      "label": "NREM in 10+ min bouts",
+      "description": "Minutes of NREM in bouts of at least 10 minutes (3-stage)"
+    },
+    {
+      "id": "SLOPE.NSS_3.VAR_WASO",
+      "label": "P(WASO) slope",
+      "description": "Within the SPT: Overnight slope (3-stage; W variability)"
+    },
+    {
+      "id": "HD_MINS.SS_WASO",
+      "label": "WASO minutes",
+      "description": "Expected wake duration from posterior mass within the SPT (minutes)"
+    },
+    {
+      "id": "HD_PCT.SS_WASO",
+      "label": "WASO %",
+      "description": "Expected wake duration within the SPT as a percentage of physical analysis-window duration"
+    },
+    {
+      "id": "HD_DENS.SS_WASO",
+      "label": "WASO Posterior density",
+      "description": "Expected wake duration within the SPT divided by physical analysis-window duration"
+    },
+    {
+      "id": "P_W.SS_WASO.NSS_3",
+      "label": "WASO probability(WASO)",
+      "description": "Within the SPT: Wake posterior probability (scored W; 3-stage)"
+    },
+    {
+      "id": "P_NR.SS_WASO.NSS_3",
+      "label": "NREM probability(WASO)",
+      "description": "Within the SPT: NREM posterior probability (scored W; 3-stage)"
+    },
+    {
+      "id": "P_R.SS_WASO.NSS_3",
+      "label": "REM probability(WASO)",
+      "description": "Within the SPT: REM posterior probability (scored W; 3-stage)"
+    },
+    {
+      "id": "CONF.SS_WASO.NSS_3",
+      "label": "Confidence",
+      "description": "Within the SPT: Confidence for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "H.SS_WASO.NSS_3",
+      "label": "Entropy",
+      "description": "Within the SPT: Entropy for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "H_P90.SS_WASO.NSS_3",
+      "label": "Entropy p90",
+      "description": "Within the SPT: Entropy p90 for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "MG.SS_WASO.NSS_3",
+      "label": "Margin",
+      "description": "Within the SPT: Margin for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "FRAC_LOW_CONF.SS_WASO.NSS_3",
+      "label": "Low confidence",
+      "description": "Within the SPT: Low confidence for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "PS.SS_WASO.NSS_3",
+      "label": "PS(WASO)",
+      "description": "Within the SPT: Posterior shift (scored W; 3-stage)"
+    },
+    {
+      "id": "PS_P90.SS_WASO.NSS_3",
+      "label": "PS p90",
+      "description": "Within the SPT: PS p90 for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "PS_LAG.SS_WASO.NSS_3",
+      "label": "PS lag",
+      "description": "Within the SPT: PS lag for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "CORR_H_PS.SS_WASO.NSS_3",
+      "label": "Entropy-PS correlation",
+      "description": "Within the SPT: Entropy-PS correlation for hard-called W epochs (3-state)"
+    },
+    {
+      "id": "PCT_STABLE.SS_WASO.NSS_3",
+      "label": "Stable %",
+      "description": "Within the SPT: Stable % for hard-called W epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "H_RATIO_UN_ST.SS_WASO.NSS_3",
+      "label": "Entropy ratio (U/S)",
+      "description": "Within the SPT: Entropy ratio (U/S) for hard-called W epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "CONF_DIFF_UN_ST.SS_WASO.NSS_3",
+      "label": "Confidence difference (U-S)",
+      "description": "Within the SPT: Confidence difference (U-S) for hard-called W epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "PS_RATIO_UN_ST.SS_WASO.NSS_3",
+      "label": "PS ratio (U/S)",
+      "description": "Within the SPT: PS ratio (U/S) for hard-called W epochs (3-state); stable/unstable classification at NSS=3"
+    },
+    {
+      "id": "ACF.SS_WASO.NSS_3.LRLAG_600",
+      "label": "ACF(WASO, 10min)",
+      "description": "Within the SPT: Autocorrelation (scored W; 3-stage; long-range lag 10 minutes)"
+    },
+    {
+      "id": "ACF.SS_WASO.NSS_3.LRLAG_1800",
+      "label": "ACF(WASO, 30min)",
+      "description": "Within the SPT: Autocorrelation (scored W; 3-stage; long-range lag 30 minutes)"
+    },
+    {
+      "id": "ACF.SS_WASO.NSS_3.LRLAG_3600",
+      "label": "ACF(WASO, 60min)",
+      "description": "Within the SPT: Autocorrelation (scored W; 3-stage; long-range lag 1 hour)"
+    },
+    {
+      "id": "ACF.SS_WASO.NSS_3.LRLAG_5400",
+      "label": "ACF(WASO, 90min)",
+      "description": "Within the SPT: Autocorrelation (scored W; 3-stage; long-range lag 90 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_3.VAR_WASO.LRWIN_1800",
+      "label": "P(WASO) within-block SD (30min)",
+      "description": "Within the SPT: Within-block standard deviation (3-stage; W variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "WITHIN_SD.NSS_3.VAR_WASO.LRWIN_3600",
+      "label": "P(WASO) within-block SD (60min)",
+      "description": "Within the SPT: Within-block standard deviation (3-stage; W variability; long-range window 1 hour)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_3.VAR_WASO.LRWIN_1800",
+      "label": "P(WASO) between-block SD (30min)",
+      "description": "Within the SPT: Between-block standard deviation (3-stage; W variability; long-range window 30 minutes)"
+    },
+    {
+      "id": "BETWEEN_SD.NSS_3.VAR_WASO.LRWIN_3600",
+      "label": "P(WASO) between-block SD (60min)",
+      "description": "Within the SPT: Between-block standard deviation (3-stage; W variability; long-range window 1 hour)"
+    },
+    {
+      "id": "COM.NSS_3.VAR_WASO",
+      "label": "WASO CoM",
+      "description": "Within the SPT: Centre of mass (3-stage; W variability)"
+    },
+    {
+      "id": "COM_M.NSS_3.VAR_WASO",
+      "label": "Centre of mass (min)",
+      "description": "Within the SPT: Centre of mass (min) of the soft W posterior trajectory (3-state)"
+    },
+    {
+      "id": "T50.NSS_3.VAR_WASO",
+      "label": "WASO T50",
+      "description": "Within the SPT: Median time (3-stage; W variability)"
+    },
+    {
+      "id": "T50_M.NSS_3.VAR_WASO",
+      "label": "T50 (min)",
+      "description": "Within the SPT: T50 (min) of the soft W posterior trajectory (3-state)"
+    },
+    {
+      "id": "BOUT_DENS.NSS_5.BOUT_W",
+      "label": "Wake bout density",
+      "description": "Qualifying wake bouts within the sleep period, per hour of valid context observations (5-stage)"
+    },
+    {
+      "id": "BOUT_PCT.NSS_5.BOUT_W",
+      "label": "Wake time in bouts",
+      "description": "Percentage covered by qualifying bouts: full bout duration divided by the union of dominant-stage time and full qualifying bout spans, including absorbed deviations and invalid gaps; wake-zone bouts assigned whole."
+    },
+    {
+      "id": "BOUT_05.NSS_5.BOUT_W",
+      "label": "Wake in 5+ min bouts",
+      "description": "Minutes of within-sleep-period wake in bouts of at least 5 minutes (5-stage)"
+    },
+    {
+      "id": "BOUT_10.NSS_5.BOUT_W",
+      "label": "Wake in 10+ min bouts",
+      "description": "Minutes of within-sleep-period wake in bouts of at least 10 minutes (5-stage)"
     }
   ],
   "component_selection": {
@@ -1977,10 +2272,11 @@
   },
   "weighting": {
     "method": "equal_component_variance",
-    "feature_multiplier": "1 / sqrt(G * p_g)",
+    "feature_multiplier": "sqrt(q_j / (G * sum(q within group))); q_j defaults to 1, with each W/WASO pair assigned 1/3 and 2/3",
     "scope": "within_panel",
     "score_normalization": "divide each fitted PC score by its training SD (singular_value / sqrt(n_fit - 1))",
-    "contract_status": "implemented by the HDSTATS-PC fitting and JSON projection code"
+    "contract_status": "implemented by the HDSTATS-PC fitting and JSON projection code",
+    "wake_pair_budget": "W and WASO remain in the same conceptual group. Each matched pair shares one original input slot: W=1/3, WASO=2/3 of its variance budget. Other inputs retain q=1. Group budgets remain equal, including ON_STAGE_TREND and BO_WAKE."
   },
   "derived_features": [
     {
@@ -2399,11 +2695,16 @@
           "id": "ON_STAGE_TREND",
           "features": [
             "SLOPE.NSS_3.VAR_W",
+            "SLOPE.NSS_3.VAR_WASO",
             "SLOPE.NSS_5.VAR_N1",
             "SLOPE.NSS_5.VAR_N2",
             "SLOPE.NSS_5.VAR_N3",
             "SLOPE.NSS_3.VAR_R"
-          ]
+          ],
+          "feature_variance_weights": {
+            "SLOPE.NSS_3.VAR_W": 0.3333333333333333,
+            "SLOPE.NSS_3.VAR_WASO": 0.6666666666666666
+          }
         }
       ]
     },
@@ -2415,53 +2716,157 @@
           "id": "W_AMOUNT",
           "features": [
             "HD_MINS.SS_W",
+            "HD_MINS.SS_WASO",
             "HD_PCT.SS_W",
-            "HD_DENS.SS_W"
-          ]
+            "HD_PCT.SS_WASO",
+            "HD_DENS.SS_W",
+            "HD_DENS.SS_WASO"
+          ],
+          "feature_variance_weights": {
+            "HD_MINS.SS_W": 0.3333333333333333,
+            "HD_MINS.SS_WASO": 0.6666666666666666,
+            "HD_PCT.SS_W": 0.3333333333333333,
+            "HD_PCT.SS_WASO": 0.6666666666666666,
+            "HD_DENS.SS_W": 0.3333333333333333,
+            "HD_DENS.SS_WASO": 0.6666666666666666
+          }
         },
         {
           "id": "W_PURITY",
           "features": [
             "P_W.SS_W.NSS_3",
+            "P_W.SS_WASO.NSS_3",
             "P_NR.SS_W.NSS_3",
+            "P_NR.SS_WASO.NSS_3",
             "P_R.SS_W.NSS_3",
+            "P_R.SS_WASO.NSS_3",
             "CONF.SS_W.NSS_3",
+            "CONF.SS_WASO.NSS_3",
             "H.SS_W.NSS_3",
+            "H.SS_WASO.NSS_3",
             "H_P90.SS_W.NSS_3",
+            "H_P90.SS_WASO.NSS_3",
             "MG.SS_W.NSS_3",
-            "FRAC_LOW_CONF.SS_W.NSS_3"
-          ]
+            "MG.SS_WASO.NSS_3",
+            "FRAC_LOW_CONF.SS_W.NSS_3",
+            "FRAC_LOW_CONF.SS_WASO.NSS_3"
+          ],
+          "feature_variance_weights": {
+            "P_W.SS_W.NSS_3": 0.3333333333333333,
+            "P_W.SS_WASO.NSS_3": 0.6666666666666666,
+            "P_NR.SS_W.NSS_3": 0.3333333333333333,
+            "P_NR.SS_WASO.NSS_3": 0.6666666666666666,
+            "P_R.SS_W.NSS_3": 0.3333333333333333,
+            "P_R.SS_WASO.NSS_3": 0.6666666666666666,
+            "CONF.SS_W.NSS_3": 0.3333333333333333,
+            "CONF.SS_WASO.NSS_3": 0.6666666666666666,
+            "H.SS_W.NSS_3": 0.3333333333333333,
+            "H.SS_WASO.NSS_3": 0.6666666666666666,
+            "H_P90.SS_W.NSS_3": 0.3333333333333333,
+            "H_P90.SS_WASO.NSS_3": 0.6666666666666666,
+            "MG.SS_W.NSS_3": 0.3333333333333333,
+            "MG.SS_WASO.NSS_3": 0.6666666666666666,
+            "FRAC_LOW_CONF.SS_W.NSS_3": 0.3333333333333333,
+            "FRAC_LOW_CONF.SS_WASO.NSS_3": 0.6666666666666666
+          }
         },
         {
           "id": "W_LOCAL_INSTABILITY",
           "features": [
             "PS.SS_W.NSS_3",
+            "PS.SS_WASO.NSS_3",
             "PS_P90.SS_W.NSS_3",
+            "PS_P90.SS_WASO.NSS_3",
             "PS_LAG.SS_W.NSS_3",
+            "PS_LAG.SS_WASO.NSS_3",
             "CORR_H_PS.SS_W.NSS_3",
+            "CORR_H_PS.SS_WASO.NSS_3",
             "PCT_STABLE.SS_W.NSS_3",
+            "PCT_STABLE.SS_WASO.NSS_3",
             "H_RATIO_UN_ST.SS_W.NSS_3",
+            "H_RATIO_UN_ST.SS_WASO.NSS_3",
             "CONF_DIFF_UN_ST.SS_W.NSS_3",
-            "PS_RATIO_UN_ST.SS_W.NSS_3"
-          ]
+            "CONF_DIFF_UN_ST.SS_WASO.NSS_3",
+            "PS_RATIO_UN_ST.SS_W.NSS_3",
+            "PS_RATIO_UN_ST.SS_WASO.NSS_3"
+          ],
+          "feature_variance_weights": {
+            "PS.SS_W.NSS_3": 0.3333333333333333,
+            "PS.SS_WASO.NSS_3": 0.6666666666666666,
+            "PS_P90.SS_W.NSS_3": 0.3333333333333333,
+            "PS_P90.SS_WASO.NSS_3": 0.6666666666666666,
+            "PS_LAG.SS_W.NSS_3": 0.3333333333333333,
+            "PS_LAG.SS_WASO.NSS_3": 0.6666666666666666,
+            "CORR_H_PS.SS_W.NSS_3": 0.3333333333333333,
+            "CORR_H_PS.SS_WASO.NSS_3": 0.6666666666666666,
+            "PCT_STABLE.SS_W.NSS_3": 0.3333333333333333,
+            "PCT_STABLE.SS_WASO.NSS_3": 0.6666666666666666,
+            "H_RATIO_UN_ST.SS_W.NSS_3": 0.3333333333333333,
+            "H_RATIO_UN_ST.SS_WASO.NSS_3": 0.6666666666666666,
+            "CONF_DIFF_UN_ST.SS_W.NSS_3": 0.3333333333333333,
+            "CONF_DIFF_UN_ST.SS_WASO.NSS_3": 0.6666666666666666,
+            "PS_RATIO_UN_ST.SS_W.NSS_3": 0.3333333333333333,
+            "PS_RATIO_UN_ST.SS_WASO.NSS_3": 0.6666666666666666
+          }
         },
         {
           "id": "W_LONG_RANGE_ORGANIZATION",
           "features": [
             "ACF.SS_W.NSS_3.LRLAG_600",
+            "ACF.SS_WASO.NSS_3.LRLAG_600",
             "ACF.SS_W.NSS_3.LRLAG_1800",
+            "ACF.SS_WASO.NSS_3.LRLAG_1800",
             "ACF.SS_W.NSS_3.LRLAG_3600",
+            "ACF.SS_WASO.NSS_3.LRLAG_3600",
             "ACF.SS_W.NSS_3.LRLAG_5400",
+            "ACF.SS_WASO.NSS_3.LRLAG_5400",
             "WITHIN_SD.NSS_3.VAR_W.LRWIN_1800",
+            "WITHIN_SD.NSS_3.VAR_WASO.LRWIN_1800",
             "WITHIN_SD.NSS_3.VAR_W.LRWIN_3600",
+            "WITHIN_SD.NSS_3.VAR_WASO.LRWIN_3600",
             "BETWEEN_SD.NSS_3.VAR_W.LRWIN_1800",
+            "BETWEEN_SD.NSS_3.VAR_WASO.LRWIN_1800",
             "BETWEEN_SD.NSS_3.VAR_W.LRWIN_3600",
+            "BETWEEN_SD.NSS_3.VAR_WASO.LRWIN_3600",
             "SLOPE.NSS_3.VAR_W",
+            "SLOPE.NSS_3.VAR_WASO",
             "COM.NSS_3.VAR_W",
+            "COM.NSS_3.VAR_WASO",
             "COM_M.NSS_3.VAR_W",
+            "COM_M.NSS_3.VAR_WASO",
             "T50.NSS_3.VAR_W",
-            "T50_M.NSS_3.VAR_W"
-          ]
+            "T50.NSS_3.VAR_WASO",
+            "T50_M.NSS_3.VAR_W",
+            "T50_M.NSS_3.VAR_WASO"
+          ],
+          "feature_variance_weights": {
+            "ACF.SS_W.NSS_3.LRLAG_600": 0.3333333333333333,
+            "ACF.SS_WASO.NSS_3.LRLAG_600": 0.6666666666666666,
+            "ACF.SS_W.NSS_3.LRLAG_1800": 0.3333333333333333,
+            "ACF.SS_WASO.NSS_3.LRLAG_1800": 0.6666666666666666,
+            "ACF.SS_W.NSS_3.LRLAG_3600": 0.3333333333333333,
+            "ACF.SS_WASO.NSS_3.LRLAG_3600": 0.6666666666666666,
+            "ACF.SS_W.NSS_3.LRLAG_5400": 0.3333333333333333,
+            "ACF.SS_WASO.NSS_3.LRLAG_5400": 0.6666666666666666,
+            "WITHIN_SD.NSS_3.VAR_W.LRWIN_1800": 0.3333333333333333,
+            "WITHIN_SD.NSS_3.VAR_WASO.LRWIN_1800": 0.6666666666666666,
+            "WITHIN_SD.NSS_3.VAR_W.LRWIN_3600": 0.3333333333333333,
+            "WITHIN_SD.NSS_3.VAR_WASO.LRWIN_3600": 0.6666666666666666,
+            "BETWEEN_SD.NSS_3.VAR_W.LRWIN_1800": 0.3333333333333333,
+            "BETWEEN_SD.NSS_3.VAR_WASO.LRWIN_1800": 0.6666666666666666,
+            "BETWEEN_SD.NSS_3.VAR_W.LRWIN_3600": 0.3333333333333333,
+            "BETWEEN_SD.NSS_3.VAR_WASO.LRWIN_3600": 0.6666666666666666,
+            "SLOPE.NSS_3.VAR_W": 0.3333333333333333,
+            "SLOPE.NSS_3.VAR_WASO": 0.6666666666666666,
+            "COM.NSS_3.VAR_W": 0.3333333333333333,
+            "COM.NSS_3.VAR_WASO": 0.6666666666666666,
+            "COM_M.NSS_3.VAR_W": 0.3333333333333333,
+            "COM_M.NSS_3.VAR_WASO": 0.6666666666666666,
+            "T50.NSS_3.VAR_W": 0.3333333333333333,
+            "T50.NSS_3.VAR_WASO": 0.6666666666666666,
+            "T50_M.NSS_3.VAR_W": 0.3333333333333333,
+            "T50_M.NSS_3.VAR_WASO": 0.6666666666666666
+          }
         }
       ]
     },
@@ -2728,6 +3133,79 @@
           ]
         }
       ]
+    },
+    {
+      "id": "BO",
+      "n_components": 1,
+      "weight_groups": [
+        {
+          "id": "BO_WAKE",
+          "features": [
+            "BOUT_DENS.NSS_5.BOUT_WASO",
+            "BOUT_DENS.NSS_5.BOUT_W",
+            "BOUT_PCT.NSS_5.BOUT_WASO",
+            "BOUT_PCT.NSS_5.BOUT_W",
+            "BOUT_05.NSS_5.BOUT_WASO",
+            "BOUT_05.NSS_5.BOUT_W",
+            "BOUT_10.NSS_5.BOUT_WASO",
+            "BOUT_10.NSS_5.BOUT_W"
+          ],
+          "feature_variance_weights": {
+            "BOUT_DENS.NSS_5.BOUT_WASO": 0.6666666666666666,
+            "BOUT_DENS.NSS_5.BOUT_W": 0.3333333333333333,
+            "BOUT_PCT.NSS_5.BOUT_WASO": 0.6666666666666666,
+            "BOUT_PCT.NSS_5.BOUT_W": 0.3333333333333333,
+            "BOUT_05.NSS_5.BOUT_WASO": 0.6666666666666666,
+            "BOUT_05.NSS_5.BOUT_W": 0.3333333333333333,
+            "BOUT_10.NSS_5.BOUT_WASO": 0.6666666666666666,
+            "BOUT_10.NSS_5.BOUT_W": 0.3333333333333333
+          }
+        },
+        {
+          "id": "BO_N1",
+          "features": [
+            "BOUT_DENS.NSS_5.BOUT_N1",
+            "BOUT_PCT.NSS_5.BOUT_N1",
+            "BOUT_05.NSS_5.BOUT_N1"
+          ]
+        },
+        {
+          "id": "BO_N2",
+          "features": [
+            "BOUT_DENS.NSS_5.BOUT_N2",
+            "BOUT_PCT.NSS_5.BOUT_N2",
+            "BOUT_05.NSS_5.BOUT_N2",
+            "BOUT_10.NSS_5.BOUT_N2"
+          ]
+        },
+        {
+          "id": "BO_N3",
+          "features": [
+            "BOUT_DENS.NSS_5.BOUT_N3",
+            "BOUT_PCT.NSS_5.BOUT_N3",
+            "BOUT_05.NSS_5.BOUT_N3",
+            "BOUT_10.NSS_5.BOUT_N3"
+          ]
+        },
+        {
+          "id": "BO_R",
+          "features": [
+            "BOUT_DENS.NSS_5.BOUT_R",
+            "BOUT_PCT.NSS_5.BOUT_R",
+            "BOUT_05.NSS_5.BOUT_R",
+            "BOUT_10.NSS_5.BOUT_R"
+          ]
+        },
+        {
+          "id": "BO_NR",
+          "features": [
+            "BOUT_DENS.NSS_3.BOUT_NR",
+            "BOUT_PCT.NSS_3.BOUT_NR",
+            "BOUT_05.NSS_3.BOUT_NR",
+            "BOUT_10.NSS_3.BOUT_NR"
+          ]
+        }
+      ]
     }
   ],
   "stage_component_contract": {
@@ -2746,8 +3224,10 @@
       "W_R_NR": "Use NSS=3 hard-called stage conditioning. Stable/unstable refinements are included only here and remain part of LOCAL_INSTABILITY.",
       "N2_N3": "Use ordinary NSS=5 hard-called stage conditioning. Do not use stable/unstable refinements.",
       "N1": "Use only posterior amount and soft long-range organization; exclude all N1 arg-max-conditioned and stable/unstable measures.",
-      "NR": "Keep NR as a distinct NREM domain. Include its NSS=3 purity measures and NREM depth/composition features; N2 predominance within NR is expected."
+      "NR": "Keep NR as a distinct NREM domain. Include its NSS=3 purity measures and NREM depth/composition features; N2 predominance within NR is expected.",
+      "BO": "Bout/consolidation domain with six equally weighted stage groups: paired W/WASO (NSS=5), N1, N2, N3, R (NSS=5) and NR (NSS=3). W/WASO share the wake group with 1/3 and 2/3 of its variance budget. Measures are BOUT_DENS, BOUT_PCT, BOUT_05 and BOUT_10 (no BOUT_10 for N1); no BOUT_DUR_* measures, which are undefined when a stage has no bouts. Groups guide rotation; they do not prescribe one fitted PC per stage.",
+      "W_WASO": "Both wake definitions are included for amount, purity, local instability and long-range organization in W, wake slope in ON, and wake bouts in BO. W spans the analysis window; WASO is restricted to the SPT. Matched definitions share each original input budget with WASO:W = 2:1 in variance."
     },
-    "weighting": "Each listed component has equal input-variance budget within its domain. For G components and p_g measures in a component, use 1 / sqrt(G * p_g) per standardized measure; normalize fitted PC scores to unit training-sample variance."
+    "weighting": "Each conceptual group has equal total standardized input-variance budget within its panel. Relative feature variance weights q default to 1; matched W/WASO inputs use q=1/3 and q=2/3. Multiply standardized inputs by sqrt(q_j / (G * sum(q within group))); normalize fitted scores to unit training variance."
   }
 }

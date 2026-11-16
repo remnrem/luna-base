@@ -13,6 +13,15 @@ namespace hdstats_pc {
 
 typedef std::map<std::string,double> feature_map_t;
 
+// HDSTATS options that were explicitly given and can change feature values
+// (option -> value as written). Recorded with level-1 features, embedded in
+// fitted JSON models, and required to match exactly at projection.
+typedef std::map<std::string,std::string> settings_t;
+
+// Complete derived raw metrics before table/feature export. Existing values
+// are retained; fitting and projection use this to read older feature files.
+void derive_features( feature_map_t * features );
+
 struct panel_scores_t {
   std::string panel;
   std::vector<double> scores;
@@ -43,10 +52,19 @@ struct component_score_t {
 // VARIABLE.FAC_LVL.FAC_LVL, from a FAC/LVL;FAC/LVL stratum.
 std::string key( const std::string & variable, const std::string & stratum );
 
-// Level 1: write one tab-delimited key/value line for an individual.
+// Level 1: write one tab-delimited key/value line for an individual,
+// including a SETTINGS field holding the recorded HDSTATS settings.
 void write_features( const std::string & directory,
                      const std::string & id,
-                     const feature_map_t & features );
+                     const feature_map_t & features,
+                     const settings_t & settings );
+
+// Reports, never enforces: the first time a model is applied, prints the
+// HDSTATS settings it was fitted with; if this run's settings differ, prints
+// the differences once (per distinct run settings). Studies may legitimately
+// need different settings (e.g. core-mode), so projection always proceeds.
+// Models without recorded settings get a one-time note instead.
+void report_settings( const std::string & model, const settings_t & settings );
 
 // Legacy V2 single-model projection. Structured V3 projection uses
 // project_panels() so one unavailable panel does not suppress the others.

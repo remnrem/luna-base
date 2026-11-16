@@ -89,6 +89,49 @@ std::string wrap_text( const std::string & text , const int width )
   return out.str();
 }
 
+// Formats one "label<spaces>description" row, word-wrapping the description
+// to fit within the fixed verbose_help_wrap column budget. Continuation
+// lines are indented to align under the description column, rather than
+// being left for the terminal to hard-wrap raggedly at whatever width it
+// happens to have -- which is what made long option/parameter descriptions
+// hard to read. 'label' should already include any left-hand indent/padding
+// of its own (e.g. built with std::setw); 'label_width' is label's printed
+// width plus the desired gap before the description column.
+std::string help_row( const std::string & label, const int label_width, const std::string & desc )
+{
+  std::stringstream out;
+  out << label;
+  if ( (int)label.size() < label_width )
+    out << std::string( label_width - label.size() , ' ' );
+
+  const int desc_width = std::max( 20 , verbose_help_wrap - label_width );
+  std::stringstream words( desc );
+  std::string word;
+  int col = 0;
+
+  while ( words >> word )
+    {
+      if ( col == 0 )
+        {
+          out << word;
+          col = (int)word.size();
+        }
+      else if ( col + 1 + (int)word.size() <= desc_width )
+        {
+          out << " " << word;
+          col += 1 + (int)word.size();
+        }
+      else
+        {
+          out << "\n" << std::string( label_width , ' ' ) << word;
+          col = (int)word.size();
+        }
+    }
+
+  out << "\n";
+  return out.str();
+}
+
 }
 
 
@@ -4627,6 +4670,7 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "N3"         , "PP_N3"  , "Channel name for N3 posterior" );
   add_param( "HDSTATS" , "NR"         , "PP_NR"  , "Channel name for NREM posterior (used by emit-nr-pp)" );
   add_param( "HDSTATS" , "R"          , "PP_R"   , "Channel name for REM posterior" );
+  add_param( "HDSTATS" , "VALID"      , ""       , "Channel name for the posterior validity flag (default inferred from the posterior channel prefix, e.g. PP_INVALID)" );
   add_param( "HDSTATS" , "weights"    , ""       , "Apply inverse class-weight correction before HDSTATS calculations; five positive values in W,R,N1,N2,N3 order" );
   add_param( "HDSTATS" , "update-pp"  , "F"      , "With weights=, also update the selected posterior channels in memory; invalid samples are unchanged" );
   add_param( "HDSTATS" , "emit-nr-pp" , "F"      , "Create NR by summing available N1/N2/N3 posterior channels" );
@@ -4640,28 +4684,31 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "lr-min-duration" , "16200" , "Strict duration minimum (seconds)" );
   add_param( "HDSTATS" , "gap-aware" , "T" , "Gap-aware long-range mode" );
   add_param( "HDSTATS" , "fail-on-empty" , "F" , "Fail if no long-range values" );
-  add_param( "HDSTATS" , "spt" , "T" , "Use SPT analysis interval" );
-  add_param( "HDSTATS" , "fixed" , "" , "Use an exact N-hour core window beginning at sustained sleep onset; spt-flank-pre/post are retained around it for analysis, and recordings without the full core are excluded" );
-  add_param( "HDSTATS" , "spt-mode" , "legacy" , "SPT selector: legacy or primary-island (select largest qualifying soft-sleep island)" );
-  add_param( "HDSTATS" , "spt-island-min" , "60" , "primary-island: minimum soft sleep mass (minutes) for a candidate island" );
-  add_param( "HDSTATS" , "spt-gap" , "120" , "primary-island: maximum physical gap (minutes) retained within an SPT; wake and invalid samples are bridgeable" );
-  add_param( "HDSTATS" , "spt-qc" , "F" , "Emit SPT_QC primary-island and split-night diagnostics without changing the legacy selector" );
-  add_param( "HDSTATS" , "spt-flank" , "300" , "SPT flank (seconds); default 300s (5 min) on each side, but 0 in fixed= mode unless explicitly set" );
-  add_param( "HDSTATS" , "spt-flank-mins" , "" , "SPT flank (minutes); alias for spt-flank, mutually exclusive with it" );
-  add_param( "HDSTATS" , "spt-flank-pre" , "300" , "Pre-SPT flank (seconds); defaults to spt-flank (or 0 in fixed= mode)" );
-  add_param( "HDSTATS" , "spt-flank-pre-mins" , "" , "Pre-SPT flank (minutes); alias for spt-flank-pre, mutually exclusive with it" );
-  add_param( "HDSTATS" , "spt-flank-post" , "300" , "Post-SPT flank (seconds); defaults to spt-flank (or 0 in fixed= mode)" );
-  add_param( "HDSTATS" , "spt-flank-post-mins" , "" , "Post-SPT flank (minutes); alias for spt-flank-post, mutually exclusive with it" );
+  add_param( "HDSTATS" , "fixed" , "" , "Cap the core at exactly N hours from its start (sustained onset for spt, island start for primary-island, or recording start for core-mode=recording); SPT cannot extend past the cutoff (primary-island retains its onset and any earlier island end), core-flank-pre/post are retained around it for analysis, and recordings without the full core are excluded" );
+  add_param( "HDSTATS" , "core-mode" , "spt" , "Analysis-window core: spt (sustained sleep onset to final sleep), primary-island (largest qualifying soft-sleep island), recording (whole recording, no flanks) or annot (one positive-duration lights_out interval or one ordered pair of zero-duration lights_out/lights_on markers; no default flanks; fixed= not yet supported); primary-island boundaries directly define SPT; other modes detect SPT inside the window" );
+  add_param( "HDSTATS" , "core-island-min" , "3600" , "primary-island: minimum soft sleep mass (seconds) for a candidate island; default 3600s (60 min)" );
+  add_param( "HDSTATS" , "core-island-min-mins" , "" , "primary-island minimum soft sleep mass (minutes); alias for core-island-min, mutually exclusive with it" );
+  add_param( "HDSTATS" , "core-gap" , "7200" , "primary-island: maximum physical gap (seconds) retained within a core window; wake and invalid samples are bridgeable; default 7200s (120 min)" );
+  add_param( "HDSTATS" , "core-gap-mins" , "" , "primary-island maximum physical gap (minutes); alias for core-gap, mutually exclusive with it" );
+  add_param( "HDSTATS" , "core-qc" , "F" , "Emit CORE_QC primary-island and split-night diagnostics without changing the selected core-mode" );
+  add_param( "HDSTATS" , "core-flank" , "300" , "Analysis-window flank around the core (seconds); default 300s (5 min) on each side, but 0 with fixed= or core-mode=annot unless explicitly set" );
+  add_param( "HDSTATS" , "core-flank-mins" , "" , "Analysis-window flank (minutes); alias for core-flank, mutually exclusive with it" );
+  add_param( "HDSTATS" , "core-flank-pre" , "300" , "Pre-core flank (seconds); defaults to core-flank (or 0 with fixed= or core-mode=annot)" );
+  add_param( "HDSTATS" , "core-flank-pre-mins" , "" , "Pre-core flank (minutes); alias for core-flank-pre, mutually exclusive with it" );
+  add_param( "HDSTATS" , "core-flank-post" , "300" , "Post-core flank (seconds); defaults to core-flank (or 0 with fixed= or core-mode=annot)" );
+  add_param( "HDSTATS" , "core-flank-post-mins" , "" , "Post-core flank (minutes); alias for core-flank-post, mutually exclusive with it" );
   add_param( "HDSTATS" , "stable-min" , "30"     , "Minimum contiguous flank duration (seconds) for a stable-to-stable transition" );
   add_param( "HDSTATS" , "stable-ps"  , "0.05"   , "Per-sample PS must be below this to qualify as stable-core" );
   add_param( "HDSTATS" , "stable-conf", "0.70"   , "Per-sample confidence threshold to qualify as stable-core" );
   add_param( "HDSTATS" , "conf-th"    , "0.8"    , "Confidence threshold for FRAC_LOW_CONF" );
   add_param( "HDSTATS" , "min-shift"  , "0.10"   , "Minimum left/right posterior shift to accept a boundary transition" );
   add_param( "HDSTATS" , "shift-win"  , "30"     , "Left/right support window (seconds) for boundary-transition detection" );
-  add_param( "HDSTATS" , "bout-min"   , "120"    , "Minimum settled-run duration (seconds) to qualify as a bout, used for N_BOUT_TRANS and the SEC-aligned profiles" );
-  add_param( "HDSTATS" , "bout-gap"   , "30"     , "Maximum gap (seconds) tolerated when merging same-stage runs into a bout" );
-  add_param( "HDSTATS" , "bout-smooth", "15"     , "Centered moving-average half-window (seconds) applied to PS/CONF before the bout stability test only (0=off)" );
+  add_param( "HDSTATS" , "bout-min"            , "120"  , "Minimum bout duration (seconds), used for BOUT/BOUT_TRANS and the SEC-aligned profiles; bouts are detected on their settled core but measured on the run (each end extended to its dominant-stage boundary when within window+bout-smooth of the core)" );
+  add_param( "HDSTATS" , "bout-intrusion-max"  , "60"   , "Absolute ceiling (seconds) on any single intrusion (instability, or a brief foray into another stage) absorbed into a bout, measured between run extents" );
+  add_param( "HDSTATS" , "bout-intrusion-frac" , "0.08" , "An intrusion must also be <= this fraction of the smaller flanking run/chain to be absorbed; tolerance scales with how established the bout already is" );
+  add_param( "HDSTATS" , "bout-smooth"         , "15"   , "Centered moving-average half-window (seconds) applied to PS/CONF before the bout stability test only (0=off)" );
   add_param( "HDSTATS" , "hd-metrics" , "T"      , "Emit HD_ hypnodensity analogs of selected HYPNO metrics" );
+  add_param( "HDSTATS" , "pre-post-wake" , "F"   , "Also report wake before sleep onset (WPRE) and after final wake (WPOST) wherever WASO is reported (SS, VAR and BOUT levels), and label W-dominant <root>_bout annotations outside the SPT as WPRE/WPOST instead of W (bouts assigned by majority overlap); WASO (wake within the SPT) is always reported when an SPT is defined, with every W metric repeated for it: SS amounts and per-stage summaries, long-range ACF (SS) and SLOPE/COM/T50/WITHIN_SD/BETWEEN_SD (VAR), BOUT, and the WASO bout-annotation label; thin zones are throttled by the usual minimums (min-samples, lag pairs, timing mass)" );
   add_param( "HDSTATS" , "hd-smooth"  , "30"     , "Smoothing window (seconds) for soft sleep/REM trajectories" );
   add_param( "HDSTATS" , "hd-onset-win" , "10"   , "Forward integration window (minutes) for sustained sleep/REM entry" );
   add_param( "HDSTATS" , "hd-sleep-mass-th" , "0.60" , "Mean sleep probability threshold for sustained sleep entry" );
@@ -4671,13 +4718,24 @@ void cmddefs_t::init()
   add_param( "HDSTATS" , "min-samples" , "20"    , "Minimum samples required to emit STABLE summaries" );
   add_param( "HDSTATS" , "annot"      , ""       , "Annotation class to stratify output by" );
   add_param( "HDSTATS" , "min-events"  , "3"      , "Minimum events required to emit aligned transition profile" );
-  add_param( "HDSTATS" , "emit-all-trans", "F"   , "Emit all directed TRANS and BOUT_TRANS pairs, padding unobserved pair summaries with zero counts/densities" );
-  add_param( "HDSTATS" , "emit-annots", ""       , "Emit detected transitions as annotations under this class name" );
+  add_param( "HDSTATS" , "emit-all-trans", "F"   , "Compatibility option: all directed TRANS and BOUT_TRANS pairs now always include zero counts/densities for unobserved directions" );
+  add_param( "HDSTATS" , "emit-annots", ""       , "Emit detected transitions, bouts and stable runs as <root>_trans, <root>_bout_trans, <root>_bout, <root>_stable (plus _event point classes, and _3_ variants if 3state) annotations (a bare emit-annots uses root hd); replaces any same-named classes from a prior run" );
   add_param( "HDSTATS" , "emit-annots-by-type", "F" , "Encode transition type in the emitted annotation class name" );
-  add_param( "HDSTATS" , "emit-spt", "hd"      , "Emit <root>_spt, <root>_sleep_onset, <root>_final_wake, and flanked <root>_lights_out/_lights_on annotations; fixed= also emits <root>_fixed" );
-  add_param( "HDSTATS" , "emit-cycles", "F"   , "Emit complete soft-ultradian trough-to-peak-to-trough cycle annotations as <root>_cycle (T uses root hd); these are not canonical HYPNO NREM cycles" );
-  add_param( "HDSTATS" , "pc-out", ""          , "Write one HDSTATS-PC feature line per individual" );
-  add_param( "HDSTATS" , "pc-proj", ""         , "Project a legacy or self-contained JSON (V1/V2/V3) HDSTATS-PC model as named PC scores and loading-selected feature contributions; a sibling PANEL.desc.json next to the model, if present, is applied automatically" );
+  add_param( "HDSTATS" , "emit-spt", "hd"      , "Emit <root>_spt, <root>_sleep_onset, <root>_final_wake, and flanked <root>_lights_out/_lights_on annotations; fixed= also emits <root>_fixed; replaces any same-named classes from a prior run (F disables)" );
+  add_param( "HDSTATS" , "emit-cycles", "F"   , "Emit soft-ultradian <root>_cycle annotations (including initial partials, flagged partial) and <root>_phase quarters D1/D2/L1/L2 from U_PHASE; cycle phase_start/phase_stop are radians (T uses root hd)" );
+  add_param( "HDSTATS" , "ultradian" , "T"       , "Compute the soft ultradian depth trajectory, phase and amplitude (U_* metrics)" );
+  add_param( "HDSTATS" , "ultra-fwhm" , "600"     , "Gaussian smoothing FWHM (seconds) for the ultradian depth trajectory" );
+  add_param( "HDSTATS" , "ultra-prominence" , "1" , "Hysteretic prominence required to commit an ultradian peak/trough" );
+  add_param( "HDSTATS" , "ultra-min-sleep-support" , "0.25" , "Minimum Gaussian-weighted local sleep mass [0,1] for ultradian depth to be defined" );
+  add_param( "HDSTATS" , "ultra-weights" , "0,-1,1,2,-2" , "Ultradian depth weights in W,N1,N2,N3,R order" );
+  add_param( "HDSTATS" , "ultra-condition" , "T"  , "Emit joint time + harmonic-phase fits (UVAR table)" );
+  add_param( "HDSTATS" , "ultra-condition-weighted" , "F" , "Weight the UVAR fits by U_AMP (sensitivity analysis)" );
+  add_param( "HDSTATS" , "ultra-condition-max" , "12" , "Maximum standardized UVAR design condition number for a fit to be reported" );
+  add_param( "HDSTATS" , "ultra-regions" , "T"    , "Emit means within the four ultradian phase quarters (UQ,UMETRIC table)" );
+  add_param( "HDSTATS" , "emit-ultradian" , "F"   , "Add U_PHASE (-1 if undefined), U_PHASE_VALID and U_AMP EDF signals; with emit-stats=F, only these are produced" );
+  add_param( "HDSTATS" , "ultra-diagnostics" , "F" , "With emit-ultradian, also add U_DEPTH and U_AMP_RAW EDF signals" );
+  add_param( "HDSTATS" , "pc-out", ""          , "Write one HDSTATS-PC feature line per individual, recording the explicitly given HDSTATS options that can change feature values (all except output-only, emit-*, annot, channel-name and PC I/O options)" );
+  add_param( "HDSTATS" , "pc-proj", ""         , "Project a legacy or self-contained JSON (V1/V2/V3) HDSTATS-PC model as named PC scores and loading-selected feature contributions; a sibling PANEL.desc.json next to the model, if present, is applied automatically; the model's recorded HDSTATS fit settings are printed once, with any differences from this run noted (projection always proceeds)" );
   add_param( "HDSTATS" , "model-desc", "F"      , "With pc-proj=, emit optional appended HDSTATS-PC model descriptions and associations" );
   add_param( "HDSTATS" , "pc-min-loading", "0.10" , "Minimum absolute oriented loading for linked PC feature contributions" );
   add_param( "HDSTATS" , "pc-all", "F"         , "With pc-proj=, also emit all ordinary HDSTATS metrics" );
@@ -4764,12 +4822,16 @@ void cmddefs_t::init()
     "NSS,BOUT_TRANS",
     "ANNOT,NSS,BOUT_TRANS"
   };
+  const std::vector<std::string> hdstats_bout_tables = {
+    "NSS,BOUT",
+    "ANNOT,NSS,BOUT"
+  };
   const std::vector<std::string> hdstats_mix_tables = {
     "NSS,MIX",
     "ANNOT,NSS,MIX"
   };
-  // HD_DENS needs hd_spt, which is only computed for the unstratified pass
-  // (hm is always NULL under ANNOT) — so it never populates under ANNOT,MIX.
+  // MIX HD_DENS uses the physical analysis duration in the global pass.
+  // Annotation-specific mixing remains minutes-only and is excluded from PC.
   const std::vector<std::string> hdstats_mix_bare_tables = {
     "NSS,MIX"
   };
@@ -4792,10 +4854,12 @@ void cmddefs_t::init()
   add_table( "HDSTATS" , ""                 , "Sleep timing (HD_*) and channel-validity summary, unstratified" );
   add_table( "HDSTATS" , "NSS"              , "Overall HDSTATS summary, by state representation (5/3)" );
   add_table( "HDSTATS" , "ANNOT,NSS"        , "Overall HDSTATS summary, by annotation level and state representation" );
+  add_var(   "HDSTATS" , ""                 , "HD_TRT"       , "Physical recording duration (minutes)" );
+  add_var(   "HDSTATS" , ""                 , "HD_WIN"       , "Analysis-window duration including flanks (minutes)" );
   add_var(   "HDSTATS" , ""                 , "HD_SPT"       , "Sleep period time (minutes)" );
   add_var(   "HDSTATS" , ""                 , "HD_SME"       , "Sleep maintenance efficiency (sleep mass / HD_SPT)" );
   add_var(   "HDSTATS" , ""                 , "HD_WASO"      , "Wake after sleep onset (minutes)" );
-  add_var(   "HDSTATS" , ""                 , "HD_SOL"       , "Sleep latency (minutes from recording start)" );
+  add_var(   "HDSTATS" , ""                 , "HD_SOL"       , "Sleep latency from analysis-window start to official SPT onset (minutes)" );
   add_var(   "HDSTATS" , ""                 , "HD_REM_LAT"   , "REM latency (minutes from sleep onset)" );
   add_var(   "HDSTATS" , ""                 , "HD_REM_LAT2"  , "REM latency excluding wake (minutes)" );
   add_var(   "HDSTATS" , ""                 , "HD_TWT"       , "Expected wake time (minutes)" );
@@ -4805,6 +4869,7 @@ void cmddefs_t::init()
   add_var( "HDSTATS" , "PC" , "SCORE" , "Semantically oriented component score (NA if unavailable)" );
   add_table( "HDSTATS" , "PC,FTR" , "Curated signed standardized feature contributions" );
   add_var( "HDSTATS" , "PC,FTR" , "VAL" , "Oriented loading times standardized feature value (NA if score unavailable)" );
+  add_var( "HDSTATS", "PC,FTR", "RAW", "Raw metric value before model standardization" );
 
   add_table( "HDSTATS-PC" , "" , "HDSTATS PCA model" );
   add_var( "HDSTATS-PC" , "" , "N" , "People used" );
@@ -4858,6 +4923,18 @@ void cmddefs_t::init()
   add_table( "HDSTATS" , "NSS,LRLAG,SS,METRIC,QC" , "Long-range stage metric QC" );
   add_table( "HDSTATS" , "NSS,VAR,METRIC,QC" , "Long-range trend metric QC" );
   add_table( "HDSTATS" , "NSS,LRWIN,VAR,METRIC,QC" , "Long-range window metric QC" );
+  add_table( "HDSTATS", "UVAR", "Joint time and ultradian phase fits" );
+  for ( const std::string & metric : { "U_SLOPE", "U_MOD", "U_MOD_COS", "U_MOD_SIN",
+                                      "U_PEAK", "U_R2", "U_PARTIAL_R2" } )
+    add_var( "HDSTATS", "UVAR", metric, "Ultradian fit coefficient or summary" );
+  add_table( "HDSTATS", "UQ,UMETRIC", "Means within ultradian phase quarters" );
+  add_var( "HDSTATS", "UQ,UMETRIC", "U_MEAN", "Mean metric within phase quarter" );
+  for ( const std::string & metric : { "U_MAG", "U_COVERAGE", "U_NCYC" } )
+    add_var( "HDSTATS", "", metric, "Ultradian organization summary" );
+  add_var( "HDSTATS", "", "NREM_ILR_N1_VS_N2N3", "NREM composition: sqrt(2/3) log(N1 / sqrt(N2 N3)), posterior-minute floor 1e-6" );
+  add_var( "HDSTATS", "", "NREM_ILR_N2_VS_N3", "NREM composition: sqrt(1/2) log(N2 / N3), posterior-minute floor 1e-6" );
+  add_var( "HDSTATS", "", "NREM_COM_N1_MINUS_N2", "Difference between normalized N1 and N2 posterior-mass centers" );
+  add_var( "HDSTATS", "", "NREM_COM_N2_MINUS_N3", "Difference between normalized N2 and N3 posterior-mass centers" );
   add_table( "HDSTATS" , "UVAR,QC" , "Ultradian fit QC" );
   add_var(   "HDSTATS" , "UVAR,QC" , "U_DESIGN_COND", "Ultradian fit design condition number" );
   add_var(   "HDSTATS" , "UVAR,QC" , "U_STATUS", "Ultradian fit status" );
@@ -4875,15 +4952,15 @@ void cmddefs_t::init()
           "U_PCT_SUPPORTED", "U_PCT_PHASE", "U_VALID_SEC", "U_SLEEP_SEC",
           "U_PHASE_SEC", "U_N_PHASE_RUNS", "U_MEAN_RAW" } )
     add_var( "HDSTATS", "QC", variable, "Ultradian diagnostic" );
-  add_table( "HDSTATS" , "SPT_QC" , "Primary-island SPT and split-night diagnostics (spt-mode=primary-island or spt-qc=T only)" );
+  add_table( "HDSTATS" , "CORE_QC" , "Primary-island core-window and split-night diagnostics (core-mode=primary-island or core-qc=T only)" );
   for ( const auto & variable : std::vector<std::string>{
-          "PRIMARY_VALID", "FALLBACK_LEGACY", "N_ISLANDS", "PRIMARY_INDEX",
+          "PRIMARY_VALID", "FALLBACK_SPT", "N_ISLANDS", "PRIMARY_INDEX",
           "TOTAL_SLEEP_MIN", "PRIMARY_SLEEP_MIN", "PRIMARY_MASS_PCT",
-          "PRIMARY_SPT_MIN", "LEGACY_SPT_MIN", "SPT_DELTA_MIN",
+          "PRIMARY_CORE_MIN", "SPT_CORE_MIN", "CORE_DELTA_MIN",
           "ONSET_DELTA_MIN", "FINAL_WAKE_DELTA_MIN", "OUTSIDE_SLEEP_MIN",
           "INTERNAL_WAKE_MIN", "INTERNAL_WAKE_PCT", "MAX_WAKE_GAP_MIN", "SPLIT_NIGHT",
           "PRIMARY_START_SEC", "PRIMARY_STOP_SEC" } )
-    add_var( "HDSTATS", "SPT_QC", variable, "Primary-island SPT diagnostic" );
+    add_var( "HDSTATS", "CORE_QC", variable, "Primary-island core-window diagnostic" );
   add_var(   "HDSTATS" , "NSS,LRLAG"       , "PS",    "Probability shift" );
   add_var(   "HDSTATS" , "NSS,LRLAG"       , "SIM",   "Posterior similarity" );
   add_var(   "HDSTATS" , "NSS,LRLAG,SS"    , "ACF",   "Stage autocorrelation" );
@@ -4929,8 +5006,8 @@ void cmddefs_t::init()
   add_table( "HDSTATS" , "NSS,SS"           , "Mixedness/instability by stage, by state representation (5/3)" );
   add_table( "HDSTATS" , "ANNOT,NSS,SS"     , "Mixedness/instability by stage, by annotation level and state representation" );
   add_hdstats_var( hdstats_ss_tables, "HD_MINS", "Expected stage duration from posterior mass (minutes)" );
-  add_hdstats_var( hdstats_ss_tables, "HD_PCT",  "Expected stage duration as % of total sleep time" );
-  add_hdstats_var( hdstats_ss_tables, "HD_DENS", "Expected stage duration as a proportion of HD_SPT" );
+  add_hdstats_var( hdstats_ss_tables, "HD_PCT",  "Expected stage duration as % of sleep mass (W, S, WASO and, with pre-post-wake, WPRE/WPOST use analysis duration)" );
+  add_hdstats_var( hdstats_ss_tables, "HD_DENS", "Expected stage duration as a proportion of HD_WIN (physical analysis duration)" );
 
   add_table( "HDSTATS" , "STABLE,NSS",       "Mixedness and instability, by STABLE (1) / UNSTABLE (0) and state representation" );
   add_table( "HDSTATS" , "STABLE,ANNOT,NSS", "Mixedness and instability, by STABLE (1) / UNSTABLE (0), annotation level, and state representation" );
@@ -4976,11 +5053,11 @@ void cmddefs_t::init()
   add_hdstats_var( hdstats_bare_tables, "CORR_H_PS", "Pearson correlation between entropy and PS" );
   add_hdstats_var( hdstats_bare_tables, "PCT_STABLE", "Percentage of context classified as stable" );
 
-  add_hdstats_var( hdstats_top_tables,   "H_RATIO_UN_ST",  "Entropy ratio: unstable / stable" );
-  add_hdstats_var( hdstats_top_tables,   "CONF_DIFF_UN_ST","Confidence difference: unstable - stable" );
-  add_hdstats_var( hdstats_top_tables,   "PS_RATIO_UN_ST", "PS ratio: unstable / stable" );
+  add_hdstats_var( hdstats_bare_tables,  "H_RATIO_UN_ST",  "Entropy ratio: unstable / stable" );
+  add_hdstats_var( hdstats_bare_tables,  "CONF_DIFF_UN_ST","Confidence difference: unstable - stable" );
+  add_hdstats_var( hdstats_bare_tables,  "PS_RATIO_UN_ST", "PS ratio: unstable / stable" );
   add_hdstats_var( hdstats_top_tables,   "TRANS_N",        "Number of transitions detected (event-based, see min-shift/shift-win)" );
-  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_N",   "Number of bout-to-bout transitions (block-based, see bout-min/bout-gap)" );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_N",   "Number of bout-to-bout transitions (block-based, see bout-min/bout-intrusion-max/bout-intrusion-frac)" );
   add_hdstats_var( hdstats_top_tables,   "TRANS_DENS",     "TRANS_N density (per hour)" );
   add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_DENS","BOUT_TRANS_N density (per hour)" );
   add_hdstats_var( hdstats_top_tables,   "TRANS_DUR",      "Mean transition duration (seconds)" );
@@ -5014,10 +5091,22 @@ void cmddefs_t::init()
   add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_MIN_CONF", "Mean minimum confidence across each bout-transition window" );
   add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_TOT_PS",   "Mean PS area under each bout-transition curve (seconds)" );
 
+  add_table( "HDSTATS" , "NSS,BOUT"       , "Soft-called bout-duration statistics (HYPNO's BOUT_N/BOUT_MN/BOUT_MD/BOUT_MX/BOUT_05/BOUT_10 analogue), by dominant stage (plus WASO, and WPRE/WPOST with pre-post-wake) and state representation" );
+  add_table( "HDSTATS" , "ANNOT,NSS,BOUT" , "Soft-called bout-duration statistics, by dominant stage, annotation level, and state representation" );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_N",        "Number of qualifying bouts for this dominant stage" );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_DENS",     "BOUT_N density (per hour)" );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_PCT",      "Percentage covered by qualifying bouts: full bout duration / union of dominant-stage time and full qualifying bout spans (including absorbed deviations and invalid gaps; wake-zone bouts assigned whole)" );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_DUR_MEAN", "Mean bout duration (seconds; run extent, not just the settled core)" );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_DUR_MED",  "Median bout duration (seconds)" );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_DUR_MAX",  "Maximum bout duration (seconds), e.g. the soft-called longest wake bout for BOUT=W (or within the SPT for BOUT=WASO)" );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_DUR_P90",  "90th percentile bout duration (seconds)" );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_05",       "Total minutes accounted for by bouts >= 5 minutes" );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_10",       "Total minutes accounted for by bouts >= 10 minutes" );
+
   add_table( "HDSTATS" , "NSS,MIX"              , "State-set mixing, by combination of states and state representation" );
   add_table( "HDSTATS" , "ANNOT,NSS,MIX"        , "State-set mixing, by combination of states, annotation level, and state representation" );
   add_hdstats_var( hdstats_mix_tables,      "HD_MINS", "Expected minutes jointly ambiguous across this state set" );
-  add_hdstats_var( hdstats_mix_bare_tables, "HD_DENS", "HD_MINS as a proportion of HD_SPT" );
+  add_hdstats_var( hdstats_mix_bare_tables, "HD_DENS", "HD_MINS as a proportion of HD_WIN (physical analysis duration)" );
 
   add_table( "HDSTATS" , "NSS,TRANS,SEC"       , "Transition-aligned profiles, by TRANS label (ALL or directional pair) and state representation" );
   add_table( "HDSTATS" , "ANNOT,NSS,TRANS,SEC" , "Transition-aligned profiles, by annotation level, TRANS label (ALL or directional pair), and state representation" );
@@ -5246,6 +5335,10 @@ void cmddefs_t::init()
   add_param( "PSD" , "epoch-spectrum" , "" , "Calculate per-epoch power spectra" );
   add_param( "PSD" , "dB" , "" , "Report power in decibel units" );
   add_param( "PSD" , "peaks" , "" , "Estimate of spectral peaks/artifacts" );
+  add_param( "PSD" , "aperiodic" , "0.5,44.75" , "Robust power-law background fit with positive-peak rejection; bare flag uses min/max" );
+  add_param( "PSD" , "aperiodic-th" , "3" , "Positive-peak rejection threshold in robust SDs (1 dB minimum)" );
+  add_param( "PSD" , "aperiodic-iter" , "5" , "Maximum peak-rejection passes (1-100)" );
+  add_param( "PSD" , "aperiodic-pivot" , "10" , "Frequency (Hz) at which APER_OFFSET is reported (default 1); fitted line unchanged" );
 
   add_param( "PSD" , "no-window" , "" , "No windowing on FFT segments" );
   add_param( "PSD" , "hann"    , "" , "Use Hann window" );
@@ -5300,6 +5393,31 @@ void cmddefs_t::init()
   add_var( "PSD" , "CH,E" , "SPK" , "Sum PSD peakedness" );
   add_var( "PSD" , "CH,E" , "SPEC_SLOPE" , "Spectral slope" );
   add_var( "PSD" , "CH,E" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
+
+  for (const std::string & table : { std::string("CH"), std::string("CH,E") })
+    {
+      add_var("PSD",table,"APER_VALID","Aperiodic fit valid (0/1)");
+      add_var("PSD",table,"APER_FALLBACK","Used initial robust fit after peak-rejection fit failed (0/1)");
+      add_var("PSD",table,"APER_OFFSET","Aperiodic log10 power density at the pivot frequency (aperiodic-pivot, default 1 Hz)");
+      add_var("PSD",table,"APER_EXP","Aperiodic exponent: PSD = 10^offset * (frequency/pivot)^(-exponent)");
+      add_var("PSD",table,"APER_RSQ","Aperiodic log-log R-squared on retained bins");
+      add_var("PSD",table,"APER_N","Number of retained positive frequency bins");
+    }
+  add_var("PSD","CH","APER_NWIN","Number of analyzed aperiodic windows");
+  add_var("PSD","CH","APER_NFAIL","Windows without usable aperiodic estimates after robust-fit fallback");
+  add_var("PSD","CH","APER_NFALLBACK","Windows rescued by the initial robust fit");
+  add_var("PSD","CH","APER_NFLAT","Failed windows with constant input samples");
+  add_var("PSD","CH","APER_MAXGAP","Longest consecutive run of failed windows");
+  add_var("PSD","CH","APER_NFILL","Failed windows filled in added component channels (excludes edge padding)");
+  for (const std::string & table : { std::string("CH,B"), std::string("CH,B,E"),
+                                   std::string("CH,F"), std::string("CH,F,E") })
+    {
+      add_var("PSD",table,"APER","Fitted aperiodic power (dB with dB)");
+      add_var("PSD",table,"APER_PSD","Original power used for decomposition (dB with dB); summary uses mean linear PSD");
+      add_var("PSD",table,"PER","Signed residual PSD minus APER, always linear");
+      add_var("PSD",table,"PER_DB","Residual power in dB, only for positive residuals with dB");
+      add_var("PSD",table,"PER_EXCESS_DB","10log10(original power / APER), always dB");
+    }
   
   // dynamics
   add_table( "PSD", "CH,F,VAR,QD" , "PSD spectra dynamics" );
@@ -9584,13 +9702,14 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
   if ( cmds.find( cmd ) == cmds.end() ) return "";
   
   std::stringstream ss;
-  if ( ! verbose ) 
+  if ( ! verbose )
     {
+      std::stringstream lbl;
       if ( show_domain_label )
-     ss << std::left << std::setw( 18 ) << domain_label.find( cdomain.find( cmd )->second )->second  << " " ;
-      
-      ss << std::left << std::setw( 12 ) << cmd << " "
-	 << cmds.find( cmd )->second << "\n";    
+        lbl << std::left << std::setw( 18 ) << domain_label.find( cdomain.find( cmd )->second )->second << " " ;
+      lbl << std::left << std::setw( 12 ) << cmd;
+      const std::string label = lbl.str();
+      ss << help_row( label , (int)label.size() + 1 , cmds.find( cmd )->second );
     }
   else
     {
@@ -9624,25 +9743,28 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 		continue;
 	      }
 	    
-	    ss << "  " << std::left << std::setw( 24 ) << jj->first << " "
-	       << jj->second;
-	    
+	    std::stringstream lbl;
+	    lbl << "  " << std::left << std::setw( 24 ) << jj->first;
+	    const std::string label = lbl.str();
+
+	    std::string desc = jj->second;
+
 	    // requirements?
-	    std::string req = preq.find( cmd )->second.find( jj->first )->second ; 
+	    std::string req = preq.find( cmd )->second.find( jj->first )->second ;
 	    if ( req != "" )
-	      ss << " [req. " << req << "]";
+	      desc += " [req. " + req + "]";
 
 	    // example (if any)
-	    std::string ex = px.find( cmd )->second.find( jj->first )->second ; 
+	    std::string ex = px.find( cmd )->second.find( jj->first )->second ;
 	    if ( ex != "" )
-	      ss << "  e.g. " << jj->first << "=" << ex;
-	    
-	    ss << "\n";
-	    
+	      desc += "  e.g. " + jj->first + "=" + ex;
+
+	    ss << help_row( label , (int)label.size() + 1 , desc ) << "\n";
+
 	    ++jj;
 	  }
 	  ++ii;
-	}    
+	}
 
 
       //
@@ -9669,9 +9791,11 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 		  continue;
 		}
 	      
-	      ss << "   " << tfac.as_string( " x " ) << " : "
-		 << ii->second << "\n";
-	      
+	      {
+		const std::string label = "   " + tfac.as_string( " x " ) + " : ";
+		ss << help_row( label , (int)label.size() , ii->second );
+	      }
+
 	      ss << "   " << std::left << std::string( 60 , '-' )
 		<< "\n";
 
@@ -9699,11 +9823,10 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 			    continue;
 			  }
 			
-			ss << "     "
-			   << std::left
-			   << std::setw(22)
-			   << vv->first << " "
-			   << vv->second << "\n";
+			std::stringstream lbl;
+			lbl << "     " << std::left << std::setw(22) << vv->first;
+			const std::string label = lbl.str();
+			ss << help_row( label , (int)label.size() + 1 , vv->second );
 			++vv;
 		      }
 		       
@@ -9711,7 +9834,7 @@ std::string cmddefs_t::help( const std::string & cmd , bool show_domain_label , 
 		}
 	      
 	      // spacer for next table
-	      ss << "\n";
+	      ss << "\n\n";
 	      ++ii;
 	    }
 	  

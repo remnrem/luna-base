@@ -164,6 +164,8 @@ class pops_coda_t {
   // S:          ne manual labels (used to write PRIOR / PRIOR30 field)
   // pedf:       pointer to EDF (for clock times), may be NULL
   // emit_stage1: also emit pre-CODA stage-1 outputs (for standalone predict-coda paths)
+  // final_calls: optional output of the same hard calls written to PRED,
+  //              including POPS_UNKNOWN for flagged rows (for annotations)
   void predict( const Eigen::MatrixXd & P ,
                 const std::vector<int> & E ,
                 const std::vector<bool> & flagged ,
@@ -173,7 +175,8 @@ class pops_coda_t {
                 edf_t * pedf ,
                 const std::vector<std::string> * start = NULL ,
                 const std::vector<std::string> * stop = NULL ,
-                bool emit_stage1 = false );
+                bool emit_stage1 = false ,
+                std::vector<int> * final_calls = NULL );
 
   // Matrix-only rescoring path for callers that want CODA posteriors without
   // writing the standard epoch-level CODA outputs.

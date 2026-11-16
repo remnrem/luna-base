@@ -5931,6 +5931,102 @@ static void test_pops_posterior_weights( lunapi_t * /*eng*/,
 }
 #endif
 
+// HDSTATS settings provenance: pc-out records explicit (non-exempt) options,
+// the fit requires them to agree and embeds them, and projection reports
+// (never enforces) any difference.
+static void test_hdstats_pc_settings( lunapi_t * eng, std::vector<test_result_t> & R, bool V )
+{
+  const std::string base = temp_base_path("hdstats_settings");
+  const std::string spec = "docs/hdstats/hdstats-pc.spec.json";
+
+  // pc-out records the given analysis options, not output-only ones.
+  try {
+    const int n = 1800;
+    auto p = eng->inst("T_hd_settings_out");
+    p->empty_edf("T_hd_settings_out",n,1,"01.01.85","22.00.00");
+    std::vector<double> w(n,1.0), n2(n,0.0), zero(n,0.0);
+    for ( int i = 400; i < 1400; ++i ) w[i] = 0.0, n2[i] = 1.0;
+    p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",zero,1);
+    p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",zero,1);
+    p->insert_signal("PP_R",zero,1);
+    const std::string dir = base + "_out";
+    p->eval("HDSTATS core-mode=recording longrange=F ultradian=F gap-aware pre-post-wake qc=T emit-spt=F emit-annots pc-out=" + dir);
+    std::ifstream in( dir + "/T_hd_settings_out.hdpc" );
+    std::string line; std::getline( in, line );
+    const auto tok = Helper::parse( line, "\t" );
+    nlohmann::json recorded;
+    for ( size_t i = 0; i + 1 < tok.size(); i += 2 )
+      if ( tok[i] == "SETTINGS" ) recorded = nlohmann::json::parse( tok[i+1] );
+    const nlohmann::json expected = { {"core-mode","recording"}, {"longrange","F"}, {"ultradian","F"}, {"gap-aware",""} };
+    record(R,"hdstats-pc-settings/pc-out-records-explicit",recorded == expected,recorded.dump(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats-pc-settings/pc-out-records-explicit",false,e.what(),V);
+  }
+
+  // Fit embeds consistent settings; mixed settings are rejected; projection
+  // enforces an exact match.
+  try {
+    nlohmann::json specification;
+    { std::ifstream in(spec); specification = nlohmann::json::parse(in); }
+    std::set<std::string> derived, inputs;
+    for ( const auto & d : specification.at("derived_features") ) derived.insert(d.at("id").get<std::string>());
+    for ( const auto & pnl : specification.at("panels") )
+      for ( const auto & g : pnl.at("weight_groups") )
+        for ( const auto & f : g.at("features") )
+          if ( !derived.count(f.get<std::string>()) ) inputs.insert(f.get<std::string>());
+    auto write_data = [&]( const std::string & file, const std::string & odd_settings ) {
+      std::ofstream out(file);
+      out << std::setprecision(17);
+      for ( int i = 0; i < 40; ++i ) {
+        out << "ID\tS" << i << "\tFORMAT\t__HDSTATS_FEATURES_V2\tSETTINGS\t"
+            << ( i == 7 && !odd_settings.empty() ? odd_settings : std::string("{\"core-mode\":\"annot\",\"waso\":\"T\"}") );
+        int j = 0;
+        for ( const auto & id : inputs ) {
+          ++j;
+          out << '\t' << id << '\t' << 50.0 + 3*std::sin((i+1)*0.17*(1+j%5)) + std::cos((i+1)*0.11*(1+j%7));
+        }
+        out << '\n';
+      }
+    };
+    auto fit = [&]( const std::string & data, const std::string & model ) {
+      param_t q; q.add("data",data); q.add("spec",spec); q.add("model",model); q.add("nc","1"); q.add("rotate","F");
+      hdstats_pc::fit(q);
+    };
+    const std::string data = base + ".hdpc", model = base + ".model.json";
+    write_data( data, "" );
+    fit( data, model );
+    nlohmann::json document; { std::ifstream in(model); document = nlohmann::json::parse(in); }
+    const bool embedded = document.contains("hdstats_settings")
+      && document.at("hdstats_settings") == nlohmann::json{ {"core-mode","annot"}, {"waso","T"} };
+
+    const std::string mixed = base + ".mixed.hdpc";
+    write_data( mixed, "{\"core-mode\":\"spt\",\"waso\":\"T\"}" );
+    bool mixed_rejected = false;
+    try { fit( mixed, base + ".mixed.model.json" ); }
+    catch ( std::exception & e ) { mixed_rejected = std::string(e.what()).find("different HDSTATS settings") != std::string::npos; }
+
+    // Projection reports differences but never refuses (studies may differ).
+    bool reported_ok = true;
+    for ( const hdstats_pc::settings_t & st : std::vector<hdstats_pc::settings_t>{
+            { {"core-mode","annot"}, {"waso","T"} }, { {"core-mode","annot"} },
+            { {"core-mode","spt"}, {"waso","T"}, {"bout-min","60"} } } )
+      try { hdstats_pc::report_settings( model, st ); }
+      catch ( std::exception & ) { reported_ok = false; }
+
+    hdstats_model::model_t read_back;
+    const bool readable = hdstats_model::read( model, &read_back ) && read_back.has_hdstats_settings
+      && read_back.hdstats_settings == hdstats_pc::settings_t{ {"core-mode","annot"}, {"waso","T"} };
+
+    const bool pass = embedded && mixed_rejected && reported_ok && readable;
+    std::ostringstream m;
+    m << "embedded=" << embedded << " mixed-rejected=" << mixed_rejected
+      << " mismatch-reported-not-fatal=" << reported_ok << " model-reader=" << readable;
+    record(R,"hdstats-pc-settings/fit-embeds-and-projection-reports",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats-pc-settings/fit-embeds-and-projection-reports",false,e.what(),V);
+  }
+}
+
 static void test_hdstats_pc_rotation( lunapi_t * eng, std::vector<test_result_t> & R, bool V )
 {
   // Group rotation is fitted once, then both public projection paths must
@@ -5990,6 +6086,39 @@ static void test_hdstats_pc_rotation( lunapi_t * eng, std::vector<test_result_t>
     const auto rotated = fit(".rotated","",4);
     const auto repeat = fit(".repeat","T",4);
     const auto single = fit(".single","T",1);
+    // W/WASO share each existing wake budget; adding the twin must not
+    // increase any conceptual group's total standardized input variance.
+    bool wake_weights = true;
+    int wake_pairs = 0;
+    for ( const auto & p : plain.at("panels") )
+      if ( p.at("id")=="W" || p.at("id")=="ON" || p.at("id")=="BO" )
+        {
+          std::map<std::string,double> weights;
+          for ( const auto & f : p.at("features") ) weights[f.at("id").get<std::string>()] = f.at("weight").get<double>();
+          for ( const auto & spec_panel : specification.at("panels") )
+            if ( spec_panel.at("id")==p.at("id") )
+              for ( const auto & g : spec_panel.at("weight_groups") )
+                {
+                  double budget = 0.0;
+                  for ( const auto & f : g.at("features") ) budget += std::pow(weights.at(f.get<std::string>()),2);
+                  wake_weights = wake_weights && std::fabs(budget-1.0/spec_panel.at("weight_groups").size())<1e-12;
+                }
+          for ( const auto & f : weights )
+            for ( const std::string & tag : { std::string("SS_W"), std::string("VAR_W"), std::string("BOUT_W") } )
+              {
+                const size_t at = f.first.find(tag);
+                if ( at==std::string::npos ) continue;
+                const size_t end = at+tag.size();
+                if ( end<f.first.size() && f.first[end]!='.' ) continue;
+                const std::string waso = f.first.substr(0,end)+"ASO"+f.first.substr(end);
+                wake_weights = wake_weights && weights.count(waso) &&
+                  std::fabs(weights.at(waso)*weights.at(waso)-2*f.second*f.second)<1e-12;
+                ++wake_pairs;
+              }
+        }
+    wake_weights = wake_weights && wake_pairs==37;
+    record(R,"hdstats-pc/wake-pair-weights-preserve-group-budgets",wake_weights,
+           "W/WASO pairs="+std::to_string(wake_pairs)+"; WASO:W variance=2:1",V);
     bool invariant = plain.at("version") == 1 && rotated.at("version") == 2;
     bool improved = false, deterministic = true, degenerate = true;
     for ( size_t p = 0; p < rotated.at("panels").size(); ++p )
@@ -6066,7 +6195,7 @@ static void test_hdstats_pc_rotation( lunapi_t * eng, std::vector<test_result_t>
     projection = projection && api.find("group_quartimax_v1")!=std::string::npos && api.find("score_sds")!=std::string::npos;
     record(R,"hdstats-pc/rotated-model-projection-and-scaling",projection,"scores="+std::to_string(scores.size())+" "+error,V);
     bool rejects = true;
-    for ( int invalid = 0; invalid < 5; ++invalid )
+    for ( int invalid = 0; invalid < 9; ++invalid )
       {
         auto bad = rotated;
         if ( invalid==0 ) bad["panels"][0]["score_sds"][0] = 0;
@@ -6074,6 +6203,16 @@ static void test_hdstats_pc_rotation( lunapi_t * eng, std::vector<test_result_t>
         if ( invalid==2 ) bad["panels"][0].erase("rotation");
         if ( invalid==3 ) bad["version"] = 1;
         if ( invalid==4 ) bad["panels"][0]["features"][0]["loadings"][0] = 5;
+        if ( invalid>=5 )
+          for ( auto & p : bad["spec"]["panels"] )
+            if ( p["id"]=="W" )
+              {
+                auto & weights = p["weight_groups"][0]["feature_variance_weights"];
+                if ( invalid==5 ) weights["HD_MINS.SS_W"] = 0;
+                if ( invalid==6 ) weights["HD_MINS.SS_W"] = "invalid";
+                if ( invalid==7 ) weights["NOT_A_GROUP_FEATURE"] = 1;
+                if ( invalid==8 ) weights["HD_MINS.SS_W"] = 0.5; // disagrees with saved multipliers
+              }
         const std::string file = base+".bad.json";
         { std::ofstream out(file); out << bad.dump(); }
         rejects = rejects && !hdstats_model::read(file,&parsed,&error);
@@ -6300,7 +6439,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
   // embedded specification and does not consult the source file.
   try {
     const std::string base = temp_base_path("hdstats_v2_json");
-    const std::string data = base + ".hdpc", spec = "docs/hdstats/hdstats-pc.spec.json", model = base + ".model.json", desc = base + ".desc.json", selection = base + ".selection.json";
+    const std::string data = base + ".hdpc", spec = "docs/hdstats/hdstats-pc.spec.json", model = base + ".model.json", desc = base + ".explicit.desc.json", selection = base + ".selection.json";
     nlohmann::json specification;
     { std::ifstream in(spec); specification = nlohmann::json::parse(in); }
     std::set<std::string> derived, inputs;
@@ -6352,6 +6491,11 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     hdstats_model::model_t parsed;
     std::string error;
     const bool parsed_ok = hdstats_model::read(model,&parsed,&error);
+    // Check the original layout before read_descriptor mutates its IDs.
+    const bool layout_ok = parsed_ok && !parsed.model_id.empty() && !parsed.specification_json.empty()
+      && parsed.components.size() == 21 && parsed.components[0].id == "AMIN_1"
+      && !parsed.panels.empty() && parsed.panels[0].source_components == std::vector<int>{2}
+      && parsed.components[0].source_panel_pc == 2;
     std::ostringstream description;
     hdstats_pc::describe(model,description,0.0,desc);
     const bool descriptor_ok = hdstats_model::read_descriptor(desc,&parsed,&error);
@@ -6359,14 +6503,11 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     const std::string api_descriptor = eng->read_hdstats_pc_descriptor(model,desc);
     const auto amin = std::find_if(components.begin(),components.end(),[](const hdstats_pc::component_score_t & c) { return c.id == "AMIN_1"; });
     const auto amin_panel = std::find_if(panels.begin(),panels.end(),[](const hdstats_pc::panel_scores_t & p) { return p.panel == "AMIN"; });
-    const bool pass = parsed_ok && !parsed.model_id.empty() && !parsed.specification_json.empty()
-      && parsed.components.size() == 19 && parsed.components[0].id == "AMIN_1"
-      && !parsed.panels.empty() && parsed.panels[0].source_components == std::vector<int>{2}
-      && parsed.components[0].source_panel_pc == 2
+    const bool pass = layout_ok
       && descriptor_ok && parsed.components[0].id == "AMIN_FACTOR" && parsed.components[0].orientation == -1
-      && components.size() == 19 && amin != components.end() && amin->orientation == 1
+      && components.size() == 21 && amin != components.end() && amin->orientation == 1
       && amin->compatible && Helper::realnum(amin->score)
-      && panels.size() == 10 && amin_panel != panels.end() && amin_panel->scores.size() == 1
+      && panels.size() == 11 && amin_panel != panels.end() && amin_panel->scores.size() == 1
       && api_model.find("AMIN_1") != std::string::npos && api_descriptor.find("AMIN_FACTOR") != std::string::npos
       && description.str().find("AMIN_FACTOR\tAMIN\t1\tSynthetic AMIN factor\t-1") != std::string::npos;
     record(R,"hdstats-pc/v2-self-contained-json-layout",pass,
@@ -6413,6 +6554,25 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     record(R,"hdstats-pc/v3-independent-panel-projection",false,e.what(),V);
   }
   try {
+    hdstats_pc::feature_map_t values = {
+      {"HD_MINS.SS_N1",1.0}, {"HD_MINS.SS_N2",2.0}, {"HD_MINS.SS_N3",4.0},
+      {"COM.NSS_5.VAR_N1",0.2}, {"COM.NSS_5.VAR_N2",0.4}, {"COM.NSS_5.VAR_N3",0.7}
+    };
+    hdstats_pc::derive_features(&values);
+    const double ilr = values.at("NREM_ILR_N1_VS_N2N3");
+    const bool legacy = approx_equal(ilr,std::sqrt(2.0/3.0)*std::log(1.0/std::sqrt(8.0)),1e-12)
+      && approx_equal(values.at("NREM_COM_N2_MINUS_N3"),-0.3,1e-12);
+    values["HD_MINS.SS_N1"] = 100.0;
+    values["COM.NSS_5.VAR_N1"] = 0.9;
+    values["NREM_COM_N1_MINUS_N2"] = std::numeric_limits<double>::quiet_NaN();
+    hdstats_pc::derive_features(&values);
+    record(R,"hdstats-pc/derived-inputs-fill-legacy-preserve-computed",legacy
+      && values.at("NREM_ILR_N1_VS_N2N3") == ilr
+      && std::isnan(values.at("NREM_COM_N1_MINUS_N2")),"precomputed values and NA remain authoritative",V);
+  } catch (std::exception & e) {
+    record(R,"hdstats-pc/derived-inputs-fill-legacy-preserve-computed",false,e.what(),V);
+  }
+  try {
     const int n = 7200; // 2 h at 1 Hz; deliberately not tied to 30-s epochs
     std::vector<double> w(n,0.0), n1(n,0.0), n2(n,0.0), n3(n,0.0), r(n,0.0), invalid(n,0.0);
     for (int i=0; i<n; ++i)
@@ -6435,7 +6595,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     p->insert_signal("PP_INVALID",invalid,1);
     // This two-hour record is too short for strict long-range summaries;
     // PC output must still be produced for its other panels.
-    p->eval("HDSTATS spt=F gap-aware=F ultra-fwhm=60 ultra-prominence=1 emit-ultradian=T ultra-diagnostics=T emit-cycles=T pc-out=/tmp");
+    p->eval("HDSTATS core-mode=recording gap-aware=F ultra-fwhm=60 ultra-prominence=1 emit-ultradian=T ultra-diagnostics=T emit-cycles=T pc-out=/tmp");
 
     const auto have = p->has_channels({"U_PHASE","U_PHASE_VALID","U_AMP","U_DEPTH","U_AMP_RAW"});
     const auto dat = p->data({"U_PHASE_VALID","U_AMP"}, {}, false);
@@ -6485,7 +6645,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
       for ( const auto & from : states.second ) for ( const auto & to : states.second ) if (from!=to)
         for ( const auto & family : {"TRANS","BOUT_TRANS"} )
           {
-            const std::string key="DENS.NSS_"+states.first+"."+family+"_"+from+"to"+to;
+            const std::string key=std::string(family)+"_DENS.NSS_"+states.first+"."+family+"_"+from+"to"+to;
             const auto found=pc_values.find(key);
             if (found!=pc_values.end()) { ++directional_keys; if (found->second=="0") ++zero_directions; }
           }
@@ -6523,7 +6683,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     p->insert_signal("PP_N2",std::vector<double>(n,1.0),1);
     p->insert_signal("PP_N3",std::vector<double>(n,0.0),1);
     p->insert_signal("PP_R",std::vector<double>(n,0.0),1);
-    p->eval("HDSTATS spt=F longrange=F ultra-fwhm=60 emit-ultradian=T");
+    p->eval("HDSTATS core-mode=recording longrange=F ultra-fwhm=60 emit-ultradian=T");
     const auto dat = p->data({"U_PHASE_VALID","U_AMP"}, {}, false);
     const auto & x = std::get<1>(dat);
     double max_phase_valid = 0.0, max_amp = 0.0;
@@ -6558,7 +6718,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",n1,1);
     p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",n3,1);
     p->insert_signal("PP_R",r,1);
-    p->eval("HDSTATS spt=F longrange=F ultra-fwhm=60 qc=T");
+    p->eval("HDSTATS core-mode=recording longrange=F ultra-fwhm=60 qc=T");
     const double uncyc = get_val(p,"HDSTATS","U_NCYC");
     const double slope = get_val_where(p,"HDSTATS","UVAR","UVAR","H","U_SLOPE");
     const double cond = get_val_where(p,"HDSTATS","QC_UVAR","UVAR","H","U_DESIGN_COND");
@@ -6586,7 +6746,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",z,1);
     p->insert_signal("PP_R",z,1);
     p->insert_signal("PP_INVALID",invalid,1);
-    p->eval("HDSTATS spt=F ultradian=F 3state=F lr-lags=100 lr-windows=100 lr-min-duration=1 gap-aware=T");
+    p->eval("HDSTATS core-mode=recording ultradian=F 3state=F lr-lags=100 lr-windows=100 lr-min-duration=1 gap-aware=T");
     const auto input = p->data({"PP_W"}, {}, false);
     const auto & input_w = std::get<1>(input);
     std::vector<double> w_ref(n);
@@ -6644,13 +6804,13 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",n1,1);
     p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",n3,1);
     p->insert_signal("PP_R",r,1);
-    p->eval("HDSTATS spt=F ultradian=F lr-lags=100 lr-windows=100 lr-min-duration=1 pc-out=/tmp qc=T");
+    p->eval("HDSTATS core-mode=recording ultradian=F lr-lags=100 lr-windows=100 lr-min-duration=1 pc-out=/tmp qc=T");
     const double n3_com = get_val_where(p,"HDSTATS","NSS_VAR","VAR","N3","COM");
     const double n3_t50 = get_val_where(p,"HDSTATS","NSS_VAR","VAR","N3","T50");
     const double n3_com_m = get_val_where(p,"HDSTATS","NSS_VAR","VAR","N3_NREM","COM_M");
     const double r_com = get_val_where(p,"HDSTATS","NSS_VAR","VAR","R","COM");
     const double r_t50_m = get_val_where(p,"HDSTATS","NSS_VAR","VAR","R_SLEEP","T50_M");
-    const double w_timing_ok = get_val_where(p,"HDSTATS","QC_NSS_VAR","VAR","W","TIMING_ESTIMABLE");
+    const double w_timing_ok = get_val_where(p,"HDSTATS","NSS_QC_VAR","VAR","W","TIMING_ESTIMABLE");
     std::ifstream pc_in("/tmp/T_hdstats_lr_timing.hdpc");
     std::stringstream pc_text; pc_text << pc_in.rdbuf();
     const std::string pc_line = pc_text.str();
@@ -6659,9 +6819,9 @@ static void test_hdstats_ultradian( lunapi_t * eng,
       && pc_line.find("T50.NSS_3.VAR_R") != std::string::npos
       && pc_line.find("T50.NSS_5.VAR_N3_NREM") != std::string::npos
       && pc_line.find("T50.NSS_5.VAR_R_SLEEP") != std::string::npos
-      && pc_line.find("T50.NSS_3.VAR_NR") == std::string::npos
+      && pc_line.find("T50.NSS_3.VAR_NR") != std::string::npos
       && pc_line.find("COM.NSS_5.VAR_N3") != std::string::npos
-      && pc_line.find(".LRWIN_100") == std::string::npos;
+      && pc_line.find(".LRWIN_100") != std::string::npos;
     const bool pass = approx_equal(n3_com,75.0/600.0,1e-10)
       && approx_equal(n3_t50,75.0/600.0,1e-10)
       && approx_equal(n3_com_m,75.0/60.0,1e-10)
@@ -6677,9 +6837,10 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     record(R,"hdstats-longrange/posterior-mass-timing",false,e.what(),V);
   }
 
-  // fixed= is a third analysis selector: its exact-length window starts at
-  // sustained sleep onset, regardless of the SPT flanks, and a short record
-  // must be rejected rather than silently shortened.
+  // fixed= is a third analysis selector: its exact-length core starts at
+  // sustained sleep onset; core-flank still widens the analysis window, but the
+  // true-SPT search stops at the fixed cutoff (so HD_SPT == fixed duration
+  // here). A short record must be rejected rather than silently shortened.
   try {
     const int n = 500, onset = 100;
     std::vector<double> w(n,1.0), n1(n,0.0), n2(n,0.0), n3(n,0.0), r(n,0.0);
@@ -6690,7 +6851,7 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",n1,1);
     p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",n3,1);
     p->insert_signal("PP_R",r,1);
-    p->eval("HDSTATS fixed=0.1 spt-flank=300 hd-smooth=0 hd-onset-win=0.1 hd-offset-win=0.1 longrange=F ultradian=F qc=T");
+    p->eval("HDSTATS fixed=0.1 core-flank=300 hd-smooth=0 hd-onset-win=0.1 hd-offset-win=0.1 longrange=F ultradian=F qc=T");
     const double start = get_val_s(p,"HDSTATS","QC","HD_ANALYSIS_START_SEC");
     const double stop = get_val_s(p,"HDSTATS","QC","HD_ANALYSIS_STOP_SEC");
     const double duration = get_val_s(p,"HDSTATS","QC","HD_ANALYSIS_SEC");
@@ -6698,12 +6859,29 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     const double spt = get_val(p,"HDSTATS","HD_SPT");
     const double rem_lat = get_val(p,"HDSTATS","HD_REM_LAT");
     const auto fixed_annot = p->fetch_annots({"hd_fixed"});
-    const bool window_ok = approx_equal(start,sol*60.0,1e-8) && approx_equal(stop,start+360.0,1e-8)
-      && approx_equal(duration,360.0,1e-8) && approx_equal(spt,6.0,1e-8);
+    const double core_start = std::get<1>(p->fetch_annots({"hd_sleep_onset"}).at(0));
+    const double exp_start = std::max(0.0, core_start - 300.0);
+    const double exp_stop = std::min((double)n, core_start + 360.0 + 300.0);
+    const bool window_ok = approx_equal(start,exp_start,1e-8) && approx_equal(stop,exp_stop,1e-8)
+      && approx_equal(duration,exp_stop-exp_start,1e-8) && approx_equal(spt,6.0,1e-8);
     const bool latency_ok = Helper::realnum(sol) && !Helper::realnum(rem_lat);
     const bool annotation_ok = fixed_annot.size() == 1
       && approx_equal(std::get<1>(fixed_annot[0]),start,1e-8)
       && approx_equal(std::get<2>(fixed_annot[0]),stop,1e-8);
+
+    // core-mode=recording fixed=: the fixed core runs from recording start.
+    auto r0 = eng->inst("T_hdstats_fixed_rec");
+    r0->empty_edf("T_hdstats_fixed_rec", n, 1, "01.01.85", "22.00.00");
+    r0->insert_signal("PP_W",w,1); r0->insert_signal("PP_N1",n1,1);
+    r0->insert_signal("PP_N2",n2,1); r0->insert_signal("PP_N3",n3,1);
+    r0->insert_signal("PP_R",r,1);
+    r0->eval("HDSTATS core-mode=recording fixed=0.1 hd-smooth=0 hd-onset-win=0.1 hd-offset-win=0.1 longrange=F ultradian=F qc=T");
+    const double rec_start = get_val_s(r0,"HDSTATS","QC","HD_ANALYSIS_START_SEC");
+    const double rec_stop = get_val_s(r0,"HDSTATS","QC","HD_ANALYSIS_STOP_SEC");
+    const double rec_spt = get_val(r0,"HDSTATS","HD_SPT");
+    const double rec_sol = get_val(r0,"HDSTATS","HD_SOL");
+    const bool rec_ok = approx_equal(rec_start,0.0,1e-8) && approx_equal(rec_stop,360.0,1e-8)
+      && approx_equal(rec_spt,6.0 - rec_sol,1e-6);
 
     const int short_n = 400;
     auto q = eng->inst("T_hdstats_fixed_short");
@@ -6720,13 +6898,500 @@ static void test_hdstats_ultradian( lunapi_t * eng,
     const double short_skipped = get_val_s(q,"HDSTATS","QC","HD_FIXED_SKIPPED");
     const bool short_skipped_ok = approx_equal(short_available,short_n/3600.0,1e-8)
       && short_ok == 0.0 && !Helper::realnum(short_spt) && short_skipped == 1.0;
-    const bool pass = window_ok && latency_ok && annotation_ok && short_skipped_ok;
+    const bool pass = window_ok && latency_ok && annotation_ok && short_skipped_ok && rec_ok;
     std::ostringstream m; m << "start/stop/duration=" << start << "/" << stop << "/" << duration
                             << " SOL=" << sol << " REM_LAT=" << rem_lat
-                            << " annotation=" << annotation_ok << " short_skipped=" << short_skipped_ok;
+                            << " annotation=" << annotation_ok << " short_skipped=" << short_skipped_ok
+                            << " recording-fixed start/stop/spt=" << rec_start << "/" << rec_stop << "/" << rec_spt;
     record(R,"hdstats/fixed-window-at-sleep-onset",pass,m.str(),V);
   } catch (std::exception & e) {
     record(R,"hdstats/fixed-window-at-sleep-onset",false,e.what(),V);
+  }
+
+  // Default smoothing/integration must give the same onset even when a
+  // short fixed cutoff truncates its forward support and changes the flanks.
+  try {
+    const int n = 1800;
+    std::vector<double> w(n,1.0), n2(n,0.0), zero(n,0.0);
+    for ( int i = 400; i < 1400; ++i ) w[i] = 0.0, n2[i] = 1.0;
+    double onset[3], wake[3];
+    bool pass = true;
+    for ( int j = 0; j < 3; ++j ) {
+      const std::string id = "T_hdstats_onset_invariance_" + std::to_string(j);
+      auto p = eng->inst(id);
+      p->empty_edf(id, n, 1, "01.01.85", "22.00.00");
+      p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",zero,1);
+      p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",zero,1);
+      p->insert_signal("PP_R",zero,1);
+      const std::string fixed = j == 0 ? "" : (j == 1 ? " fixed=0.1" : " fixed=0.25 core-flank=300");
+      p->eval("HDSTATS core-mode=spt longrange=F ultradian=F qc=T" + fixed);
+      const auto starts = p->fetch_annots({"hd_sleep_onset"});
+      const auto stops = p->fetch_annots({"hd_final_wake"});
+      if ( starts.size() != 1 || stops.size() != 1 ) {
+        pass = false;
+        onset[j] = wake[j] = -1.0;
+        continue;
+      }
+      onset[j] = std::get<1>(starts[0]);
+      wake[j] = std::get<1>(stops[0]);
+      pass = pass && approx_equal(onset[j], get_val_s(p,"HDSTATS","QC","HD_ANALYSIS_START_SEC") + get_val(p,"HDSTATS","HD_SOL") * 60.0, 1e-6)
+        && approx_equal(get_val(p,"HDSTATS","HD_SPT"), (wake[j]-onset[j])/60.0, 1e-6);
+    }
+    pass = pass && approx_equal(onset[0],onset[1],1e-6)
+      && approx_equal(onset[0],onset[2],1e-6)
+      && approx_equal(wake[1],onset[1]+360.0,1e-6)
+      && approx_equal(wake[2],onset[2]+900.0,1e-6)
+      && wake[0] > wake[2];
+    std::ostringstream m; m << "onsets=" << onset[0] << "/" << onset[1] << "/" << onset[2]
+                            << " final wakes=" << wake[0] << "/" << wake[1] << "/" << wake[2];
+    record(R,"hdstats/fixed-onset-invariance",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/fixed-onset-invariance",false,e.what(),V);
+  }
+
+  // Island boundaries are official SPT boundaries, even if wide flanks
+  // contain other sleep. Fixed durations may cap, but never extend, the SPT.
+  try {
+    const int n = 3600;
+    std::vector<double> w(n,1.0), n2(n,0.0), r(n,0.0), zero(n,0.0);
+    for ( int i = 200; i < 400; ++i ) w[i] = 0.0, n2[i] = 1.0;
+    for ( int i = 1000; i < 2200; ++i ) w[i] = 0.0, n2[i] = 1.0;
+    for ( int i = 1400; i < 1450; ++i ) w[i] = 1.0, n2[i] = 0.0;
+    for ( int i = 1600; i < 2200; ++i ) n2[i] = 0.0, r[i] = 1.0;
+    for ( int i = 2600; i < 2800; ++i ) w[i] = 0.0, n2[i] = 1.0;
+    bool pass = true;
+    std::ostringstream m;
+    for ( int j = 0; j < 4; ++j ) {
+      const std::string id = "T_hdstats_island_bounds_" + std::to_string(j);
+      auto p = eng->inst(id);
+      p->empty_edf(id, n, 1, "01.01.85", "22.00.00");
+      p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",zero,1);
+      p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",zero,1);
+      p->insert_signal("PP_R",r,1);
+      const std::string flank = j == 0 ? " core-flank=0" : " core-flank=1000";
+      const std::string fixed = j == 2 ? " fixed=0.1" : (j == 3 ? " fixed=0.5" : "");
+      p->eval("HDSTATS core-mode=primary-island core-island-min=300 core-gap=60 hd-smooth=0 hd-onset-win=0.1 hd-offset-win=0.1 longrange=F ultradian=F" + flank + fixed);
+      const auto starts = p->fetch_annots({"hd_sleep_onset"});
+      const auto stops = p->fetch_annots({"hd_final_wake"});
+      const auto spans = p->fetch_annots({"hd_spt"});
+      if ( starts.size() != 1 || stops.size() != 1 || spans.size() != 1 ) {
+        pass = false;
+        continue;
+      }
+      const double stop = j == 2 ? 1360.0 : 2200.0;
+      const double waso = j == 2 ? 0.0 : 50.0/60.0;
+      // EDF signal quantization leaves tiny posterior row-sum errors.
+      pass = pass && approx_equal(std::get<1>(starts[0]),1000.0,1e-6)
+        && approx_equal(std::get<1>(stops[0]),stop,1e-6)
+        && approx_equal(std::get<1>(spans[0]),1000.0,1e-6)
+        && approx_equal(std::get<2>(spans[0]),stop,1e-6)
+        && approx_equal(get_val(p,"HDSTATS","HD_SPT"),(stop-1000.0)/60.0,1e-6)
+        && approx_equal(get_val(p,"HDSTATS","HD_WASO"),waso,1e-6)
+        && approx_equal(get_val(p,"HDSTATS","HD_SME"),100.0*(1.0-waso*60.0/(stop-1000.0)),0.005)
+        && get_val(p,"HDSTATS","HD_SME") >= 0.0 && get_val(p,"HDSTATS","HD_SME") <= 100.0
+        && (j != 2 || get_val(p,"HDSTATS","HD_SME") == 100.0)
+        && approx_equal(get_val(p,"HDSTATS","HD_SOL")*60.0,j == 0 ? 0.0 : 1000.0,1e-6)
+        && get_val(p,"HDSTATS","HD_TRT") >= get_val(p,"HDSTATS","HD_WIN")
+        && get_val(p,"HDSTATS","HD_WIN") >= get_val(p,"HDSTATS","HD_SPT");
+      const double rem = get_val(p,"HDSTATS","HD_REM_LAT");
+      pass = pass && (j == 2 ? !Helper::realnum(rem) : approx_equal(rem,596.0/60.0,1e-6));
+      m << "case " << j << " onset/offset=" << std::get<1>(starts[0]) << "/" << std::get<1>(stops[0])
+        << " WASO=" << get_val(p,"HDSTATS","HD_WASO") << " SME=" << get_val(p,"HDSTATS","HD_SME")
+        << " REM=" << rem << " SOL=" << get_val(p,"HDSTATS","HD_SOL") << "; ";
+    }
+    record(R,"hdstats/primary-island-spt-boundaries",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/primary-island-spt-boundaries",false,e.what(),V);
+  }
+
+}
+
+// Analysis-window timing and annotation window selection through the public command.
+static void test_hdstats_windows( lunapi_t * eng, std::vector<test_result_t> & R, bool V )
+{
+  const int n = 1800;
+  auto make_record = [&]( const std::string & id, const bool sleep = true ) {
+    auto p = eng->inst(id);
+    p->empty_edf(id,n,1,"01.01.85","22.00.00");
+    std::vector<double> w(n,1.0), n2(n,0.0), zero(n,0.0);
+    if ( sleep ) for ( int i = 400; i < 1400; ++i ) w[i] = 0.0, n2[i] = 1.0;
+    p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",zero,1);
+    p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",zero,1);
+    p->insert_signal("PP_R",zero,1);
+    return p;
+  };
+  const std::string command = "HDSTATS core-mode=annot hd-smooth=0 hd-onset-win=0.1 hd-offset-win=0.1 longrange=F ultradian=F qc=T";
+  try {
+    bool pass = true;
+    std::ostringstream m;
+    for ( int j = 0; j < 5; ++j ) {
+      auto p = make_record("T_hd_window_"+std::to_string(j));
+      if ( j == 0 ) p->insert_annotation("lights_out",{{300.0,1500.0}});
+      else {
+        p->insert_annotation("lights_out",{{300.0,300.0}});
+        p->insert_annotation("lights_on",{{1500.0,1500.0}});
+      }
+      const std::string flank = j == 2 ? " core-flank=30" :
+        (j == 3 ? " core-flank-pre=60 core-flank-post=120" : (j == 4 ? " core-flank=1000" : ""));
+      p->eval(command+flank);
+      const double start = j == 2 ? 270.0 : (j == 3 ? 240.0 : (j == 4 ? 0.0 : 300.0));
+      const double stop = j == 2 ? 1530.0 : (j == 3 ? 1620.0 : (j == 4 ? 1800.0 : 1500.0));
+      const double win = get_val(p,"HDSTATS","HD_WIN");
+      const double trt = get_val(p,"HDSTATS","HD_TRT");
+      const double spt = get_val(p,"HDSTATS","HD_SPT");
+      const double sol = get_val(p,"HDSTATS","HD_SOL");
+      const auto onset = p->fetch_annots({"hd_sleep_onset"});
+      const auto lights_out = p->fetch_annots({"hd_lights_out"});
+      const auto lights_on = p->fetch_annots({"hd_lights_on"});
+      pass = pass && approx_equal(win,(stop-start)/60.0,1e-6)
+        && approx_equal(trt,30.0,1e-6) && trt >= win && win >= spt
+        && approx_equal(sol,(398.0-start)/60.0,1e-6)
+        && approx_equal(spt,1004.0/60.0,1e-6)
+        && onset.size() == 1 && approx_equal(std::get<1>(onset[0]),398.0,1e-6)
+        && lights_out.size() == 1 && approx_equal(std::get<1>(lights_out[0]),start,1e-6)
+        && lights_on.size() == 1 && approx_equal(std::get<1>(lights_on[0]),stop,1e-6)
+        && approx_equal(get_val_s(p,"HDSTATS","QC","HD_ANALYSIS_SEC"),win*60.0,1e-6);
+      m << j << ": SOL/WIN/SPT=" << sol << "/" << win << "/" << spt << "; ";
+    }
+    record(R,"hdstats/annot-window-timing",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/annot-window-timing",false,e.what(),V);
+  }
+  try {
+    auto p = make_record("T_hd_window_no_sleep",false);
+    p->insert_annotation("lights_out",{{300.0,1500.0}});
+    p->eval(command);
+    const bool pass = approx_equal(get_val(p,"HDSTATS","HD_WIN"),20.0,1e-6)
+      && approx_equal(get_val(p,"HDSTATS","HD_TRT"),30.0,1e-6)
+      && !Helper::realnum(get_val(p,"HDSTATS","HD_SOL"))
+      && !Helper::realnum(get_val(p,"HDSTATS","HD_SPT"));
+    record(R,"hdstats/annot-window-without-sleep",pass,"",V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/annot-window-without-sleep",false,e.what(),V);
+  }
+  try {
+    // Invalid or ambiguous lights definitions must fail, never fall back.
+    bool pass = true;
+    int rejected = 0;
+    for ( int j = 0; j < 9; ++j ) {
+      auto p = make_record("T_hd_window_bad_"+std::to_string(j));
+      if ( j == 1 ) p->insert_annotation("lights_out",{{300.0,300.0}});
+      if ( j == 2 ) {
+        p->insert_annotation("lights_out",{{1500.0,1500.0}});
+        p->insert_annotation("lights_on",{{300.0,300.0}});
+      }
+      if ( j == 3 ) {
+        p->insert_annotation("lights_out",{{300.0,500.0}});
+        p->insert_annotation("lights_on",{{1500.0,1500.0}});
+      }
+      if ( j == 4 ) p->insert_annotation("lights_out",{{300.0,1500.0},{400.0,1600.0}});
+      if ( j == 5 ) {
+        p->insert_annotation("lights_out",{{300.0,300.0}});
+        p->insert_annotation("lights_on",{{1500.0,1500.0},{1600.0,1600.0}});
+      }
+      if ( j == 6 ) p->insert_annotation("lights_out",{{300.0,1900.0}});
+      if ( j == 7 ) p->insert_annotation("lights_out",{{300.0,1500.0}});
+      if ( j == 8 ) {
+        p->insert_annotation("lights_out",{{300.0,300.0}});
+        p->insert_annotation("lights_on",{{1500.0,1600.0}});
+      }
+      bool threw = false;
+      try { p->eval(command + (j == 7 ? " fixed=0.1" : "")); }
+      catch (std::exception & e) {
+        threw = std::string(e.what()).find("core-mode=annot") != std::string::npos;
+      }
+      pass = pass && threw;
+      if ( threw ) ++rejected;
+    }
+    record(R,"hdstats/annot-window-validation",pass,std::to_string(rejected)+"/9 rejected",V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/annot-window-validation",false,e.what(),V);
+  }
+}
+
+// Lightweight checks of HDSTATS options: WASO / pre-post-wake split, re-emission of
+// generated annotations, emit-hypnogram staging, and -mins duration aliases.
+static void test_hdstats_options( lunapi_t * eng, std::vector<test_result_t> & R, bool V )
+{
+  // 30 min at 1 Hz: wake, N2 400-1400 with a 300 s wake intrusion at 900-1200, wake.
+  const int n = 1800;
+  auto make_record = [&]( const std::string & id ) {
+    auto p = eng->inst(id);
+    p->empty_edf(id,n,1,"01.01.85","22.00.00");
+    std::vector<double> w(n,1.0), n2(n,0.0), zero(n,0.0);
+    for ( int i = 400; i < 1400; ++i ) if ( i < 900 || i >= 1200 ) w[i] = 0.0, n2[i] = 1.0;
+    p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",zero,1);
+    p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",zero,1);
+    p->insert_signal("PP_R",zero,1);
+    return p;
+  };
+  const std::string base = "HDSTATS hd-smooth=0 hd-onset-win=0.1 hd-offset-win=0.1 longrange=F ultradian=F";
+
+  // pre-post-wake: SS=WASO/WPRE/WPOST partition SS=W, and BOUT=WASO/WPRE/WPOST
+  // partition the BOUT=W bouts. Without it, WASO is still reported (same
+  // values) but WPRE/WPOST are absent; waso= is retired and halts.
+  try {
+    auto p = make_record("T_hd_opt_waso");
+    p->eval(base + " pre-post-wake");
+    auto ss = [&]( const std::string & lvl ) { return get_val_where(p,"HDSTATS","SS","SS",lvl,"HD_MINS"); };
+    auto bn = [&]( const std::string & lvl ) { return get_val_where(p,"HDSTATS","BOUT_NSS","BOUT",lvl,"BOUT_N"); };
+    const double w = ss("W"), waso = ss("WASO"), wpre = ss("WPRE"), wpost = ss("WPOST");
+    const double bw = bn("W"), bwaso = bn("WASO"), bwpre = bn("WPRE"), bwpost = bn("WPOST");
+    auto q = make_record("T_hd_opt_nowaso");
+    q->eval(base);
+    const bool waso_default = approx_equal(get_val_where(q,"HDSTATS","SS","SS","WASO","HD_MINS"),waso,1e-9)
+      && get_val_where(q,"HDSTATS","BOUT_NSS","BOUT","WASO","BOUT_N") == bwaso;
+    const bool absent = !Helper::realnum(get_val_where(q,"HDSTATS","SS","SS","WPRE","HD_MINS"))
+      && !Helper::realnum(get_val_where(q,"HDSTATS","BOUT_NSS","BOUT","WPOST","BOUT_N"));
+    bool retired = false;
+    try { make_record("T_hd_opt_waso_retired")->eval(base + " waso=T"); }
+    catch ( std::exception & e ) { retired = std::string(e.what()).find("waso= has been removed") != std::string::npos; }
+    const bool pass = approx_equal(w, waso + wpre + wpost, 1e-6)
+      && approx_equal(waso, 5.0, 0.2) && wpre > 0.0 && wpost > 0.0
+      && approx_equal(bw, bwaso + bwpre + bwpost, 1e-9) && bwaso >= 1.0
+      && waso_default && absent && retired;
+    std::ostringstream m;
+    m << "W=" << w << " WASO/WPRE/WPOST=" << waso << "/" << wpre << "/" << wpost
+      << " BOUT_N W=" << bw << " (" << bwaso << "/" << bwpre << "/" << bwpost << ")"
+      << " WASO-by-default=" << waso_default << " WPRE/WPOST-absent-by-default=" << absent
+      << " waso=-retired=" << retired;
+    record(R,"hdstats/waso-split",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/waso-split",false,e.what(),V);
+  }
+
+  // Every W output has a WASO twin: the pc-out feature line of an 8 h night
+  // (long-range on) has exactly the same SS_W / VAR_W keys as SS_WASO / VAR_WASO.
+  try {
+    const int m = 8 * 3600;
+    auto p = eng->inst("T_hd_opt_waso_twin");
+    p->empty_edf("T_hd_opt_waso_twin",m,1,"01.01.85","22.00.00");
+    std::vector<double> w(m,1.0), n2(m,0.0), r(m,0.0), zero(m,0.0);
+    for ( int i = 1800; i < 27000; ++i )
+      {
+        if ( ( i >= 10000 && i < 11000 ) || ( i >= 18000 && i < 18600 ) ) continue;
+        w[i] = 0.0;
+        ( ( i / 5400 ) % 2 ? r : n2 )[i] = 1.0;
+      }
+    p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",zero,1);
+    p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",zero,1);
+    p->insert_signal("PP_R",r,1);
+    const std::string dir = temp_base_path("hdstats_waso_twin") + "_out";
+    p->eval("HDSTATS hd-smooth=0 ultradian=F pc-out=" + dir);
+    std::ifstream in( dir + "/T_hd_opt_waso_twin.hdpc" );
+    std::string line; std::getline( in, line );
+    const auto tok = Helper::parse( line, "\t" );
+    std::map<std::string,std::string> kv;
+    for ( size_t i = 0; i + 1 < tok.size(); i += 2 ) kv[tok[i]] = tok[i+1];
+    // Map each key to a zone-neutral form; W and WASO must give identical sets.
+    std::set<std::string> wk, wasok;
+    for ( const auto & x : kv )
+      for ( const std::string & fac : { std::string("SS_"), std::string("VAR_") } )
+        for ( const std::string & z : { std::string("W"), std::string("WASO") } )
+          {
+            const std::string tag = fac + z;
+            const size_t at = x.first.find( tag );
+            if ( at == std::string::npos ) continue;
+            const size_t end = at + tag.size();
+            if ( end != x.first.size() && x.first[end] != '.' ) continue;
+            ( z == "W" ? wk : wasok ).insert( x.first.substr(0,at) + fac + "@" + x.first.substr(end) );
+          }
+    auto num = [&]( const std::string & k ) {
+      double d;
+      return kv.count(k) && Helper::str2dbl(kv[k],&d) && Helper::realnum(d);
+    };
+    const bool lr = num("ACF.SS_WASO.NSS_5.LRLAG_600") && num("SLOPE.NSS_5.VAR_WASO")
+      && num("COM.NSS_3.VAR_WASO") && num("WITHIN_SD.NSS_5.VAR_WASO.LRWIN_1800");
+    const bool ss = num("CONF.SS_WASO.NSS_5") && num("PCT_STABLE.SS_WASO.NSS_3");
+    const bool pass = !wk.empty() && wk == wasok && lr && ss;
+    std::ostringstream msg;
+    msg << "W keys=" << wk.size() << " WASO keys=" << wasok.size()
+        << " long-range finite=" << lr << " per-stage finite=" << ss;
+    record(R,"hdstats/waso-mirrors-w",pass,msg.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/waso-mirrors-w",false,e.what(),V);
+  }
+
+  // Bouts are detected on their settled core but measured on the run: each
+  // end grows back over the transition halo to the dominant-stage boundary,
+  // so the 300 s wake intrusion is a 300 s bout and the 200 s N2 run (whose
+  // core alone is < bout-min) still qualifies.
+  try {
+    auto p = make_record("T_hd_opt_bout_extent");
+    p->eval(base + " emit-annots pre-post-wake");
+    const auto bouts = p->fetch_annots({"hd_bout"});
+    const std::vector<std::pair<double,double>> expect = {
+      {-1.0,400.0}, {400.0,900.0}, {900.0,1200.0}, {1200.0,1400.0}, {1400.0,-1.0} };
+    bool pass = bouts.size() == expect.size();
+    std::ostringstream m;
+    for ( size_t i = 0; i < bouts.size(); ++i ) {
+      m << std::get<1>(bouts[i]) << "-" << std::get<2>(bouts[i]) << " ";
+      if ( i < expect.size() ) {
+        if ( expect[i].first >= 0 ) pass = pass && approx_equal(std::get<1>(bouts[i]),expect[i].first,1e-6);
+        if ( expect[i].second >= 0 ) pass = pass && approx_equal(std::get<2>(bouts[i]),expect[i].second,1e-6);
+      }
+    }
+    const double waso_max = get_val_where(p,"HDSTATS","BOUT_NSS","BOUT","WASO","BOUT_DUR_MAX");
+    const double n2_n = get_val_where(p,"HDSTATS","BOUT_NSS","BOUT","N2","BOUT_N");
+    const double bt_n = get_val_where(p,"HDSTATS","NSS","NSS","5","BOUT_TRANS_N");
+    pass = pass && approx_equal(waso_max,300.0,1e-6) && n2_n == 2.0 && bt_n == 4.0;
+    m << "WASO max=" << waso_max << " N2 n=" << n2_n << " BOUT_TRANS_N=" << bt_n;
+    record(R,"hdstats/bout-run-extent",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/bout-run-extent",false,e.what(),V);
+  }
+
+  // Re-running HDSTATS must replace, not duplicate, its generated annotations.
+  try {
+    auto p = make_record("T_hd_opt_reemit");
+    const std::string cmd = base + " emit-annots emit-annots-by-type pre-post-wake";
+    const std::vector<std::string> cls = { "hd_spt", "hd_sleep_onset", "hd_final_wake",
+                                           "hd_lights_out", "hd_lights_on", "hd_trans",
+                                           "hd_bout_trans_event_WtoN2", "hd_bout_trans", "hd_bout",
+                                           "hd_stable", "hd_3_bout", "hd_3_stable" };
+    p->eval(cmd);
+    std::vector<size_t> first;
+    for ( const auto & c : cls ) first.push_back( p->fetch_annots({c}).size() );
+    p->eval(cmd);
+    bool pass = true;
+    std::ostringstream m;
+    for ( size_t i = 0; i < cls.size(); ++i ) {
+      const size_t second = p->fetch_annots({cls[i]}).size();
+      pass = pass && second == first[i];
+      m << cls[i] << "=" << first[i] << "/" << second << " ";
+    }
+    pass = pass && first[0] == 1 && first[6] > 0 && first[8] > 0;
+    record(R,"hdstats/annotations-replaced-on-rerun",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/annotations-replaced-on-rerun",false,e.what(),V);
+  }
+
+  // emit-hypnogram: 30 s-pooled stage runs, replaced on re-run, and usable
+  // as staging by a subsequent HYPNO (N2 at 400-900 and 1200-1400 pools to
+  // 30 s epochs 13..29 and 40..46, i.e. 390-900 + 1200-1410).
+  try {
+    auto p = make_record("T_hd_opt_hypnogram");
+    p->eval(base + " emit-hypnogram");
+    p->eval(base + " emit-hypnogram");
+    const auto n2 = p->fetch_annots({"N2"});
+    p->eval("HYPNO");
+    const double tst = get_val(p,"HYPNO","TST");
+    const bool pass = n2.size() == 2
+      && approx_equal(std::get<1>(n2[0]),390.0,1e-6)
+      && approx_equal(tst, ( (900.0-390.0) + (1410.0-1200.0) ) / 60.0, 1e-6);
+    std::ostringstream m; m << "N2 runs=" << n2.size() << " HYPNO TST=" << tst;
+    record(R,"hdstats/emit-hypnogram-staging",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/emit-hypnogram-staging",false,e.what(),V);
+  }
+
+  // core-* "-mins" aliases equal their seconds forms, and both together fail.
+  try {
+    auto a = make_record("T_hd_opt_secs");
+    a->eval(base + " core-flank=30");
+    auto b = make_record("T_hd_opt_mins");
+    b->eval(base + " core-flank-mins=0.5");
+    const double wa = get_val(a,"HDSTATS","HD_WIN"), wb = get_val(b,"HDSTATS","HD_WIN");
+    auto c = make_record("T_hd_opt_both");
+    bool threw = false;
+    try { c->eval(base + " core-flank=30 core-flank-mins=0.5"); }
+    catch (std::exception & e) {
+      threw = std::string(e.what()).find("core-flank") != std::string::npos;
+    }
+    const bool pass = Helper::realnum(wa) && approx_equal(wa,wb,1e-9) && threw;
+    std::ostringstream m; m << "HD_WIN secs/mins=" << wa << "/" << wb << " both-rejected=" << threw;
+    record(R,"hdstats/core-duration-mins-alias",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/core-duration-mins-alias",false,e.what(),V);
+  }
+}
+
+// Cycle annotations must retain analysed initial phase and expose the same
+// quarters as U_PHASE, including partial cycles and gaps.
+static void test_hdstats_cycle_annotations( lunapi_t * eng, std::vector<test_result_t> & R, bool V )
+{
+  try {
+    const int n = 1800;
+    bool pass = true;
+    std::ostringstream m;
+    for ( int variant = 0; variant < 4; ++variant ) {
+      std::vector<double> w(n,0.0), n1(n,0.0), n2(n,0.0), n3(n,0.0), r(n,0.0), invalid(n,0.0);
+      for ( int i = 0; i < n; ++i ) {
+        const double d = 2.0 * std::sin(2.0*M_PI*i/600.0);
+        if ( d <= -1.0 ) r[i] = -d-1.0, n1[i] = d+2.0;
+        else if ( d <= 1.0 ) n1[i] = (1.0-d)/2.0, n2[i] = (d+1.0)/2.0;
+        else n2[i] = 2.0-d, n3[i] = d-1.0;
+        if ( variant == 2 && i >= 600 && i < 720 ) invalid[i] = 1.0;
+        if ( variant == 3 && i < 100 ) w[i] = 1.0, n1[i] = n2[i] = n3[i] = r[i] = 0.0;
+      }
+      const std::string id = "T_hd_cycle_annots_"+std::to_string(variant);
+      auto p = eng->inst(id);
+      p->empty_edf(id,n,1,"01.01.85","22.00.00");
+      p->insert_signal("PP_W",w,1); p->insert_signal("PP_N1",n1,1);
+      p->insert_signal("PP_N2",n2,1); p->insert_signal("PP_N3",n3,1);
+      p->insert_signal("PP_R",r,1); p->insert_signal("PP_INVALID",invalid,1);
+      if ( variant == 1 ) p->insert_annotation("lights_out",{{100.0,1300.0}});
+      const std::string command = "HDSTATS longrange=F ultra-fwhm=30 emit-cycles=T emit-ultradian=T";
+      const std::string mode = variant == 1 ? " core-mode=annot" :
+        (variant == 3 ? " core-mode=spt hd-smooth=0 hd-onset-win=0.1" : " core-mode=recording");
+      p->eval(command + mode);
+      annot_t * cycles = p->find_annot("hd_cycle");
+      annot_t * phases = p->find_annot("hd_phase");
+      if ( cycles == NULL || cycles->empty() || phases == NULL || phases->empty() ) {
+        pass = false;
+        continue;
+      }
+      const int selected_lo = variant == 1 ? 100 : 0;
+      const int selected_stop = variant == 1 ? 1300 : n;
+      const double initial_start = variant == 3 ? 98.0 : selected_lo;
+      int complete = 0, partial = 0;
+      double previous_stop = -1.0;
+      for ( const auto & kv : cycles->interval_events ) {
+        const double start = kv.first.interval.start_sec(), stop = kv.first.interval.stop_sec();
+        avar_t * flag = kv.second->find("partial");
+        avar_t * phase_start = kv.second->find("phase_start");
+        avar_t * phase_stop = kv.second->find("phase_stop");
+        pass = pass && start >= selected_lo && stop <= selected_stop && stop > start
+          && start >= previous_stop && flag != NULL && phase_start != NULL && phase_stop != NULL;
+        if ( flag != NULL && flag->bool_value() ) ++partial; else ++complete;
+        if ( previous_stop < 0.0 )
+          pass = pass && approx_equal(start,initial_start,1e-6) && stop > 150.0 && stop < 600.0
+            && flag != NULL && flag->bool_value() && phase_start != NULL && phase_start->double_value() > 0.0;
+        if ( variant == 2 ) pass = pass && !(start < 720.0 && stop > 600.0);
+        previous_stop = stop;
+      }
+      const auto signal = p->data({"U_PHASE","U_PHASE_VALID"}, {}, false);
+      const auto & x = std::get<1>(signal);
+      std::vector<int> coverage(n,0), quarter(n,-1);
+      for ( const auto & kv : phases->interval_events ) {
+        const std::string label = kv.first.id;
+        const int q = label == "D1" ? 0 : label == "D2" ? 1 : label == "L1" ? 2 : label == "L2" ? 3 : -1;
+        const int start = (int)std::round(kv.first.interval.start_sec());
+        const int stop = (int)std::round(kv.first.interval.stop_sec());
+        pass = pass && q >= 0 && start >= selected_lo && stop <= selected_stop;
+        for ( int i = start; i < stop && i < n; ++i ) ++coverage[i], quarter[i] = q;
+      }
+      for ( int i = 0; i < n; ++i ) {
+        const bool defined = i >= selected_lo && i < selected_stop && x(i,1) > 0.5 && !invalid[i];
+        pass = pass && coverage[i] == (defined ? 1 : 0);
+        if ( defined ) {
+          const double phase = x(i,0);
+          const double distance = std::fabs(phase/(M_PI/2.0)-std::round(phase/(M_PI/2.0)));
+          // Exported EDF phase is quantized; avoid asserting its side of an exact boundary.
+          if ( distance > 0.001 ) pass = pass && quarter[i] == std::min(3,(int)std::floor(phase/(M_PI/2.0)));
+        }
+      }
+      pass = pass && partial >= 1 && complete >= 1;
+      // Re-emission replaces old intervals instead of accumulating them.
+      const int n_cycles = cycles->num_interval_events(), n_phases = phases->num_interval_events();
+      p->eval(command + mode);
+      pass = pass && p->find_annot("hd_cycle")->num_interval_events() == n_cycles
+        && p->find_annot("hd_phase")->num_interval_events() == n_phases;
+      m << variant << ": complete=" << complete << " partial=" << partial << " phase intervals=" << n_phases << "; ";
+    }
+    record(R,"hdstats/cycle-partials-and-phase-annotations",pass,m.str(),V);
+  } catch (std::exception & e) {
+    record(R,"hdstats/cycle-partials-and-phase-annotations",false,e.what(),V);
   }
 }
 
@@ -6886,9 +7551,13 @@ void proc_tests( const std::string & group, const bool verbose )
   RUN("plm",      test_plm)
   RUN("sigdyn",   test_sigdyn)
   RUN("hdstats-ultradian", test_hdstats_ultradian)
+  RUN("hdstats-windows", test_hdstats_windows)
+  RUN("hdstats-options", test_hdstats_options)
+  RUN("hdstats-cycle-annots", test_hdstats_cycle_annotations)
   RUN("hdstats-pc-rotation", test_hdstats_pc_rotation)
   RUN("hdstats-pc-post-rotation-selection", test_hdstats_pc_post_rotation_selection)
   RUN("hdstats-pc-sibling-descriptor", test_hdstats_pc_sibling_descriptor)
+  RUN("hdstats-pc-settings", test_hdstats_pc_settings)
   RUN("pops-calibration", test_pops_calibration)
 #ifdef HAS_LGBM
   RUN("pops-weights", test_pops_posterior_weights)

@@ -316,8 +316,8 @@ int main(int argc , char ** argv )
 	  std::set<std::string> listed_cmds;
 	  bool any = false;
 
-	  std::cerr << "\nHelp search: " << q << "\n";
-	  std::cerr << std::string( 13 + q.size() , '-' ) << "\n\n";
+	  std::cout << "\nHelp search: " << q << "\n";
+	  std::cout << std::string( 13 + q.size() , '-' ) << "\n\n";
 
 	  for (int i=0;i<doms.size();i++)
 	    {
@@ -328,7 +328,7 @@ int main(int argc , char ** argv )
 		{
 		  any = true;
 		  std::string str = dom + " : " + desc;
-		  std::cerr << str << "\n"
+		  std::cout << str << "\n"
 			    << std::string( str.size() , '-' ) << "\n\n"
 			    << globals::cmddefs().help_commands( dom , false )
 			    << "\n";
@@ -356,14 +356,14 @@ int main(int argc , char ** argv )
 
 	  if ( ss.str() != "" )
 	    {
-	      std::cerr << "Matching commands\n"
+	      std::cout << "Matching commands\n"
 			<< "-----------------\n"
 			<< ss.str()
 			<< "\n";
 	    }
 
 	  if ( ! any )
-	    std::cerr << "No matching domains or commands\n\n";
+	    std::cout << "No matching domains or commands\n\n";
 	}
       else if ( strcmp( argv[1] , "-hv" ) == 0 )
 	{
@@ -375,36 +375,36 @@ int main(int argc , char ** argv )
 	    Helper::halt( "option [" + p + "] not recognized as a domain" );
 
 	  std::string str = p + " : " + globals::cmddefs().help_domain( p );
-	  std::cerr << "\n"
+	  std::cout << "\n"
 		    << str << "\n"
 		    << std::string( str.size(),'-')
 		    << "\n";
 
 	  const std::vector<std::string> cmds = globals::cmddefs().fetch_cmds( p );
 	  for (int i=0;i<cmds.size();i++)
-	    std::cerr << globals::cmddefs().help( cmds[i] , true , true , false ) << "\n";
+	    std::cout << globals::cmddefs().help( cmds[i] , true , true , false ) << "\n";
 	}
       else if ( argc == 2 )  // -h 
 	{
 
-	  std::cerr << "\n" << usage_msg << "\n";
+	  std::cout << "\n" << usage_msg << "\n";
 
-	  std::cerr << "List of domains\n"
+	  std::cout << "List of domains\n"
 		    << "---------------\n";
 	  
-	  std::cerr << globals::cmddefs().help_domains()
+	  std::cout << globals::cmddefs().help_domains()
 		    << "\n";
 
-	  std::cerr << "For commands within a domain, add the domain label after -h, e.g.\n"
+	  std::cout << "For commands within a domain, add the domain label after -h, e.g.\n"
 		    << "  luna -h annot\n\n";
 
-	  std::cerr << "For options and output for a given command, add the (upper-case) command after -h, e.g.\n"
+	  std::cout << "For options and output for a given command, add the (upper-case) command after -h, e.g.\n"
 		    << "  luna -h SIGSTATS\n\n";
 
-	  std::cerr << "To search help text across domains and commands, use -hs, e.g.\n"
+	  std::cout << "To search help text across domains and commands, use -hs, e.g.\n"
 		    << "  luna -hs annot\n\n";
 
-	  std::cerr << "For verbose help for all commands in one domain, use -hv, e.g.\n"
+	  std::cout << "For verbose help for all commands in one domain, use -hv, e.g.\n"
 		    << "  luna -hv summ\n\n";
 
 	}
@@ -415,14 +415,14 @@ int main(int argc , char ** argv )
 	  // 'all'  list all commands for all domains
 	  if ( p == "all" ) 
 	    {
-	      std::cerr << globals::cmddefs().help_commands() << "\n";
+	      std::cout << globals::cmddefs().help_commands() << "\n";
 
 	    }
 	  // -h {domain}  list all commands (non-verbose)
 	  else if ( globals::cmddefs().is_domain(p) ) 
 	    {
 	      std::string str = p + " : " + globals::cmddefs().help_domain(p);
-	      std::cerr << "\n"
+	      std::cout << "\n"
 			<< str << "\n"
 			<< std::string(str.size(),'-') 
 			<< "\n\n"
@@ -433,12 +433,12 @@ int main(int argc , char ** argv )
 	  // -h {cmd}  list all options/tables (verbose)
 	  else if ( globals::cmddefs().is_cmd(p) ) 
 	    {
-	      std::cerr << globals::cmddefs().help( p , true , true , primary ) << "\n";
+	      std::cout << globals::cmddefs().help( p , true , true , primary ) << "\n";
 	    }
 	  
 	  // otherwise, complain
 	  else  
-	    std::cerr << "option [" << p << "] not recognized as a domain or command\n";
+	    std::cout << "option [" << p << "] not recognized as a domain or command\n";
 	}      
       std::exit(0);
     }

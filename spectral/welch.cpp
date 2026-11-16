@@ -20,6 +20,7 @@
 //    --------------------------------------------------------------------
 
 #include "spectral/welch.h"
+#include "spectral/psd-aperiodic.h"
 #include "edf/edf.h"
 #include "edf/slice.h"
 #include "param.h"
@@ -425,6 +426,8 @@ annot_t * spectral_power( edf_t & edf ,
       //
 
       writer.level( signals.label(s) , globals::signal_strat );
+
+      psd_aperiodic_t aperiodic( param, min_power, max_power );
       
       
       //
@@ -558,6 +561,9 @@ annot_t * spectral_power( edf_t & edf ,
 			  calc_seg_sd,
 			  average_adj ,
 			  use_nextpow2 );
+
+	   aperiodic.epoch( pwelch.freq, pwelch.psd, bands_defined, *d, signals.label(s),
+	                    edf.timeline.display_epoch(epoch), interval.start_sec(), interval.stop_sec() );
 	   
 	   bandaid.track_bands_per_epoch( pwelch.psdsum( SLOW ),
 					  pwelch.psdsum( DELTA ),
@@ -891,6 +897,8 @@ annot_t * spectral_power( edf_t & edf ,
       const int n = freqs.size();      
 
       bool okay = total_epochs > 0 ;
+
+      aperiodic.summary( bands_defined );
       
       if ( ! suppress_output )       
 	writer.value( "NE" , total_epochs );
@@ -1305,6 +1313,8 @@ annot_t * spectral_power( edf_t & edf ,
 	    }
 	  
 	  
+	  aperiodic.add( edf, signals.label(s), obs, expected, pad1, pad2 );
+
 	  // but given SR of 1/(epoch-inc), we will typically have fewer (i.e. at the end of the recording,
 	  // we might miss 1 sample with epoch len = 4s, epoch step = 2s
 	  // just zero-pad these final points

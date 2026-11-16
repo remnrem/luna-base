@@ -55,6 +55,91 @@
 extern logger_t logger;
 extern writer_t writer;
 
+// Numerical results belong to the analysis, not to an output destination.
+// Producers populate this store once. Table output and PC export only read it;
+// SEC profiles, annotation contexts and QC can never become PC inputs.
+struct hd_results_t
+{
+  typedef std::map<std::string, std::string> levels_t;
+  struct row_t
+  {
+    levels_t levels;
+    std::string variable;
+    value_t value;
+    bool output;
+  };
+  levels_t levels;
+  std::vector<row_t> rows;
+  std::set<std::pair<levels_t, std::string>> assigned;
+  hdstats_pc::feature_map_t features;
+  bool output = true;
+
+  static bool pc_context( const levels_t &context )
+  {
+    return !context.count( "QC" ) && !context.count( "METRIC" ) && !context.count( globals::sec_strat ) &&
+           !context.count( globals::annot_strat );
+  }
+
+  void level( const std::string &label, const std::string &factor ) { levels[factor] = label; }
+  void level( const int label, const std::string &factor ) { level( Helper::int2str( label ), factor ); }
+  void level( const double label, const std::string &factor ) { level( Helper::dbl2str( label ), factor ); }
+  void unlevel( const std::string &factor ) { levels.erase( factor ); }
+
+  static std::string feature_key( const std::string &variable, const levels_t &levels )
+  {
+    // Retain the portable HDSTATS-PC factor ordering, independently of the
+    // order in which a producer entered its nested contexts.
+    static const std::vector<std::string> order = { "SS",    "NSS",        "STABLE", "MIX",   "BOUT",
+                                                    "TRANS", "BOUT_TRANS", "VAR",    "LRWIN", "LRLAG",
+                                                    "UQ",    "UMETRIC",    "UVAR" };
+    std::string stratum;
+    for ( const auto &factor : order )
+    {
+      const auto found = levels.find( factor );
+      if ( found == levels.end() )
+        continue;
+      if ( !stratum.empty() )
+        stratum += ";";
+      stratum += factor + "/" + found->second;
+    }
+    return hdstats_pc::key( variable, stratum );
+  }
+
+  void value( const std::string &variable, const value_t &value )
+  {
+    if ( !assigned.insert( { levels, variable } ).second )
+      Helper::halt( "HDSTATS metric calculated twice: " + feature_key( variable, levels ) );
+    rows.push_back( { levels, variable, value, output } );
+    if ( value.any_number() && pc_context( levels ) )
+      features.emplace( feature_key( variable, levels ), value.is_integer() ? value.i : value.d );
+  }
+  void value( const std::string &variable, double x ) { value( variable, value_t( x ) ); }
+  void value( const std::string &variable, int x ) { value( variable, value_t( x ) ); }
+  void value( const std::string &variable, const std::string &x ) { value( variable, value_t( x ) ); }
+
+  void emit( const bool main_metrics, const bool expose_pc_inputs = false ) const
+  {
+    for ( const auto &row : rows )
+    {
+      const bool pc_input = row.value.any_number() && pc_context( row.levels );
+      if ( !row.output && !( expose_pc_inputs && pc_input ) )
+        continue;
+      if ( !main_metrics && !row.levels.count( "QC" ) )
+        continue;
+      for ( const auto &item : row.levels )
+        ::writer.level( item.second, item.first );
+      if ( row.value.is_integer() )
+        ::writer.value( row.variable, row.value.i );
+      else if ( row.value.is_numeric() )
+        ::writer.value( row.variable, row.value.d );
+      else
+        ::writer.value( row.variable, row.value.s );
+      for ( const auto &item : row.levels )
+        ::writer.unlevel( item.first );
+    }
+  }
+};
+
 namespace {
 
 std::string make_invalid_channel_label( const std::string & prefix )
@@ -91,7 +176,6 @@ std::string infer_invalid_channel_label( const std::string & signal_label )
 
 }
 
-
 // ============================================================
 // Internal types
 // ============================================================
@@ -111,10 +195,10 @@ struct hd_params_t
   double hd_rem_mass_th;            // mean REM probability threshold for REM onset
   double hd_offset_win_min;         // backward integrated-area window for final-sleep detection
   double hd_offset_mass_th;         // mean sleep probability threshold for final-sleep detection
-  std::string spt_mode;             // legacy or primary-island selector
-  bool spt_qc;                      // emit primary-island/split-night diagnostics
-  double spt_island_min_sec;        // minimum soft-sleep mass for a candidate island
-  double spt_gap_max_sec;           // largest physical gap eligible to merge islands
+  std::string core_mode;             // spt (default), primary-island, recording or annot
+  bool core_qc;                      // emit primary-island/split-night diagnostics
+  double core_island_min_sec;        // minimum soft-sleep mass for a candidate island
+  double core_gap_max_sec;           // largest physical gap eligible to merge islands
   std::string annot_name;           // annotation class for stratification (empty = none)
   bool verbose;                     // emit per-sample HDSIG table
   bool qc;                          // emit operational and fit diagnostics
@@ -127,23 +211,26 @@ struct hd_params_t
   double shift_win_sec;             // pre/post window (seconds) for shift computation
   bool emit_annot_typed_classes;    // if true, encode directional transition type in point-event class name
   bool emit_all_trans;              // if true, pad TRANS/BOUT_TRANS pair summaries with unobserved directions
-  double bout_min_sec;              // minimum stable-run span (seconds) to qualify as a bout
-  double bout_gap_sec;               // max within-run gap (seconds) tolerated before splitting a bout
+  double bout_min_sec;              // minimum settled-run span (seconds) to qualify as a bout
+  double bout_intrusion_max_sec;    // absolute ceiling (seconds) on any single intrusion absorbed into a bout
+  double bout_intrusion_frac;       // intrusion must also be <= this fraction of the smaller flanking run/chain
   double bout_smooth_sec;           // centered moving-average half-window (seconds) applied to PS/CONF before the bout stability test (0=off)
   std::string ch_valid;             // channel name for PP_INVALID invalidity flag (optional)
   std::string emit_sig_label;       // if non-empty, emit PS/H/CONF per-sample signals under this channel-name prefix
+  bool emit_pre_post_wake;          // if true, also emit WPRE/WPOST (SS/BOUT) and zone-label W-dominant bout annotations
   bool do_emit_hypnogram;           // if true, emit hard-called (argmax) stage run annotations
   std::string hypno_prefix;         // optional prefix for those annotation classes, e.g. "hd_"
   std::string emit_spt_label;       // root for soft-SPT annotations; empty disables
-  std::string emit_cycle_label;     // root for complete soft-ultradian cycle annotations; empty disables
+  std::string emit_cycle_label;     // root for soft-ultradian cycle/phase annotations; empty disables
   bool do_longrange;                // global long-range hypnodensity dynamics
   std::vector<double> lr_lags_sec;  // physical lags (seconds)
   std::vector<double> lr_windows_sec; // non-overlapping physical windows (seconds)
   double lr_min_duration_sec;       // minimum contiguous valid-core duration
   std::string lr_policy;             // gap-aware (default) or strict
   bool lr_fail_on_empty;             // retain an optional fatal empty-panel policy
-  std::string analysis;              // spt (default), fixed, or recording
-  double fixed_duration_sec;         // fixed core duration, anchored at sleep onset
+  bool fixed;                        // fixed= given: cap the core at fixed_duration_sec
+  double fixed_duration_sec;         // fixed core duration, from the core start (sleep onset,
+                                     // or recording start in core-mode=recording)
   double analysis_flank_pre_sec;     // physical time retained before hypnodensity onset
   double analysis_flank_post_sec;    // physical time retained after hypnodensity offset
   std::string pc_out;                // optional level-1 HDSTATS feature directory
@@ -161,7 +248,6 @@ struct hd_params_t
   double ultra_max_condition;        // max standardized UVAR design condition number
   bool do_ultra_regions;             // optional four-region U_PHASE summaries
 };
-
 
 // ============================================================
 // Layer 1: data loading and validation
@@ -338,6 +424,14 @@ struct hd_data_t
 // once its reversal has been observed.  Thus neither recording edges nor an
 // unsupported (usually wake) gap can manufacture a half-cycle.
 // ============================================================
+
+static const char * const hd_ultra_quarter_label[] = { "D1", "D2", "L1", "L2" };
+
+static int hd_ultra_phase_quarter( const double phase )
+{
+  if ( !std::isfinite(phase) || phase < 0.0 ) return -1;
+  return std::min( 3, (int)std::floor( phase / ( M_PI / 2.0 ) ) );
+}
 
 struct hd_ultradian_extremum_t
 {
@@ -660,7 +754,6 @@ static void hd_update_posterior_channels( edf_t & edf,
     }
 }
 
-
 // ============================================================
 // Layer 2: per-sample derived signals
 // ============================================================
@@ -781,7 +874,6 @@ struct hd_derived_t
       }
   }
 };
-
 
 // ============================================================
 // Layer 3: transition detection
@@ -916,26 +1008,72 @@ static void build_stable_mask(
     }
 }
 
-// A bout: a long, settled, single-dominant-stage run (see bout-min/bout-gap).
-struct hd_bout_t { int lo, hi, dom; };
+// A bout: a long, settled, single-dominant-stage run, forgiving of brief
+// intrusions (plain instability, or a short foray into another stage) when
+// they are cheap both absolutely and relative to how established the run
+// already is on each side -- see bout-min/bout-intrusion-max/bout-intrusion-frac.
+//
+// Each bout has two extents. The settled core [core_lo,core_hi] is what
+// the stability test actually found: it excludes the +/-window transition
+// halo (and bout-smooth edge erosion) on either side. The run extent
+// [lo,hi] grows the core outward to the edge of its dominant-stage run --
+// see compute_bouts() -- and is what bouts report: durations, bout-min,
+// intrusion gaps, annotations and WASO zoning. The core bounds are kept for
+// anchoring bout-to-bout transitions within the (core-to-core) gap.
+struct hd_bout_t { int lo, hi, dom, core_lo, core_hi; };
 
-// Find bouts within context: contiguous stable runs of one argmax stage, merged
-// across short gaps only when the stage is the same, and kept only if the
-// merged span is >= bout_min_sec.
+// Maximum distance (samples) a settled core is grown outward toward its
+// dominant-stage run boundary: the transition halo plus bout smoothing,
+// i.e. the most the stability machinery itself erodes at a transition.
+static int hd_bout_extend_smp( const hd_params_t & par, const double Fs )
+{
+  return std::max( 0, (int)std::round( ( par.window_sec + par.bout_smooth_sec ) * Fs ) );
+}
+
+// Find bouts within context by growing one open "chain" at a time,
+// absorbing whatever sits between two same-dominant-stage raw segments --
+// plain instability or a different stage's brief run alike -- whenever that
+// intervening span is both:
+//   (a) <= bout-intrusion-max (an absolute ceiling, regardless of context), and
+//   (b) <= bout-intrusion-frac * the SMALLER of the chain-so-far and the
+//       resuming segment's own span, so tolerance scales with how
+//       established the bout already is: a brief wobble between two
+//       20-minute runs is absorbed, the same wobble between two 2-minute
+//       runs is not.
+// A segment that fails to merge and is itself too short to stand alone
+// (< bout-min) is simply skipped without closing the open chain: this lets a
+// genuinely long single-stage run that one noisy sample split into two
+// under-threshold pieces (e.g. 70s + 59s) still surface as a single bout
+// once the gap between the pieces is absorbed, rather than vanishing
+// entirely. Only a segment substantial enough to stand as its own bout
+// (>= bout-min) forces the current chain to close.
+//
+// Detection uses the settled core, but measurement uses the run: before
+// chaining, each raw stable run is extended at each end to its
+// dominant-stage run boundary (the first sample whose argmax differs, or the
+// context edge), provided that boundary lies within max_extend_smp of the
+// core. This undoes the halo/smoothing erosion at a genuine stage change
+// without bridging same-stage instability: if the run simply continues
+// unstably past max_extend_smp, or reaches another stable run of the same
+// stage first, that end is left at the core and the gap is judged as an
+// intrusion exactly as before. bout-min and the intrusion tolerances are
+// therefore applied to run-scale spans.
 static std::vector<hd_bout_t> compute_bouts(
     const std::vector<bool> & context_mask,
     const std::vector<bool> & is_stable,
     const std::vector<int> & argmax,
     const double bout_min_sec,
-    const double bout_gap_sec,
-    const double Fs )
+    const double bout_intrusion_max_sec,
+    const double bout_intrusion_frac,
+    const double Fs,
+    const int max_extend_smp )
 {
-  const int bout_min_smp = std::max( 1, (int)std::round( bout_min_sec * Fs ) );
-  const int bout_gap_smp = std::max( 0, (int)std::round( bout_gap_sec * Fs ) );
+  const int bout_min_smp      = std::max( 1, (int)std::round( bout_min_sec * Fs ) );
+  const int intrusion_max_smp = std::max( 0, (int)std::round( bout_intrusion_max_sec * Fs ) );
 
   // Step 1: find raw stable runs within context.  Stability alone is not
   // sufficient for a bout: a confident, low-PS N2-to-N3 change can remain
-  // stable throughout.  Split at every argmax change so every raw bout has
+  // stable throughout.  Split at every argmax change so every raw run has
   // exactly one dominant stage.
   std::vector<hd_bout_t> raw;
   const int Ns = (int)context_mask.size();
@@ -946,33 +1084,74 @@ static std::vector<hd_bout_t> compute_bouts(
       int lo = si;
       const int dom = argmax[si];
       while ( si < Ns && context_mask[si] && is_stable[si] && argmax[si] == dom ) ++si;
-      hd_bout_t r; r.lo = lo; r.hi = si - 1; r.dom = dom;
+      hd_bout_t r; r.lo = r.core_lo = lo; r.hi = r.core_hi = si - 1; r.dom = dom;
       raw.push_back( r );
     }
 
-  // Step 2: merge adjacent same-stage runs separated by <= bout_gap_smp
-  std::vector<hd_bout_t> merged;
-  for ( const auto & r : raw )
+  if ( raw.empty() ) return std::vector<hd_bout_t>();
+
+  // Step 1b: grow each core to its dominant-stage run boundary when that
+  // boundary is within reach (see above). Raw runs are split at argmax
+  // changes, so extensions of neighbouring runs can never overlap.
+  for ( int k = 0; k < (int)raw.size(); ++k )
     {
-      if ( !merged.empty() &&
-           r.dom == merged.back().dom &&
-           r.lo - merged.back().hi - 1 <= bout_gap_smp )
-        merged.back().hi = r.hi;   // extend span
-      else
-        merged.push_back( r );
+      hd_bout_t & r = raw[k];
+      const int next_lo = k + 1 < (int)raw.size() ? raw[k+1].core_lo : Ns;
+      const int prev_hi = k > 0 ? raw[k-1].core_hi : -1;
+
+      int j = r.core_hi + 1;
+      while ( j < next_lo && j - r.core_hi <= max_extend_smp
+              && context_mask[j] && argmax[j] == r.dom ) ++j;
+      if ( j >= Ns || ( j < next_lo && ( !context_mask[j] || argmax[j] != r.dom ) ) )
+        r.hi = j - 1;
+
+      j = r.core_lo - 1;
+      while ( j > prev_hi && r.core_lo - j <= max_extend_smp
+              && context_mask[j] && argmax[j] == r.dom ) --j;
+      if ( j < 0 || ( j > prev_hi && ( !context_mask[j] || argmax[j] != r.dom ) ) )
+        r.lo = j + 1;
     }
 
-  // Step 3: require span >= bout_min_sec to qualify as a bout
+  // Step 2: single left-to-right pass, growing one open chain at a time.
   std::vector<hd_bout_t> bouts;
-  for ( const auto & r : merged )
-    if ( r.hi - r.lo + 1 >= bout_min_smp )
-      bouts.push_back( r );
+  hd_bout_t chain = raw[0];
+  for ( size_t ri = 1; ri < raw.size(); ++ri )
+    {
+      const hd_bout_t & r = raw[ri];
+      const int chain_len = chain.hi - chain.lo + 1;
+      const int r_len      = r.hi - r.lo + 1;
+
+      if ( r.dom == chain.dom )
+        {
+          const int gap_smp = r.lo - chain.hi - 1;
+          const int tol_smp = std::min( intrusion_max_smp,
+                                         (int)std::round( bout_intrusion_frac * std::min( chain_len, r_len ) ) );
+          if ( gap_smp <= tol_smp )
+            {
+              chain.hi = r.hi;   // absorb the intervening span and extend
+              chain.core_hi = r.core_hi;
+              continue;
+            }
+        }
+
+      // Did not merge: a segment substantial enough to stand on its own
+      // forces the current chain to close; anything smaller is noise and is
+      // skipped without disturbing the open chain.
+      if ( r_len >= bout_min_smp )
+        {
+          if ( chain_len >= bout_min_smp ) bouts.push_back( chain );
+          chain = r;
+        }
+    }
+
+  const int final_len = chain.hi - chain.lo + 1;
+  if ( final_len >= bout_min_smp ) bouts.push_back( chain );
 
   return bouts;
 }
 
 // Bout-to-bout transitions: adjacent bouts with different dominant stages.
-// The gap between them is always non-empty (see build_stable_mask: any state
+// The core-to-core gap between them is always non-empty (see build_stable_mask: any state
 // change forces at least one non-stable sample immediately after it, so
 // adjacent bouts never directly touch), but can otherwise be anywhere from a
 // single sample to many minutes long -- any intervening run too short to
@@ -993,8 +1172,10 @@ static std::vector<hd_event_t> compute_bout_transitions( const std::vector<hd_bo
   for ( int ri = 1; ri < (int)bouts.size(); ri++ )
     if ( bouts[ri].dom != bouts[ri-1].dom )
       {
-        const int gap_lo = bouts[ri-1].hi + 1;
-        const int gap_hi = bouts[ri].lo   - 1;
+        // Anchor within the core-to-core gap (the run extents of adjacent
+        // bouts may touch at a clean stage change).
+        const int gap_lo = bouts[ri-1].core_hi + 1;
+        const int gap_hi = bouts[ri].core_lo   - 1;
 
         int peak = -1;
         double best_shift = -1.0;
@@ -1038,7 +1219,7 @@ static int count_trans_bout_matches(
       {
         if ( bouts[ri].dom == bouts[ri-1].dom ) continue;
         if ( e.from_st != bouts[ri-1].dom || e.to_st != bouts[ri].dom ) continue;
-        if ( e.idx >= bouts[ri-1].hi && e.idx <= bouts[ri].lo )
+        if ( e.idx >= bouts[ri-1].core_hi && e.idx <= bouts[ri].core_lo )
           {
             ++n_matched;
             break;
@@ -1055,6 +1236,7 @@ struct hd_trans_t
   std::vector<bool>       is_bout_trans5;
   std::vector<bool>       is_stable5;
   std::vector<bool>       is_bout_stable5;   // smoothed PS/CONF stability test, bout-formation only
+  std::vector<hd_bout_t>  bouts5;            // settled dominant-stage runs underlying bout_events5
 
   std::vector<hd_event_t> events3;
   std::vector<hd_event_t> bout_events3;
@@ -1062,6 +1244,7 @@ struct hd_trans_t
   std::vector<bool>       is_bout_trans3;
   std::vector<bool>       is_stable3;
   std::vector<bool>       is_bout_stable3;   // smoothed PS/CONF stability test, bout-formation only
+  std::vector<hd_bout_t>  bouts3;            // settled dominant-stage runs underlying bout_events3
 
   static std::vector<hd_event_t> detect_boundary_events(
       const std::vector<std::vector<double>> & P,
@@ -1243,9 +1426,11 @@ struct hd_trans_t
 
       // BOUT_TRANS: per-sample halo (±window_sec), same construction as
       // IS_TRANS but anchored on bout-to-bout transitions instead of events.
-      const std::vector<bool> all_mask = allowed == NULL ? std::vector<bool>( N, true ) : *allowed;
-      const std::vector<hd_bout_t> bouts5 = compute_bouts( all_mask, is_bout_stable5, der.argmax5,
-                                                             par.bout_min_sec, par.bout_gap_sec, dat.Fs );
+      const std::vector<bool> all_mask = allowed == NULL ? dat.valid : *allowed;
+      bouts5 = compute_bouts( all_mask, is_bout_stable5, der.argmax5,
+                               par.bout_min_sec, par.bout_intrusion_max_sec,
+                               par.bout_intrusion_frac, dat.Fs,
+                               hd_bout_extend_smp( par, dat.Fs ) );
       bout_events5 = compute_bout_transitions( bouts5, events5, der.TV );
       build_trans_mask( bout_events5, N, win_smp, is_bout_trans5 );
     }
@@ -1273,14 +1458,15 @@ struct hd_trans_t
         if ( is_trans3[i] ) is_bout_stable3[i] = false;
 
       const std::vector<bool> all_mask3 = allowed == NULL ? std::vector<bool>( N, true ) : *allowed;
-      const std::vector<hd_bout_t> bouts3 = compute_bouts( all_mask3, is_bout_stable3, der.argmax3,
-                                                             par.bout_min_sec, par.bout_gap_sec, dat.Fs );
+      bouts3 = compute_bouts( all_mask3, is_bout_stable3, der.argmax3,
+                               par.bout_min_sec, par.bout_intrusion_max_sec,
+                               par.bout_intrusion_frac, dat.Fs,
+                               hd_bout_extend_smp( par, dat.Fs ) );
       bout_events3 = compute_bout_transitions( bouts3, events3, der.TV3 );
       build_trans_mask( bout_events3, N, win_smp, is_bout_trans3 );
     }
   }
 };
-
 
 // ============================================================
 // Layer 4: summary engine
@@ -1297,6 +1483,118 @@ static double percentile( std::vector<double> v, double p )
   if ( hi >= (int)v.size() ) return v.back();
   double frac = idx - lo;
   return v[lo] * (1.0 - frac) + v[hi] * frac;
+}
+
+// Soft-called analogue of HYPNO's per-stage BOUT_N/BOUT_MN/BOUT_MD/BOUT_MX/
+// BOUT_05/BOUT_10 family, computed directly over compute_bouts()'s output
+// for one dominant stage. BOUT_PCT uses the union of the context's
+// dominant-stage samples and the full spans of qualifying bouts. Absorbed
+// deviations (including invalid samples) belong to both numerator and
+// denominator; dominant-stage time outside qualifying bouts belongs only
+// to the denominator. Wake zones use the same union for whole assigned bouts.
+struct hd_bout_stats_t
+{
+  int    n        = 0;
+  bool   valid     = false;
+  double mean_sec  = 0.0;
+  double med_sec   = 0.0;
+  double max_sec   = 0.0;
+  double p90_sec   = 0.0;
+  double min05     = 0.0;   // total minutes accounted for by bouts >= 5 min
+  double min10     = 0.0;   // total minutes accounted for by bouts >= 10 min
+  double pct       = 0.0;   // % of eligible time covered by qualifying bouts
+};
+
+template <typename Pred>
+static hd_bout_stats_t compute_bout_stats_if( const std::vector<hd_bout_t> & bouts,
+                                               Pred pred,
+                                               const double Fs,
+                                               const std::vector<bool> & dominant_mask )
+{
+  hd_bout_stats_t s;
+  std::vector<double> durs_sec;
+  double total_bout_sec = 0.0;
+  int denominator_samples = 0;
+  for ( bool dominant : dominant_mask )
+    if ( dominant ) ++denominator_samples;
+  for ( const auto & b : bouts )
+    if ( pred( b ) )
+      {
+        const double d = ( b.hi - b.lo + 1 ) / Fs;
+        durs_sec.push_back( d );
+        total_bout_sec += d;
+        // Bouts do not overlap. Add only samples not already counted as
+        // dominant time, including absorbed gaps and out-of-zone samples
+        // of a whole bout assigned to this wake zone.
+        for ( int i = b.lo; i <= b.hi; ++i )
+          if ( !dominant_mask[i] ) ++denominator_samples;
+        if ( d >= 300.0 ) s.min05 += d / 60.0;
+        if ( d >= 600.0 ) s.min10 += d / 60.0;
+      }
+  s.n = (int)durs_sec.size();
+  const double denominator_sec = denominator_samples / Fs;
+  s.pct = denominator_sec > 0 ? 100.0 * total_bout_sec / denominator_sec : 0.0;
+  if ( s.n == 0 ) return s;
+  s.valid = true;
+  double sum = 0.0, mx = 0.0;
+  for ( double d : durs_sec ) { sum += d; if ( d > mx ) mx = d; }
+  s.mean_sec = sum / s.n;
+  s.max_sec  = mx;
+  s.med_sec  = percentile( durs_sec, 0.5 );
+  s.p90_sec  = percentile( durs_sec, 0.9 );
+  return s;
+}
+
+static hd_bout_stats_t compute_bout_stats( const std::vector<hd_bout_t> & bouts,
+                                            const int dom,
+                                            const double Fs,
+                                            const std::vector<bool> & dominant_mask )
+{
+  return compute_bout_stats_if( bouts, [dom]( const hd_bout_t & b ){ return b.dom == dom; }, Fs, dominant_mask );
+}
+
+// Classifies a W-dominant bout (or any [lo,hi] sample span) relative to the
+// sleep window as WASO (within sleep-onset..final-wake), WPRE (before sleep
+// onset) or WPOST (after final wake), by majority sample overlap -- a bout
+// straddling onset_idx/offset_idx is assigned whole to whichever side holds
+// more of it, rather than being split across two bouts.
+static std::string hd_wake_zone_label( const int lo, const int hi,
+                                        const int onset_idx, const int offset_idx )
+{
+  const int len   = hi - lo + 1;
+  const int n_pre  = std::max( 0, std::min( hi, onset_idx - 1 )   - lo + 1 );
+  const int n_post = std::max( 0, hi - std::max( lo, offset_idx + 1 ) + 1 );
+  const int n_waso = len - n_pre - n_post;
+  if ( n_pre  >= n_waso && n_pre  >= n_post ) return "WPRE";
+  if ( n_post >= n_waso && n_post >= n_pre  ) return "WPOST";
+  return "WASO";
+}
+
+// The sample-index zones of the W split, in hd_wake_zones order: WASO is the
+// SPT itself (onset..final wake), WPRE everything before it and WPOST
+// everything after.  Callers intersect these with their own analysis/valid
+// masks, so open-ended WPRE/WPOST bounds are deliberate.
+static const std::vector<std::string> hd_wake_zones = { "WASO", "WPRE", "WPOST" };
+
+static bool hd_in_wake_zone( const int zi, const int i, const int onset_idx, const int offset_idx )
+{
+  if ( zi == 0 ) return i >= onset_idx && i <= offset_idx;
+  if ( zi == 1 ) return i < onset_idx;
+  return i > offset_idx;
+}
+
+static void write_bout_stats( hd_results_t &writer, const hd_bout_stats_t &bs, const double dens )
+{
+  const double na = std::numeric_limits<double>::quiet_NaN();
+  writer.value( "BOUT_N", bs.n );
+  writer.value( "BOUT_DENS", dens );
+  writer.value( "BOUT_PCT", bs.pct );
+  writer.value( "BOUT_DUR_MEAN", bs.valid ? bs.mean_sec : na );
+  writer.value( "BOUT_DUR_MED", bs.valid ? bs.med_sec : na );
+  writer.value( "BOUT_DUR_MAX", bs.valid ? bs.max_sec : na );
+  writer.value( "BOUT_DUR_P90", bs.valid ? bs.p90_sec : na );
+  writer.value( "BOUT_05", bs.min05 );
+  writer.value( "BOUT_10", bs.min10 );
 }
 
 // Pearson correlation between two same-length vectors
@@ -1380,112 +1678,67 @@ static std::vector<double> window_mean_backward( const std::vector<double> & x ,
   return out;
 }
 
-struct hd_hypno_metrics_t
+struct hd_boundary_evidence_t
 {
   bool valid_onset = false;
   bool valid_offset = false;
   bool valid_window = false;
-  bool valid_rem = false;
 
   int onset_idx = -1;
   int offset_idx = -1;
-  int rem_idx = -1;
 
   double total_min = 0.0;
   double dt_min = 0.0;
-  double hd_tst = 0.0;
-  double hd_spt = 0.0;
-  double hd_waso = 0.0;
-  double hd_sme = 0.0;
-  double hd_sol = 0.0;
-  double hd_rem_lat = 0.0;
-  double hd_rem_lat2 = 0.0;
+  // Recording-wide boundary evidence, reused after selecting/truncating a
+  // window so neither smoothing nor integration changes at its edges.
+  std::vector<double> a_sleep, a_rem, b_sleep;
 
-  std::map<std::string,double> mins;
-
-  void compute( const hd_data_t & dat , const hd_params_t & par )
+  void compute( const hd_data_t &dat, const hd_params_t &par )
   {
-    mins.clear();
     const int N = dat.N;
-    if ( N == 0 ) return;
+    if ( N == 0 )
+      return;
 
     dt_min = 1.0 / dat.Fs / 60.0;
     total_min = N * dt_min;
 
-    std::vector<double> pW( N , 0.0 ) , pR( N , 0.0 ) , pNR( N , 0.0 ) , pS( N , 0.0 );
-    for ( int i = 0 ; i < N ; i++ )
-      {
-        pW[i] = dat.p[0][i];
-        pR[i] = dat.p[4][i];
-        pNR[i] = dat.p[1][i] + dat.p[2][i] + dat.p[3][i];
-        pS[i] = pNR[i] + pR[i];
+    std::vector<double> pR( N, 0.0 ), pS( N, 0.0 );
+    for ( int i = 0; i < N; ++i )
+    {
+      pR[i] = dat.p[4][i];
+      pS[i] = dat.p[1][i] + dat.p[2][i] + dat.p[3][i] + pR[i];
+    }
 
-        mins["W"]  += dat.p[0][i] * dt_min;
-        mins["N1"] += dat.p[1][i] * dt_min;
-        mins["N2"] += dat.p[2][i] * dt_min;
-        mins["N3"] += dat.p[3][i] * dt_min;
-        mins["R"]  += dat.p[4][i] * dt_min;
-        mins["NR"] += pNR[i] * dt_min;
-        mins["S"]  += pS[i] * dt_min;
-      }
+    const int smooth_smp = std::max( 1, (int)std::round( par.hd_smooth_sec * dat.Fs ) );
+    const int onset_smp = std::max( 1, (int)std::round( par.hd_onset_win_min * 60.0 * dat.Fs ) );
+    const int offset_smp = std::max( 1, (int)std::round( par.hd_offset_win_min * 60.0 * dat.Fs ) );
 
-    hd_tst = mins["S"];
+    const std::vector<double> pS_sm = moving_average_centered( pS, smooth_smp );
+    const std::vector<double> pR_sm = moving_average_centered( pR, smooth_smp );
+    a_sleep = window_mean_forward( pS_sm, onset_smp );
+    a_rem = window_mean_forward( pR_sm, onset_smp );
+    b_sleep = window_mean_backward( pS_sm, offset_smp );
 
-    const int smooth_smp = std::max( 1 , (int)std::round( par.hd_smooth_sec * dat.Fs ) );
-    const int onset_smp  = std::max( 1 , (int)std::round( par.hd_onset_win_min * 60.0 * dat.Fs ) );
-    const int offset_smp = std::max( 1 , (int)std::round( par.hd_offset_win_min * 60.0 * dat.Fs ) );
-
-    const std::vector<double> pS_sm = moving_average_centered( pS , smooth_smp );
-    const std::vector<double> pR_sm = moving_average_centered( pR , smooth_smp );
-    const std::vector<double> a_sleep = window_mean_forward( pS_sm , onset_smp );
-    const std::vector<double> a_rem   = window_mean_forward( pR_sm , onset_smp );
-    const std::vector<double> b_sleep = window_mean_backward( pS_sm , offset_smp );
-
-    for ( int i = 0 ; i < N ; i++ )
+    for ( int i = 0; i < N; i++ )
       if ( a_sleep[i] >= par.hd_sleep_mass_th )
-        {
-          onset_idx = i;
-          valid_onset = true;
-          hd_sol = i * dt_min;
-          break;
-        }
-
-    if ( ! valid_onset ) return;
-
-    for ( int i = N - 1 ; i >= onset_idx ; i-- )
-      if ( b_sleep[i] >= par.hd_offset_mass_th )
-        {
-          offset_idx = i;
-          valid_offset = true;
-          break;
-        }
-
-    if ( valid_offset && offset_idx > onset_idx )
       {
-        valid_window = true;
-        hd_spt = ( offset_idx - onset_idx ) * dt_min;
-
-        double sleep_mass_window = 0.0;
-        for ( int i = onset_idx ; i <= offset_idx ; i++ )
-          {
-            hd_waso += pW[i] * dt_min;
-            sleep_mass_window += pS[i] * dt_min;
-          }
-        hd_sme = hd_spt > 0 ? 100.0 * sleep_mass_window / hd_spt : 0.0;
+        onset_idx = i;
+        valid_onset = true;
+        break;
       }
 
-    for ( int i = onset_idx ; i < N ; i++ )
-      if ( a_rem[i] >= par.hd_rem_mass_th )
-        {
-          rem_idx = i;
-          valid_rem = true;
-          hd_rem_lat = ( i - onset_idx ) * dt_min;
+    if ( !valid_onset )
+      return;
 
-          double sleep_mass_to_rem = 0.0;
-          for ( int j = onset_idx ; j <= i ; j++ ) sleep_mass_to_rem += pS[j] * dt_min;
-          hd_rem_lat2 = sleep_mass_to_rem;
-          break;
-        }
+    for ( int i = N - 1; i >= onset_idx; i-- )
+      if ( b_sleep[i] >= par.hd_offset_mass_th )
+      {
+        offset_idx = i;
+        valid_offset = true;
+        break;
+      }
+
+    valid_window = valid_offset && offset_idx > onset_idx;
   }
 };
 
@@ -1495,7 +1748,7 @@ struct hd_hypno_metrics_t
 // wake and invalid samples; the selected primary island is the surviving
 // interval with the largest soft sleep mass. This avoids a centre-of-mass rule,
 // which can land in a long wake gap between two substantial sleep episodes.
-struct hd_spt_qc_t
+struct hd_core_qc_t
 {
   bool primary_valid = false;
   bool split = false;
@@ -1510,24 +1763,24 @@ struct hd_spt_qc_t
   double max_wake_gap_min = 0.0;
 };
 
-struct hd_spt_island_t
+struct hd_core_island_t
 {
   int lo = -1;
   int hi = -1;
   double sleep_min = 0.0;
 };
 
-static hd_spt_qc_t hd_primary_island( const hd_data_t & dat,
+static hd_core_qc_t hd_primary_island( const hd_data_t & dat,
                                        const hd_params_t & par )
 {
-  hd_spt_qc_t out;
+  hd_core_qc_t out;
   const int N = dat.N;
   if ( N == 0 ) return out;
 
   const double dt_min = 1.0 / dat.Fs / 60.0;
   const int smooth_smp = std::max( 1, (int)std::round( par.hd_smooth_sec * dat.Fs ) );
-  const int gap_smp = std::max( 0, (int)std::round( par.spt_gap_max_sec * dat.Fs ) );
-  const double min_island_min = par.spt_island_min_sec / 60.0;
+  const int gap_smp = std::max( 0, (int)std::round( par.core_gap_max_sec * dat.Fs ) );
+  const double min_island_min = par.core_island_min_sec / 60.0;
 
   std::vector<double> sleep( N, 0.0 ), wake( N, 0.0 );
   std::vector<double> sum( N + 1, 0.0 );
@@ -1553,23 +1806,23 @@ static hd_spt_qc_t hd_primary_island( const hd_data_t & dat,
       sleep_sm[i] = ( sum[hi+1] - sum[lo] ) / ( hi - lo + 1 );
     }
 
-  std::vector<hd_spt_island_t> cores;
+  std::vector<hd_core_island_t> cores;
   for ( int i = 0; i < N; )
     {
       if ( !dat.valid[i] || sleep_sm[i] < par.hd_sleep_mass_th ) { ++i; continue; }
       const int lo = i;
       while ( i < N && dat.valid[i] && sleep_sm[i] >= par.hd_sleep_mass_th ) ++i;
-      hd_spt_island_t core;
+      hd_core_island_t core;
       core.lo = lo;
       core.hi = i - 1;
       cores.push_back( core );
     }
 
-  std::vector<hd_spt_island_t> merged;
+  std::vector<hd_core_island_t> merged;
   for ( const auto & core : cores )
     {
       if ( merged.empty() ) { merged.push_back( core ); continue; }
-      hd_spt_island_t & prior = merged.back();
+      hd_core_island_t & prior = merged.back();
       const int gap_lo = prior.hi + 1;
       const int gap_hi = core.lo - 1;
       const int gap_len = gap_hi >= gap_lo ? gap_hi - gap_lo + 1 : 0;
@@ -1582,7 +1835,7 @@ static hd_spt_qc_t hd_primary_island( const hd_data_t & dat,
         merged.push_back( core );
     }
 
-  std::vector<hd_spt_island_t> islands;
+  std::vector<hd_core_island_t> islands;
   for ( auto island : merged )
     {
       for ( int i = island.lo; i <= island.hi; ++i )
@@ -1595,7 +1848,7 @@ static hd_spt_qc_t hd_primary_island( const hd_data_t & dat,
   int best = 0;
   for ( int i = 1; i < (int)islands.size(); ++i )
     if ( islands[i].sleep_min > islands[best].sleep_min ) best = i;
-  const hd_spt_island_t & primary = islands[best];
+  const hd_core_island_t & primary = islands[best];
   out.primary_valid = true;
   out.primary_index = best + 1;
   out.lo = primary.lo;
@@ -1624,78 +1877,47 @@ static hd_spt_qc_t hd_primary_island( const hd_data_t & dat,
   return out;
 }
 
-static void hd_apply_primary_island( hd_hypno_metrics_t * hm,
-                                     const hd_spt_qc_t & selection,
-                                     const hd_data_t & dat,
-                                     const hd_params_t & par )
+static void hd_apply_primary_island( hd_boundary_evidence_t *hm, const hd_core_qc_t &selection )
 {
-  if ( !selection.primary_valid ) return;
-
+  if ( !selection.primary_valid )
+    return;
   hm->onset_idx = selection.lo;
   hm->offset_idx = selection.hi;
-  hm->valid_onset = true;
-  hm->valid_offset = true;
+  hm->valid_onset = hm->valid_offset = true;
   hm->valid_window = selection.hi >= selection.lo;
-  hm->hd_sol = selection.lo * hm->dt_min;
-  hm->hd_spt = ( selection.hi - selection.lo ) * hm->dt_min;
-  hm->hd_waso = 0.0;
-  double sleep_mass = 0.0;
-  for ( int i = selection.lo; i <= selection.hi; ++i )
-    if ( dat.valid[i] )
-      {
-        hm->hd_waso += dat.p[0][i] * hm->dt_min;
-        sleep_mass += ( 1.0 - dat.p[0][i] ) * hm->dt_min;
-      }
-  hm->hd_sme = hm->hd_spt > 0.0 ? 100.0 * sleep_mass / hm->hd_spt : 0.0;
-
-  hm->valid_rem = false;
-  hm->rem_idx = -1;
-  const int smooth_smp = std::max( 1, (int)std::round( par.hd_smooth_sec * dat.Fs ) );
-  const int onset_smp = std::max( 1, (int)std::round( par.hd_onset_win_min * 60.0 * dat.Fs ) );
-  std::vector<double> pR( dat.N, 0.0 );
-  for ( int i = 0; i < dat.N; ++i ) if ( dat.valid[i] ) pR[i] = dat.p[4][i];
-  const std::vector<double> a_rem = window_mean_forward( moving_average_centered( pR, smooth_smp ), onset_smp );
-  for ( int i = selection.lo; i <= selection.hi; ++i )
-    if ( dat.valid[i] && a_rem[i] >= par.hd_rem_mass_th )
-      {
-        hm->rem_idx = i;
-        hm->valid_rem = true;
-        hm->hd_rem_lat = ( i - selection.lo ) * hm->dt_min;
-        hm->hd_rem_lat2 = 0.0;
-        for ( int j = selection.lo; j <= i; ++j )
-          if ( dat.valid[j] ) hm->hd_rem_lat2 += ( 1.0 - dat.p[0][j] ) * hm->dt_min;
-        break;
-      }
 }
 
-static void hd_write_spt_qc( const hd_spt_qc_t & selection,
+static void hd_write_core_qc( const hd_core_qc_t & selection,
                              const hd_data_t & dat,
                              const hd_params_t & par,
                              const bool fallback_to_legacy,
-                             const hd_hypno_metrics_t & legacy_hm )
+                             const hd_boundary_evidence_t & legacy_hm )
 {
   // This is deliberately a separate, opt-in table: the normal HDSTATS output
   // remains byte-for-byte quiet about the alternative selector unless it is
-  // being used or explicitly requested with spt-qc=T.
-  writer.level( par.spt_mode, "SPT_QC" );
+  // being used or explicitly requested with core-qc=T.
+  writer.level( par.core_mode, "CORE_QC" );
   writer.value( "PRIMARY_VALID", selection.primary_valid ? 1 : 0 );
-  writer.value( "FALLBACK_LEGACY", fallback_to_legacy ? 1 : 0 );
+  writer.value( "FALLBACK_SPT", fallback_to_legacy ? 1 : 0 );
   writer.value( "N_ISLANDS", selection.n_islands );
   writer.value( "PRIMARY_INDEX", selection.primary_index );
   writer.value( "TOTAL_SLEEP_MIN", selection.total_sleep_min );
   writer.value( "PRIMARY_SLEEP_MIN", selection.primary_sleep_min );
   writer.value( "PRIMARY_MASS_PCT", selection.primary_mass_pct );
-  const double primary_spt_min = selection.primary_valid
-    ? ( selection.hi - selection.lo ) / dat.Fs / 60.0
+  // Core spans (inclusive of both endpoint samples), before any flank and
+  // before any fixed cutoff or sustained-sleep boundary search.
+  const double primary_core_min = selection.primary_valid
+    ? ( selection.hi - selection.lo + 1 ) / dat.Fs / 60.0
     : std::numeric_limits<double>::quiet_NaN();
-  const double legacy_spt_min = legacy_hm.valid_window
-    ? legacy_hm.hd_spt : std::numeric_limits<double>::quiet_NaN();
-  writer.value( "PRIMARY_SPT_MIN", primary_spt_min );
-  writer.value( "LEGACY_SPT_MIN", legacy_spt_min );
-  writer.value( "SPT_DELTA_MIN", selection.primary_valid && legacy_hm.valid_window
-                ? primary_spt_min - legacy_spt_min
+  const double spt_core_min = legacy_hm.valid_window
+    ? ( legacy_hm.offset_idx - legacy_hm.onset_idx + 1 ) / dat.Fs / 60.0
+    : std::numeric_limits<double>::quiet_NaN();
+  writer.value( "PRIMARY_CORE_MIN", primary_core_min );
+  writer.value( "SPT_CORE_MIN", spt_core_min );
+  writer.value( "CORE_DELTA_MIN", selection.primary_valid && legacy_hm.valid_window
+                ? primary_core_min - spt_core_min
                 : std::numeric_limits<double>::quiet_NaN() );
-  // Signed timing deltas are primary-island minus legacy: a positive value
+  // Signed timing deltas are primary-island minus spt core: a positive value
   // means the primary-island boundary occurs later in source time.
   writer.value( "ONSET_DELTA_MIN", selection.primary_valid && legacy_hm.valid_onset
                 ? ( selection.lo - legacy_hm.onset_idx ) / dat.Fs / 60.0
@@ -1707,14 +1929,14 @@ static void hd_write_spt_qc( const hd_spt_qc_t & selection,
                 ? selection.total_sleep_min - selection.primary_sleep_min
                 : std::numeric_limits<double>::quiet_NaN() );
   writer.value( "INTERNAL_WAKE_MIN", selection.internal_wake_min );
-  writer.value( "INTERNAL_WAKE_PCT", primary_spt_min > 0.0
-                ? 100.0 * selection.internal_wake_min / primary_spt_min
+  writer.value( "INTERNAL_WAKE_PCT", primary_core_min > 0.0
+                ? 100.0 * selection.internal_wake_min / primary_core_min
                 : std::numeric_limits<double>::quiet_NaN() );
   writer.value( "MAX_WAKE_GAP_MIN", selection.max_wake_gap_min );
   writer.value( "SPLIT_NIGHT", selection.split ? 1 : 0 );
   writer.value( "PRIMARY_START_SEC", selection.primary_valid ? selection.lo / dat.Fs : std::numeric_limits<double>::quiet_NaN() );
   writer.value( "PRIMARY_STOP_SEC", selection.primary_valid ? ( selection.hi + 1 ) / dat.Fs : std::numeric_limits<double>::quiet_NaN() );
-  writer.unlevel( "SPT_QC" );
+  writer.unlevel( "CORE_QC" );
 }
 
 // The analysis interval is a mask on the original clock, never a compacted
@@ -1727,29 +1949,81 @@ struct hd_analysis_t
   std::string mode = "recording";
   bool fallback_to_recording = false;
   bool fixed_ok = true;
+  bool core_defined = true;     // fixed mode: a core start could be located
   double fixed_available_sec = std::numeric_limits<double>::quiet_NaN();
   int lo = 0;
   int hi = -1;
+  // Right edge of the true-SPT search: the analysis window's own edge,
+  // except in fixed mode, where SPT may not run past the fixed core
+  // (onset + duration) into the post-flank.
+  int spt_hi = -1;
+  double duration_min = 0.0;
   std::vector<bool> physical_mask;
   std::vector<bool> valid_mask;
   int n_invalid = 0;
 };
 
-static hd_analysis_t hd_make_analysis( const hd_data_t & dat,
-                                        const hd_hypno_metrics_t & hm,
+// Annotation windows use literal lights_out/lights_on class names. Require
+// one unambiguous interval or marker pair; never guess among multiple nights.
+static std::pair<int,int> hd_annotation_core( edf_t & edf, const hd_data_t & dat )
+{
+  const annot_t * out = edf.annotations->find( "lights_out" );
+  const annot_t * on = edf.annotations->find( "lights_on" );
+  if ( out == NULL || out->interval_events.size() != 1 )
+    Helper::halt( "HDSTATS core-mode=annot requires exactly one lights_out annotation" );
+  const interval_t & off_interval = out->interval_events.begin()->first.interval;
+  uint64_t start = off_interval.start;
+  uint64_t stop = off_interval.stop;
+  if ( on != NULL && !on->interval_events.empty() )
+    {
+      if ( on->interval_events.size() != 1 )
+        Helper::halt( "HDSTATS core-mode=annot requires exactly one lights_on marker" );
+      const interval_t & on_interval = on->interval_events.begin()->first.interval;
+      if ( start != stop || on_interval.start != on_interval.stop )
+        Helper::halt( "HDSTATS core-mode=annot requires zero-duration lights_out and lights_on markers when both are present" );
+      stop = on_interval.start;
+    }
+  if ( stop <= start )
+    Helper::halt( "HDSTATS core-mode=annot requires lights_out before lights_on, or a positive-duration lights_out interval" );
+  const uint64_t sample_tp = (uint64_t)std::round( (double)globals::tp_1sec / dat.Fs );
+  if ( dat.tp.empty() || start < dat.tp.front() || stop > dat.tp.back() + sample_tp )
+    Helper::halt( "HDSTATS core-mode=annot window must lie within the recording" );
+  const int lo = std::lower_bound( dat.tp.begin(), dat.tp.end(), start ) - dat.tp.begin();
+  const int hi = std::lower_bound( dat.tp.begin(), dat.tp.end(), stop ) - dat.tp.begin() - 1;
+  if ( hi < lo ) Helper::halt( "HDSTATS core-mode=annot window contains no posterior samples" );
+  return std::make_pair( lo, hi );
+}
+
+static hd_analysis_t hd_make_analysis( edf_t & edf,
+                                        const hd_data_t & dat,
+                                        const hd_boundary_evidence_t & hm,
                                         const hd_params_t & par )
 {
   hd_analysis_t out;
   out.hi = dat.N - 1;
-  if ( par.analysis == "fixed" )
+  if ( par.core_mode == "annot" )
     {
+      const std::pair<int,int> core = hd_annotation_core( edf, dat );
+      const int pre = std::max( 0, (int)std::round( par.analysis_flank_pre_sec * dat.Fs ) );
+      const int post = std::max( 0, (int)std::round( par.analysis_flank_post_sec * dat.Fs ) );
+      out.mode = "annot";
+      out.lo = std::max( 0, core.first - pre );
+      out.hi = std::min( dat.N - 1, core.second + post );
+    }
+  else if ( par.fixed )
+    {
+      // The fixed core starts at the selected core's sleep onset (spt or
+      // primary-island; hm already reflects the chosen core), or at the
+      // recording start in core-mode=recording.
       out.mode = "fixed";
-      if ( ! hm.valid_onset )
+      const bool from_recording_start = par.core_mode == "recording";
+      out.core_defined = from_recording_start || hm.valid_onset;
+      if ( ! out.core_defined )
         out.fixed_ok = false;
       else
         {
           const int duration = std::max( 1, (int)std::round( par.fixed_duration_sec * dat.Fs ) );
-          const int core_lo = hm.onset_idx;
+          const int core_lo = from_recording_start ? 0 : hm.onset_idx;
           const int core_hi = core_lo + duration - 1;
           out.fixed_available_sec = ( dat.N - core_lo ) / dat.Fs;
           if ( core_hi >= dat.N )
@@ -1766,10 +2040,11 @@ static hd_analysis_t hd_make_analysis( const hd_data_t & dat,
               const int post = std::max( 0, (int)std::round( par.analysis_flank_post_sec * dat.Fs ) );
               out.lo = std::max( 0, core_lo - pre );
               out.hi = std::min( dat.N - 1, core_hi + post );
+              out.spt_hi = core_hi;
             }
         }
     }
-  else if ( par.analysis == "spt" )
+  else if ( par.core_mode != "recording" )
     {
       if ( hm.valid_window )
         {
@@ -1782,9 +2057,12 @@ static hd_analysis_t hd_make_analysis( const hd_data_t & dat,
       else
         {
           out.fallback_to_recording = true;
-          logger << "  warning: analysis=spt could not define a sustained sleep interval; using recording\n";
+          logger << "  warning: core-mode=" << par.core_mode
+                 << " could not define a sustained sleep interval; using recording\n";
         }
     }
+  if ( out.spt_hi < 0 ) out.spt_hi = out.hi;
+  out.duration_min = ( out.hi - out.lo + 1 ) / dat.Fs / 60.0;
   out.physical_mask.assign( dat.N, false );
   out.valid_mask.assign( dat.N, false );
   for ( int i = out.lo; i <= out.hi; ++i )
@@ -1793,6 +2071,97 @@ static hd_analysis_t hd_make_analysis( const hd_data_t & dat,
       out.valid_mask[i] = dat.valid[i];
       if ( ! dat.valid[i] ) ++out.n_invalid;
     }
+  return out;
+}
+
+// For sustained-sleep detection, SPT boundaries are searched inside the
+// active window, rather than copied from the
+// whole-recording onset_idx/offset_idx (which seed the analysis window
+// for core-mode=spt). This scans the recording-wide
+// smoothed/integrated evidence already computed by hd_boundary_evidence_t,
+// bounded to [lo,hi] instead of the whole recording (hi = analysis.spt_hi:
+// the window edge, or the fixed core's end in fixed mode). If no sustained-
+// wake crossing is found before hi, SPT's end falls back to hi (e.g. the
+// fixed= cutoff, or the recording's physical end in core-mode=recording) rather than
+// being left undefined. SPT spans samples onset..offset inclusive, so its
+// duration, WASO/sleep mass and the _spt annotation all agree. REM latency is
+// measured from this SPT onset, to the first sustained REM within the SPT.
+struct hd_window_spt_t
+{
+  bool valid_onset = false;
+  bool valid_offset = false;    // selected/detected endpoint rather than a cutoff fallback
+  bool offset_is_fallback = false;
+  bool valid_window = false;
+  int onset_idx = -1;
+  int offset_idx = -1;
+  double spt_min = 0.0;
+  double sol_min = 0.0;    // official onset minus analysis-window start
+  double waso_min = 0.0;
+  double sme = 0.0;
+  bool valid_rem = false;
+  int rem_idx = -1;
+  double rem_lat = 0.0;
+  double rem_lat2 = 0.0;
+};
+
+// Summarize one official SPT, independent of how its boundaries were selected.
+static hd_window_spt_t hd_spt_from_bounds( const hd_data_t & dat,
+                                           const hd_params_t & par,
+                                           const hd_boundary_evidence_t & evidence,
+                                           const int lo, const int hi )
+{
+  hd_window_spt_t out;
+  if ( lo < 0 || hi < lo || hi >= dat.N ) return out;
+  const double dt_min = 1.0 / dat.Fs / 60.0;
+  out.valid_onset = out.valid_offset = out.valid_window = true;
+  out.onset_idx = lo;
+  out.offset_idx = hi;
+  out.spt_min = ( hi - lo + 1 ) * dt_min;
+  double sleep_mass = 0.0;
+  for ( int i = lo; i <= hi; ++i )
+    if ( dat.valid[i] )
+      {
+        out.waso_min += dat.p[0][i] * dt_min;
+        const double sleep = dat.p[1][i] + dat.p[2][i] + dat.p[3][i] + dat.p[4][i];
+        sleep_mass += sleep * dt_min;
+        if ( !out.valid_rem )
+          {
+            out.rem_lat2 += sleep * dt_min;
+            if ( evidence.a_rem[i] >= par.hd_rem_mass_th )
+              {
+                out.valid_rem = true;
+                out.rem_idx = i;
+                out.rem_lat = ( i - lo ) * dt_min;
+              }
+          }
+      }
+  out.sme = std::clamp( 100.0 * sleep_mass / out.spt_min, 0.0, 100.0 );
+  return out;
+}
+
+static hd_window_spt_t hd_detect_spt_within( const hd_data_t & dat,
+                                              const hd_params_t & par,
+                                              const hd_boundary_evidence_t & evidence,
+                                              const int lo, const int hi )
+{
+  hd_window_spt_t out;
+  if ( lo < 0 || hi < lo || hi >= dat.N ) return out;
+
+  // Restrict the boundary search, not the evidence used to evaluate it.
+  // In particular, fixed= must never change sustained-onset detection.
+  int onset = -1;
+  for ( int i = lo; i <= hi; ++i )
+    if ( evidence.a_sleep[i] >= par.hd_sleep_mass_th ) { onset = i; break; }
+  if ( onset < 0 ) return out;
+
+  int offset = -1;
+  for ( int i = hi; i >= onset; --i )
+    if ( evidence.b_sleep[i] >= par.hd_offset_mass_th ) { offset = i; break; }
+  const bool fallback = offset < 0;
+  if ( fallback ) offset = hi;
+  out = hd_spt_from_bounds( dat, par, evidence, onset, offset );
+  out.valid_offset = !fallback;
+  out.offset_is_fallback = fallback;
   return out;
 }
 
@@ -1876,7 +2245,6 @@ static hd_region_stats_t compute_region(
   return rs;
 }
 
-
 // State-set mixing: which combinations to report, and how the density is computed.
 //
 // Label order follows state index order (W, N1, N2, N3, R / W, NR, R) so labels
@@ -1911,7 +2279,6 @@ static double compute_mix_mins(
     }
   return sum_min;
 }
-
 
 // Transition shape statistics and aligned profiles
 struct hd_trans_stats_t
@@ -1949,7 +2316,8 @@ static void compute_trans_shape(
     bool require_dir,
     bool require_stable,
     hd_trans_stats_t & tshape,
-    hd_profile_t & profile )
+    hd_profile_t & profile,
+    const bool profiles )
 {
   const int N = (int)region_mask.size();
   const int win_smp = std::max( 1, (int)std::round( par.window_sec * Fs ) );
@@ -1993,7 +2361,7 @@ static void compute_trans_shape(
   double sum_width = 0, sum_peak_H = 0, sum_min_C = 0, sum_TV_area = 0;
 
   // Profile accumulation: 2*win_smp + 1 offset positions
-  int profile_len = 2 * win_smp + 1;
+  int profile_len = profiles ? 2 * win_smp + 1 : 0;
   std::vector<double> sum_H( profile_len, 0.0 ), sum_C( profile_len, 0.0 );
   std::vector<double> sum_Mg( profile_len, 0.0 ), sum_TV( profile_len, 0.0 );
   std::vector<std::vector<double>> sum_P( K , std::vector<double>( profile_len , 0.0 ) );
@@ -2051,7 +2419,7 @@ static void compute_trans_shape(
       // An aligned profile represents complete event windows.  Do not insert
       // zero-filled invalid rows (or average different support at each offset);
       // instead omit an event whose window crosses an invalid posterior gap.
-      bool complete_valid_window = lo == ci - win_smp && hi == ci + win_smp;
+      bool complete_valid_window = profiles && lo == ci - win_smp && hi == ci + win_smp;
       if ( complete_valid_window )
 	for ( int i = lo; i <= hi; i++ )
 	  if ( !dat.valid[i] ) { complete_valid_window = false; break; }
@@ -2081,7 +2449,7 @@ static void compute_trans_shape(
 
   // Profile
   profile.n_events = n_events_profile;
-  profile.valid    = n_events_profile >= par.min_events_profile;
+  profile.valid    = profiles && n_events_profile >= par.min_events_profile;
 
   if ( profile.valid )
     {
@@ -2108,7 +2476,6 @@ static void compute_trans_shape(
     }
 }
 
-
 // ============================================================
 // Output helpers
 // ============================================================
@@ -2116,38 +2483,22 @@ static void compute_trans_shape(
 // Core mixedness/instability summary: valid at any granularity (top-level, ANNOT,
 // STATE, SS, or within a STABLE/UNSTABLE region) since it's built from means and
 // percentiles, which stay well-defined under range restriction.
-static void write_region( const hd_region_stats_t & rs, bool threestate )
+static void write_region( hd_results_t &writer, const hd_region_stats_t &rs, bool threestate )
 {
-  if ( !rs.valid ) return;
-  writer.value( "N",          rs.n );
-  writer.value( "H",          rs.mean_H );
-  writer.value( "H_P90",      rs.p90_H );
-  writer.value( "CONF",       rs.mean_C );
-  writer.value( "FRAC_LOW_CONF", rs.frac_C_below );
-  writer.value( "MG",         rs.mean_Mg );
-  writer.value( "PS",         rs.mean_TV );
-  writer.value( "PS_P90",     rs.p90_TV );
-  writer.value( "PS_LAG",     rs.mean_TV_lag );
-  if ( threestate )
-    {
-	if ( rs.mean_p.size() >= 3 )
-	{
-	  writer.value( "P_W",   rs.mean_p[0] );
-	  writer.value( "P_NR",  rs.mean_p[1] );
-	  writer.value( "P_R",   rs.mean_p[2] );
-	}
-    }
-  else
-    {
-      if ( rs.mean_p.size() >= 5 )
-	{
-	  writer.value( "P_W",   rs.mean_p[0] );
-	  writer.value( "P_N1",  rs.mean_p[1] );
-	  writer.value( "P_N2",  rs.mean_p[2] );
-	  writer.value( "P_N3",  rs.mean_p[3] );
-	  writer.value( "P_R",   rs.mean_p[4] );
-	}
-    }
+  const double na = std::numeric_limits<double>::quiet_NaN();
+  writer.value( "N", rs.n );
+  writer.value( "H", rs.valid ? rs.mean_H : na );
+  writer.value( "H_P90", rs.valid ? rs.p90_H : na );
+  writer.value( "CONF", rs.valid ? rs.mean_C : na );
+  writer.value( "FRAC_LOW_CONF", rs.valid ? rs.frac_C_below : na );
+  writer.value( "MG", rs.valid ? rs.mean_Mg : na );
+  writer.value( "PS", rs.valid ? rs.mean_TV : na );
+  writer.value( "PS_P90", rs.valid ? rs.p90_TV : na );
+  writer.value( "PS_LAG", rs.valid ? rs.mean_TV_lag : na );
+  const std::vector<std::string> labels = threestate ? std::vector<std::string>{ "W", "NR", "R" }
+                                                     : std::vector<std::string>{ "W", "N1", "N2", "N3", "R" };
+  for ( int k = 0; k < (int)labels.size(); ++k )
+    writer.value( "P_" + labels[k], rs.valid ? rs.mean_p[k] : na );
 }
 
 // CORR_H_PS: entropy/PS correlation. Only valid at bare (unstratified-by-REGION)
@@ -2155,291 +2506,12 @@ static void write_region( const hd_region_stats_t & rs, bool threestate )
 // artificially range-restricted by the same thresholds that define the bucket,
 // which destabilizes a correlation coefficient (unlike the means/percentiles
 // above, which remain well-defined under range restriction).
-static void write_region_corr( const hd_region_stats_t & rs )
+static void write_region_corr( hd_results_t &writer, const hd_region_stats_t &rs )
 {
-  if ( !rs.valid ) return;
-  writer.value( "CORR_H_PS", rs.corr_H_TV );
+  writer.value( "CORR_H_PS", rs.valid ? rs.corr_H_TV : std::numeric_limits<double>::quiet_NaN() );
 }
 
-static std::vector<bool> make_stage_mask( const std::vector<bool> &,
-                                          const std::vector<int> &,
-                                          const int );
-static std::string hd_state_label( const bool, const int );
-
-// Level-1 HDSTATS-PC features include the hard-coded structured panel inputs,
-// including zero-filled directional densities. Time/SEC profiles are excluded.
-// Keys encode their factors and use the selected analysis interval.
-static void hd_pc_add( hdstats_pc::feature_map_t * out,
-                       const std::string & key,
-                       const double value )
-{
-  (*out)[key] = value;
-}
-
-// The ultradian PC block uses confidence and PS at both state resolutions.
-// The ordinary HDSTATS tables retain a broader set of UQ/UVAR diagnostics.
-// Every key is
-// present even when ultradian phase cannot be estimated, so a PC model has a
-// stable schema and treats such a record as unavailable rather than silently
-// ascribing it zero phase modulation.
-static const std::vector<std::string> & hd_pc_ultra_metrics()
-{
-  static const std::vector<std::string> metrics = { "CONF", "CONF3", "PS", "PS3" };
-  return metrics;
-}
-
-static bool hd_pc_ultra_metric( const std::string & metric )
-{
-  const std::vector<std::string> & metrics = hd_pc_ultra_metrics();
-  return std::find( metrics.begin(), metrics.end(), metric ) != metrics.end();
-}
-
-static void hd_pc_add_ultradian_placeholders( hdstats_pc::feature_map_t * out )
-{
-  const double na = std::numeric_limits<double>::quiet_NaN();
-  for ( const std::string & metric : hd_pc_ultra_metrics() )
-    {
-      for ( const std::string & uq : std::vector<std::string>{ "D1", "D2", "L1", "L2" } )
-        {
-          hd_pc_add( out, hdstats_pc::key( "U_MEAN", "UQ/" + uq + ";UMETRIC/" + metric ), na );
-        }
-      for ( const std::string & statistic : std::vector<std::string>{
-              "U_SLOPE", "U_MOD", "U_MOD_COS", "U_MOD_SIN", "U_R2", "U_PARTIAL_R2" } )
-        hd_pc_add( out, hdstats_pc::key( statistic, "UVAR/" + metric ), na );
-    }
-}
-
-static hdstats_pc::feature_map_t hd_pc_features(
-    const hd_data_t & dat,
-    const hd_derived_t & der,
-    const hd_trans_t & tr,
-    const hd_hypno_metrics_t & hm,
-    const hd_analysis_t & analysis,
-    const hd_params_t & par )
-{
-  hdstats_pc::feature_map_t out;
-  const std::vector<bool> & mask = analysis.valid_mask;
-  // Match compute_trans_shape(): count only events centered on valid analysis
-  // samples and use those same samples for the density denominator.
-  const double hours = std::count( mask.begin(), mask.end(), true ) / dat.Fs / 3600.0;
-  auto event_density = [&]( const std::vector<hd_event_t> & events ) {
-    int n = 0;
-    for ( const auto & e : events )
-      if ( e.idx >= 0 && e.idx < (int)mask.size() && mask[e.idx] ) ++n;
-    return hours > 0.0 ? n / hours : 0.0;
-  };
-
-  const hd_region_stats_t rs5 = compute_region( dat, der, mask, par, false );
-  // Structured panels use exactly the selected analysis interval and the
-  // same statistics as the normal HDSTATS tables. Their schema lives in C++;
-  // docs/hdstats/hdstats.pc is only a readable inventory.
-  const double na = std::numeric_limits<double>::quiet_NaN();
-  std::vector<double> mins( 7, 0.0 ); // W N1 N2 N3 R NR S
-  for ( int i = 0; i < dat.N; ++i )
-    if ( mask[i] )
-      {
-        mins[0] += dat.p[0][i] / dat.Fs / 60.0;
-        mins[1] += dat.p[1][i] / dat.Fs / 60.0;
-        mins[2] += dat.p[2][i] / dat.Fs / 60.0;
-        mins[3] += dat.p[3][i] / dat.Fs / 60.0;
-        mins[4] += dat.p[4][i] / dat.Fs / 60.0;
-      }
-  mins[5] = mins[1] + mins[2] + mins[3]; mins[6] = mins[5] + mins[4];
-  const std::vector<std::string> labels = { "W", "N1", "N2", "N3", "R", "NR", "S" };
-  auto add = [&]( const std::string & var, const std::string & stratum, const double value ) {
-    hd_pc_add( &out, hdstats_pc::key( var, stratum ), value );
-  };
-  const double analysis_min = ( analysis.hi - analysis.lo + 1 ) / dat.Fs / 60.0;
-  const double sleep_min = mins[6];
-  const bool selected_window = analysis.mode != "recording";
-  for ( const bool three : { false, true } )
-    {
-      if ( three && !par.do_3state ) continue;
-      const std::string s = three ? "NSS/3" : "NSS/5";
-      const hd_region_stats_t & all = three ? compute_region( dat, der, mask, par, true ) : rs5;
-      const std::vector<bool> & stable_mask = three ? tr.is_stable3 : tr.is_stable5;
-      const std::vector<bool> & bout_stable = three ? tr.is_bout_stable3 : tr.is_bout_stable5;
-      const std::vector<int> & argmax = three ? der.argmax3 : der.argmax5;
-      const std::vector<hd_event_t> & events = three ? tr.events3 : tr.events5;
-      const std::vector<hd_event_t> & bout_events = three ? tr.bout_events3 : tr.bout_events5;
-      const bool all_ok = all.valid && all.n >= par.min_samples_region;
-      auto masked = [&]( const bool want_stable ) {
-        std::vector<bool> result( mask.size(), false );
-        for ( int i = 0; i < (int)mask.size(); ++i ) result[i] = mask[i] && ( stable_mask[i] == want_stable );
-        return result;
-      };
-      const hd_region_stats_t st = compute_region( dat, der, masked(true), par, three );
-      const hd_region_stats_t un = compute_region( dat, der, masked(false), par, three );
-      const bool st_ok = st.valid && st.n >= par.min_samples_region;
-      const bool un_ok = un.valid && un.n >= par.min_samples_region;
-      add( "H", s, all_ok ? all.mean_H : na );
-      add( "H_P90", s, all_ok ? all.p90_H : na );
-      add( "CONF", s, all_ok ? all.mean_C : na );
-      add( "FRAC_LOW_CONF", s, all_ok ? all.frac_C_below : na );
-      add( "MG", s, all_ok ? all.mean_Mg : na );
-      add( "PS", s, all_ok ? all.mean_TV : na );
-      add( "PS_P90", s, all_ok ? all.p90_TV : na );
-      add( "PS_LAG", s, all_ok ? all.mean_TV_lag : na );
-      add( "CORR_H_PS", s, all_ok ? all.corr_H_TV : na );
-      add( "PCT_STABLE", s, all_ok ? 100.0 * st.n / all.n : na );
-      add( "H_RATIO_UN_ST", s, st_ok && un_ok && st.mean_H > 0 ? un.mean_H / st.mean_H : na );
-      add( "CONF_DIFF_UN_ST", s, st_ok && un_ok ? un.mean_C - st.mean_C : na );
-      add( "PS_RATIO_UN_ST", s, st_ok && un_ok && st.mean_TV > 0 ? un.mean_TV / st.mean_TV : na );
-      for ( const auto & pair : std::vector<std::pair<std::string,const hd_region_stats_t *>>{
-            {"1",&st}, {"0",&un} } )
-        {
-          const bool ok = pair.first == "1" ? st_ok : un_ok;
-          const std::string t = s + ";STABLE/" + pair.first;
-          add( "H", t, ok ? pair.second->mean_H : na );
-          add( "CONF", t, ok ? pair.second->mean_C : na );
-          add( "PS", t, ok ? pair.second->mean_TV : na );
-        }
-
-      const std::vector<std::vector<double>> & P = three ? dat.p3 : dat.p;
-      const std::vector<std::vector<int>> mixes = hd_mix_combinations( three );
-      for ( const auto & combo : mixes )
-        {
-          std::string label = hd_state_label( three, combo[0] );
-          for ( int i = 1; i < (int)combo.size(); ++i ) label += "_" + hd_state_label( three, combo[i] );
-          const double mix_mins = compute_mix_mins( P, mask, combo, dat.Fs );
-          add( "HD_MINS", s + ";MIX/" + label, mix_mins );
-          const double mix_denom = selected_window ? analysis_min : hm.hd_spt;
-          add( "HD_DENS", s + ";MIX/" + label, mix_denom > 0 ? mix_mins / mix_denom : 0.0 );
-        }
-
-      const auto bouts = compute_bouts( mask, bout_stable, argmax, par.bout_min_sec, par.bout_gap_sec, dat.Fs );
-      const auto scoped_bouts = compute_bout_transitions( bouts, events, three ? der.TV3 : der.TV );
-      auto emit_family = [&]( const std::vector<hd_event_t> & family, const std::string & prefix ) {
-        hd_trans_stats_t stats;
-        hd_profile_t profile;
-        compute_trans_shape( der, family, mask, stable_mask, dat, par, dat.Fs, three,
-                             false, false, stats, profile );
-        add( prefix + "_N", s, stats.n_events );
-        add( prefix + "_DENS", s, stats.density );
-        add( prefix + "_DUR", s, stats.valid ? stats.mean_width_sec : na );
-        add( prefix + "_PEAK_H", s, stats.valid ? stats.mean_peak_H : na );
-        add( prefix + "_MIN_CONF", s, stats.valid ? stats.mean_min_C : na );
-        add( prefix + "_TOT_PS", s, stats.valid ? stats.mean_TV_area : na );
-        return stats.n_events;
-      };
-      const int n_trans = emit_family( events, "TRANS" );
-      emit_family( scoped_bouts, "BOUT_TRANS" );
-      std::vector<hd_event_t> scoped_events;
-      for ( const auto & e : events ) if ( e.idx >= 0 && e.idx < (int)mask.size() && mask[e.idx] )
-        scoped_events.push_back( e );
-      const int n_matched = count_trans_bout_matches( scoped_events, bouts );
-      add( "TRANS_N_MATCHED", s, n_matched );
-      add( "TRANS_PCT_MATCHED", s, n_trans > 0 ? 100.0 * n_matched / n_trans : 0.0 );
-      const int K = three ? 3 : 5;
-      for ( int from = 0; from < K; ++from ) for ( int to = 0; to < K; ++to ) if ( from != to )
-        {
-          const std::string pair = hd_state_label( three, from ) + "to" + hd_state_label( three, to );
-          auto pair_density = [&]( const std::vector<hd_event_t> & family, const bool directional ) {
-            int count = 0;
-            for ( const auto & e : family )
-              if ( ( !directional || e.is_dir ) && e.from_st == from && e.to_st == to &&
-                   e.idx >= 0 && e.idx < (int)mask.size() && mask[e.idx] ) ++count;
-            return hours > 0 ? count / hours : 0.0;
-          };
-          add( "TRANS_DENS", s + ";TRANS/" + pair, pair_density( events, true ) );
-          add( "BOUT_TRANS_DENS", s + ";BOUT_TRANS/" + pair, pair_density( scoped_bouts, false ) );
-        }
-    }
-
-  if ( hm.valid_onset ) add( "HD_SOL", ".", hm.hd_sol );
-  // HD_SPT is the core sleep-period time, never the selected analysis span.
-  // In SPT/fixed modes the latter can include user-requested flanks and is
-  // separately available as HD_ANALYSIS_SEC in the QC table.
-  add( "HD_SPT", ".", hm.valid_window ? hm.hd_spt : na );
-  add( "HD_WASO", ".", selected_window ? mins[0] : ( hm.valid_window ? hm.hd_waso : na ) );
-  add( "HD_SME", ".", selected_window ? ( analysis_min > 0 ? 100.0 * sleep_min / analysis_min : 0.0 )
-                          : ( hm.valid_window ? hm.hd_sme : na ) );
-  const bool rem_in_analysis = hm.valid_rem &&
-    ( ! selected_window || ( hm.rem_idx >= analysis.lo && hm.rem_idx <= analysis.hi ) );
-  add( "HD_REM_LAT", ".", rem_in_analysis ? hm.hd_rem_lat : na );
-  add( "HD_REM_LAT2", ".", rem_in_analysis ? hm.hd_rem_lat2 : na );
-  for ( int k = 0; k < 5; ++k )
-    {
-      const std::string st = labels[k], stratum = "SS/" + st;
-      const double value = selected_window ? mins[k] : hm.mins.at( st );
-      const double denom = selected_window ? ( k == 0 ? analysis_min : sleep_min )
-                               : ( k == 0 ? hm.total_min : hm.hd_tst );
-      add( "HD_MINS", stratum, value );
-      add( "HD_PCT", stratum, denom > 0 ? 100.0 * value / denom : 0.0 );
-      add( "HD_DENS", stratum, ( selected_window ? analysis_min : hm.hd_spt ) > 0
-           ? value / ( selected_window ? analysis_min : hm.hd_spt ) : 0.0 );
-    }
-  // The three-state NREM aggregate is a first-class v2 PC input.  It is not
-  // an additional posterior state: it is the sum of N1, N2, and N3 posterior
-  // minutes, expressed with the same sleep/SPT denominators as the individual
-  // sleep-stage amount features above.
-  const double nr_mins = selected_window ? mins[5]
-    : hm.mins.at("SS/N1") + hm.mins.at("SS/N2") + hm.mins.at("SS/N3");
-  const double nr_sleep_denom = selected_window ? sleep_min : hm.hd_tst;
-  const double nr_spt_denom = selected_window ? analysis_min : hm.hd_spt;
-  add( "HD_MINS", "SS/NR", nr_mins );
-  add( "HD_PCT", "SS/NR", nr_sleep_denom > 0 ? 100.0 * nr_mins / nr_sleep_denom : 0.0 );
-  add( "HD_DENS", "SS/NR", nr_spt_denom > 0 ? nr_mins / nr_spt_denom : 0.0 );
-  // Stage domains deliberately use different contracts: W, NR, and R use
-  // the robust coarse NSS=3 partition; N2 and N3 use ordinary NSS=5 calls;
-  // N1 is represented only by posterior amount and soft long-range measures.
-  // For each admitted hard-called stage, emit the complete purity and local
-  // instability families.  Stable/unstable refinements are limited to the
-  // NSS=3 W/NR/R domains, never to N1/N2/N3.
-  for ( const auto & stage : std::vector<std::pair<bool,int>>{
-          { true, 0 }, { false, 2 }, { false, 3 }, { true, 1 }, { true, 2 } } )
-    if ( stage.first ? par.do_3state : true )
-      {
-        const bool three = stage.first;
-        const int k = stage.second;
-        const std::string label = hd_state_label( three, k );
-        const std::vector<bool> stage_mask = make_stage_mask(
-          mask, three ? der.argmax3 : der.argmax5, k );
-        const hd_region_stats_t region = compute_region( dat, der, stage_mask, par, three );
-        const bool ok = region.valid && region.n >= par.min_samples_region;
-        const std::string s = "SS/" + label + ";NSS/" + ( three ? "3" : "5" );
-        const int K = three ? 3 : 5;
-        for ( int outcome = 0; outcome < K; ++outcome )
-          add( "P_" + hd_state_label( three, outcome ), s,
-               ok ? region.mean_p[outcome] : na );
-        add( "CONF", s, ok ? region.mean_C : na );
-        add( "H", s, ok ? region.mean_H : na );
-        add( "H_P90", s, ok ? region.p90_H : na );
-        add( "MG", s, ok ? region.mean_Mg : na );
-        add( "FRAC_LOW_CONF", s, ok ? region.frac_C_below : na );
-        add( "PS", s, ok ? region.mean_TV : na );
-        add( "PS_P90", s, ok ? region.p90_TV : na );
-        add( "PS_LAG", s, ok ? region.mean_TV_lag : na );
-        add( "CORR_H_PS", s, ok ? region.corr_H_TV : na );
-
-        if ( three )
-          {
-            std::vector<bool> stable_stage_mask( mask.size(), false );
-            std::vector<bool> unstable_stage_mask( mask.size(), false );
-            for ( int i = 0; i < (int)mask.size(); ++i )
-              if ( stage_mask[i] )
-                {
-                  stable_stage_mask[i] = tr.is_stable3[i];
-                  unstable_stage_mask[i] = !tr.is_stable3[i];
-                }
-            const hd_region_stats_t stable = compute_region( dat, der, stable_stage_mask, par, true );
-            const hd_region_stats_t unstable = compute_region( dat, der, unstable_stage_mask, par, true );
-            const bool stable_ok = stable.valid && stable.n >= par.min_samples_region;
-            const bool unstable_ok = unstable.valid && unstable.n >= par.min_samples_region;
-            add( "PCT_STABLE", s, ok ? 100.0 * stable.n / region.n : na );
-            add( "H_RATIO_UN_ST", s, stable_ok && unstable_ok && stable.mean_H > 0.0
-                 ? unstable.mean_H / stable.mean_H : na );
-            add( "CONF_DIFF_UN_ST", s, stable_ok && unstable_ok
-                 ? unstable.mean_C - stable.mean_C : na );
-            add( "PS_RATIO_UN_ST", s, stable_ok && unstable_ok && stable.mean_TV > 0.0
-                 ? unstable.mean_TV / stable.mean_TV : na );
-          }
-      }
-  hd_pc_add_ultradian_placeholders( &out );
-  return out;
-}
-
-static void write_trans_stats( const hd_trans_stats_t & ts,
+static void write_trans_stats( hd_results_t & writer, const hd_trans_stats_t & ts,
                                const std::string & prefix,
                                const bool emit_na_for_empty = false )
 {
@@ -2693,43 +2765,114 @@ static void hd_emit_ultradian_signals( edf_t & edf,
          << ( par.ultra_diagnostics ? ", U_DEPTH and U_AMP_RAW" : "" ) << "\n";
 }
 
-// These are intentionally labelled as HDSTATS soft-ultradian cycles, rather
-// than canonical scored NREM cycles. A cycle requires three consecutive,
-// confirmed extrema (trough -> peak -> trough) within one contiguous,
-// selected, valid supported run. Thus it neither invents partial cycles at
-// record/window edges nor bridges invalid/wake-supported gaps.
+// Emit confirmed complete cycles plus the observed initial portion of each
+// selected phase run. Edge portions retain their original phase and are
+// explicitly partial; unsupported samples are never bridged.
 static int hd_emit_ultradian_cycles( edf_t & edf,
                                      const hd_data_t & dat,
                                      const hd_ultradian_t & ultra,
                                      const hd_analysis_t & analysis,
+                                     const hd_window_spt_t & spt,
                                      const hd_params_t & par )
 {
   if ( par.emit_cycle_label.empty() || dat.tp.empty() ) return 0;
-
   const uint64_t sample_tp = (uint64_t)std::round( (double)globals::tp_1sec / dat.Fs );
   const std::string class_name = par.emit_cycle_label + "_cycle";
-  int n_emitted = 0;
+  const std::string phase_class = par.emit_cycle_label + "_phase";
+  edf.annotations->clear( class_name );
+  edf.annotations->clear( phase_class );
+  annot_t * cycles = edf.annotations->add( class_name );
+  annot_t * phases = edf.annotations->add( phase_class );
+  cycles->types["partial"] = globals::A_BOOL_T;
+  cycles->types["phase_start"] = globals::A_DBL_T;
+  cycles->types["phase_stop"] = globals::A_DBL_T;
+  phases->types["cycle"] = globals::A_TXT_T;
+  phases->types["partial"] = globals::A_BOOL_T;
+  auto selected_phase = [&]( const int i ) {
+    return analysis.valid_mask[i] && ultra.supported[i] && std::isfinite(ultra.phase[i]);
+  };
+  struct segment_t { int lo, stop; bool partial; }; // half-open sample bounds
+  std::vector<segment_t> segments;
+
+  // Preserve the complete trough -> peak -> trough definition. The ending
+  // trough starts the following cycle, so neighbouring annotations do not overlap.
   for ( int k = 0; k + 2 < (int)ultra.extrema.size(); ++k )
     {
-      const hd_ultradian_extremum_t & a = ultra.extrema[k];
-      const hd_ultradian_extremum_t & b = ultra.extrema[k+1];
-      const hd_ultradian_extremum_t & c = ultra.extrema[k+2];
-      if ( ! a.trough || b.trough || ! c.trough || a.idx >= b.idx || b.idx >= c.idx ) continue;
+      const auto & a = ultra.extrema[k];
+      const auto & b = ultra.extrema[k+1];
+      const auto & c = ultra.extrema[k+2];
+      if ( !a.trough || b.trough || !c.trough || a.idx >= b.idx || b.idx >= c.idx ) continue;
       if ( a.idx < analysis.lo || c.idx > analysis.hi ) continue;
-
-      bool contiguous_selected_support = true;
+      bool contiguous = true;
       for ( int i = a.idx; i <= c.idx; ++i )
-        if ( ! analysis.valid_mask[i] || ! ultra.supported[i] )
-          { contiguous_selected_support = false; break; }
-      if ( ! contiguous_selected_support ) continue;
-
-      ++n_emitted;
-      edf.annotations->add( class_name )->add(
-        "C" + std::to_string( n_emitted ),
-        interval_t( dat.tp[a.idx], dat.tp[c.idx] + sample_tp ), "." );
+        if ( !selected_phase(i) ) { contiguous = false; break; }
+      if ( contiguous ) segments.push_back( { a.idx, c.idx, false } );
     }
 
-  return n_emitted;
+  // Add the observed leading portion up to the first confirmed trough.
+  // This includes initial NREM without extending an existing REM-to-REM
+  // cycle across an additional depth peak. Repeat after a support/validity
+  // gap, and retain a wholly partial run if it contains no confirmed trough.
+  for ( int lo = analysis.lo; lo <= analysis.hi; )
+    {
+      if ( !selected_phase(lo) ) { ++lo; continue; }
+      int hi = lo;
+      while ( hi < analysis.hi && selected_phase(hi+1) ) ++hi;
+      int stop = hi + 1;
+      for ( const auto & e : ultra.extrema )
+        if ( e.trough && e.idx >= lo && e.idx <= hi ) { stop = e.idx; break; }
+      // Anchor the initial partial at official sleep onset when that onset
+      // lies in this phase run; never pull pre-sleep flank into that cycle.
+      const int start = spt.valid_onset ? std::max( lo, spt.onset_idx ) : lo;
+      const int last = stop <= hi ? stop : hi;
+      double advance = 0.0;
+      for ( int i = start + 1; i <= last; ++i )
+        {
+          double d = ultra.phase[i] - ultra.phase[i-1];
+          if ( d < -M_PI ) d += 2.0 * M_PI;
+          if ( d > 0.0 ) advance += d;
+        }
+      if ( stop > start && advance > 1e-12 ) segments.push_back( { start, stop, true } );
+      lo = hi + 1;
+    }
+  std::sort( segments.begin(), segments.end(), []( const segment_t & a, const segment_t & b ) {
+    return a.lo < b.lo;
+  } );
+  std::vector<int> cycle_at( dat.N, 0 );
+  for ( int j = 0; j < (int)segments.size(); ++j )
+    {
+      const auto & segment = segments[j];
+      const int end = segment.stop;
+      const uint64_t stop_tp = end < dat.N ? dat.tp[end] : dat.tp.back() + sample_tp;
+      instance_t * instance = cycles->add( "C" + std::to_string(j+1),
+        interval_t( dat.tp[segment.lo], stop_tp ), "." );
+      instance->set( "partial", segment.partial );
+      instance->set( "phase_start", ultra.phase[segment.lo] );
+      instance->set( "phase_stop", ultra.phase[end < dat.N && selected_phase(end) ? end : end-1] );
+      for ( int i = segment.lo; i < end; ++i ) cycle_at[i] = j+1;
+    }
+
+  // Annotate precisely the same phase quarters used by UQ analysis, including
+  // supported trailing portions that are not part of an emitted full cycle.
+  // Quarters are fractions of phase, not four equal durations of an annotation.
+  for ( int lo = analysis.lo; lo <= analysis.hi; )
+    {
+      if ( !selected_phase(lo) ) { ++lo; continue; }
+      const int q = hd_ultra_phase_quarter( ultra.phase[lo] );
+      int stop = lo + 1;
+      while ( stop <= analysis.hi && selected_phase(stop)
+              && hd_ultra_phase_quarter(ultra.phase[stop]) == q && cycle_at[stop] == cycle_at[lo] ) ++stop;
+      const uint64_t stop_tp = dat.tp[stop-1] + sample_tp;
+      instance_t * instance = phases->add( hd_ultra_quarter_label[q],
+        interval_t( dat.tp[lo], stop_tp ), "." );
+      if ( cycle_at[lo] > 0 )
+        {
+          instance->set( "cycle", "C" + std::to_string(cycle_at[lo]) );
+          instance->set( "partial", segments[cycle_at[lo]-1].partial );
+        }
+      lo = stop;
+    }
+  return (int)segments.size();
 }
 
 struct hd_ultra_fit_t
@@ -2883,267 +3026,275 @@ static hd_ultra_fit_t hd_ultra_fit_linear( const std::vector<std::vector<double>
 // Per-metric joint Y ~ time + cos(U_PHASE) + sin(U_PHASE) descriptions.  These
 // are global/analysis-interval outputs, analogous to the existing long-range
 // trend summaries, rather than thousands of heavily overlapping strata.
-static void hd_write_ultra_conditioned_metrics( const hd_data_t & dat,
-                                                 const hd_derived_t & der,
-                                                 const hd_ultradian_t & ultra,
-                                                 const hd_analysis_t & analysis,
-                                                 const hd_params_t & par,
-                                                 hdstats_pc::feature_map_t * pc_features = NULL,
-                                                 const bool emit_output = true )
+static void hd_compute_ultra_conditioned_metrics( hd_results_t &writer, const hd_data_t &dat,
+                                                  const hd_derived_t &der, const hd_ultradian_t &ultra,
+                                                  const hd_analysis_t &analysis, const hd_params_t &par,
+                                                  const bool emit_output = true )
 {
-  struct metric_t { const char * label; const std::vector<double> * x; int gap; };
-  std::vector<metric_t> metrics = {
-    { "H", &der.H, 0 }, { "CONF", &der.C, 0 }, { "MG", &der.Mg, 0 },
-    { "PS", &der.TV, 1 }, { "PS_LAG", &der.TV_lag,
-      std::max(1, (int)std::round(par.lag_sec * dat.Fs)) }
+  const bool saved_output = writer.output;
+  writer.output = saved_output && emit_output;
+  struct metric_t
+  {
+    const char *label;
+    const std::vector<double> *x;
+    int gap;
   };
+  std::vector<metric_t> metrics = {
+      { "H", &der.H, 0 },
+      { "CONF", &der.C, 0 },
+      { "MG", &der.Mg, 0 },
+      { "PS", &der.TV, 1 },
+      { "PS_LAG", &der.TV_lag, std::max( 1, (int)std::round( par.lag_sec * dat.Fs ) ) } };
   if ( par.do_3state )
-    {
-      metrics.push_back( { "H3", &der.H3, 0 } );
-      metrics.push_back( { "CONF3", &der.C3, 0 } );
-      metrics.push_back( { "MG3", &der.Mg3, 0 } );
-      metrics.push_back( { "PS3", &der.TV3, 1 } );
-      metrics.push_back( { "PS3_LAG", &der.TV3_lag,
-                           std::max(1, (int)std::round(par.lag_sec * dat.Fs)) } );
-    }
+  {
+    metrics.push_back( { "H3", &der.H3, 0 } );
+    metrics.push_back( { "CONF3", &der.C3, 0 } );
+    metrics.push_back( { "MG3", &der.Mg3, 0 } );
+    metrics.push_back( { "PS3", &der.TV3, 1 } );
+    metrics.push_back( { "PS3_LAG", &der.TV3_lag, std::max( 1, (int)std::round( par.lag_sec * dat.Fs ) ) } );
+  }
 
   const double nan = std::numeric_limits<double>::quiet_NaN();
-  for ( const auto & metric : metrics )
+  for ( const auto &metric : metrics )
+  {
+    std::vector<int> idx;
+    std::vector<double> raw_w;
+    for ( int i = analysis.lo; i <= analysis.hi; ++i )
     {
-      std::vector<int> idx;
-      std::vector<double> raw_w;
-      for ( int i = analysis.lo; i <= analysis.hi; ++i )
-        {
-          if ( !analysis.valid_mask[i] || !std::isfinite(ultra.phase[i])
-               || !std::isfinite((*(metric.x))[i]) ) continue;
-          if ( metric.gap > 0 && ( i < metric.gap || !dat.valid[i-metric.gap] ) ) continue;
-          const double wi = par.ultra_condition_weighted ? ultra.amp[i] : 1.0;
-          if ( !std::isfinite(wi) || wi <= 0.0 ) continue;
-          idx.push_back(i); raw_w.push_back(wi);
-        }
-
-      std::string status = "NO_PHASE";
-      double slope = nan, modulation = nan, peak = nan, r2 = nan, partial_r2 = nan, design_condition = nan;
-      double phase_cos = nan, phase_sin = nan;
-      if ( !idx.empty() )
-        {
-          double mean_t = 0.0, sum_w = 0.0;
-          for ( int q = 0; q < (int)idx.size(); ++q )
-            { mean_t += raw_w[q] * idx[q] / dat.Fs / 3600.0; sum_w += raw_w[q]; }
-          mean_t = sum_w > 0.0 ? mean_t / sum_w : 0.0;
-          // Normalise positive amplitude weights to unit mean: numerical
-          // scaling changes neither coefficient estimates nor R2, and makes
-          // the optional weighting definition explicit.
-          const double mean_w = sum_w / idx.size();
-          std::vector<double> y, w;
-          std::vector<std::vector<double>> x_time, x_full;
-          double ybar = 0.0;
-          for ( int q = 0; q < (int)idx.size(); ++q )
-            {
-              const int i = idx[q];
-              const double wi = raw_w[q] / mean_w;
-              const double t = i / dat.Fs / 3600.0 - mean_t;
-              y.push_back( (*(metric.x))[i] ); w.push_back(wi);
-              ybar += wi * y.back();
-              x_time.push_back( { 1.0, t } );
-              x_full.push_back( { 1.0, t, std::cos(ultra.phase[i]), std::sin(ultra.phase[i]) } );
-            }
-          double wsum = std::accumulate(w.begin(), w.end(), 0.0);
-          ybar = wsum > 0.0 ? ybar / wsum : 0.0;
-          double sst = 0.0;
-          for ( int q = 0; q < (int)y.size(); ++q ) sst += w[q] * (y[q]-ybar) * (y[q]-ybar);
-          hd_ultra_fit_t time_fit = hd_ultra_fit_linear( x_time, y, w, par.ultra_max_condition );
-          hd_ultra_fit_t full_fit = hd_ultra_fit_linear( x_full, y, w, par.ultra_max_condition );
-          design_condition = full_fit.design_condition;
-          status = full_fit.status;
-          if ( full_fit.ok && time_fit.ok && sst > 1e-12 && time_fit.sse > 1e-12 )
-            {
-              slope = full_fit.beta[1];
-              phase_cos = full_fit.beta[2];
-              phase_sin = full_fit.beta[3];
-              modulation = std::sqrt( full_fit.beta[2]*full_fit.beta[2]
-                                      + full_fit.beta[3]*full_fit.beta[3] );
-              peak = std::atan2( full_fit.beta[3], full_fit.beta[2] );
-              if ( peak < 0.0 ) peak += 2.0 * M_PI;
-              r2 = 1.0 - full_fit.sse / sst;
-              partial_r2 = ( time_fit.sse - full_fit.sse ) / time_fit.sse;
-              if ( partial_r2 < 0.0 && partial_r2 > -1e-10 ) partial_r2 = 0.0;
-              status = "OK";
-            }
-          else if ( full_fit.ok && time_fit.ok && sst <= 1e-12 ) status = "ZERO_VARIANCE";
-        }
-
-      if ( emit_output )
-        {
-          writer.level( metric.label, "UVAR" );
-          writer.value( "U_SLOPE", slope );
-          writer.value( "U_MOD", modulation );
-          writer.value( "U_PEAK", peak );
-          writer.value( "U_R2", r2 );
-          writer.value( "U_PARTIAL_R2", partial_r2 );
-          if ( par.qc )
-            {
-              writer.level( 1, "QC" );
-              writer.value( "U_DESIGN_COND", design_condition );
-              writer.value( "U_STATUS", status );
-              writer.unlevel( "QC" );
-            }
-          writer.unlevel( "UVAR" );
-        }
-
-      // A raw circular peak cannot be a sensible scalar PC feature: phases
-      // just below 2*pi and just above zero are adjacent physiologically but
-      // far apart numerically.  The two signed harmonic coefficients retain
-      // both U_MOD and U_PEAK without that discontinuity.  QC failures remain
-      // missing rather than being recoded as no modulation.
-      if ( pc_features != NULL && hd_pc_ultra_metric( metric.label ) && status == "OK" )
-        {
-          const std::string s = "UVAR/" + std::string( metric.label );
-          hd_pc_add( pc_features, hdstats_pc::key( "U_SLOPE", s ), slope );
-          hd_pc_add( pc_features, hdstats_pc::key( "U_MOD", s ), modulation );
-          hd_pc_add( pc_features, hdstats_pc::key( "U_MOD_COS", s ), phase_cos );
-          hd_pc_add( pc_features, hdstats_pc::key( "U_MOD_SIN", s ), phase_sin );
-          hd_pc_add( pc_features, hdstats_pc::key( "U_R2", s ), r2 );
-          hd_pc_add( pc_features, hdstats_pc::key( "U_PARTIAL_R2", s ), partial_r2 );
-        }
+      if ( !analysis.valid_mask[i] || !std::isfinite( ultra.phase[i] ) ||
+           !std::isfinite( ( *( metric.x ) )[i] ) )
+        continue;
+      if ( metric.gap > 0 && ( i < metric.gap || !dat.valid[i - metric.gap] ) )
+        continue;
+      const double wi = par.ultra_condition_weighted ? ultra.amp[i] : 1.0;
+      if ( !std::isfinite( wi ) || wi <= 0.0 )
+        continue;
+      idx.push_back( i );
+      raw_w.push_back( wi );
     }
+
+    std::string status = "NO_PHASE";
+    double slope = nan, modulation = nan, peak = nan, r2 = nan, partial_r2 = nan, design_condition = nan;
+    double phase_cos = nan, phase_sin = nan;
+    if ( !idx.empty() )
+    {
+      double mean_t = 0.0, sum_w = 0.0;
+      for ( int q = 0; q < (int)idx.size(); ++q )
+      {
+        mean_t += raw_w[q] * idx[q] / dat.Fs / 3600.0;
+        sum_w += raw_w[q];
+      }
+      mean_t = sum_w > 0.0 ? mean_t / sum_w : 0.0;
+      // Normalise positive amplitude weights to unit mean: numerical
+      // scaling changes neither coefficient estimates nor R2, and makes
+      // the optional weighting definition explicit.
+      const double mean_w = sum_w / idx.size();
+      std::vector<double> y, w;
+      std::vector<std::vector<double>> x_time, x_full;
+      double ybar = 0.0;
+      for ( int q = 0; q < (int)idx.size(); ++q )
+      {
+        const int i = idx[q];
+        const double wi = raw_w[q] / mean_w;
+        const double t = i / dat.Fs / 3600.0 - mean_t;
+        y.push_back( ( *( metric.x ) )[i] );
+        w.push_back( wi );
+        ybar += wi * y.back();
+        x_time.push_back( { 1.0, t } );
+        x_full.push_back( { 1.0, t, std::cos( ultra.phase[i] ), std::sin( ultra.phase[i] ) } );
+      }
+      double wsum = std::accumulate( w.begin(), w.end(), 0.0 );
+      ybar = wsum > 0.0 ? ybar / wsum : 0.0;
+      double sst = 0.0;
+      for ( int q = 0; q < (int)y.size(); ++q )
+        sst += w[q] * ( y[q] - ybar ) * ( y[q] - ybar );
+      hd_ultra_fit_t time_fit = hd_ultra_fit_linear( x_time, y, w, par.ultra_max_condition );
+      hd_ultra_fit_t full_fit = hd_ultra_fit_linear( x_full, y, w, par.ultra_max_condition );
+      design_condition = full_fit.design_condition;
+      status = full_fit.status;
+      if ( full_fit.ok && time_fit.ok && sst > 1e-12 && time_fit.sse > 1e-12 )
+      {
+        slope = full_fit.beta[1];
+        phase_cos = full_fit.beta[2];
+        phase_sin = full_fit.beta[3];
+        modulation = std::sqrt( full_fit.beta[2] * full_fit.beta[2] + full_fit.beta[3] * full_fit.beta[3] );
+        peak = std::atan2( full_fit.beta[3], full_fit.beta[2] );
+        if ( peak < 0.0 )
+          peak += 2.0 * M_PI;
+        r2 = 1.0 - full_fit.sse / sst;
+        partial_r2 = ( time_fit.sse - full_fit.sse ) / time_fit.sse;
+        if ( partial_r2 < 0.0 && partial_r2 > -1e-10 )
+          partial_r2 = 0.0;
+        status = "OK";
+      }
+      else if ( full_fit.ok && time_fit.ok && sst <= 1e-12 )
+        status = "ZERO_VARIANCE";
+    }
+
+    writer.level( metric.label, "UVAR" );
+    writer.value( "U_SLOPE", slope );
+    writer.value( "U_MOD", modulation );
+    writer.value( "U_MOD_COS", phase_cos );
+    writer.value( "U_MOD_SIN", phase_sin );
+    writer.value( "U_PEAK", peak );
+    writer.value( "U_R2", r2 );
+    writer.value( "U_PARTIAL_R2", partial_r2 );
+    if ( par.qc )
+    {
+      writer.level( 1, "QC" );
+      writer.value( "U_DESIGN_COND", design_condition );
+      writer.value( "U_STATUS", status );
+      writer.unlevel( "QC" );
+    }
+    writer.unlevel( "UVAR" );
+  }
+  writer.output = saved_output;
 }
 
 // Complementary descriptive view of the continuous harmonic fit.  These are
 // phase regions, not scored sleep-cycle states: each observation remains on
 // the same soft U_PHASE coordinate used by UVAR.
-static void hd_write_ultra_phase_regions( const hd_data_t & dat,
-                                           const hd_derived_t & der,
-                                           const hd_ultradian_t & ultra,
-                                           const hd_analysis_t & analysis,
-                                           const hd_params_t & par,
-                                           hdstats_pc::feature_map_t * pc_features = NULL,
-                                           const bool emit_output = true )
+static void hd_compute_ultra_phase_regions( hd_results_t &writer, const hd_data_t &dat,
+                                            const hd_derived_t &der, const hd_ultradian_t &ultra,
+                                            const hd_analysis_t &analysis, const hd_params_t &par,
+                                            const bool emit_output = true )
 {
-  struct metric_t { const char * label; const std::vector<double> * x; int gap; };
-  std::vector<metric_t> metrics = {
-    { "H", &der.H, 0 }, { "CONF", &der.C, 0 }, { "MG", &der.Mg, 0 },
-    { "PS", &der.TV, 1 }, { "PS_LAG", &der.TV_lag,
-      std::max(1, (int)std::round(par.lag_sec * dat.Fs)) }
+  const bool saved_output = writer.output;
+  writer.output = saved_output && emit_output;
+  struct metric_t
+  {
+    const char *label;
+    const std::vector<double> *x;
+    int gap;
   };
+  std::vector<metric_t> metrics = {
+      { "H", &der.H, 0 },
+      { "CONF", &der.C, 0 },
+      { "MG", &der.Mg, 0 },
+      { "PS", &der.TV, 1 },
+      { "PS_LAG", &der.TV_lag, std::max( 1, (int)std::round( par.lag_sec * dat.Fs ) ) } };
   if ( par.do_3state )
-    {
-      metrics.push_back( { "H3", &der.H3, 0 } );
-      metrics.push_back( { "CONF3", &der.C3, 0 } );
-      metrics.push_back( { "MG3", &der.Mg3, 0 } );
-      metrics.push_back( { "PS3", &der.TV3, 1 } );
-      metrics.push_back( { "PS3_LAG", &der.TV3_lag,
-                           std::max(1, (int)std::round(par.lag_sec * dat.Fs)) } );
-    }
-  static const char * region_label[] = { "D1", "D2", "L1", "L2" };
+  {
+    metrics.push_back( { "H3", &der.H3, 0 } );
+    metrics.push_back( { "CONF3", &der.C3, 0 } );
+    metrics.push_back( { "MG3", &der.Mg3, 0 } );
+    metrics.push_back( { "PS3", &der.TV3, 1 } );
+    metrics.push_back( { "PS3_LAG", &der.TV3_lag, std::max( 1, (int)std::round( par.lag_sec * dat.Fs ) ) } );
+  }
 
-  for ( const auto & metric : metrics )
+  for ( const auto &metric : metrics )
+  {
+    double sum[4] = { 0.0, 0.0, 0.0, 0.0 };
+    int n[4] = { 0, 0, 0, 0 };
+    for ( int i = analysis.lo; i <= analysis.hi; ++i )
     {
-      double sum[4] = { 0.0, 0.0, 0.0, 0.0 };
-      int n[4] = { 0, 0, 0, 0 };
-      for ( int i = analysis.lo; i <= analysis.hi; ++i )
-        {
-          if ( !analysis.valid_mask[i] || !std::isfinite(ultra.phase[i])
-               || !std::isfinite((*(metric.x))[i]) ) continue;
-          if ( metric.gap > 0 && ( i < metric.gap || !dat.valid[i-metric.gap] ) ) continue;
-          int q = (int)std::floor( ultra.phase[i] / ( M_PI / 2.0 ) );
-          if ( q < 0 ) continue;
-          if ( q > 3 ) q = 3; // defensively accepts round-off just below 2 pi
-          sum[q] += (*(metric.x))[i];
-          ++n[q];
-        }
-      for ( int q = 0; q < 4; ++q )
-        if ( n[q] >= par.min_samples_region )
-          {
-            const double mean = sum[q] / n[q];
-            if ( emit_output )
-              {
-                writer.level( region_label[q], "UQ" );
-                writer.level( metric.label, "UMETRIC" );
-                writer.value( "U_MEAN", mean );
-                writer.unlevel( "UMETRIC" );
-                writer.unlevel( "UQ" );
-              }
-            if ( pc_features != NULL && hd_pc_ultra_metric( metric.label ) )
-              {
-                hd_pc_add( pc_features, hdstats_pc::key( "U_MEAN", std::string("UQ/") + region_label[q] + ";UMETRIC/" + metric.label ), mean );
-              }
-          }
+      if ( !analysis.valid_mask[i] || !std::isfinite( ultra.phase[i] ) ||
+           !std::isfinite( ( *( metric.x ) )[i] ) )
+        continue;
+      if ( metric.gap > 0 && ( i < metric.gap || !dat.valid[i - metric.gap] ) )
+        continue;
+      const int q = hd_ultra_phase_quarter( ultra.phase[i] );
+      if ( q < 0 )
+        continue;
+      sum[q] += ( *( metric.x ) )[i];
+      ++n[q];
     }
+    for ( int q = 0; q < 4; ++q )
+    {
+      const double mean =
+          n[q] >= par.min_samples_region ? sum[q] / n[q] : std::numeric_limits<double>::quiet_NaN();
+      writer.level( hd_ultra_quarter_label[q], "UQ" );
+      writer.level( metric.label, "UMETRIC" );
+      writer.value( "U_MEAN", mean );
+      writer.unlevel( "UMETRIC" );
+      writer.unlevel( "UQ" );
+    }
+  }
+  writer.output = saved_output;
 }
 
-static void write_hd_hypno_metrics( const hd_hypno_metrics_t & hm,
+static void compute_hd_hypno_metrics( hd_results_t & writer, const hd_boundary_evidence_t & hm,
                                     const hd_data_t & dat,
-                                    const hd_analysis_t & analysis )
+                                    const hd_analysis_t & analysis,
+                                    const hd_window_spt_t & spt,
+                                    const bool emit_pre_post_wake )
 {
-  if ( hm.valid_onset ) writer.value( "HD_SOL" , hm.hd_sol );
-  if ( analysis.mode != "recording" )
-    {
-      const double dt_min = 1.0 / dat.Fs / 60.0;
-      const double analysis_min = ( analysis.hi - analysis.lo + 1 ) * dt_min;
-      double wake_min = 0.0, sleep_min = 0.0;
-      std::map<std::string,double> mins;
-      for ( int i = analysis.lo; i <= analysis.hi; ++i )
-        if ( dat.valid[i] )
+  // Latency is measured from the analysis window to its official SPT onset.
+  writer.value( "HD_SOL", spt.valid_onset ? spt.sol_min : std::numeric_limits<double>::quiet_NaN() );
+  writer.value( "HD_WIN", analysis.duration_min );
+  // HD_TRT is the physical total recording duration: always the same value
+  // regardless of core-mode/fixed=, so it can be compared against
+  // HD_SPT (which varies with the analysis window, and in whole-recording
+  // mode will typically be close to HD_TRT).
+  writer.value( "HD_TRT" , hm.total_min );
+
+  const double dt_min = 1.0 / dat.Fs / 60.0;
+  const double analysis_min = analysis.duration_min;
+
+  // The true SPT -- sleep onset to sleep offset/final-wake -- is measured
+  // from the selected primary island, or detected inside the analysis
+  // window using recording-wide evidence. HD_WASO/HD_SME follow
+  // that same window-bounded SPT.
+  const double na = std::numeric_limits<double>::quiet_NaN();
+  writer.value( "HD_SPT", spt.valid_window ? spt.spt_min : na );
+  writer.value( "HD_WASO", spt.valid_window ? spt.waso_min : na );
+  writer.value( "HD_SME", spt.valid_window ? spt.sme : na );
+  writer.value( "HD_REM_LAT", spt.valid_rem ? spt.rem_lat : na );
+  writer.value( "HD_REM_LAT2", spt.valid_rem ? spt.rem_lat2 : na );
+
+  // SS=W/N1/N2/N3/R/NR/S minutes, PCT and DENS are scoped to the analysis
+  // window (core + any flank) -- the one interval, besides the recording
+  // itself, where everything but HD_TRT is allowed to look.
+  double sleep_min = 0.0;
+  double waso_min = 0.0, wpre_min = 0.0, wpost_min = 0.0;
+  std::map<std::string,double> mins;
+  for ( int i = analysis.lo; i <= analysis.hi; ++i )
+    if ( dat.valid[i] )
+      {
+        const double w = dat.p[0][i];
+        const double nr = dat.p[1][i] + dat.p[2][i] + dat.p[3][i];
+        const double r = dat.p[4][i];
+        sleep_min += ( nr + r ) * dt_min;
+        mins["W"] += w * dt_min; mins["N1"] += dat.p[1][i] * dt_min;
+        mins["N2"] += dat.p[2][i] * dt_min; mins["N3"] += dat.p[3][i] * dt_min;
+        mins["R"] += r * dt_min; mins["NR"] += nr * dt_min; mins["S"] += ( nr + r ) * dt_min;
+        if ( spt.valid_window )
           {
-            const double w = dat.p[0][i];
-            const double nr = dat.p[1][i] + dat.p[2][i] + dat.p[3][i];
-            const double r = dat.p[4][i];
-            wake_min += w * dt_min;
-            sleep_min += ( nr + r ) * dt_min;
-            mins["W"] += w * dt_min; mins["N1"] += dat.p[1][i] * dt_min;
-            mins["N2"] += dat.p[2][i] * dt_min; mins["N3"] += dat.p[3][i] * dt_min;
-            mins["R"] += r * dt_min; mins["NR"] += nr * dt_min; mins["S"] += ( nr + r ) * dt_min;
+            if ( i < spt.onset_idx )       wpre_min  += w * dt_min;
+            else if ( i > spt.offset_idx ) wpost_min += w * dt_min;
+            else                           waso_min  += w * dt_min;
           }
-      // The analysis interval may include flanks; HD_SPT must retain its
-      // conventional core-onset-to-final-wake meaning.
-      if ( hm.valid_window ) writer.value( "HD_SPT", hm.hd_spt );
-      writer.value( "HD_WASO", wake_min );
-      writer.value( "HD_SME", analysis_min > 0.0 ? 100.0 * sleep_min / analysis_min : 0.0 );
-      if ( hm.valid_rem && hm.rem_idx >= analysis.lo && hm.rem_idx <= analysis.hi )
-        {
-          writer.value( "HD_REM_LAT" , hm.hd_rem_lat );
-          writer.value( "HD_REM_LAT2" , hm.hd_rem_lat2 );
-        }
-      static const std::vector<std::string> stages = { "W", "N1", "N2", "N3", "R", "NR", "S" };
-      for ( const auto & st : stages )
-        {
-          writer.level( st, "SS" );
-          const double value = mins[st];
-          writer.value( "HD_MINS", value );
-          const bool use_total = st == "W" || st == "S";
-          const double denom = use_total ? analysis_min : sleep_min;
-          writer.value( "HD_PCT", denom > 0.0 ? 100.0 * value / denom : 0.0 );
-          writer.value( "HD_DENS", analysis_min > 0.0 ? value / analysis_min : 0.0 );
-          writer.unlevel( "SS" );
-        }
-      return;
-    }
-  if ( hm.valid_window )
-    {
-      writer.value( "HD_SPT" , hm.hd_spt );
-      writer.value( "HD_WASO" , hm.hd_waso );
-      writer.value( "HD_SME" , hm.hd_sme );
-    }
-  if ( hm.valid_rem )
-    {
-      writer.value( "HD_REM_LAT" , hm.hd_rem_lat );
-      writer.value( "HD_REM_LAT2" , hm.hd_rem_lat2 );
-    }
+      }
 
   static const std::vector<std::string> stages = { "W", "N1", "N2", "N3", "R", "NR", "S" };
   for ( const auto & st : stages )
     {
-      std::map<std::string,double>::const_iterator ii = hm.mins.find( st );
-      if ( ii == hm.mins.end() ) continue;
-      writer.level( st , "SS" );
-      writer.value( "HD_MINS" , ii->second );
-      // W and S: % of total recording time; sleep sub-stages: % of TST
-      const bool use_total = ( st == "W" || st == "S" );
-      const double denom = use_total ? hm.total_min : hm.hd_tst;
-      writer.value( "HD_PCT" , denom > 0 ? 100.0 * ii->second / denom : 0.0 );
-      writer.value( "HD_DENS" , hm.hd_spt > 0 ? ii->second / hm.hd_spt : 0.0 );
+      writer.level( st, "SS" );
+      const double value = mins[st];
+      writer.value( "HD_MINS", value );
+      const bool use_total = st == "W" || st == "S";
+      const double denom = use_total ? analysis_min : sleep_min;
+      writer.value( "HD_PCT", denom > 0.0 ? 100.0 * value / denom : 0.0 );
+      writer.value( "HD_DENS", analysis_min > 0.0 ? value / analysis_min : 0.0 );
       writer.unlevel( "SS" );
+    }
+
+  // Additive split of SS=W into sleep-period wake (WASO, always emitted when
+  // an SPT is defined) and the pre-/post-sleep wake outside the true SPT but
+  // still inside the analysis window (WPRE/WPOST, with pre-post-wake only);
+  // SS=W above keeps its original all-wake meaning.
+  if ( spt.valid_window )
+    {
+      static const std::vector<std::string> wake_zones = { "WASO", "WPRE", "WPOST" };
+      const std::vector<double> wake_zone_mins = { waso_min, wpre_min, wpost_min };
+      for ( int zi = 0; zi < ( emit_pre_post_wake ? 3 : 1 ); ++zi )
+        {
+          writer.level( wake_zones[zi], "SS" );
+          writer.value( "HD_MINS", wake_zone_mins[zi] );
+          writer.value( "HD_PCT", analysis_min > 0.0 ? 100.0 * wake_zone_mins[zi] / analysis_min : 0.0 );
+          writer.value( "HD_DENS", analysis_min > 0.0 ? wake_zone_mins[zi] / analysis_min : 0.0 );
+          writer.unlevel( "SS" );
+        }
     }
 }
 
@@ -3158,308 +3309,375 @@ static std::vector<bool> make_stage_mask(
   return mask;
 }
 
-// Write HDSTATS rows for one context (global or per-stratum).
+// Populate shared HDSTATS results for one context (global or per-stratum).
 // Emits a bare (unstratified) summary plus REGION strata: STABLE, UNSTABLE.
-// Emits STATE stratum only when do_3state is true.
+// Computes NSS=5 and, when requested, the independent NSS=3 representation.
 // Emits SS stratum for primary summary metrics only, based on argmax stage.
-static void write_hdstats(
-    const hd_derived_t & der,
-    const hd_trans_t & tr,
-    const std::vector<bool> & region_mask5,   // which samples are in this context (5-state)
-    const std::vector<bool> & region_mask3,   // same for 3-state (may be same as region_mask5)
-    const hd_params_t & par,
-    const hd_data_t & dat,
-    const hd_hypno_metrics_t * hm,
-    const hd_analysis_t * analysis )
+static void
+compute_hdstats( hd_results_t &writer, const hd_derived_t &der, const hd_trans_t &tr,
+                 const std::vector<bool> &region_mask5, // which samples are in this context (5-state)
+                 const std::vector<bool> &region_mask3, // same for 3-state (may be same as region_mask5)
+                 const hd_params_t &par, const hd_data_t &dat, const hd_boundary_evidence_t *hm,
+                 const hd_analysis_t *analysis, const hd_window_spt_t *spt, const bool profiles )
 {
-  if ( hm != NULL && par.do_hd_metrics )
-    write_hd_hypno_metrics( *hm, dat, *analysis );
+  if ( hm != NULL )
+  {
+    const bool saved_output = writer.output;
+    writer.output = saved_output && par.do_hd_metrics;
+    compute_hd_hypno_metrics( writer, *hm, dat, *analysis, *spt, par.emit_pre_post_wake );
+    writer.output = saved_output;
+    writer.value( "HD_TWT", writer.features.at( "HD_MINS.SS_W" ) );
+  }
 
-  auto make_all   = [&]( const std::vector<bool> & rm ) { return rm; };
-  auto make_stable = [&]( const std::vector<bool> & rm,
-			   const std::vector<bool> & is_stable ) {
+  auto make_all = [&]( const std::vector<bool> &rm ) { return rm; };
+  auto make_stable = [&]( const std::vector<bool> &rm, const std::vector<bool> &is_stable )
+  {
     std::vector<bool> m( rm.size() );
-    for ( int i = 0; i < (int)rm.size(); i++ ) m[i] = rm[i] && is_stable[i];
+    for ( int i = 0; i < (int)rm.size(); i++ )
+      m[i] = rm[i] && is_stable[i];
     return m;
   };
   // Helper: emit one state (5 or 3)
-  auto emit_state = [&]( bool threestate ) {
-
-    const std::vector<bool> & rmask       = threestate ? region_mask3 : region_mask5;
-    const std::vector<bool> & is_stable   = threestate ? tr.is_stable3 : tr.is_stable5;
-    const std::vector<bool> & is_bout_stable = threestate ? tr.is_bout_stable3 : tr.is_bout_stable5;
-    const std::vector<int>  & argmax      = threestate ? der.argmax3    : der.argmax5;
+  auto emit_state = [&]( bool threestate )
+  {
+    const std::vector<bool> &rmask = threestate ? region_mask3 : region_mask5;
+    const std::vector<bool> &is_stable = threestate ? tr.is_stable3 : tr.is_stable5;
+    const std::vector<bool> &is_bout_stable = threestate ? tr.is_bout_stable3 : tr.is_bout_stable5;
+    const std::vector<int> &argmax = threestate ? der.argmax3 : der.argmax5;
     const int K = threestate ? 3 : 5;
 
-    auto emit_context = [&]( const std::vector<bool> & context_mask,
-			     const bool emit_top_level_transition_stats,
-			     const bool emit_profiles_and_pairs )
+    auto emit_context = [&]( const std::vector<bool> &context_mask,
+                             const bool emit_top_level_transition_stats, const bool emit_profiles_and_pairs )
+    {
+      // Helper: emit a transition profile vector under the current writer context.
+      // Per-state posteriors are only meaningful once events are restricted to a
+      // single pair (BOUT_TRANS,SEC) — pooled across mixed pair types they average
+      // together unrelated state identities, so the generic SEC table omits them.
+      auto emit_profile_rows = [&]( const hd_profile_t &pf, const bool emit_posteriors )
       {
-	// Helper: emit a transition profile vector under the current writer context.
-	// Per-state posteriors are only meaningful once events are restricted to a
-	// single pair (BOUT_TRANS,SEC) — pooled across mixed pair types they average
-	// together unrelated state identities, so the generic SEC table omits them.
-	auto emit_profile_rows = [&]( const hd_profile_t & pf, const bool emit_posteriors ) {
-	  for ( int j = 0; j < (int)pf.offsets.size(); j++ )
-	    {
-	      writer.level( pf.offsets[j], globals::sec_strat );
-	      writer.value( "N", pf.n_events );
-	      writer.value( "H",  pf.H[j] );
-	      writer.value( "CONF", pf.C[j] );
-	      writer.value( "MG", pf.Mg[j] );
-	      writer.value( "PS", pf.TV[j] );
-	      if ( emit_posteriors )
-		{
-		  if ( threestate )
-		    {
-		      writer.value( "P_W",  pf.P[0][j] );
-		      writer.value( "P_NR", pf.P[1][j] );
-		      writer.value( "P_R",  pf.P[2][j] );
-		    }
-		  else
-		    {
-		      writer.value( "P_W",  pf.P[0][j] );
-		      writer.value( "P_N1", pf.P[1][j] );
-		      writer.value( "P_N2", pf.P[2][j] );
-		      writer.value( "P_N3", pf.P[3][j] );
-		      writer.value( "P_R",  pf.P[4][j] );
-		    }
-		}
-	      writer.unlevel( globals::sec_strat );
-	    }
-	};
-
-	// HDSTATS table: bare (unstratified-by-STABLE) summary, plus a binary
-	// STABLE/UNSTABLE breakdown. UNSTABLE merges what were previously the
-	// separate TRANS (near a crossing) and unlabeled remainder buckets —
-	// the finer distinction is still available via the event-based
-	// TRANS/SEC tables below, which are unaffected by this.
-	{
-	  auto make_unstable = [&]( const std::vector<bool> & rm ) {
-	    std::vector<bool> m( rm.size() );
-	    for ( int i = 0; i < (int)rm.size(); i++ )
-	      m[i] = rm[i] && !is_stable[i];
-	    return m;
-	  };
-
-	  hd_region_stats_t rs_all      = compute_region( dat, der, make_all(context_mask),               par, threestate );
-	  hd_region_stats_t rs_stable   = compute_region( dat, der, make_stable(context_mask, is_stable),  par, threestate );
-	  hd_region_stats_t rs_unstable = compute_region( dat, der, make_unstable(context_mask),           par, threestate );
-
-	  const bool ok_all      = rs_all.valid      && rs_all.n      >= par.min_samples_region;
-	  const bool ok_stable   = rs_stable.valid   && rs_stable.n   >= par.min_samples_region;
-	  const bool ok_unstable = rs_unstable.valid && rs_unstable.n >= par.min_samples_region;
-
-	  // Bare summary: no REGION token, so this lands wherever we're already
-	  // nested (top-level/ANNOT/STATE for the main pass, bare SS=<stage> for
-	  // the stage-conditioned pass). CORR_H_PS and PCT_STABLE only make sense
-	  // here, not within a STABLE/UNSTABLE bucket (see write_region_corr).
-	  if ( ok_all )
-	    {
-	      write_region( rs_all, threestate );
-	      write_region_corr( rs_all );
-	      writer.value( "PCT_STABLE", 100.0 * rs_stable.n / rs_all.n );
-	    }
-
-	  if ( ok_stable )
-	    {
-	      writer.level( 1, "STABLE" );
-	      write_region( rs_stable, threestate );
-	      writer.unlevel( "STABLE" );
-	    }
-
-	  if ( ok_unstable )
-	    {
-	      writer.level( 0, "STABLE" );
-	      write_region( rs_unstable, threestate );
-	      writer.unlevel( "STABLE" );
-	    }
-
-	  // Stable-vs-unstable contrasts (no REGION stratum; top-level context only)
-	  if ( emit_top_level_transition_stats && ok_stable && ok_unstable )
-	    {
-	      writer.value( "H_RATIO_UN_ST",   rs_stable.mean_H  > 0
-			    ? rs_unstable.mean_H  / rs_stable.mean_H  : std::numeric_limits<double>::quiet_NaN() );
-	      writer.value( "CONF_DIFF_UN_ST", rs_unstable.mean_C - rs_stable.mean_C );
-	      writer.value( "PS_RATIO_UN_ST",  rs_stable.mean_TV > 0
-			    ? rs_unstable.mean_TV / rs_stable.mean_TV : std::numeric_limits<double>::quiet_NaN() );
-	    }
-	}
-
-	// HDTRANS table (transition shape)
-	{
-	  const std::vector<hd_event_t> & evts = threestate ? tr.events3 : tr.events5;
-	  hd_trans_stats_t tshape;
-	  hd_profile_t     profile;
-	  compute_trans_shape( der, evts, context_mask, is_stable, dat, par, dat.Fs, threestate,
-                               false, false, tshape, profile );
-
-	  // Bouts: long, settled, single-dominant-stage runs (see bout-min/bout-gap).
-	  // Reused below both to count bout-to-bout transitions (N_BOUT_TRANS) and,
-	  // via compute_bout_transitions(), to anchor every OFFSET profile — OFFSET
-	  // no longer has its own independent flank-qualification notion.
-	  const std::vector<hd_bout_t> bouts = compute_bouts( context_mask, is_bout_stable, argmax,
-	                                                       par.bout_min_sec, par.bout_gap_sec, dat.Fs );
-	  const std::vector<hd_event_t> bout_events = compute_bout_transitions( bouts, evts, threestate ? der.TV3 : der.TV );
-	  hd_trans_stats_t tshape_bout;
-	  hd_profile_t     profile_bout;
-	  if ( emit_top_level_transition_stats || emit_profiles_and_pairs )
-	    compute_trans_shape( der, bout_events, context_mask, is_stable, dat, par, dat.Fs, threestate,
-	                         false, false, tshape_bout, profile_bout );
-
-	  // TRANS events restricted to this context (matches how TRANS_N itself, via
-	  // compute_trans_shape's region_mask filtering, is scoped).
-	  std::vector<hd_event_t> evts_in_context;
-	  for ( const auto & e : evts )
-	    if ( e.idx >= 0 && e.idx < (int)context_mask.size() && context_mask[e.idx] )
-	      evts_in_context.push_back( e );
-
-	  if ( emit_top_level_transition_stats )
-	    {
-	      write_trans_stats( tshape, "TRANS" );
-
-	      const int n_matched = count_trans_bout_matches( evts_in_context, bouts );
-	      writer.value( "TRANS_N_MATCHED",   n_matched );
-	      writer.value( "TRANS_PCT_MATCHED", tshape.n_events > 0 ? 100.0 * n_matched / tshape.n_events : 0.0 );
-
-	      write_trans_stats( tshape_bout, "BOUT_TRANS" );
-
-	      // MIX table: state-set mixing, in the same MINS/DENS units as the HD_*
-	      // hypnodensity metrics (top-level context only; not under SS, matching
-	      // how HD_MINS/HD_DENS themselves are only available where hm != NULL).
-	      {
-		const std::vector<std::vector<double>> & P_ref = threestate ? dat.p3 : dat.p;
-		for ( const auto & combo : hd_mix_combinations( threestate ) )
-		  {
-		    std::string label = hd_state_label( threestate, combo[0] );
-		    for ( int ci = 1; ci < (int)combo.size(); ci++ )
-		      label += "_" + hd_state_label( threestate, combo[ci] );
-		    const double mix_mins = compute_mix_mins( P_ref, context_mask, combo, dat.Fs );
-		    writer.level( label, "MIX" );
-		    writer.value( "HD_MINS", mix_mins );
-		    if ( hm != NULL )
-		{
-		  const double denom = analysis->mode != "recording"
-		    ? ( analysis->hi - analysis->lo + 1 ) / dat.Fs / 60.0
-		    : hm->hd_spt;
-		  writer.value( "HD_DENS", denom > 0 ? mix_mins / denom : 0.0 );
-		}
-		    writer.unlevel( "MIX" );
-		  }
-	      }
-	    }
-
-	  if ( ! emit_profiles_and_pairs ) return;
-
-	  // Generic aligned profiles, pooled across every event family.  The ALL
-	  // level keeps the family explicit while retaining one table per family.
-	  writer.level( "ALL", "TRANS" );
-	  if ( profile.valid )
-	    emit_profile_rows( profile, false );
-	  writer.unlevel( "TRANS" );
-
-	  writer.level( "ALL", "BOUT_TRANS" );
-	  if ( profile_bout.valid )
-	    emit_profile_rows( profile_bout, false );
-	  writer.unlevel( "BOUT_TRANS" );
-
-	  // TRANS: pair-specific summary statistics still use directional events (unchanged).
-	  std::set<std::pair<int,int>> trans_pairs;
-	  for ( const auto & e : evts )
-	    if ( e.is_dir && e.from_st >= 0 && e.to_st >= 0 && e.from_st != e.to_st )
-	      trans_pairs.insert( std::make_pair( e.from_st , e.to_st ) );
-	  if ( par.emit_all_trans )
-	    for ( int from = 0; from < K; from++ )
-	      for ( int to = 0; to < K; to++ )
-		if ( from != to ) trans_pairs.insert( std::make_pair( from, to ) );
-
-	  for ( const auto & tp : trans_pairs )
-	    {
-	      std::vector<hd_event_t> evts_pair;
-	      for ( const auto & e : evts )
-		if ( e.from_st == tp.first && e.to_st == tp.second )
-		  evts_pair.push_back( e );
-
-	      if ( evts_pair.empty() && !par.emit_all_trans ) continue;
-
-	      hd_trans_stats_t tshape_pair;
-              hd_profile_t     profile_pair_dir;
-	      compute_trans_shape( der, evts_pair, context_mask, is_stable, dat, par, dat.Fs, threestate,
-                                   true, false, tshape_pair, profile_pair_dir );
-
-	      std::vector<hd_event_t> evts_pair_in_context;
-	      for ( const auto & e : evts_pair )
-		if ( e.idx >= 0 && e.idx < (int)context_mask.size() && context_mask[e.idx] )
-		  evts_pair_in_context.push_back( e );
-	      const int n_matched_pair = count_trans_bout_matches( evts_pair_in_context, bouts );
-
-	      const std::string trans_label = hd_state_label( threestate , tp.first ) + "to"
-		+ hd_state_label( threestate , tp.second );
-
-	      writer.level( trans_label , "TRANS" );
-	      const bool empty_pair = tshape_pair.n_events == 0;
-	      write_trans_stats( tshape_pair, "TRANS", par.emit_all_trans && empty_pair );
-	      writer.value( "TRANS_N_MATCHED",   n_matched_pair );
-	      writer.value( "TRANS_PCT_MATCHED", tshape_pair.n_events > 0
-		    ? 100.0 * n_matched_pair / tshape_pair.n_events
-		    : ( par.emit_all_trans ? std::numeric_limits<double>::quiet_NaN() : 0.0 ) );
-	      if ( profile_pair_dir.valid )
-		emit_profile_rows( profile_pair_dir, true );
-	      writer.unlevel( "TRANS" );
-	    }
-
-	  // BOUT: pair-specific aligned profiles, one per observed bout-to-bout stage pair.
-	  std::set<std::pair<int,int>> bout_pairs;
-	  for ( const auto & e : bout_events )
-	    bout_pairs.insert( std::make_pair( e.from_st , e.to_st ) );
-	  if ( par.emit_all_trans )
-	    for ( int from = 0; from < K; from++ )
-	      for ( int to = 0; to < K; to++ )
-		if ( from != to ) bout_pairs.insert( std::make_pair( from, to ) );
-
-	  for ( const auto & tp : bout_pairs )
-	    {
-	      std::vector<hd_event_t> bout_events_pair;
-	      for ( const auto & e : bout_events )
-		if ( e.from_st == tp.first && e.to_st == tp.second )
-		  bout_events_pair.push_back( e );
-
-	      if ( bout_events_pair.empty() && !par.emit_all_trans ) continue;
-
-	      hd_trans_stats_t tshape_bout_pair;
-              hd_profile_t     profile_bout_pair;
-	      compute_trans_shape( der, bout_events_pair, context_mask, is_stable, dat, par, dat.Fs, threestate,
-                                   false, false, tshape_bout_pair, profile_bout_pair );
-
-	      const std::string bout_label = hd_state_label( threestate , tp.first ) + "to"
-		+ hd_state_label( threestate , tp.second );
-
-	      writer.level( bout_label , "BOUT_TRANS" );
-	      write_trans_stats( tshape_bout_pair, "BOUT_TRANS",
-				 par.emit_all_trans && tshape_bout_pair.n_events == 0 );
-	      if ( profile_bout_pair.valid )
-		emit_profile_rows( profile_bout_pair, true );
-	      writer.unlevel( "BOUT_TRANS" );
-	    }
-	}
+        for ( int j = 0; j < (int)pf.offsets.size(); j++ )
+        {
+          writer.level( pf.offsets[j], globals::sec_strat );
+          writer.value( "N", pf.n_events );
+          writer.value( "H", pf.H[j] );
+          writer.value( "CONF", pf.C[j] );
+          writer.value( "MG", pf.Mg[j] );
+          writer.value( "PS", pf.TV[j] );
+          if ( emit_posteriors )
+          {
+            if ( threestate )
+            {
+              writer.value( "P_W", pf.P[0][j] );
+              writer.value( "P_NR", pf.P[1][j] );
+              writer.value( "P_R", pf.P[2][j] );
+            }
+            else
+            {
+              writer.value( "P_W", pf.P[0][j] );
+              writer.value( "P_N1", pf.P[1][j] );
+              writer.value( "P_N2", pf.P[2][j] );
+              writer.value( "P_N3", pf.P[3][j] );
+              writer.value( "P_R", pf.P[4][j] );
+            }
+          }
+          writer.unlevel( globals::sec_strat );
+        }
       };
 
-    // Overall context output remains unchanged and includes detailed transition profiles.
+      // HDSTATS table: bare (unstratified-by-STABLE) summary, plus a binary
+      // STABLE/UNSTABLE breakdown. UNSTABLE merges what were previously the
+      // separate TRANS (near a crossing) and unlabeled remainder buckets —
+      // the finer distinction is still available via the event-based
+      // TRANS/SEC tables below, which are unaffected by this.
+      {
+        auto make_unstable = [&]( const std::vector<bool> &rm )
+        {
+          std::vector<bool> m( rm.size() );
+          for ( int i = 0; i < (int)rm.size(); i++ )
+            m[i] = rm[i] && !is_stable[i];
+          return m;
+        };
+
+        hd_region_stats_t rs_all = compute_region( dat, der, make_all( context_mask ), par, threestate );
+        hd_region_stats_t rs_stable =
+            compute_region( dat, der, make_stable( context_mask, is_stable ), par, threestate );
+        hd_region_stats_t rs_unstable =
+            compute_region( dat, der, make_unstable( context_mask ), par, threestate );
+
+        const bool ok_all = rs_all.valid && rs_all.n >= par.min_samples_region;
+        const bool ok_stable = rs_stable.valid && rs_stable.n >= par.min_samples_region;
+        const bool ok_unstable = rs_unstable.valid && rs_unstable.n >= par.min_samples_region;
+
+        // Bare summary: no REGION token, so this lands wherever we're already
+        // nested (top-level/ANNOT/STATE for the main pass, bare SS=<stage> for
+        // the stage-conditioned pass). CORR_H_PS and PCT_STABLE only make sense
+        // here, not within a STABLE/UNSTABLE bucket (see write_region_corr).
+        rs_all.valid = ok_all;
+        rs_stable.valid = ok_stable;
+        rs_unstable.valid = ok_unstable;
+        write_region( writer, rs_all, threestate );
+        write_region_corr( writer, rs_all );
+        const double na = std::numeric_limits<double>::quiet_NaN();
+        writer.value( "PCT_STABLE", ok_all ? 100.0 * rs_stable.n / rs_all.n : na );
+        writer.level( 1, "STABLE" );
+        write_region( writer, rs_stable, threestate );
+        writer.unlevel( "STABLE" );
+        writer.level( 0, "STABLE" );
+        write_region( writer, rs_unstable, threestate );
+        writer.unlevel( "STABLE" );
+
+        // These contrasts are also raw PC inputs for NSS=3 stage domains.
+        // Calculate and expose them for every ordinary context in one place.
+        writer.value( "H_RATIO_UN_ST", ok_stable && ok_unstable && rs_stable.mean_H > 0.0
+                                           ? rs_unstable.mean_H / rs_stable.mean_H
+                                           : na );
+        writer.value( "CONF_DIFF_UN_ST",
+                      ok_stable && ok_unstable ? rs_unstable.mean_C - rs_stable.mean_C : na );
+        writer.value( "PS_RATIO_UN_ST", ok_stable && ok_unstable && rs_stable.mean_TV > 0.0
+                                            ? rs_unstable.mean_TV / rs_stable.mean_TV
+                                            : na );
+      }
+
+      // Stage-conditioned contexts only need region summaries.
+      if ( !emit_top_level_transition_stats )
+        return;
+
+      // HDTRANS table (transition shape)
+      {
+        const std::vector<hd_event_t> &evts = threestate ? tr.events3 : tr.events5;
+        hd_trans_stats_t tshape;
+        hd_profile_t profile;
+        compute_trans_shape( der, evts, context_mask, is_stable, dat, par, dat.Fs, threestate, false, false,
+                             tshape, profile, profiles );
+
+        // Bouts: long, settled, single-dominant-stage runs (see
+        // bout-min/bout-intrusion-max/bout-intrusion-frac). Reused below both
+        // to count bout-to-bout transitions (N_BOUT_TRANS) and the per-stage
+        // BOUT_* duration family, and, via compute_bout_transitions(), to
+        // anchor every OFFSET profile — OFFSET no longer has its own
+        // independent flank-qualification notion.
+        const std::vector<hd_bout_t> context_bouts =
+            hm != NULL ? std::vector<hd_bout_t>()
+                       : compute_bouts( context_mask, is_bout_stable, argmax, par.bout_min_sec,
+                                        par.bout_intrusion_max_sec, par.bout_intrusion_frac, dat.Fs,
+                                        hd_bout_extend_smp( par, dat.Fs ) );
+        const std::vector<hd_bout_t> &bouts =
+            hm != NULL ? ( threestate ? tr.bouts3 : tr.bouts5 ) : context_bouts;
+        const std::vector<hd_event_t> context_bout_events =
+            hm != NULL ? std::vector<hd_event_t>()
+                       : compute_bout_transitions( bouts, evts, threestate ? der.TV3 : der.TV );
+        const std::vector<hd_event_t> &bout_events =
+            hm != NULL ? ( threestate ? tr.bout_events3 : tr.bout_events5 ) : context_bout_events;
+        hd_trans_stats_t tshape_bout;
+        hd_profile_t profile_bout;
+        if ( emit_top_level_transition_stats || emit_profiles_and_pairs )
+          compute_trans_shape( der, bout_events, context_mask, is_stable, dat, par, dat.Fs, threestate, false,
+                               false, tshape_bout, profile_bout, profiles );
+
+        // TRANS events restricted to this context (matches how TRANS_N itself, via
+        // compute_trans_shape's region_mask filtering, is scoped).
+        std::vector<hd_event_t> evts_in_context;
+        for ( const auto &e : evts )
+          if ( e.idx >= 0 && e.idx < (int)context_mask.size() && context_mask[e.idx] )
+            evts_in_context.push_back( e );
+
+        if ( emit_top_level_transition_stats )
+        {
+          write_trans_stats( writer, tshape, "TRANS", true );
+
+          const int n_matched = count_trans_bout_matches( evts_in_context, bouts );
+          writer.value( "TRANS_N_MATCHED", n_matched );
+          writer.value( "TRANS_PCT_MATCHED",
+                        tshape.n_events > 0 ? 100.0 * n_matched / tshape.n_events : 0.0 );
+
+          write_trans_stats( writer, tshape_bout, "BOUT_TRANS", true );
+
+          // Soft-called bout-statistics family (HYPNO's BOUT_N/BOUT_MN/BOUT_MD/
+          // BOUT_MX/BOUT_05/BOUT_10 analogue), one dominant stage at a time.
+          // BOUT/W retains its original all-wake meaning; when a sleep window
+          // is available, BOUT/WASO, BOUT/WPRE and BOUT/WPOST additionally
+          // split it into sleep-period, pre-sleep and post-sleep wake bouts
+          // (dominant stage 0 is always W, in both the 5- and 3-state spaces).
+          {
+            int n_context = 0;
+            for ( bool b : context_mask )
+              if ( b )
+                ++n_context;
+            const double dur_hr = (double)n_context / dat.Fs / 3600.0;
+            for ( int k = 0; k < K; ++k )
+            {
+              const std::vector<bool> dominant_mask = make_stage_mask( context_mask, argmax, k );
+              const hd_bout_stats_t bs = compute_bout_stats( bouts, k, dat.Fs, dominant_mask );
+              writer.level( hd_state_label( threestate, k ), "BOUT" );
+              write_bout_stats( writer, bs, dur_hr > 0 ? bs.n / dur_hr : 0.0 );
+              writer.unlevel( "BOUT" );
+            }
+
+            // BOUT=WASO is always emitted alongside BOUT=W when an SPT is
+            // defined; BOUT=WPRE/WPOST only with pre-post-wake.
+            if ( spt != NULL && spt->valid_window )
+            {
+              static const std::vector<std::string> wake_zones = { "WASO", "WPRE", "WPOST" };
+              for ( int zi = 0; zi < ( par.emit_pre_post_wake ? 3 : 1 ); ++zi )
+              {
+                const std::string &zone = wake_zones[zi];
+                std::vector<bool> dominant_mask( context_mask.size(), false );
+                for ( int i = 0; i < (int)context_mask.size(); ++i )
+                  dominant_mask[i] = context_mask[i] && argmax[i] == 0 &&
+                                    hd_in_wake_zone( zi, i, spt->onset_idx, spt->offset_idx );
+                const hd_bout_stats_t bs = compute_bout_stats_if(
+                    bouts,
+                    [&]( const hd_bout_t &b )
+                    {
+                      return b.dom == 0 &&
+                             hd_wake_zone_label( b.lo, b.hi, spt->onset_idx, spt->offset_idx ) == zone;
+                    },
+                    dat.Fs, dominant_mask );
+                writer.level( zone, "BOUT" );
+                write_bout_stats( writer, bs, dur_hr > 0 ? bs.n / dur_hr : 0.0 );
+                writer.unlevel( "BOUT" );
+              }
+            }
+          }
+
+          // MIX table: state-set mixing, in the same MINS/DENS units as the HD_*
+          // hypnodensity metrics (top-level context only; not under SS, matching
+          // how HD_MINS/HD_DENS themselves are only available where hm != NULL).
+          {
+            const std::vector<std::vector<double>> &P_ref = threestate ? dat.p3 : dat.p;
+            for ( const auto &combo : hd_mix_combinations( threestate ) )
+            {
+              std::string label = hd_state_label( threestate, combo[0] );
+              for ( int ci = 1; ci < (int)combo.size(); ci++ )
+                label += "_" + hd_state_label( threestate, combo[ci] );
+              const double mix_mins = compute_mix_mins( P_ref, context_mask, combo, dat.Fs );
+              writer.level( label, "MIX" );
+              writer.value( "HD_MINS", mix_mins );
+              if ( spt != NULL )
+                writer.value( "HD_DENS",
+                              analysis->duration_min > 0 ? mix_mins / analysis->duration_min : 0.0 );
+              writer.unlevel( "MIX" );
+            }
+          }
+        }
+
+        if ( !emit_profiles_and_pairs )
+          return;
+
+        // Generic aligned profiles, pooled across every event family.  The ALL
+        // level keeps the family explicit while retaining one table per family.
+        writer.level( "ALL", "TRANS" );
+        if ( profiles && profile.valid )
+          emit_profile_rows( profile, false );
+        writer.unlevel( "TRANS" );
+
+        writer.level( "ALL", "BOUT_TRANS" );
+        if ( profiles && profile_bout.valid )
+          emit_profile_rows( profile_bout, false );
+        writer.unlevel( "BOUT_TRANS" );
+
+        // TRANS: pair-specific summary statistics still use directional events (unchanged).
+        std::set<std::pair<int, int>> trans_pairs;
+        for ( const auto &e : evts )
+          if ( e.is_dir && e.from_st >= 0 && e.to_st >= 0 && e.from_st != e.to_st )
+            trans_pairs.insert( std::make_pair( e.from_st, e.to_st ) );
+        for ( int from = 0; from < K; from++ )
+          for ( int to = 0; to < K; to++ )
+            if ( from != to )
+              trans_pairs.insert( std::make_pair( from, to ) );
+
+        for ( const auto &tp : trans_pairs )
+        {
+          std::vector<hd_event_t> evts_pair;
+          for ( const auto &e : evts )
+            if ( e.from_st == tp.first && e.to_st == tp.second )
+              evts_pair.push_back( e );
+
+          hd_trans_stats_t tshape_pair;
+          hd_profile_t profile_pair_dir;
+          compute_trans_shape( der, evts_pair, context_mask, is_stable, dat, par, dat.Fs, threestate, true,
+                               false, tshape_pair, profile_pair_dir, profiles );
+
+          std::vector<hd_event_t> evts_pair_in_context;
+          for ( const auto &e : evts_pair )
+            if ( e.idx >= 0 && e.idx < (int)context_mask.size() && context_mask[e.idx] )
+              evts_pair_in_context.push_back( e );
+          const int n_matched_pair = count_trans_bout_matches( evts_pair_in_context, bouts );
+
+          const std::string trans_label =
+              hd_state_label( threestate, tp.first ) + "to" + hd_state_label( threestate, tp.second );
+
+          writer.level( trans_label, "TRANS" );
+          const bool empty_pair = tshape_pair.n_events == 0;
+          write_trans_stats( writer, tshape_pair, "TRANS", empty_pair );
+          writer.value( "TRANS_N_MATCHED", n_matched_pair );
+          writer.value( "TRANS_PCT_MATCHED",
+                        tshape_pair.n_events > 0 ? 100.0 * n_matched_pair / tshape_pair.n_events : 0.0 );
+          if ( profiles && profile_pair_dir.valid )
+            emit_profile_rows( profile_pair_dir, true );
+          writer.unlevel( "TRANS" );
+        }
+
+        // BOUT: pair-specific aligned profiles, one per observed bout-to-bout stage pair.
+        std::set<std::pair<int, int>> bout_pairs;
+        for ( const auto &e : bout_events )
+          bout_pairs.insert( std::make_pair( e.from_st, e.to_st ) );
+        for ( int from = 0; from < K; from++ )
+          for ( int to = 0; to < K; to++ )
+            if ( from != to )
+              bout_pairs.insert( std::make_pair( from, to ) );
+
+        for ( const auto &tp : bout_pairs )
+        {
+          std::vector<hd_event_t> bout_events_pair;
+          for ( const auto &e : bout_events )
+            if ( e.from_st == tp.first && e.to_st == tp.second )
+              bout_events_pair.push_back( e );
+
+          hd_trans_stats_t tshape_bout_pair;
+          hd_profile_t profile_bout_pair;
+          compute_trans_shape( der, bout_events_pair, context_mask, is_stable, dat, par, dat.Fs, threestate,
+                               false, false, tshape_bout_pair, profile_bout_pair, profiles );
+
+          const std::string bout_label =
+              hd_state_label( threestate, tp.first ) + "to" + hd_state_label( threestate, tp.second );
+
+          writer.level( bout_label, "BOUT_TRANS" );
+          write_trans_stats( writer, tshape_bout_pair, "BOUT_TRANS", tshape_bout_pair.n_events == 0 );
+          if ( profiles && profile_bout_pair.valid )
+            emit_profile_rows( profile_bout_pair, true );
+          writer.unlevel( "BOUT_TRANS" );
+        }
+      }
+    };
+
+    // Global or annotation summaries share the same producer; profiles are optional.
     emit_context( rmask, true, true );
 
-    // Stage-conditioned output is REGION-only; do not emit separate top-level
-    // transition or ratio summaries under SS.
+    // Stage-conditioned output includes region summaries and stability contrasts.
+    // It never constructs a separate stage-conditioned transition analysis.
     for ( int st = 0; st < K; st++ )
-      {
-	const std::vector<bool> stage_mask = make_stage_mask( rmask, argmax, st );
-	bool any = false;
-	for ( int i = 0; i < (int)stage_mask.size(); i++ )
-	  if ( stage_mask[i] ) { any = true; break; }
-	if ( ! any ) continue;
-	writer.level( hd_state_label( threestate, st ), "SS" );
-	emit_context( stage_mask, false, false );
-	writer.unlevel( "SS" );
-      }
+    {
+      const std::vector<bool> stage_mask = make_stage_mask( rmask, argmax, st );
+      writer.level( hd_state_label( threestate, st ), "SS" );
+      emit_context( stage_mask, false, false );
+      writer.unlevel( "SS" );
+
+      // SS=W keeps its all-wake meaning; its WASO (and, with pre-post-wake,
+      // WPRE/WPOST) split gets the identical summaries over the same W
+      // samples restricted to each zone.  Thin zones are throttled by the
+      // ordinary min-samples rule, exactly as a thin stage would be.
+      if ( st == 0 && spt != NULL && spt->valid_window )
+        for ( int zi = 0; zi < ( par.emit_pre_post_wake ? 3 : 1 ); ++zi )
+          {
+            std::vector<bool> zone_mask( stage_mask.size(), false );
+            for ( int i = 0; i < (int)stage_mask.size(); ++i )
+              zone_mask[i] = stage_mask[i] && hd_in_wake_zone( zi, i, spt->onset_idx, spt->offset_idx );
+            writer.level( hd_wake_zones[zi], "SS" );
+            emit_context( zone_mask, false, false );
+            writer.unlevel( "SS" );
+          }
+    }
   };
 
   // NSS is always emitted, even when only 5-state is computed, so table shape
@@ -3469,11 +3687,11 @@ static void write_hdstats(
   writer.unlevel( "NSS" );
 
   if ( par.do_3state )
-    {
-      writer.level( "3", "NSS" );
-      emit_state( true );
-      writer.unlevel( "NSS" );
-    }
+  {
+    writer.level( "3", "NSS" );
+    emit_state( true );
+    writer.unlevel( "NSS" );
+  }
 }
 
 // Long-range summaries are deliberately global: unlike the main HDSTATS
@@ -3558,6 +3776,7 @@ static hd_lr_tiling_stats_t hd_lr_tiling_stats( const hd_data_t & dat,
                                                 const bool gap_aware )
 {
   hd_lr_tiling_stats_t out;
+  if ( core_lo < 0 || core_hi < core_lo ) return out;
   const int n = dat.N;
   std::vector<int> invalid_prefix( n + 1, 0 ), ps_break_prefix( n + 1, 0 );
   for ( int i = 0; i < n; ++i )
@@ -3730,17 +3949,13 @@ static hd_lr_timing_t hd_lr_timing( const std::vector<double> & x,
   return out;
 }
 
-static void hd_write_lr_timing( const hd_lr_timing_t & timing,
-                                const bool emit_output,
+static void hd_write_lr_timing( hd_results_t & writer, const hd_lr_timing_t & timing,
                                 const bool emit_qc )
 {
-  if ( emit_output )
-    {
-      writer.value( "COM", timing.com );
-      writer.value( "COM_M", timing.com_m );
-      writer.value( "T50", timing.t50 );
-      writer.value( "T50_M", timing.t50_m );
-    }
+  writer.value( "COM", timing.com );
+  writer.value( "COM_M", timing.com_m );
+  writer.value( "T50", timing.t50 );
+  writer.value( "T50_M", timing.t50_m );
   if ( emit_qc )
     {
       writer.level( 1, "QC" );
@@ -3758,25 +3973,25 @@ static double hd_sample_sd_values( const std::vector<double> & x )
     : hd_sample_sd( x, 0, (int)x.size() - 1 );
 }
 
-static void hd_write_lr_status_values( const bool estimable, const std::string & reason )
+static void hd_write_lr_status_values( hd_results_t & writer, const bool estimable, const std::string & reason )
 {
   writer.value( "ESTIMABLE", estimable ? 1 : 0 );
   if ( ! estimable ) writer.value( "NA_REASON", reason );
 }
 
-static void hd_write_lr_status( const bool estimable, const std::string & reason,
+static void hd_write_lr_status( hd_results_t & writer, const bool estimable, const std::string & reason,
                                 const bool emit_qc )
 {
   if ( !emit_qc ) return;
   writer.level( 1, "QC" );
-  hd_write_lr_status_values( estimable, reason );
+  hd_write_lr_status_values( writer, estimable, reason );
   writer.unlevel( "QC" );
 }
 
 // A companion, metric-granular row removes any ambiguity when a shared
 // result row contains (for example) an estimable PS but a zero-variance SIM.
 // Its inherited strata make it directly joinable to the numerical row.
-static void hd_write_lr_metric_quality( const std::string & metric,
+static void hd_write_lr_metric_quality( hd_results_t & writer, const std::string & metric,
                                         const std::string & count_name,
                                         const int count,
                                         const bool estimable,
@@ -3787,7 +4002,7 @@ static void hd_write_lr_metric_quality( const std::string & metric,
   writer.level( metric, "METRIC" );
   writer.level( 1, "QC" );
   writer.value( count_name, count );
-  hd_write_lr_status_values( estimable, reason );
+  hd_write_lr_status_values( writer, estimable, reason );
   writer.unlevel( "QC" );
   writer.unlevel( "METRIC" );
 }
@@ -3818,18 +4033,114 @@ static double hd_pair_corr( const std::vector<double> & x , const int lo , const
     : std::numeric_limits<double>::quiet_NaN();
 }
 
-static void write_hdstats_longrange(
+static void compute_hdstats_longrange(
+    hd_results_t & writer,
     const hd_data_t & dat,
     const hd_derived_t & der,
     const hd_params_t & par,
     const hd_lr_quality_t & quality,
-    hdstats_pc::feature_map_t * pc_features = NULL,
-    const bool emit_output = true )
+    const std::vector<bool> & lr_allowed,
+    const hd_window_spt_t * spt )
 {
   const int core_lo = quality.first_valid;
   const int core_hi = quality.last_valid;
   const int n_core = quality.n_valid;
   const double NaN = std::numeric_limits<double>::quiet_NaN();
+
+  // Lag-pair autocorrelation of one trace, pairs never crossing a run
+  // boundary.  Strict mode has always required a core of at least 3 * lag
+  // samples, i.e. 2 * lag retained pairs; that minimum applies to every trace.
+  auto emit_acf = [&]( const std::vector<double> & x, const hd_lr_quality_t & q, const int lag ) {
+    const int min_lag_pairs = 2 * lag;
+    int n = 0;
+    double sx = 0.0, sy = 0.0, sxx = 0.0, syy = 0.0, sxy = 0.0;
+    for ( const auto & run : q.runs )
+      for ( int i = run.first; i + lag <= run.second; ++i )
+        { ++n; sx += x[i]; sy += x[i+lag]; }
+    const double mx = n ? sx / n : 0.0, my = n ? sy / n : 0.0;
+    for ( const auto & run : q.runs )
+      for ( int i = run.first; i + lag <= run.second; ++i )
+        {
+          const double dx = x[i] - mx, dy = x[i+lag] - my;
+          sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
+        }
+    const bool acf_ok = n >= min_lag_pairs && sxx > 0.0 && syy > 0.0;
+    if ( par.qc )
+      {
+        writer.level( 1, "QC" );
+        writer.value( "NPAIR", n );
+        writer.unlevel( "QC" );
+      }
+    writer.value( "ACF", acf_ok ? sxy / std::sqrt( sxx * syy ) : NaN );
+    hd_write_lr_status( writer, acf_ok, n < min_lag_pairs ? "INSUFFICIENT_PAIRS" : "ZERO_VARIANCE", par.qc );
+    hd_write_lr_metric_quality( writer, "ACF", "NPAIR", n, acf_ok,
+                                n < min_lag_pairs ? "INSUFFICIENT_PAIRS" : "ZERO_VARIANCE", par.qc );
+  };
+
+  // Linear trend over the given sample indexes, per normalized time unit of
+  // the [lo,hi] span (start to end of that trace's valid core).
+  auto emit_slope = [&]( const std::vector<double> & x, const std::vector<int> & idx,
+                         const int lo, const int hi ) {
+    double sx = 0.0, sy = 0.0, sxx = 0.0, sxy = 0.0;
+    for ( int i : idx )
+      {
+        const double u = hi > lo ? (double)( i - lo ) / ( hi - lo ) : 0.0;
+        sx += u;
+        sy += x[i];
+        sxx += u * u;
+        sxy += u * x[i];
+      }
+    const int n = (int)idx.size();
+    const double den = n * sxx - sx * sx;
+    const bool slope_ok = n >= 2 && den != 0.0;
+    writer.value( "SLOPE", slope_ok ? ( n * sxy - sx * sy ) / den : NaN );
+    hd_write_lr_status( writer, slope_ok, "INSUFFICIENT_TIME_VARIATION", par.qc );
+    hd_write_lr_metric_quality( writer, "SLOPE", "NVALID", n, slope_ok,
+                                "INSUFFICIENT_TIME_VARIATION", par.qc );
+  };
+
+  // WITHIN_SD/BETWEEN_SD for one trace over [lo,hi] (see the tiling notes
+  // below), written under the caller's LRWIN/VAR levels.
+  auto emit_tiling = [&]( const std::vector<double> & x, const int lo, const int hi,
+                          const int width, const bool ps_trace ) {
+    const hd_lr_tiling_stats_t tiling = hd_lr_tiling_stats(
+      dat, x, lo, hi, width, ps_trace, par.lr_policy == "gap-aware" );
+    const int n_offsets_used = tiling.n_offsets_used;
+    const bool within_ok  = n_offsets_used > 0 && width >= 2;
+    const bool between_ok = n_offsets_used > 0;
+    // NWIN is the mean block count per phase (same scale/meaning as the old
+    // single-tiling count); N_OFFSETS records how many of the `width`
+    // candidate phases actually contributed.
+    const int nwin_mean = n_offsets_used > 0 ? (int)std::round( tiling.sum_nwin / n_offsets_used ) : 0;
+    if ( par.qc )
+      {
+        writer.level( 1, "QC" );
+        writer.value( "NWIN", nwin_mean );
+        writer.value( "N_OFFSETS", n_offsets_used );
+        writer.unlevel( "QC" );
+      }
+    writer.value( "WITHIN_SD", within_ok ? tiling.sum_within_sd / n_offsets_used : NaN );
+    writer.value( "BETWEEN_SD", between_ok ? tiling.sum_between_sd / n_offsets_used : NaN );
+    hd_write_lr_status( writer, within_ok && between_ok,
+                        n_offsets_used == 0 ? "NO_ELIGIBLE_WINDOWS" : "INSUFFICIENT_WINDOWS", par.qc );
+    hd_write_lr_metric_quality( writer, "WITHIN_SD", "NWIN", nwin_mean, within_ok,
+                                n_offsets_used == 0 ? "NO_ELIGIBLE_WINDOWS" : "INSUFFICIENT_WINDOW_SAMPLES", par.qc );
+    hd_write_lr_metric_quality( writer, "BETWEEN_SD", "NWIN", nwin_mean, between_ok,
+                                n_offsets_used == 0 ? "NO_ELIGIBLE_WINDOWS" : "INSUFFICIENT_WINDOWS", par.qc );
+  };
+
+  // The W split (WASO, plus WPRE/WPOST with pre-post-wake): the same P(W)
+  // trace, restricted to each zone's samples of the long-range core.  Thin
+  // zones are throttled by the ordinary per-metric minimums.
+  std::vector<hd_lr_quality_t> zone_quality;
+  if ( spt != NULL && spt->valid_window )
+    for ( int zi = 0; zi < ( par.emit_pre_post_wake ? 3 : 1 ); ++zi )
+      {
+        std::vector<bool> allowed( dat.N, false );
+        for ( int i = 0; i < dat.N; ++i )
+          allowed[i] = lr_allowed[i] && hd_in_wake_zone( zi, i, spt->onset_idx, spt->offset_idx );
+        zone_quality.push_back( hd_lr_quality( dat, &allowed ) );
+      }
 
   auto emit_representation = [&]( const bool threestate ) {
     const std::vector<std::vector<double>> & P = threestate ? dat.p3 : dat.p;
@@ -3860,7 +4171,6 @@ static void write_hdstats_longrange(
 
         double mean_l1 = 0.0;
         double dot = 0.0, ss0 = 0.0, ss1 = 0.0;
-        std::vector<std::vector<double>> acf0( K ), acf1( K );
         int npair = 0;
         // Strict mode has always required a core of at least 3 * lag samples;
         // its shortest accepted trace therefore has 2 * lag retained pairs.
@@ -3880,8 +4190,6 @@ static void write_hdstats_longrange(
                   dot += x0 * x1;
                   ss0 += x0 * x0;
                   ss1 += x1 * x1;
-                  acf0[k].push_back( P[k][i] );
-                  acf1[k].push_back( P[k][i+lag] );
                 }
               mean_l1 += 0.5 * l1;
             }
@@ -3895,52 +4203,28 @@ static void write_hdstats_longrange(
           }
         const bool ps_ok = npair >= min_lag_pairs;
         const bool sim_ok = ps_ok && ss0 > 0.0 && ss1 > 0.0;
-        if ( emit_output )
+
           {
             writer.value( "PS", ps_ok ? mean_l1 / npair : NaN );
             writer.value( "SIM", sim_ok ? dot / std::sqrt( ss0 * ss1 ) : NaN );
           }
-        if ( pc_features != NULL )
-          {
-            const std::string s = "NSS/" + std::string( threestate ? "3" : "5" )
-              + ";LRLAG/" + Helper::dbl2str( lag_sec );
-            hd_pc_add( pc_features, hdstats_pc::key( "PS", s ), ps_ok ? mean_l1 / npair : NaN );
-            hd_pc_add( pc_features, hdstats_pc::key( "SIM", s ), sim_ok ? dot / std::sqrt( ss0 * ss1 ) : NaN );
-          }
-        hd_write_lr_status( ps_ok && sim_ok, npair < min_lag_pairs ? "INSUFFICIENT_PAIRS" :
+
+        hd_write_lr_status( writer, ps_ok && sim_ok, npair < min_lag_pairs ? "INSUFFICIENT_PAIRS" :
                             "ZERO_VARIANCE", par.qc );
-        hd_write_lr_metric_quality( "PS", "NPAIR", npair, ps_ok,
+        hd_write_lr_metric_quality( writer, "PS", "NPAIR", npair, ps_ok,
                                     "INSUFFICIENT_PAIRS", par.qc );
-        hd_write_lr_metric_quality( "SIM", "NPAIR", npair, sim_ok,
+        hd_write_lr_metric_quality( writer, "SIM", "NPAIR", npair, sim_ok,
                                     npair < min_lag_pairs ? "INSUFFICIENT_PAIRS" : "ZERO_VARIANCE", par.qc );
         for ( int k = 0; k < K; k++ )
           {
             writer.level( hd_state_label( threestate, k ), "SS" );
-            const int n = (int)acf0[k].size();
-            double sx = 0.0, sy = 0.0, sxx = 0.0, syy = 0.0, sxy = 0.0;
-            for ( int j = 0; j < n; ++j ) { sx += acf0[k][j]; sy += acf1[k][j]; }
-            const double mx = n ? sx / n : 0.0, my = n ? sy / n : 0.0;
-            for ( int j = 0; j < n; ++j )
-              {
-                const double dx = acf0[k][j] - mx, dy = acf1[k][j] - my;
-                sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
-              }
-            const bool acf_ok = n >= min_lag_pairs && sxx > 0.0 && syy > 0.0;
-            if ( par.qc )
-              {
-                writer.level( 1, "QC" );
-                writer.value( "NPAIR", n );
-                writer.unlevel( "QC" );
-              }
-            if ( emit_output ) writer.value( "ACF", acf_ok ? sxy / std::sqrt( sxx * syy ) : NaN );
-            if ( pc_features != NULL )
-              hd_pc_add( pc_features, hdstats_pc::key( "ACF",
-                           "SS/" + hd_state_label(threestate,k) + ";NSS/"
-                           + ( threestate ? "3" : "5" ) + ";LRLAG/" + Helper::dbl2str(lag_sec) ),
-                         acf_ok ? sxy / std::sqrt( sxx * syy ) : NaN );
-            hd_write_lr_status( acf_ok, n < min_lag_pairs ? "INSUFFICIENT_PAIRS" : "ZERO_VARIANCE", par.qc );
-            hd_write_lr_metric_quality( "ACF", "NPAIR", n, acf_ok,
-                                        n < min_lag_pairs ? "INSUFFICIENT_PAIRS" : "ZERO_VARIANCE", par.qc );
+            emit_acf( P[k], quality, lag );
+            writer.unlevel( "SS" );
+          }
+        for ( int zi = 0; zi < (int)zone_quality.size(); ++zi )
+          {
+            writer.level( hd_wake_zones[zi], "SS" );
+            emit_acf( P[0], zone_quality[zi], lag );
             writer.unlevel( "SS" );
           }
         writer.unlevel( "LRLAG" );
@@ -3969,38 +4253,23 @@ static void write_hdstats_longrange(
             // invalid sample in the ordinary per-sample trace, so it is not a
             // valid long-range observation.
             if ( par.lr_policy == "strict" || q < K + 1 || i == core_lo || dat.valid[i-1] ) idx.push_back( i );
-        double sx = 0.0, sy = 0.0, sxx = 0.0, sxy = 0.0;
-        for ( int i : idx )
-          {
-            const double u = core_hi > core_lo ? (double)( i - core_lo ) / ( core_hi - core_lo ) : 0.0;
-            sx += u;
-            sy += x[i];
-            sxx += u * u;
-            sxy += u * x[i];
-          }
-        const int n = (int)idx.size();
-        const double den = n * sxx - sx * sx;
-        const bool slope_ok = n >= 2 && den != 0.0;
         writer.level( trend_label[q], "VAR" );
-        const double slope = slope_ok ? ( n * sxy - sx * sy ) / den : NaN;
-        if ( emit_output ) writer.value( "SLOPE", slope );
-        if ( q < K ) hd_write_lr_timing( stage_timing[q], emit_output, par.qc );
-        if ( pc_features != NULL )
-          {
-            const std::string s = "NSS/" + std::string( threestate ? "3" : "5" )
-              + ";VAR/" + trend_label[q];
-            hd_pc_add( pc_features, hdstats_pc::key( "SLOPE", s ), slope );
-            if ( q < K )
-              {
-                hd_pc_add( pc_features, hdstats_pc::key( "T50", s ), stage_timing[q].t50 );
-                hd_pc_add( pc_features, hdstats_pc::key( "T50_M", s ), stage_timing[q].t50_m );
-                hd_pc_add( pc_features, hdstats_pc::key( "COM", s ), stage_timing[q].com );
-                hd_pc_add( pc_features, hdstats_pc::key( "COM_M", s ), stage_timing[q].com_m );
-              }
-          }
-        hd_write_lr_status( slope_ok, "INSUFFICIENT_TIME_VARIATION", par.qc );
-        hd_write_lr_metric_quality( "SLOPE", "NVALID", n, slope_ok,
-                                    "INSUFFICIENT_TIME_VARIATION", par.qc );
+        emit_slope( x, idx, core_lo, core_hi );
+        if ( q < K ) hd_write_lr_timing( writer, stage_timing[q], par.qc );
+        writer.unlevel( "VAR" );
+      }
+
+    // VAR=WASO (etc.): slope and timing of P(W) within each wake zone, on
+    // that zone's own normalized time axis.
+    for ( int zi = 0; zi < (int)zone_quality.size(); ++zi )
+      {
+        const hd_lr_quality_t & zq = zone_quality[zi];
+        std::vector<int> idx;
+        for ( const auto & run : zq.runs )
+          for ( int i = run.first; i <= run.second; ++i ) idx.push_back( i );
+        writer.level( hd_wake_zones[zi], "VAR" );
+        emit_slope( P[0], idx, zq.first_valid, zq.last_valid );
+        hd_write_lr_timing( writer, hd_lr_timing( P[0], dat, zq ), par.qc );
         writer.unlevel( "VAR" );
       }
 
@@ -4026,12 +4295,8 @@ static void write_hdstats_longrange(
                                                    const std::vector<double> & x ) {
           writer.level( label, "VAR" );
           const hd_lr_timing_t timing = hd_lr_timing( x, dat, quality );
-          hd_write_lr_timing( timing, emit_output, par.qc );
-          if ( pc_features != NULL )
-            {
-              hd_pc_add( pc_features, hdstats_pc::key( "T50", "NSS/5;VAR/" + label ), timing.t50 );
-              hd_pc_add( pc_features, hdstats_pc::key( "COM", "NSS/5;VAR/" + label ), timing.com );
-            }
+          hd_write_lr_timing( writer, timing, par.qc );
+
           writer.unlevel( "VAR" );
         };
         emit_conditional_timing( "N3_NREM", n3_nrem );
@@ -4056,51 +4321,17 @@ static void write_hdstats_longrange(
         const double window_sec = width / dat.Fs;
         for ( int q = 0; q < (int)trend_x.size(); q++ )
           {
-            const std::vector<double> & x = *trend_x[q];
-
-            const hd_lr_tiling_stats_t tiling = hd_lr_tiling_stats(
-              dat, x, core_lo, core_hi, width, q == K + 1,
-              par.lr_policy == "gap-aware" );
-            const double sum_nwin = tiling.sum_nwin;
-            const double sum_within_sd = tiling.sum_within_sd;
-            const double sum_between_sd = tiling.sum_between_sd;
-            const int n_offsets_used = tiling.n_offsets_used;
-
-            const bool within_ok  = n_offsets_used > 0 && width >= 2;
-            const bool between_ok = n_offsets_used > 0;
-            // NWIN is now the mean block count per phase (same scale/meaning
-            // as the old single-tiling count); N_OFFSETS records how many of
-            // the `width` candidate phases actually contributed.
-            const int nwin_mean = n_offsets_used > 0 ? (int)std::round( sum_nwin / n_offsets_used ) : 0;
             writer.level( window_sec, "LRWIN" );
             writer.level( trend_label[q], "VAR" );
-            if ( par.qc )
-              {
-                writer.level( 1, "QC" );
-                writer.value( "NWIN", nwin_mean );
-                writer.value( "N_OFFSETS", n_offsets_used );
-                writer.unlevel( "QC" );
-              }
-            const double within_sd  = within_ok  ? sum_within_sd  / n_offsets_used : NaN;
-            const double between_sd = between_ok ? sum_between_sd / n_offsets_used : NaN;
-            if ( emit_output )
-              {
-                writer.value( "WITHIN_SD", within_sd );
-                writer.value( "BETWEEN_SD", between_sd );
-              }
-            if ( pc_features != NULL )
-              {
-                const std::string s = "NSS/" + std::string( threestate ? "3" : "5" )
-                  + ";VAR/" + trend_label[q] + ";LRWIN/" + Helper::dbl2str(window_sec);
-                hd_pc_add( pc_features, hdstats_pc::key( "WITHIN_SD", s ), within_sd );
-                hd_pc_add( pc_features, hdstats_pc::key( "BETWEEN_SD", s ), between_sd );
-              }
-            hd_write_lr_status( within_ok && between_ok,
-                                n_offsets_used == 0 ? "NO_ELIGIBLE_WINDOWS" : "INSUFFICIENT_WINDOWS", par.qc );
-            hd_write_lr_metric_quality( "WITHIN_SD", "NWIN", nwin_mean, within_ok,
-                                        n_offsets_used == 0 ? "NO_ELIGIBLE_WINDOWS" : "INSUFFICIENT_WINDOW_SAMPLES", par.qc );
-            hd_write_lr_metric_quality( "BETWEEN_SD", "NWIN", nwin_mean, between_ok,
-                                        n_offsets_used == 0 ? "NO_ELIGIBLE_WINDOWS" : "INSUFFICIENT_WINDOWS", par.qc );
+            emit_tiling( *trend_x[q], core_lo, core_hi, width, q == K + 1 );
+            writer.unlevel( "VAR" );
+            writer.unlevel( "LRWIN" );
+          }
+        for ( int zi = 0; zi < (int)zone_quality.size(); ++zi )
+          {
+            writer.level( window_sec, "LRWIN" );
+            writer.level( hd_wake_zones[zi], "VAR" );
+            emit_tiling( P[0], zone_quality[zi].first_valid, zone_quality[zi].last_valid, width, false );
             writer.unlevel( "VAR" );
             writer.unlevel( "LRWIN" );
           }
@@ -4143,10 +4374,38 @@ struct hdstats_offset_outputs_scope_t
   ~hdstats_offset_outputs_scope_t() { set_hdstats_offset_outputs( false ); }
 };
 
-
 // ============================================================
 // Layer 5: top-level command
 // ============================================================
+
+// HDSTATS settings recorded with PC features and enforced at projection:
+// every explicitly given option, except those known not to change feature
+// values (outputs, annotations/signals emitted, channel names, the PC I/O
+// options themselves). Options not listed here -- including any added in
+// future -- are recorded, so the default is to require a match.
+static hdstats_pc::settings_t hd_pc_settings( const param_t & param )
+{
+  static const std::set<std::string> exempt = {
+    // PC I/O and reporting
+    "pc-out", "pc-proj", "model-desc", "pc-min-loading", "pc-all",
+    // output-only / emission
+    "verbose", "qc", "emit-stats", "emit-all-trans", "emit-annots", "emit-annots-by-type",
+    "emit-spt", "emit-cycles", "emit-sigs", "emit-hypnogram", "emit-ultradian",
+    "ultra-diagnostics", "emit-nr-pp", "update-pp", "fail-on-empty",
+    // adds WPRE/WPOST levels only; existing feature values are unchanged
+    "pre-post-wake",
+    // separately stratified outputs, not PC inputs
+    "annot",
+    // computed regardless when PC features are requested; only printing changes
+    "ultra-condition", "ultra-regions",
+    // input channel names
+    "W", "N1", "N2", "N3", "NR", "R", "VALID", "sig" };
+  hdstats_pc::settings_t settings;
+  for ( const std::string & key : param.keys() )
+    if ( ! param.is_hidden( key ) && exempt.find( key ) == exempt.end() )
+      settings[ key ] = param.empty( key ) ? "" : param.value( key );  // bare option -> ""
+  return settings;
+}
 
 void proc_hdstats( edf_t & edf, param_t & param )
 {
@@ -4193,23 +4452,48 @@ void proc_hdstats( edf_t & edf, param_t & param )
   par.hd_rem_mass_th   = param.has( "hd-rem-mass-th" ) ? param.requires_dbl( "hd-rem-mass-th" ) : 0.30;
   par.hd_offset_win_min = param.has( "hd-offset-win" ) ? param.requires_dbl( "hd-offset-win" ) : 10.0;
   par.hd_offset_mass_th = param.has( "hd-offset-mass-th" ) ? param.requires_dbl( "hd-offset-mass-th" ) : 0.60;
-  par.spt_mode = param.has( "spt-mode" ) ? param.value( "spt-mode" ) : "legacy";
-  if ( par.spt_mode != "legacy" && par.spt_mode != "primary-island" )
-    Helper::halt( "spt-mode must be legacy or primary-island" );
-  par.spt_qc = param.has( "spt-qc" ) ? param.yesno( "spt-qc" ) : false;
-  par.spt_island_min_sec = ( param.has( "spt-island-min" )
-                             ? param.requires_dbl( "spt-island-min" ) : 60.0 ) * 60.0;
-  par.spt_gap_max_sec = ( param.has( "spt-gap" )
-                          ? param.requires_dbl( "spt-gap" ) : 120.0 ) * 60.0;
-  if ( !std::isfinite( par.spt_island_min_sec ) || par.spt_island_min_sec <= 0.0 ||
-       !std::isfinite( par.spt_gap_max_sec ) || par.spt_gap_max_sec < 0.0 )
-    Helper::halt( "primary-island SPT parameters must be finite; spt-island-min > 0 and spt-gap >= 0" );
+  // Retired options halt rather than being silently ignored, which would
+  // quietly fall back to the default analysis window.
+  for ( const std::string & old : { "spt", "spt-mode", "spt-qc", "spt-flank", "spt-flank-mins",
+                                    "spt-flank-pre", "spt-flank-pre-mins", "spt-flank-post",
+                                    "spt-flank-post-mins", "spt-island-min", "spt-island-min-mins",
+                                    "spt-gap", "spt-gap-mins" } )
+    if ( param.has( old ) )
+      Helper::halt( "HDSTATS " + old + "= has been removed: use core-mode=spt|primary-island|recording|annot"
+                    " and the core-* options (e.g. spt=F is now core-mode=recording)" );
+  par.core_mode = param.has( "core-mode" ) ? param.value( "core-mode" ) : "spt";
+  if ( par.core_mode != "spt" && par.core_mode != "primary-island" && par.core_mode != "recording" && par.core_mode != "annot" )
+    Helper::halt( "core-mode must be spt, primary-island, recording or annot" );
+  par.core_qc = param.has( "core-qc" ) ? param.yesno( "core-qc" ) : false;
+  // All core-* duration parameters share one convention: the bare name is
+  // seconds, and a "-mins" sibling is the mutually-exclusive minutes alias.
+  auto core_duration_sec = [&]( const std::string & seconds_name,
+                               const std::string & minutes_name,
+                               const double default_seconds ) {
+    if ( param.has( seconds_name ) && param.has( minutes_name ) )
+      Helper::halt( "specify only one of " + seconds_name + " or " + minutes_name );
+    if ( param.has( seconds_name ) ) return param.requires_dbl( seconds_name );
+    if ( param.has( minutes_name ) ) return 60.0 * param.requires_dbl( minutes_name );
+    return default_seconds;
+  };
+  par.core_island_min_sec = core_duration_sec( "core-island-min", "core-island-min-mins", 3600.0 );
+  par.core_gap_max_sec    = core_duration_sec( "core-gap", "core-gap-mins", 7200.0 );
+  if ( !std::isfinite( par.core_island_min_sec ) || par.core_island_min_sec <= 0.0 ||
+       !std::isfinite( par.core_gap_max_sec ) || par.core_gap_max_sec < 0.0 )
+    Helper::halt( "primary-island SPT parameters must be finite; core-island-min > 0 and core-gap >= 0" );
   par.annot_name      = param.has( "annot"     ) ? param.value( "annot" )              : "";
   par.verbose         = param.yesno( "verbose" );
   par.qc              = param.has( "qc" ) ? param.yesno( "qc" ) : false;
   par.min_events_profile = param.has( "min-events" ) ? param.requires_int( "min-events" ) : 3;
   par.min_samples_region = param.has( "min-samples" ) ? param.requires_int( "min-samples" ) : 20;
   par.emit_annot_typed_classes = param.has( "emit-annots-by-type" ) ? param.yesno( "emit-annots-by-type" ) : false;
+  // WASO (SS and BOUT levels) is always emitted alongside W when an SPT is
+  // defined; pre-post-wake additionally emits WPRE/WPOST and labels
+  // W-dominant bout annotations by zone (WASO/WPRE/WPOST) instead of W.
+  if ( param.has( "waso" ) )
+    Helper::halt( "HDSTATS waso= has been removed: WASO is now always reported alongside W;"
+                  " use pre-post-wake to also report WPRE/WPOST" );
+  par.emit_pre_post_wake = param.yesno( "pre-post-wake" );
   par.emit_all_trans = param.yesno( "emit-all-trans" );
   par.emit_annot_label   =
     param.has( "emit-annots" ) ? ( ( ! param.empty("emit-annots" ) ) ? param.value( "emit-annots" ) : "hd" )
@@ -4244,9 +4528,10 @@ void proc_hdstats( edf_t & edf, param_t & param )
   par.stable_conf_th  = param.has( "stable-conf" ) ? param.requires_dbl( "stable-conf" ) : 0.70;
   par.min_shift       = param.has( "min-shift"   ) ? param.requires_dbl( "min-shift"   ) : 0.10;
   par.shift_win_sec   = param.has( "shift-win"   ) ? param.requires_dbl( "shift-win"   ) : 30.0;
-  par.bout_min_sec    = param.has( "bout-min"    ) ? param.requires_dbl( "bout-min"    ) : 120.0;
-  par.bout_gap_sec    = param.has( "bout-gap"    ) ? param.requires_dbl( "bout-gap"    ) : 30.0;
-  par.bout_smooth_sec = param.has( "bout-smooth" ) ? param.requires_dbl( "bout-smooth" ) : 15.0;
+  par.bout_min_sec           = param.has( "bout-min"            ) ? param.requires_dbl( "bout-min"            ) : 120.0;
+  par.bout_intrusion_max_sec = param.has( "bout-intrusion-max"  ) ? param.requires_dbl( "bout-intrusion-max"  ) : 60.0;
+  par.bout_intrusion_frac    = param.has( "bout-intrusion-frac" ) ? param.requires_dbl( "bout-intrusion-frac" ) : 0.08;
+  par.bout_smooth_sec        = param.has( "bout-smooth"         ) ? param.requires_dbl( "bout-smooth"         ) : 15.0;
   par.ch_valid        = param.has( "VALID" ) ? param.value( "VALID" ) : infer_invalid_channel_label( par.ch );
   par.emit_sig_label  =
     param.has( "emit-sigs" ) ? ( ( ! param.empty( "emit-sigs" ) ) ? param.value( "emit-sigs" ) : "hd" ) : "";
@@ -4265,37 +4550,32 @@ void proc_hdstats( edf_t & edf, param_t & param )
     ? param.requires_dbl( "lr-min-duration" ) : 4.5 * 3600.0;
   par.lr_policy = ( ! param.has( "gap-aware" ) || param.yesno( "gap-aware" ) ) ? "gap-aware" : "strict";
   par.lr_fail_on_empty = param.has( "fail-on-empty" ) ? param.yesno( "fail-on-empty" ) : false;
+  par.fixed = false;
   par.fixed_duration_sec = 0.0;
   if ( param.has( "fixed" ) )
     {
       const double fixed_hours = param.requires_dbl( "fixed" );
       if ( ! std::isfinite( fixed_hours ) || fixed_hours <= 0.0 )
         Helper::halt( "fixed= must be a finite positive core duration in hours" );
-      par.analysis = "fixed";
+      par.fixed = true;
       par.fixed_duration_sec = fixed_hours * 3600.0;
     }
-  else
-    par.analysis = ( ! param.has( "spt" ) || param.yesno( "spt" ) ) ? "spt" : "recording";
+  if ( par.fixed && par.core_mode == "annot" )
+    Helper::halt( "fixed= with core-mode=annot is not supported yet" );
   // SPT analysis retains its established 5-minute default flanks.  Fixed
   // windows historically had no flanks, so retain that contract unless a
   // shared or side-specific flank has been explicitly requested.
-  auto flank_seconds = [&]( const std::string & seconds_name,
-                            const std::string & minutes_name,
-                            const double default_seconds ) {
-    if ( param.has( seconds_name ) && param.has( minutes_name ) )
-      Helper::halt( "specify only one of " + seconds_name + " or " + minutes_name );
-    if ( param.has( seconds_name ) ) return param.requires_dbl( seconds_name );
-    if ( param.has( minutes_name ) ) return 60.0 * param.requires_dbl( minutes_name );
-    return default_seconds;
-  };
-  const double analysis_flank_sec = flank_seconds(
-    "spt-flank", "spt-flank-mins", par.analysis == "fixed" ? 0.0 : 300.0 );
-  par.analysis_flank_pre_sec = flank_seconds(
-    "spt-flank-pre", "spt-flank-pre-mins", analysis_flank_sec );
-  par.analysis_flank_post_sec = flank_seconds(
-    "spt-flank-post", "spt-flank-post-mins", analysis_flank_sec );
+  const double analysis_flank_sec = core_duration_sec(
+    "core-flank", "core-flank-mins", ( par.fixed || par.core_mode == "annot" ) ? 0.0 : 300.0 );
+  par.analysis_flank_pre_sec = core_duration_sec(
+    "core-flank-pre", "core-flank-pre-mins", analysis_flank_sec );
+  par.analysis_flank_post_sec = core_duration_sec(
+    "core-flank-post", "core-flank-post-mins", analysis_flank_sec );
   par.pc_out = param.has( "pc-out" ) ? param.value( "pc-out" ) : "";
   par.pc_proj = param.has( "pc-proj" ) ? Helper::expand( param.value( "pc-proj" ) ) : "";
+  const hdstats_pc::settings_t pc_settings = hd_pc_settings( param );
+  // Report (once) the model's fit-time settings and any difference from this run.
+  if ( ! par.pc_proj.empty() ) hdstats_pc::report_settings( par.pc_proj, pc_settings );
   const bool emit_model_desc = param.yesno( "model-desc" );
   if ( emit_model_desc && par.pc_proj.empty() )
     Helper::halt( "model-desc requires pc-proj=<HDSTATS-PC V3 model>" );
@@ -4384,7 +4664,9 @@ void proc_hdstats( edf_t & edf, param_t & param )
     return s;
   };
 
-  logger << "  general: analysis=" << par.analysis
+  logger << "  general: core-mode=" << par.core_mode;
+  if ( par.fixed ) logger << ", fixed=" << Helper::dbl2str( par.fixed_duration_sec / 3600.0 ) << "h";
+  logger
          << ", 3state=" << ( par.do_3state ? "T" : "F" )
          << ", window=" << par.window_sec << "s"
          << ", lag=" << par.lag_sec << "s"
@@ -4477,43 +4759,58 @@ void proc_hdstats( edf_t & edf, param_t & param )
 
   // The sleep-period selector relies on the existing robust hypnodensity
   // onset/final-sleep logic even when the optional HD timing table is off.
-  hd_hypno_metrics_t hm;
+  hd_boundary_evidence_t hm;
   hm.compute( dat, par );
-  const hd_hypno_metrics_t legacy_hm = hm;
-  const hd_spt_qc_t spt_selection = hd_primary_island( dat, par );
-  bool spt_fallback_to_legacy = false;
-  if ( par.spt_mode == "primary-island" )
+  const hd_boundary_evidence_t legacy_hm = hm;
+  const hd_core_qc_t core_selection = hd_primary_island( dat, par );
+  bool core_fallback_to_legacy = false;
+  if ( par.core_mode == "primary-island" )
     {
-      if ( spt_selection.primary_valid )
+      if ( core_selection.primary_valid )
         {
-          hd_apply_primary_island( &hm, spt_selection, dat, par );
-          logger << "  SPT selector: primary island " << spt_selection.primary_index
-                 << "/" << spt_selection.n_islands << " ("
-                 << Helper::dbl2str( spt_selection.primary_sleep_min )
+          hd_apply_primary_island( &hm, core_selection );
+          logger << "  SPT selector: primary island " << core_selection.primary_index
+                 << "/" << core_selection.n_islands << " ("
+                 << Helper::dbl2str( core_selection.primary_sleep_min )
                  << " soft sleep minutes)\n";
         }
       else
         {
-          spt_fallback_to_legacy = true;
-          logger << "  warning: primary-island SPT selector found no qualifying island; using legacy SPT\n";
+          core_fallback_to_legacy = true;
+          logger << "  warning: primary-island core selector found no qualifying island; using core-mode=spt\n";
         }
     }
-  const hd_analysis_t analysis = hd_make_analysis( dat, hm, par );
-  if ( par.spt_qc || par.spt_mode == "primary-island" )
-    hd_write_spt_qc( spt_selection, dat, par, spt_fallback_to_legacy, legacy_hm );
+  const hd_analysis_t analysis = hd_make_analysis( edf, dat, hm, par );
+  // A selected primary island directly defines the official SPT. Flanks
+  // affect analysis only; fixed= can shorten its end but never move onset.
+  // If island selection failed, retain the ordinary sustained-sleep scan.
+  hd_window_spt_t spt;
+  if ( par.core_mode == "primary-island" && core_selection.primary_valid )
+    {
+      const int stop = std::min( core_selection.hi, analysis.spt_hi );
+      spt = hd_spt_from_bounds( dat, par, legacy_hm, core_selection.lo, stop );
+      spt.offset_is_fallback = stop < core_selection.hi;
+      spt.valid_offset = !spt.offset_is_fallback;
+    }
+  else
+    spt = hd_detect_spt_within( dat, par, legacy_hm, analysis.lo, analysis.spt_hi );
+  if ( spt.valid_onset ) spt.sol_min = ( spt.onset_idx - analysis.lo ) / dat.Fs / 60.0;
+  if ( par.core_qc || par.core_mode == "primary-island" )
+    hd_write_core_qc( core_selection, dat, par, core_fallback_to_legacy, legacy_hm );
   const bool make_pc_features = ! par.pc_out.empty() || ! par.pc_proj.empty();
-  if ( par.analysis == "fixed" )
+  if ( par.fixed )
     {
       writer.value( "HD_FIXED_AVAILABLE_HOURS", analysis.fixed_available_sec / 3600.0 );
       writer.value( "HD_FIXED_OK", analysis.fixed_ok ? 1 : 0 );
       if ( ! analysis.fixed_ok )
         {
-          if ( hm.valid_onset )
+          if ( analysis.core_defined )
             logger << "  warning: fixed="
                    << Helper::dbl2str( par.fixed_duration_sec / 3600.0 )
                    << " hours skips this recording: only "
                    << Helper::dbl2str( analysis.fixed_available_sec / 3600.0 )
-                   << " hours are available after sustained sleep onset\n";
+                   << " hours are available after "
+                   << ( par.core_mode == "recording" ? "recording start" : "sustained sleep onset" ) << "\n";
           else
             logger << "  warning: fixed= skips this recording: could not define sustained sleep onset\n";
           if ( par.qc )
@@ -4526,9 +4823,9 @@ void proc_hdstats( edf_t & edf, param_t & param )
               if ( dat.n_invalid_trail > 0 ) writer.value( "N_INVALID_TRAIL", dat.n_invalid_trail );
               if ( dat.n_invalid_mid   > 0 ) writer.value( "N_INVALID_MID",   dat.n_invalid_mid );
               writer.value( "HD_ANALYSIS", "fixed" );
-              writer.value( "HD_ANALYSIS_START_SEC", hm.valid_onset ? analysis.lo / dat.Fs : std::numeric_limits<double>::quiet_NaN() );
-              writer.value( "HD_ANALYSIS_STOP_SEC", hm.valid_onset ? ( analysis.hi + 1 ) / dat.Fs : std::numeric_limits<double>::quiet_NaN() );
-              writer.value( "HD_ANALYSIS_SEC", hm.valid_onset ? ( analysis.hi - analysis.lo + 1 ) / dat.Fs : 0.0 );
+              writer.value( "HD_ANALYSIS_START_SEC", analysis.core_defined ? analysis.lo / dat.Fs : std::numeric_limits<double>::quiet_NaN() );
+              writer.value( "HD_ANALYSIS_STOP_SEC", analysis.core_defined ? ( analysis.hi + 1 ) / dat.Fs : std::numeric_limits<double>::quiet_NaN() );
+              writer.value( "HD_ANALYSIS_SEC", analysis.core_defined ? ( analysis.hi - analysis.lo + 1 ) / dat.Fs : 0.0 );
               writer.value( "HD_ANALYSIS_INVALID_SEC", analysis.n_invalid / dat.Fs );
               writer.value( "HD_FIXED_SKIPPED", 1 );
               writer.unlevel( "QC" );
@@ -4543,14 +4840,27 @@ void proc_hdstats( edf_t & edf, param_t & param )
   if ( ! par.emit_spt_label.empty() && ! dat.tp.empty() )
     {
       const uint64_t sample_tp = (uint64_t)std::round( (double)globals::tp_1sec / dat.Fs );
-      if ( hm.valid_window )
+
+      // Replace, rather than accumulate alongside, any instances left by a
+      // prior HDSTATS run under this same root (e.g. HDSTATS re-run on an
+      // EDF/annotation set already carrying its output). Cleared regardless
+      // of whether this run defines an SPT/fixed window, so a stale window
+      // from an earlier run never survives a run that could not define one.
+      for ( const char * suffix : { "_sleep_onset", "_final_wake", "_spt",
+                                    "_lights_out", "_lights_on", "_fixed" } )
+        edf.annotations->clear( par.emit_spt_label + suffix );
+
+      // "_sleep_onset"/"_final_wake"/"_spt" always come from the true,
+      // window-bounded SPT (never the whole-recording hm.onset_idx/
+      // offset_idx). "_lights_out"/"_lights_on" are the analysis window's
+      // own bounds (core + any flank) -- no separate flank arithmetic
+      // needed, since analysis.lo/hi already include it.
+      if ( spt.valid_window )
         {
-          const uint64_t onset_tp = dat.tp[hm.onset_idx];
-          const uint64_t final_wake_tp = dat.tp[hm.offset_idx] + sample_tp;
-          const int lights_out_idx = std::max( 0, hm.onset_idx - (int)std::round( par.analysis_flank_pre_sec * dat.Fs ) );
-          const int lights_on_idx = std::min( dat.N - 1, hm.offset_idx + (int)std::round( par.analysis_flank_post_sec * dat.Fs ) );
-          const uint64_t lights_out_tp = dat.tp[lights_out_idx];
-          const uint64_t lights_on_tp = dat.tp[lights_on_idx] + sample_tp;
+          const uint64_t onset_tp = dat.tp[spt.onset_idx];
+          const uint64_t final_wake_tp = dat.tp[spt.offset_idx] + sample_tp;
+          const uint64_t lights_out_tp = dat.tp[analysis.lo];
+          const uint64_t lights_on_tp = dat.tp[analysis.hi] + sample_tp;
           edf.annotations->add( par.emit_spt_label + "_sleep_onset" )->add(
             ".", interval_t( onset_tp, onset_tp ), "." );
           edf.annotations->add( par.emit_spt_label + "_final_wake" )->add(
@@ -4561,7 +4871,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
             ".", interval_t( lights_out_tp, lights_out_tp ), "." );
           edf.annotations->add( par.emit_spt_label + "_lights_on" )->add(
             ".", interval_t( lights_on_tp, lights_on_tp ), "." );
-          logger << "  emitted soft SPT annotations under '" << par.emit_spt_label << "'\n";
+          logger << "  emitted SPT annotations under '" << par.emit_spt_label << "'\n";
         }
       if ( analysis.mode == "fixed" )
         {
@@ -4573,8 +4883,8 @@ void proc_hdstats( edf_t & edf, param_t & param )
 
   if ( par.do_ultradian && ! par.emit_cycle_label.empty() )
     {
-      const int n_cycles = hd_emit_ultradian_cycles( edf, dat, ultra, analysis, par );
-      logger << "  emitted " << n_cycles << " complete soft-ultradian cycle annotation(s) under '"
+      const int n_cycles = hd_emit_ultradian_cycles( edf, dat, ultra, analysis, spt, par );
+      logger << "  emitted " << n_cycles << " soft-ultradian cycle annotation(s), including initial partials, under '"
              << par.emit_cycle_label << "'\n";
     }
 
@@ -4598,8 +4908,6 @@ void proc_hdstats( edf_t & edf, param_t & param )
                    << lr_quality.runs.size() << " valid runs)\n";
           if ( lr_quality.n_valid == 0 && par.lr_fail_on_empty )
             Helper::halt( "longrange has no valid observations" );
-          if ( lr_quality.n_valid == 0 && make_pc_features )
-            longrange_available = false;
         }
       else
         {
@@ -4672,82 +4980,104 @@ void proc_hdstats( edf_t & edf, param_t & param )
             }
         };
 
-      // Emit TRANS events as point events; use instance label "from->to" or "." if states unknown
+      // Emit a TRANS/BOUT_TRANS family: a point event at the crossing (class
+      // suffix "_event") plus a padded ±window_sec interval (same class, no
+      // suffix) covering the same samples as the TIME table's IS_TRANS/
+      // IS_BOUT_TRANS mask. Both carry a concise "FROMtoTO" instance label
+      // (e.g. "WtoN1") rather than a generic placeholder; bout transitions
+      // always have a known from/to pair (bouts are always dominant-state
+      // runs), plain transitions fall back to "." when direction is unclear.
       const uint64_t half_sample_tp = sample_tp / 2;
-      for ( const auto & e : tr.events5 )
-	{
-	  const std::string inst =
-	    ( e.is_dir && e.from_st >= 0 && e.to_st >= 0 )
-	    ? hd_state_label( false, e.from_st ) + "to" + hd_state_label( false, e.to_st )
-	    : ".";
-	  const std::string cls =
-	    ( par.emit_annot_typed_classes && inst != "." )
-	    ? par.emit_annot_label + "_trans_event_" + inst
-	    : par.emit_annot_label + "_trans_event";
-	  uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
-	  edf.annotations->add( cls )->add( inst , interval_t( tp0 , tp0 ) , "." );
-	}
+      const int win_smp = std::max( 1, (int)std::round( par.window_sec * dat.Fs ) );
 
-      // Emit BOUT_TRANS transitions as point events, anchored at the bout-gap
-      // midpoint; from/to states are always known (bouts are always dominant-state runs)
-      for ( const auto & e : tr.bout_events5 )
-	{
-	  const std::string inst = hd_state_label( false, e.from_st ) + "to" + hd_state_label( false, e.to_st );
-	  const std::string cls =
-	    par.emit_annot_typed_classes
-	    ? par.emit_annot_label + "_bout_trans_event_" + inst
-	    : par.emit_annot_label + "_bout_trans_event";
-	  uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
-	  edf.annotations->add( cls )->add( inst , interval_t( tp0 , tp0 ) , "." );
-	}
+      // Each emitted class replaces any same-named class from a prior HDSTATS
+      // run, rather than accumulating duplicate instances. For transition
+      // families this includes every possible typed point-event class
+      // (<base>_event_<FROM>to<TO>), whether or not typed classes are
+      // requested this time, so switching emit-annots-by-type also replaces.
+      auto clear_trans_family = [&]( const std::string & base_cls, const bool threestate )
+        {
+          edf.annotations->clear( base_cls );
+          edf.annotations->clear( base_cls + "_event" );
+          const int K = threestate ? 3 : 5;
+          for ( int a = 0; a < K; ++a )
+            for ( int b = 0; b < K; ++b )
+              if ( a != b )
+                edf.annotations->clear( base_cls + "_event_"
+                                        + hd_state_label( threestate, a ) + "to"
+                                        + hd_state_label( threestate, b ) );
+        };
 
-      // Emit stable, trans, and bout_trans whole intervals (5-state) -- the same
-      // three independent flags as the TIME table's STABLE/TRANS/BOUT_TRANS
+      auto emit_trans_family = [&]( const std::vector<hd_event_t> & events,
+                                     const std::string & base_cls,
+                                     const bool threestate,
+                                     const bool always_directional )
+        {
+          clear_trans_family( base_cls, threestate );
+          annot_t * a_ivl = edf.annotations->add( base_cls );
+          for ( const auto & e : events )
+            {
+              const std::string inst =
+                ( always_directional || ( e.is_dir && e.from_st >= 0 && e.to_st >= 0 ) )
+                ? hd_state_label( threestate, e.from_st ) + "to" + hd_state_label( threestate, e.to_st )
+                : ".";
+              const std::string pt_cls =
+                ( par.emit_annot_typed_classes && inst != "." )
+                ? base_cls + "_event_" + inst
+                : base_cls + "_event";
+              const uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
+              edf.annotations->add( pt_cls )->add( inst , interval_t( tp0 , tp0 ) , "." );
+
+              const int lo = std::max( 0, e.idx - win_smp );
+              const int hi = std::min( dat.N - 1, e.idx + win_smp );
+              a_ivl->add( inst , interval_t( dat.tp[lo] , dat.tp[hi] + sample_tp ) , "." );
+            }
+        };
+
+      // Emit bouts as whole intervals, one class per state-space, labeled
+      // with the bout's concise dominant-stage label (e.g. "N2", "R")
+      // rather than a generic "bout" instance. When a sleep window is
+      // available, a W-dominant bout lying mostly within it (majority
+      // overlap) is labeled "WASO", matching BOUT=WASO; other W-dominant
+      // bouts stay "W", or with pre-post-wake are labeled "WPRE"/"WPOST".
+      auto emit_bouts = [&]( const std::vector<hd_bout_t> & bouts,
+                              const std::string & cls,
+                              const bool threestate )
+        {
+          edf.annotations->clear( cls );
+          annot_t * a = edf.annotations->add( cls );
+          for ( const auto & b : bouts )
+            {
+              std::string inst = hd_state_label( threestate, b.dom );
+              if ( b.dom == 0 && spt.valid_window )
+                {
+                  const std::string zone = hd_wake_zone_label( b.lo, b.hi, spt.onset_idx, spt.offset_idx );
+                  if ( zone == "WASO" || par.emit_pre_post_wake ) inst = zone;
+                }
+              a->add( inst , interval_t( dat.tp[b.lo] , dat.tp[b.hi] + sample_tp ) , "." );
+            }
+        };
+
+      emit_trans_family( tr.events5,      par.emit_annot_label + "_trans",      false, false );
+      emit_trans_family( tr.bout_events5, par.emit_annot_label + "_bout_trans", false, true );
+      emit_bouts( tr.bouts5, par.emit_annot_label + "_bout", false );
+
+      // Emit stable whole intervals (5-state) -- the same flag as the TIME
+      // table's STABLE column; already stage-specific via the run's argmax.
+      edf.annotations->clear( par.emit_annot_label + "_stable" );
       annot_t * atr_stable = edf.annotations->add( par.emit_annot_label + "_stable" );
       emit_runs( atr_stable , tr.is_stable5 , "stable" , &der.argmax5 , false );
 
-      annot_t * atr_trans = edf.annotations->add( par.emit_annot_label + "_trans" );
-      emit_runs( atr_trans , tr.is_trans5 , "trans" );
-
-      annot_t * atr_bout_trans = edf.annotations->add( par.emit_annot_label + "_bout_trans" );
-      emit_runs( atr_bout_trans , tr.is_bout_trans5 , "bout_trans" );
-
-      // If 3-state mode, also emit 3-state transitions, stable, trans, and bout_trans intervals
+      // If 3-state mode, also emit 3-state transitions, bouts, and stable intervals
       if ( par.do_3state )
 	{
-	  for ( const auto & e : tr.events3 )
-	    {
-	      const std::string inst =
-		( e.is_dir && e.from_st >= 0 && e.to_st >= 0 )
-		? hd_state_label( true, e.from_st ) + "to" + hd_state_label( true, e.to_st )
-		: ".";
-	      const std::string cls =
-		( par.emit_annot_typed_classes && inst != "." )
-		? par.emit_annot_label + "_3_trans_event_" + inst
-		: par.emit_annot_label + "_3_trans_event";
-	      uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
-	      edf.annotations->add( cls )->add( inst , interval_t( tp0 , tp0 ) , "." );
-	    }
+	  emit_trans_family( tr.events3,      par.emit_annot_label + "_3_trans",      true, false );
+	  emit_trans_family( tr.bout_events3, par.emit_annot_label + "_3_bout_trans", true, true );
+	  emit_bouts( tr.bouts3, par.emit_annot_label + "_3_bout", true );
 
-	  for ( const auto & e : tr.bout_events3 )
-	    {
-	      const std::string inst = hd_state_label( true, e.from_st ) + "to" + hd_state_label( true, e.to_st );
-	      const std::string cls =
-		par.emit_annot_typed_classes
-		? par.emit_annot_label + "_3_bout_trans_event_" + inst
-		: par.emit_annot_label + "_3_bout_trans_event";
-	      uint64_t tp0 = dat.tp[ e.idx ] >= half_sample_tp ? dat.tp[ e.idx ] - half_sample_tp : dat.tp[ e.idx ];
-	      edf.annotations->add( cls )->add( inst , interval_t( tp0 , tp0 ) , "." );
-	    }
-
+	  edf.annotations->clear( par.emit_annot_label + "_3_stable" );
 	  annot_t * atr3_stable = edf.annotations->add( par.emit_annot_label + "_3_stable" );
 	  emit_runs( atr3_stable , tr.is_stable3 , "stable" , &der.argmax3 , true );
-
-	  annot_t * atr3_trans = edf.annotations->add( par.emit_annot_label + "_3_trans" );
-	  emit_runs( atr3_trans , tr.is_trans3 , "trans" );
-
-	  annot_t * atr3_bout_trans = edf.annotations->add( par.emit_annot_label + "_3_bout_trans" );
-	  emit_runs( atr3_bout_trans , tr.is_bout_trans3 , "bout_trans" );
 	}
 
       logger << "  emitting transition annotations under '" << par.emit_annot_label << "'\n";
@@ -4769,6 +5099,13 @@ void proc_hdstats( edf_t & edf, param_t & param )
       const uint64_t sample_tp = (uint64_t)std::round( (double)globals::tp_1sec / dat.Fs );
       const int epoch_smp = std::max( 1, (int)std::round( 30.0 * dat.Fs ) );
       const int n_epochs  = ( dat.N + epoch_smp - 1 ) / epoch_smp;
+
+      // Clear any instances left over from a prior emission under this same
+      // prefix (e.g. HDSTATS re-run on an EDF that already carries this
+      // run's output) so that re-emitting replaces the stage runs rather
+      // than accumulating overlapping intervals alongside the new ones.
+      for ( int st = 0; st < 5; st++ )
+	edf.annotations->clear( par.hypno_prefix + hd_state_label( false, st ) );
 
       std::vector<int>  epoch_argmax( n_epochs, -1 );
       std::vector<bool> epoch_valid( n_epochs, false );
@@ -4812,19 +5149,25 @@ void proc_hdstats( edf_t & edf, param_t & param )
 	}
       logger << "  emitting hard-called stage annotations (pooled to 30s epochs) under prefix '"
 	     << par.hypno_prefix << "'\n";
+
+      // These new stage runs only *replace* the active staging source if
+      // this emission's prefix is the one currently configured (via
+      // ss-prefix/ss-pops/ss-soap) to be read as SleepStage; a different,
+      // inactive prefix is just a side annotation and should not silently
+      // invalidate whatever staging source is already in use. When it is
+      // the active prefix, drop the derived SleepStage cache so the next
+      // STAGE/HYPNO rebuilds it from these freshly emitted annotations
+      // instead of reusing a stale one made before this run.
+      if ( par.hypno_prefix == globals::sleep_stage_prefix )
+	edf.annotations->clear_sleep_stage();
     }
 
   // All substantive summaries are limited to the selected physical interval.
-  // HD_SOL remains referenced to recording start by design.
+  // HD_SOL is relative to this same analysis window.
   const std::vector<bool> & all_mask = analysis.valid_mask;
-  hdstats_pc::feature_map_t pc_features;
-  if ( make_pc_features ) pc_features = hd_pc_features( dat, der, tr, hm, analysis, par );
+  hd_results_t results;
 
-  // Operational validity/analysis diagnostics are opt-in QC, separate from
-  // the ordinary night-level phenotype summaries below.
-  double twt_min = 0.0;
-  for ( int i = analysis.lo; i <= analysis.hi; ++i )
-    if ( analysis.valid_mask[i] ) twt_min += dat.p[0][i] / dat.Fs / 60.0;
+  // Operational validity/analysis diagnostics remain separate from metrics.
   if ( par.qc )
   {
     writer.level( 1, "QC" );
@@ -4844,7 +5187,6 @@ void proc_hdstats( edf_t & edf, param_t & param )
     writer.value( "HD_ANALYSIS_FALLBACK", analysis.fallback_to_recording ? 1 : 0 );
     writer.unlevel( "QC" );
   }
-  if ( emit_main_metrics ) writer.value( "HD_TWT", twt_min );
 
   // Ultradian coverage is reported independently of excursion amplitude:
   // unsupported depth (insufficient local sleep evidence) is distinct from a
@@ -4889,17 +5231,9 @@ void proc_hdstats( edf_t & edf, param_t & param )
       // Keep the ordinary whole-night panel intentionally compact.  These
       // three are the primary ultradian phenotypes; the supporting counts and
       // conservative strict-turning-point diagnostic are verbose QC only.
-      if ( emit_main_metrics ) writer.value( "U_MAG", sleep_mass > 0.0 ? amp_mass / sleep_mass : nan );
-      if ( emit_main_metrics ) writer.value( "U_COVERAGE", sleep_mass > 0.0 ? covered_sleep_mass / sleep_mass : nan );
-      // A valid night with no phase has zero supported progression.  Missing
-      // input, by contrast, cannot assess an effective cycle count.
-      if ( emit_main_metrics ) writer.value( "U_NCYC", n_analysis_valid > 0 ? phase_advance / (2.0 * M_PI) : nan );
-      if ( make_pc_features )
-        {
-          hd_pc_add( &pc_features, "U_MAG", sleep_mass > 0.0 ? amp_mass / sleep_mass : nan );
-          hd_pc_add( &pc_features, "U_COVERAGE", sleep_mass > 0.0 ? covered_sleep_mass / sleep_mass : nan );
-          hd_pc_add( &pc_features, "U_NCYC", n_analysis_valid > 0 ? phase_advance / (2.0 * M_PI) : nan );
-        }
+      results.value( "U_MAG", sleep_mass > 0.0 ? amp_mass / sleep_mass : nan );
+      results.value( "U_COVERAGE", sleep_mass > 0.0 ? covered_sleep_mass / sleep_mass : nan );
+      results.value( "U_NCYC", n_analysis_valid > 0 ? phase_advance / (2.0 * M_PI) : nan );
       if ( par.qc && par.verbose )
         {
           writer.level( 1, "QC" );
@@ -4920,9 +5254,8 @@ void proc_hdstats( edf_t & edf, param_t & param )
         }
     }
 
-  // HDSTATS-PC has a fixed ultradian schema, so calculate its selected UVAR
-  // terms whenever a PC line/projection is requested.  The ordinary UVAR
-  // table remains controlled by ultra-condition=.
+  // Calculate UVAR once when requested directly or needed by PC export.
+  // Both outputs read the same stored coefficients and availability.
   if ( par.do_ultradian && ( par.do_ultra_condition || make_pc_features ) )
     {
       if ( par.qc && par.do_ultra_condition )
@@ -4931,21 +5264,17 @@ void proc_hdstats( edf_t & edf, param_t & param )
           writer.value( "U_CONDITION_WEIGHTED", par.ultra_condition_weighted ? 1 : 0 );
           writer.unlevel( "QC" );
         }
-      hd_write_ultra_conditioned_metrics( dat, der, ultra, analysis, par,
-                                          make_pc_features ? &pc_features : NULL,
-                                          par.do_ultra_condition && emit_main_metrics );
+      hd_compute_ultra_conditioned_metrics( results, dat, der, ultra, analysis, par,
+                                          par.do_ultra_condition );
     }
 
-  // As above, the PC UQ features are calculated even when the descriptive
-  // output table is suppressed with ultra-regions=F.
+  // Phase means follow the same shared-result contract as UVAR.
   if ( par.do_ultradian && ( par.do_ultra_regions || make_pc_features ) )
-    hd_write_ultra_phase_regions( dat, der, ultra, analysis, par,
-                                  make_pc_features ? &pc_features : NULL,
-                                  par.do_ultra_regions && emit_main_metrics );
+    hd_compute_ultra_phase_regions( results, dat, der, ultra, analysis, par,
+                                  par.do_ultra_regions );
 
   // Global summary
-  if ( emit_main_metrics )
-    write_hdstats( der, tr, all_mask, all_mask, par, dat, par.do_hd_metrics ? &hm : NULL, &analysis );
+  compute_hdstats( results, der, tr, all_mask, all_mask, par, dat, &hm, &analysis, &spt, emit_main_metrics );
 
   if ( par.do_longrange )
     {
@@ -4963,10 +5292,18 @@ void proc_hdstats( edf_t & edf, param_t & param )
           writer.unlevel( "QC" );
         }
       if ( longrange_available )
-        write_hdstats_longrange( dat, der, par, lr_quality,
-                                 make_pc_features ? &pc_features : NULL,
-                                 emit_main_metrics );
+        compute_hdstats_longrange( results, dat, der, par, lr_quality, analysis.physical_mask, &spt );
     }
+
+  // Derived raw inputs are part of the analysis result, before either output.
+  // The fitting/projection reader only fills them in for older feature files.
+  hdstats_pc::feature_map_t derived = results.features;
+  hdstats_pc::derive_features(&derived);
+  for ( const std::string & metric : { "NREM_ILR_N1_VS_N2N3", "NREM_ILR_N2_VS_N3",
+                                      "NREM_COM_N1_MINUS_N2", "NREM_COM_N2_MINUS_N3" } )
+    results.value(metric,derived.at(metric));
+  results.emit(emit_main_metrics,make_pc_features);
+  const hdstats_pc::feature_map_t & pc_features = results.features;
 
   // Level-1 HDSTATS-PC exchange: one compact line per individual.  This is
   // independent of STOUT/destrat and can be concatenated directly for the
@@ -4976,7 +5313,7 @@ void proc_hdstats( edf_t & edf, param_t & param )
     {
       if ( ! par.pc_out.empty() )
         {
-          hdstats_pc::write_features( par.pc_out, edf.id, pc_features );
+          hdstats_pc::write_features( par.pc_out, edf.id, pc_features, pc_settings );
           logger << "  wrote HDSTATS-PC features for " << edf.id << "\n";
         }
       if ( ! par.pc_proj.empty() )
@@ -5147,9 +5484,12 @@ void proc_hdstats( edf_t & edf, param_t & param )
 	}
 
       // 3-state uses the same time mask (same sample positions)
-      writer.level( lv, globals::annot_strat );
       if ( emit_main_metrics )
-        write_hdstats( der, tr, mask5, mask5, par, dat, NULL, &analysis );
-      writer.unlevel( globals::annot_strat );
+        {
+          hd_results_t annotation_results;
+          annotation_results.level(lv,globals::annot_strat);
+          compute_hdstats( annotation_results, der, tr, mask5, mask5, par, dat, NULL, &analysis, NULL, true );
+          annotation_results.emit(true);
+        }
     }
 }

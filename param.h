@@ -91,6 +91,9 @@ struct param_t
 
   std::set<std::string> keys() const;
 
+  // true if the option was added internally via add_hidden() (e.g. eval's sig=*)
+  bool is_hidden( const std::string & s ) const { return hidden.find( s ) != hidden.end(); }
+
 private:
 
   std::map<std::string,std::string> opt;

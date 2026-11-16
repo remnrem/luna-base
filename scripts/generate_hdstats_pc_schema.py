@@ -9,6 +9,7 @@ or component registry.
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 
@@ -59,7 +60,7 @@ def main() -> None:
         derived_ids.add(item["id"])
 
     panel_rows: list[tuple[str, int]] = []
-    feature_rows: list[tuple[str, str, str]] = []
+    feature_rows: list[tuple[str, str, str, float]] = []
     panel_ids = set()
     used = set()
     for panel in panels:
@@ -82,6 +83,16 @@ def main() -> None:
             if group_id in group_ids:
                 fail(args.source, f"duplicate weight group {panel_id}/{group_id}")
             group_ids.add(group_id)
+            if not all(isinstance(feature, str) and feature for feature in group["features"]):
+                fail(args.source, f"invalid feature in {panel_id}/{group_id}")
+            variance_weights = group.get("feature_variance_weights", {})
+            if not isinstance(variance_weights, dict) or set(variance_weights) - set(group["features"]):
+                fail(args.source, f"feature_variance_weights must name group features in {panel_id}/{group_id}")
+            for weight in variance_weights.values():
+                if isinstance(weight, bool) or not isinstance(weight, (int, float)) or not math.isfinite(weight) or weight <= 0:
+                    fail(args.source, f"feature variance weights must be finite and positive in {panel_id}/{group_id}")
+            if not math.isfinite(sum(variance_weights.get(feature, 1.0) for feature in group["features"])):
+                fail(args.source, f"group variance budget must be finite in {panel_id}/{group_id}")
             for feature in group["features"]:
                 if not isinstance(feature, str) or not feature:
                     fail(args.source, f"invalid feature in {panel_id}/{group_id}")
@@ -91,7 +102,7 @@ def main() -> None:
                     fail(args.source, f"duplicate panel feature {feature} in {panel_id}")
                 panel_features.add(feature)
                 used.add(feature)
-                feature_rows.append((panel_id, group_id, feature))
+                feature_rows.append((panel_id, group_id, feature, variance_weights.get(feature, 1.0)))
 
     if used != metadata:
         fail(args.source, "feature descriptions must exactly match panel features")
@@ -111,7 +122,7 @@ def main() -> None:
         "static const int n_panels = sizeof(panels) / sizeof(panels[0]);",
         "static const generated_feature_t features[] = {",
     ]
-    lines += [f"  {{ {cpp(panel)}, {cpp(group)}, {cpp(feature)} }}," for panel, group, feature in feature_rows]
+    lines += [f"  {{ {cpp(panel)}, {cpp(group)}, {cpp(feature)}, {weight:.17g} }}," for panel, group, feature, weight in feature_rows]
     lines += [
         "};",
         "static const int n_features = sizeof(features) / sizeof(features[0]);",

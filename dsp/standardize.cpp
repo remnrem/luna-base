@@ -75,6 +75,13 @@ void dsptools::standardize( edf_t & edf , param_t & param )
   edf.header.drop_annots_from_signal_list( &signals );
   const int ns = signals.size();
 
+  // Empty selections are a no-op, including epoch mode, which otherwise
+  // dereferences signals(0) when constructing its sample-index map.
+  if ( ns == 0 )
+    {
+      if ( ! silent ) logger << "  no matching data signals; skipping standardization\n";
+      return;
+    }
 
   // do by epoch?
   if ( by_epoch ) edf.timeline.ensure_epoched();

@@ -31,7 +31,7 @@
 // run-time dependency.
 namespace hdstats_pc_generated {
 struct generated_panel_t { const char * id; int n_components; };
-struct generated_feature_t { const char * panel; const char * weight_group; const char * id; };
+struct generated_feature_t { const char * panel; const char * weight_group; const char * id; double variance_weight; };
 }
 #include "hdstats-pc-schema.h"
 
@@ -61,7 +61,18 @@ const format_t hypno_format = {
 struct row_t {
   std::string id;
   hdstats_pc::feature_map_t values;
+  bool has_settings = false;     // SETTINGS field present (HDSTATS-PC only)
+  hdstats_pc::settings_t settings;
 };
+
+std::string settings_string( const hdstats_pc::settings_t & settings )
+{
+  if ( settings.empty() ) return "(none)";
+  std::string out;
+  for ( const auto & kv : settings )
+    out += ( out.empty() ? "" : " " ) + kv.first + ( kv.second.empty() ? "" : "=" + kv.second );
+  return out;
+}
 
 struct model_t {
   std::vector<std::string> names;
@@ -123,13 +134,16 @@ struct layout_t {
 
 using component_selection_t = std::map<std::string,std::vector<int>>;
 
-// Standardized inputs in a component with p measures receive
-// 1/sqrt(G*p), where G is the panel's component count.  Each component then
-// contributes 1/G to the trace of the weighted input covariance matrix.
-static double equal_component_weight( const int n_groups, const int group_size )
+// Each conceptual group contributes 1/G of the standardized input variance.
+// Optional relative feature variance weights divide that group's budget;
+// equal weights recover 1/sqrt(G*p). These are squared-multiplier weights.
+static double component_weight( const int n_groups, const double group_budget,
+                                const double variance_weight )
 {
-  if ( n_groups < 1 || group_size < 1 ) Helper::halt("invalid HDSTATS-PC weight group");
-  return 1.0 / std::sqrt( (double)n_groups * group_size );
+  if ( n_groups < 1 || !std::isfinite(group_budget) || group_budget <= 0 ||
+       !std::isfinite(variance_weight) || variance_weight <= 0 )
+    Helper::halt("invalid HDSTATS-PC weight group");
+  return std::sqrt( variance_weight / group_budget / n_groups );
 }
 
 std::string panel_option( std::string panel )
@@ -147,12 +161,12 @@ const std::vector<panel_def_t> & panel_definitions()
   static const std::vector<panel_def_t> panels = [] {
     std::vector<panel_def_t> out;
     std::map<std::string,int> position;
-    std::map<std::string,int> group_sizes;
+    std::map<std::string,double> group_budgets;
     std::map<std::string,std::set<std::string>> panel_groups;
     for ( int i = 0; i < hdstats_pc_generated::n_features; ++i )
       {
         const auto & f = hdstats_pc_generated::features[i];
-        ++group_sizes[std::string(f.panel) + "\t" + f.weight_group];
+        group_budgets[std::string(f.panel) + "\t" + f.weight_group] += f.variance_weight;
         panel_groups[f.panel].insert(f.weight_group);
       }
     for ( int i = 0; i < hdstats_pc_generated::n_features; ++i )
@@ -166,8 +180,9 @@ const std::vector<panel_def_t> & panel_definitions()
           }
         out[position[panel]].names.push_back( f.id );
         out[position[panel]].weights.push_back(
-          equal_component_weight( (int)panel_groups[panel].size(),
-                                  group_sizes[panel + "\t" + f.weight_group] ) );
+          component_weight( (int)panel_groups[panel].size(),
+                            group_budgets[panel + "\t" + f.weight_group], f.variance_weight ) );
+        out[position[panel]].groups.push_back( f.weight_group );
       }
     for ( const auto & panel : out )
       if ( panel.names.empty() || panel.names.size() != panel.weights.size() ||
@@ -238,6 +253,20 @@ row_t parse_row( const std::string & line, const std::string & source, const int
         {
           if ( value != format.feature_magic )
             Helper::halt( "unsupported " + std::string( format.label ) + " feature format in " + source + ":" + Helper::int2str( line_no ) );
+        }
+      else if ( key == "SETTINGS" )
+        {
+          json parsed;
+          try { parsed = json::parse( value ); } catch ( ... ) { parsed = json(); }
+          if ( ! parsed.is_object() )
+            Helper::halt( "bad SETTINGS field in " + source + ":" + Helper::int2str( line_no ) );
+          for ( const auto & item : parsed.items() )
+            {
+              if ( ! item.value().is_string() )
+                Helper::halt( "bad SETTINGS field in " + source + ":" + Helper::int2str( line_no ) );
+              row.settings[ item.key() ] = item.value().get<std::string>();
+            }
+          row.has_settings = true;
         }
       else
         {
@@ -397,7 +426,8 @@ std::string hdstats_pc::key( const std::string & variable, const std::string & s
 void write_features_impl( const std::string & directory,
                           const std::string & id,
                           const hdstats_pc::feature_map_t & features,
-                          const format_t & format )
+                          const format_t & format,
+                          const hdstats_pc::settings_t * settings = nullptr )
 {
   const std::filesystem::path dir( Helper::expand( directory ) );
   std::error_code ec;
@@ -407,6 +437,13 @@ void write_features_impl( const std::string & directory,
   std::ofstream out = LunaIO::open_ofstream( file.string(), std::ios::out );
   if ( ! out ) Helper::halt( "could not write " + std::string( format.label ) + " feature file " + file.string() );
   out << "ID\t" << id << "\tFORMAT\t" << format.feature_magic;
+  if ( settings != nullptr )
+    {
+      json recorded = json::object();
+      for ( const auto & kv : *settings ) recorded[ kv.first ] = kv.second;
+      std::string text = recorded.dump();  // compact; JSON escapes any tab/newline
+      out << "\tSETTINGS\t" << text;
+    }
   for ( const auto & f : features ) out << "\t" << f.first << "\t" << fmt( f.second );
   out << "\n";
   if ( ! out ) Helper::halt( "error writing " + std::string( format.label ) + " feature file " + file.string() );
@@ -742,9 +779,13 @@ static layout_t read_layout_spec( const std::string & file )
         }
 
       std::map<std::string,std::vector<std::pair<std::string,std::string>>> compiled;
+      std::map<std::pair<std::string,std::string>,double> compiled_variance_weights;
       for ( int i = 0; i < hdstats_pc_generated::n_features; ++i )
-        compiled[hdstats_pc_generated::features[i].panel].push_back(
-          { hdstats_pc_generated::features[i].weight_group, hdstats_pc_generated::features[i].id } );
+        {
+          const auto & f = hdstats_pc_generated::features[i];
+          compiled[f.panel].push_back( { f.weight_group, f.id } );
+          compiled_variance_weights[{f.panel,f.id}] = f.variance_weight;
+        }
       std::map<std::string,int> compiled_counts;
       for ( int i = 0; i < hdstats_pc_generated::n_panels; ++i )
         compiled_counts[hdstats_pc_generated::panels[i].id] = hdstats_pc_generated::panels[i].n_components;
@@ -772,7 +813,22 @@ static layout_t read_layout_spec( const std::string & file )
                 Helper::halt("invalid HDSTATS-PC weight group in panel " + panel.definition.name);
               const std::string group_id = group.at("id").get<std::string>();
               if ( !group_ids.insert(group_id).second ) Helper::halt("duplicate HDSTATS-PC weight group " + group_id);
-              const double weight = equal_component_weight( n_groups, (int)group.at("features").size() );
+              const json variance_weights = group.value("feature_variance_weights",json::object());
+              if ( !variance_weights.is_object() )
+                Helper::halt("HDSTATS-PC feature_variance_weights must be an object in " + group_id);
+              std::set<std::string> group_features;
+              for ( const auto & feature : group.at("features") )
+                {
+                  if ( !feature.is_string() ) Helper::halt("invalid HDSTATS-PC group feature");
+                  group_features.insert(feature.get<std::string>());
+                }
+              for ( auto item = variance_weights.begin(); item != variance_weights.end(); ++item )
+                if ( !group_features.count(item.key()) || !item.value().is_number() ||
+                     !std::isfinite(item.value().get<double>()) || item.value().get<double>() <= 0 )
+                  Helper::halt("invalid HDSTATS-PC feature variance weight in " + group_id);
+              double group_budget = 0.0;
+              for ( const auto & feature : group_features )
+                group_budget += variance_weights.value(feature,1.0);
               for ( const auto & source_feature : group.at("features") )
                 {
                   if ( !source_feature.is_string() || source_feature.get<std::string>().empty() )
@@ -782,9 +838,14 @@ static layout_t read_layout_spec( const std::string & file )
                        !panel_features.insert(feature).second )
                     Helper::halt("unknown, undescribed, or duplicate HDSTATS-PC feature '" + feature + "' in panel " + panel.definition.name);
                   used_features.insert(feature);
+                  const double variance_weight = variance_weights.value(feature,1.0);
+                  const auto expected_weight = compiled_variance_weights.find({panel.definition.name,feature});
+                  if ( expected_weight == compiled_variance_weights.end() ||
+                       std::fabs(variance_weight-expected_weight->second) > 1e-12 )
+                    Helper::halt("HDSTATS-PC feature variance weight does not match the generated v2 registry: " + feature);
                   observed.push_back({group_id,feature});
                   panel.definition.names.push_back(feature);
-                  panel.definition.weights.push_back(weight);
+                  panel.definition.weights.push_back(component_weight(n_groups,group_budget,variance_weight));
                   panel.definition.groups.push_back(group_id);
                 }
             }
@@ -837,32 +898,34 @@ static layout_t read_layout_spec( const std::string & file )
   return layout_t(); // unreachable after Helper::halt(), keeps all compilers happy
 }
 
-static void derive_nrem_features( hdstats_pc::feature_map_t * values )
+static void derive_nrem_features( hdstats_pc::feature_map_t *values )
 {
   const double nan = std::numeric_limits<double>::quiet_NaN();
-  const auto value = [&]( const char * id ) {
-    const auto found = values->find(id);
+  const auto value = [&]( const char *id )
+  {
+    const auto found = values->find( id );
     return found == values->end() ? nan : found->second;
   };
-  const double n1 = value("HD_MINS.SS_N1");
-  const double n2 = value("HD_MINS.SS_N2");
-  const double n3 = value("HD_MINS.SS_N3");
-  // Posterior-minute masses are non-negative.  This fixed positive floor
-  // makes the documented ILR transform finite at an empty stage boundary.
-  const double floor = 1e-6;
-  if ( std::isfinite(n1) && std::isfinite(n2) && std::isfinite(n3) )
+  if ( !values->count( "NREM_ILR_N1_VS_N2N3" ) || !values->count( "NREM_ILR_N2_VS_N3" ) )
+  {
+    const double n1 = value( "HD_MINS.SS_N1" ), n2 = value( "HD_MINS.SS_N2" ), n3 = value( "HD_MINS.SS_N3" );
+    const bool ok = std::isfinite( n1 ) && std::isfinite( n2 ) && std::isfinite( n3 );
+    // A fixed floor in posterior minutes retains the existing ILR definition.
+    const double a = std::max( n1, 1e-6 ), b = std::max( n2, 1e-6 ), c = std::max( n3, 1e-6 );
+    if ( !values->count( "NREM_ILR_N1_VS_N2N3" ) )
+      values->emplace( "NREM_ILR_N1_VS_N2N3",
+                       ok ? std::sqrt( 2.0 / 3.0 ) * std::log( a / std::sqrt( b * c ) ) : nan );
+    if ( !values->count( "NREM_ILR_N2_VS_N3" ) )
+      values->emplace( "NREM_ILR_N2_VS_N3", ok ? std::sqrt( 1.0 / 2.0 ) * std::log( b / c ) : nan );
+  }
+  for ( const auto &pair : std::vector<std::pair<std::string, std::pair<const char *, const char *>>>{
+            { "NREM_COM_N1_MINUS_N2", { "COM.NSS_5.VAR_N1", "COM.NSS_5.VAR_N2" } },
+            { "NREM_COM_N2_MINUS_N3", { "COM.NSS_5.VAR_N2", "COM.NSS_5.VAR_N3" } } } )
+    if ( !values->count( pair.first ) )
     {
-      const double a = std::max(n1,floor), b = std::max(n2,floor), c = std::max(n3,floor);
-      (*values)["NREM_ILR_N1_VS_N2N3"] = std::sqrt(2.0/3.0) * std::log(a / std::sqrt(b*c));
-      (*values)["NREM_ILR_N2_VS_N3"] = std::sqrt(1.0/2.0) * std::log(b / c);
+      const double a = value( pair.second.first ), b = value( pair.second.second );
+      values->emplace( pair.first, std::isfinite( a ) && std::isfinite( b ) ? a - b : nan );
     }
-  else
-    (*values)["NREM_ILR_N1_VS_N2N3"] = (*values)["NREM_ILR_N2_VS_N3"] = nan;
-  const double com_n1 = value("COM.NSS_5.VAR_N1");
-  const double com_n2 = value("COM.NSS_5.VAR_N2");
-  const double com_n3 = value("COM.NSS_5.VAR_N3");
-  (*values)["NREM_COM_N1_MINUS_N2"] = std::isfinite(com_n1) && std::isfinite(com_n2) ? com_n1 - com_n2 : nan;
-  (*values)["NREM_COM_N2_MINUS_N3"] = std::isfinite(com_n2) && std::isfinite(com_n3) ? com_n2 - com_n3 : nan;
 }
 
 static std::vector<row_t> with_nrem_features( std::vector<row_t> rows )
@@ -1115,7 +1178,8 @@ static json matrix_json( const Eigen::MatrixXd & matrix )
 
 static void write_json_panels( const std::string & file, const layout_t & layout,
                                const std::vector<fitted_panel_t> & panels,
-                               const bool post_rotation_selection = false )
+                               const bool post_rotation_selection,
+                               const hdstats_pc::settings_t * settings )
 {
   json document;
   document["format"] = "luna-hdstats-pc-model";
@@ -1123,6 +1187,14 @@ static void write_json_panels( const std::string & file, const layout_t & layout
   const size_t slash = file.find_last_of("/\\");
   const std::string model_name = file.substr(slash == std::string::npos ? 0 : slash + 1);
   document["model_id"] = model_name;
+  // Explicit HDSTATS settings used to produce the training features; absent
+  // when the feature files predate settings recording.
+  if ( settings != nullptr )
+    {
+      json recorded = json::object();
+      for ( const auto & kv : *settings ) recorded[ kv.first ] = kv.second;
+      document["hdstats_settings"] = recorded;
+    }
   document["spec"] = layout.document;
   document["panels"] = json::array();
   for ( const auto & panel : panels )
@@ -1286,6 +1358,28 @@ static void fit_json_hdstats_panels( param_t & param )
   const auto files = param.strvector("data");
   if ( files.empty() ) Helper::halt("--hdstats-pc requires data=<feature files>");
   const auto rows = with_nrem_features( read_rows(files,hdstats_format) );
+
+  // Every training row must have been produced with the same HDSTATS
+  // settings; those settings are then embedded in the model. Rows from older
+  // feature files carry none, in which case (all rows) nothing is recorded.
+  int n_with_settings = 0;
+  for ( const auto & row : rows ) if ( row.has_settings ) ++n_with_settings;
+  if ( n_with_settings != 0 && n_with_settings != (int)rows.size() )
+    Helper::halt( "HDSTATS-PC feature rows mix files with and without recorded HDSTATS settings ("
+                  + Helper::int2str( n_with_settings ) + " of " + Helper::int2str( (int)rows.size() )
+                  + " have them): regenerate all features with the current HDSTATS" );
+  for ( const auto & row : rows )
+    if ( row.has_settings && row.settings != rows.front().settings )
+      Helper::halt( "HDSTATS-PC feature rows were produced with different HDSTATS settings: "
+                    + rows.front().id + " has [" + settings_string( rows.front().settings ) + "] but "
+                    + row.id + " has [" + settings_string( row.settings ) + "]" );
+  const hdstats_pc::settings_t * fit_settings = n_with_settings ? &rows.front().settings : nullptr;
+  if ( fit_settings )
+    logger << "  HDSTATS-PC training features: HDSTATS settings [" << settings_string( *fit_settings ) << "]\n";
+  else
+    logger << "  warning: HDSTATS-PC feature files have no recorded HDSTATS settings; "
+           << "the model will not record or enforce them\n";
+
   std::vector<fitted_panel_t> panels;
   for ( int p = 0; p < (int)layout.panels.size(); ++p )
     {
@@ -1366,7 +1460,7 @@ static void fit_json_hdstats_panels( param_t & param )
         }
     }
 
-  write_json_panels( param.requires("model"), layout, panels, post_rotation_selection );
+  write_json_panels( param.requires("model"), layout, panels, post_rotation_selection, fit_settings );
   writer.value("N_PANELS",(int)panels.size());
   writer.value("N_INPUT",(int)rows.size());
   for ( int p = 0; p < (int)panels.size(); ++p )
@@ -1426,19 +1520,26 @@ static bool is_json_hdstats_model( const std::string & file )
   return in.peek() == '{';
 }
 
-static hdstats_model::model_t read_json_hdstats_model( const std::string & file )
+// HDSTATS is invoked once per recording: parse each JSON model (with its
+// sibling descriptor) once per process, as cached_model() does for text models.
+static const hdstats_model::model_t & read_json_hdstats_model( const std::string & file )
 {
+  static std::map<std::string,hdstats_model::model_t> cache;
+  static std::mutex cache_mutex;
+  std::lock_guard<std::mutex> lock( cache_mutex );
+  const auto found = cache.find( file );
+  if ( found != cache.end() ) return found->second;
   hdstats_model::model_t model;
   std::string error;
   if ( ! hdstats_model::read(file,&model,&error) ) Helper::halt(error);
   if ( model.specification_json.empty() ) Helper::halt("expected self-contained HDSTATS-PC JSON model " + file);
-  return model;
+  return cache.emplace( file, std::move( model ) ).first->second;
 }
 
 static std::vector<hdstats_pc::component_score_t> project_json_components(
     const std::string & file, const hdstats_pc::feature_map_t & features, const double min_loading )
 {
-  const hdstats_model::model_t source = read_json_hdstats_model(file);
+  const hdstats_model::model_t & source = read_json_hdstats_model(file);
   std::vector<hdstats_pc::component_score_t> results;
   const double nan = std::numeric_limits<double>::quiet_NaN();
   for ( const auto & definition : source.components )
@@ -1530,11 +1631,52 @@ static void describe_json_model( const std::string & file, std::ostream & out, c
   print_correlations("FEATURE CORRELATIONS",source.feature_correlations);
 }
 
+void hdstats_pc::derive_features( feature_map_t * features )
+{
+  derive_nrem_features(features);
+}
+
 void hdstats_pc::write_features( const std::string & directory,
                                  const std::string & id,
-                                 const feature_map_t & features )
+                                 const feature_map_t & features,
+                                 const settings_t & settings )
 {
-  write_features_impl( directory, id, features, hdstats_format );
+  write_features_impl( directory, id, features, hdstats_format, &settings );
+}
+
+void hdstats_pc::report_settings( const std::string & file, const settings_t & settings )
+{
+  static std::set<std::string> reported;
+  static std::mutex report_mutex;
+  std::lock_guard<std::mutex> lock( report_mutex );
+  const bool json_model = is_json_hdstats_model( file );
+  const hdstats_model::model_t * model = json_model ? &read_json_hdstats_model( file ) : nullptr;
+  if ( model == nullptr || ! model->has_hdstats_settings )
+    {
+      if ( reported.insert( file ).second )
+        logger << "  note: HDSTATS-PC model " << file << " records no HDSTATS settings\n";
+      return;
+    }
+  if ( reported.insert( file ).second )
+    logger << "  HDSTATS-PC model " << file << " was fitted with HDSTATS settings ["
+           << settings_string( model->hdstats_settings ) << "]\n";
+  if ( model->hdstats_settings == settings ) return;
+  if ( ! reported.insert( file + "\t" + settings_string( settings ) ).second ) return;
+  std::string differs;
+  std::set<std::string> keys;
+  for ( const auto & kv : model->hdstats_settings ) keys.insert( kv.first );
+  for ( const auto & kv : settings ) keys.insert( kv.first );
+  for ( const std::string & key : keys )
+    {
+      const auto m = model->hdstats_settings.find( key ), r = settings.find( key );
+      auto show = [&]( const settings_t::const_iterator & it, const settings_t & st ) {
+        return it == st.end() ? std::string( "(not set)" ) : ( it->second.empty() ? std::string( "(bare)" ) : it->second );
+      };
+      if ( m == model->hdstats_settings.end() || r == settings.end() || m->second != r->second )
+        differs += "\n    " + key + ": model " + show( m, model->hdstats_settings ) + ", this run " + show( r, settings );
+    }
+  logger << "  note: this run's HDSTATS settings [" << settings_string( settings )
+         << "] differ from the model's; projecting anyway:" << differs << "\n";
 }
 
 bool hdstats_pc::project( const std::string & file,
@@ -1551,7 +1693,8 @@ std::vector<hdstats_pc::panel_scores_t> hdstats_pc::project_panels(
   feature_map_t effective_features = features;
   derive_nrem_features(&effective_features);
   const bool json_model = is_json_hdstats_model(file);
-  const hdstats_model::model_t json_source = json_model ? read_json_hdstats_model(file) : hdstats_model::model_t();
+  static const hdstats_model::model_t no_json_model;
+  const hdstats_model::model_t & json_source = json_model ? read_json_hdstats_model(file) : no_json_model;
   std::ifstream in=LunaIO::open_ifstream(file,std::ios::in);
   std::string magic;
   if ( !std::getline(in,magic) ) Helper::halt("could not read HDSTATS-PC model " + file);

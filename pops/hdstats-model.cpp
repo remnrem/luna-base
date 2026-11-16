@@ -212,6 +212,19 @@ bool read_json_model( const std::string & file, model_t * model, std::string * e
             { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid fingerprint"; return false; }
           parsed.fingerprint = document.at("fingerprint").get<std::string>();
         }
+      if ( document.contains("hdstats_settings") )
+        {
+          const json & recorded = document.at("hdstats_settings");
+          if ( ! recorded.is_object() )
+            { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid hdstats_settings"; return false; }
+          for ( const auto & item : recorded.items() )
+            {
+              if ( ! item.value().is_string() )
+                { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid hdstats_settings"; return false; }
+              parsed.hdstats_settings[ item.key() ] = item.value().get<std::string>();
+            }
+          parsed.has_hdstats_settings = true;
+        }
       parsed.specification_json = document.at("spec").dump();
       parsed.component_id_style = component_id_style;
 
@@ -273,11 +286,30 @@ bool read_json_model( const std::string & file, model_t * model, std::string * e
               if ( !group.is_object() || !json_string(group,"id",&group_id) || !group_ids.insert(group_id).second ||
                    !group.contains("features") || !group.at("features").is_array() || group.at("features").empty() )
                 { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid weight group"; return false; }
-              const double weight = weighting_method == "equal_component_variance"
-                ? 1.0 / std::sqrt( n_groups * (int)group.at("features").size() )
-                : 1.0 / group.at("features").size();
+              const json variance_weights = group.value("feature_variance_weights",json::object());
+              if ( !variance_weights.is_object() ||
+                   (weighting_method != "equal_component_variance" && !variance_weights.empty()) )
+                { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid feature variance weights"; return false; }
+              std::set<std::string> group_features;
               for ( const auto & feature : group.at("features") )
                 {
+                  if ( !feature.is_string() || feature.get<std::string>().empty() )
+                    { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid declared feature"; return false; }
+                  group_features.insert(feature.get<std::string>());
+                }
+              for ( auto item = variance_weights.begin(); item != variance_weights.end(); ++item )
+                if ( !group_features.count(item.key()) || !item.value().is_number() ||
+                     !std::isfinite(item.value().get<double>()) || item.value().get<double>() <= 0 )
+                  { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid feature variance weight"; return false; }
+              double group_budget = 0.0;
+              for ( const auto & feature : group_features ) group_budget += variance_weights.value(feature,1.0);
+              if ( !std::isfinite(group_budget) || group_budget <= 0 )
+                { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid group variance budget"; return false; }
+              for ( const auto & feature : group.at("features") )
+                {
+                  const double weight = weighting_method == "equal_component_variance"
+                    ? std::sqrt(variance_weights.value(feature.get<std::string>(),1.0) / group_budget / n_groups)
+                    : 1.0 / group.at("features").size();
                   if ( !feature.is_string() || feature.get<std::string>().empty() ||
                        !expected_weights.emplace(feature.get<std::string>(),weight).second )
                     { if ( error ) *error = "HDSTATS JSON model " + file + ": invalid declared feature"; return false; }

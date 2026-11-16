@@ -2420,8 +2420,8 @@ void proc_pops( edf_t & edf , param_t & param )
   //
   // Optionally apply POPS-CODA second-stage rescoring (prediction mode only).
   // CODA model is specified via coda=<model-file>.
-  // The POPS stage-1 outputs are written above by summarize() inside the
-  // pops_indiv_t constructor.  CODA output is the final unstratified stream
+  // The constructor emits stage-1 tables only when requested; annotations
+  // are deferred until the final calls are known. CODA is unstratified
   // unless pre-coda requests explicit CODA=0/1 comparison output.
   //
 
@@ -2441,6 +2441,9 @@ void proc_pops( edf_t & edf , param_t & param )
           if ( !Helper::fileExists( coda_file ) )
             {
               logger << "  ** POPS-CODA: model file not found: " << coda_file << " -- skipping\n";
+              // The constructor suppressed the stage-1 table for CODA.
+              // Keep fallback tables and annotations on the same stream.
+              if ( ! pops_opt_t::pre_coda_output ) indiv.summarize();
             }
           else if ( indiv.ne == 0 || indiv.P.rows() == 0 || indiv.PS.empty() )
             { }
@@ -2512,9 +2515,21 @@ void proc_pops( edf_t & edf , param_t & param )
                              indiv.pedf ,
                              NULL ,
                              NULL ,
-                             false );
+                             false ,
+                             &indiv.PS );
             }
         }
+    }
+
+  // Emit staging only at 30-second resolution, using the final stream
+  // selected above (stage-1 or CODA). Preserve observed staging by
+  // retaining the existing p-prefix rule. HYPNO assumes 30-second stages.
+  if ( !training_mode && ! pops_opt_t::resolution_is_5s() )
+    {
+      const bool prefixed = indiv.has_staging || param.has( "force-prefix" );
+      logger << "  adding final POPS stage annotations"
+             << ( prefixed ? " (p-prefixed)\n" : "\n" );
+      indiv.add_annots( edf , prefixed ? "p" : "" );
     }
 
   if ( pops_opt_t::resolution_is_5s() )

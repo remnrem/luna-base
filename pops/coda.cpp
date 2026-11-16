@@ -1763,13 +1763,15 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
                             edf_t * pedf ,
                             const std::vector<std::string> * start ,
                             const std::vector<std::string> * stop ,
-                            bool emit_stage1 )
+                            bool emit_stage1 ,
+                            std::vector<int> * final_calls )
 {
   const bool stratify_coda = opt.output_both_stages;
   if ( !lgbm.has_booster )
     Helper::halt( "POPS-CODA: no model loaded" );
 
   const int ne = P_in.rows();
+  if ( final_calls != NULL ) final_calls->assign( ne , POPS_UNKNOWN );
   if ( ne == 0 )
     {
       emit_coda_soft_fail( pops_coda_soft_fail_msg , 0 , stratify_coda );
@@ -1884,6 +1886,8 @@ void pops_coda_t::predict( const Eigen::MatrixXd & P_in ,
       if ( rem_lat_obs == -1 && S[e] == POPS_REM )
         rem_lat_obs = E[e] - slp_lat_obs;
     }
+
+  if ( final_calls != NULL ) *final_calls = pred_stage;
 
   if ( n_pred_valid > 0 ) mean_conf /= (double)n_pred_valid;
 

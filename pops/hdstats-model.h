@@ -6,6 +6,7 @@
 #ifndef __HDSTATS_MODEL_H__
 #define __HDSTATS_MODEL_H__
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -84,6 +85,10 @@ struct model_t {
   // True when the embedded v2 contract requests scores divided by their
   // training-sample SD. Legacy V3 models retain their historical raw scores.
   bool score_unit_variance = false;
+  // Explicit HDSTATS settings the training features were produced with
+  // (JSON "hdstats_settings"); absent for models fitted from older features.
+  bool has_hdstats_settings = false;
+  std::map<std::string,std::string> hdstats_settings;
   std::vector<panel_t> panels;
   std::vector<component_t> components;
   std::vector<description_t> descriptions;
