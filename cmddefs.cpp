@@ -4245,6 +4245,7 @@ void cmddefs_t::init()
   add_param( "POPS" , "lib" , "s2a" , "POPS library root" );
   add_param( "POPS" , "force-reload" , "" , "Force re-reading the POPS specs" );
   add_param( "POPS" , "ignore-obs-staging" , "" , "Ignore existing observed staging" );
+  add_param( "POPS" , "ignore-lights" , "F" , "Ignore lights off/on boundaries and treat observed L epochs as wake" );
   add_param( "POPS" , "apply-ranges" , "T" , "Apply library-specific feature ranges" );
   add_param( "POPS" , "apply-priors" , "F" , "Apply elapsed-sleep priors from the library" );
   add_param( "POPS" , "priors-c" , "0.001" , "Intercept term for elapsed-sleep priors" );
@@ -4596,6 +4597,7 @@ void cmddefs_t::init()
   add_param( "RUN-POPS" , "ref" , "M2,M1" , "Reference signal(s), matching sig length" );
   add_param( "RUN-POPS" , "args" , "trim=10 3-class" , "Additional arguments passed to POPS" );
   add_param( "RUN-POPS" , "ignore-obs" , "F" , "Ignore existing observed staging" );
+  add_param( "RUN-POPS" , "ignore-lights" , "F" , "Ignore lights off/on boundaries and observed L epochs; skip EDGER" );
   add_param( "RUN-POPS" , "lib" , "s2a" , "POPS library root (e.g. currently s2a or hyp1)" );
   add_param( "RUN-POPS" , "path" , "." , "Base path for POPS resources" );
   add_param( "RUN-POPS" , "filter" , "T" , "Band-pass filter copied signals before POPS (no effect for lib=hyp1)" );

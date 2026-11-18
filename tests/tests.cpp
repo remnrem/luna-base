@@ -1252,6 +1252,37 @@ static void test_hypno( lunapi_t * eng,
     std::ostringstream m; m << "TST full=" << tst_full << " half=" << tst_half;
     record(R,"hypno/tst-after-re", pass, m.str(), V);
   } catch(std::exception & e) { record(R,"hypno/tst-after-re",false,e.what(),V); }
+
+  // H5 — ignore-lights leaves marker-bounded epochs in the analysis and
+  // treats an observed L stage as wake.
+  try {
+    auto setup = [&](lunapi_inst_ptr p) {
+      std::vector<std::tuple<double,double>> lights, n2;
+      for (int i=0; i<10; ++i) lights.push_back({i*30.0,(i+1)*30.0});
+      for (int i=10; i<720; ++i) n2.push_back({i*30.0,(i+1)*30.0});
+      p->insert_annotation("L", lights);
+      p->insert_annotation("N2", n2);
+      p->insert_annotation("lights_off", {{300.0,300.0}});
+      p->insert_annotation("lights_on", {{21300.0,21300.0}});
+    };
+    auto ordinary = make_sine_inst(eng);
+    setup(ordinary);
+    ordinary->eval("EPOCH len=30 & HYPNO");
+    const double ordinary_lot = get_val(ordinary,"HYPNO","LOT");
+
+    auto ignored = make_sine_inst(eng);
+    setup(ignored);
+    ignored->eval("EPOCH len=30 & HYPNO ignore-lights=T");
+    const double ignored_lot = get_val(ignored,"HYPNO","LOT");
+    const double ignored_twt = get_val(ignored,"HYPNO","TWT");
+    const bool pass = approx_equal(ordinary_lot,10.0,0.1)
+      && approx_equal(ignored_lot,0.0,0.1)
+      && approx_equal(ignored_twt,5.0,0.1);
+    std::ostringstream m;
+    m << "LOT ordinary=" << ordinary_lot << " ignored=" << ignored_lot
+      << " TWT ignored=" << ignored_twt;
+    record(R,"hypno/ignore-lights",pass,m.str(),V);
+  } catch(std::exception & e) { record(R,"hypno/ignore-lights",false,e.what(),V); }
 }
 
 // ============================================================
