@@ -1756,6 +1756,7 @@ void proc_runpops( edf_t & edf , param_t & param )
     
   // ignore extant staging?
   const bool ignore_obs_staging = param.has( "ignore-obs" ) ? param.yesno( "ignore-obs" ) : false ;
+  const bool ignore_lights = param.yesno( "ignore-lights" );
   
   // optional path
   const std::string pops_path = param.has( "path" ) ? param.value( "path" ) : "." ;
@@ -1884,7 +1885,7 @@ void proc_runpops( edf_t & edf , param_t & param )
   // optional edger tool (on filtered signal only)
   //
 
-  if ( do_edger )
+  if ( do_edger && ! ignore_lights )
     {
       logger << "  ------------------------------------------------------------\n"
 	     << "  scanning to trim excess leading/trailing wake/artifact\n";
@@ -1945,6 +1946,8 @@ void proc_runpops( edf_t & edf , param_t & param )
 
   if ( ignore_obs_staging )
     pops_param.add( "ignore-obs-staging" );
+  if ( ignore_lights )
+    pops_param.add( "ignore-lights" );
 
   pops_param.add( "resolution" , Helper::int2str( posterior_resolution ) );
   if ( param.has( "emit-pp" ) )

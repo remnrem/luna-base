@@ -69,6 +69,8 @@ bool is_same_3class( sleep_stage_t s1 , sleep_stage_t s2 )
 bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbose , const std::string sslabel )
 {
 
+  const bool ignore_lights = param.yesno( "ignore-lights" );
+
   // point to 'parent' timeline
   timeline = t ;
 
@@ -92,6 +94,7 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   
   std::set<std::string> values;
   values.clear(); values.insert( "W" );
+  if ( ignore_lights ) values.insert( "L" );
   timeline->annotate_epochs(  globals::stage( WAKE ) , "SleepStage" , values );
   
   values.clear(); values.insert( "N1" );
@@ -113,7 +116,8 @@ bool hypnogram_t::construct( timeline_t * t , param_t & param , const bool verbo
   values.clear(); values.insert( "R" );
   timeline->annotate_epochs(  globals::stage( REM ) , "SleepStage" , values );
   
-  values.clear(); values.insert( "L" );
+  values.clear();
+  if ( ! ignore_lights ) values.insert( "L" );
   timeline->annotate_epochs(  globals::stage( LIGHTS_ON ) , "SleepStage" , values );
 
   //
@@ -373,6 +377,8 @@ bool hypnogram_t::empty() const
 void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 {
 
+  const bool ignore_lights = param.yesno( "ignore-lights" );
+
   // 
   // special case; nothing to do if empty
   //
@@ -398,7 +404,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 
   clocktime_t st( timeline->edf->header.starttime );
 
-  if ( param.has( "cache" ) )
+  if ( ! ignore_lights && param.has( "cache" ) )
     {
       std::string cname = param.value( "cache" );
       
@@ -449,7 +455,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   
 
   // else, if not already set, see about command line args
-  if ( lights_off < 0 && param.has( "lights-off" ) && param.value( "lights-off" ) != "." && param.value( "lights-off" ) != "" )
+  if ( ! ignore_lights && lights_off < 0 && param.has( "lights-off" ) && param.value( "lights-off" ) != "." && param.value( "lights-off" ) != "" )
     {
       const std::string loffstr = param.value( "lights-off" );
       const bool hms_mode = Helper::is_hms( loffstr );
@@ -504,7 +510,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   // Lights-On time 
   //
 
-  if ( lights_on < 0 && param.has( "lights-on" ) && param.value( "lights-on" ) != "." && param.value( "lights-on" ) != "" )
+  if ( ! ignore_lights && lights_on < 0 && param.has( "lights-on" ) && param.value( "lights-on" ) != "." && param.value( "lights-on" ) != "" )
     {
       
       const std::string lonstr = param.value( "lights-on" );
@@ -554,8 +560,8 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
   // If not already set, see if there are lights_on and/or lights_off annotations present
   //
   
-  annot_t * lights_on_annot = timeline->annotations->find( "lights_on" );
-  annot_t * lights_off_annot = timeline->annotations->find( "lights_off" );
+  annot_t * lights_on_annot = ignore_lights ? NULL : timeline->annotations->find( "lights_on" );
+  annot_t * lights_off_annot = ignore_lights ? NULL : timeline->annotations->find( "lights_off" );
 
   //
   // valid combinations:                        | Off                    | On
@@ -1121,7 +1127,7 @@ void hypnogram_t::edit( timeline_t * timeline , param_t & param )
 	}
     }
   
-  if ( has_nonnull )
+  if ( has_nonnull && ! ignore_lights )
     {
       for (int e =0; e < ne ; e++)
 	{
