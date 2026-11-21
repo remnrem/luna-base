@@ -217,6 +217,23 @@ void cmddefs_t::init()
 	    "Use it for a quick sanity check of the file contents. With channels specified,\n"
 	    "it can also act as a simple channel-name dump." );
   add_param( "DESC" , "channels" , "" , "Only write channel names, one-per-line" );
+  add_param( "DESC" , "table" , "" , "Write CH and ANNOT summary tables to the output stream (not console)" );
+
+  add_table( "DESC" , "" , "Baseline summary (table mode)" );
+  add_var( "DESC" , "" , "EDF_TYPE" , "EDF, EDF+C or EDF+D" );
+  add_var( "DESC" , "" , "START_TIME" , "Start time (hh:mm:ss)" );
+  add_var( "DESC" , "" , "REC_DUR_HMS" , "Recording duration, excluding gaps (hh:mm:ss)" );
+  add_var( "DESC" , "" , "NS" , "Number of (selected) data channels" );
+  add_var( "DESC" , "" , "NA" , "Number of annotation classes" );
+  add_var( "DESC" , "" , "NSEGS" , "Number of contiguous segments (as SEGMENTS)" );
+
+  add_table( "DESC" , "CH" , "Per-channel summary (table mode)" );
+  add_var( "DESC" , "CH" , "SR" , "Sample rate (Hz)" );
+  add_var( "DESC" , "CH" , "PDIM" , "Physical dimension (units)" );
+
+  add_table( "DESC" , "ANNOT" , "Per-annotation-class summary (table mode)" );
+  add_var( "DESC" , "ANNOT" , "N" , "Number of instances" );
+  add_var( "DESC" , "ANNOT" , "DUR" , "Total coverage (seconds; union of instance intervals)" );
 
   //
   // SUMMARY
@@ -339,14 +356,14 @@ void cmddefs_t::init()
 	    "It can be used as a gatekeeper in command streams, either by setting a variable\n"
 	    "or by causing the current EDF to be skipped when requirements are not met." );
   add_param( "CONTAINS" , "sig" , "EMG,ECG" , "Test for these signals" );
-  add_param( "CONTAINS" , "annot" , "apnea,hypopnea" , "Test for these annotations" );
-  add_param( "CONTAINS" , "annots" , "apnea,hypopnea" , "Test for these annotations" );
+  add_param( "CONTAINS" , "annot" , "apnea,hypopnea" , "Test for these annotations (present = at least one instance)" );
+  add_param( "CONTAINS" , "annots" , "apnea,hypopnea" , "Test for these annotations (present = at least one instance)" );
   add_param( "CONTAINS" , "stages" , "" , "Test for valid staging" );
   add_param( "CONTAINS" , "epochs" , "" , "Test that at least one epoch is present" );
   add_param( "CONTAINS" , "channels" , "" , "Test that at least one channel is present" );
   add_param( "CONTAINS" , "var" , "HAS_SIGS" , "Set this variable to T/F instead of using the return code" );
-  add_param( "CONTAINS" , "skip" , "" , "Skip to next EDF on failure" );
-  add_param( "CONTAINS" , "skip-if-none" , "" , "Skip only if none of the requested signals are present" );
+  add_param( "CONTAINS" , "skip" , "" , "Skip to next EDF unless all requested signals/annotations are present (or staging is valid)" );
+  add_param( "CONTAINS" , "skip-if-none" , "" , "Skip only if none of the requested signals/annotations are present" );
 
   add_table( "CONTAINS" , "" , "Base" );
   add_var( "CONTAINS" , "" , "OVERLAP" , "Sleep stage annotations overlapped one another (0/1)" );
@@ -759,7 +776,10 @@ void cmddefs_t::init()
 	    "S2C segments oscillatory activity into cycle annotations and optional cycle-locked summaries.\n"
 	    "\n"
 	    "It is designed for extracting cycles, half-waves, peak points and aligned signal summaries,\n"
-	    "with outputs ranging from seed-level summaries to per-cycle and phase/time-binned metrics." );
+	    "with outputs ranging from seed-level summaries to per-cycle and phase/time-binned metrics.\n"
+            "Fractional seed sampling rates, including below 1 Hz, are supported. Duration limits\n"
+            "use interpolated cycle boundaries. Time-domain metrics require complete windows\n"
+            "within contiguous data; SEC coordinates retain submillisecond precision." );
 
   add_table( "S2C" , "SEED" , "Seed-level summary statistics" );
   add_var( "S2C" , "SEED" , "N_PRE" , "Number of detected cycles before magnitude filtering" );
@@ -962,7 +982,12 @@ void cmddefs_t::init()
 	    "AXA summarizes pairwise relationships between seed annotations and other annotations.\n"
 	    "\n"
 	    "It reports overlap, distance-to-nearest, counts and total spanned duration, optionally\n"
-	    "stratified within channels or by annotation instance." );
+	    "stratified within channels or by annotation instance. Nearest distances select the smallest\n"
+            "absolute anchor distance (ties precede); this correction can change previous results.\n"
+            "Points contribute to distances; overlap means use positive-duration seeds only.\n"
+            "Without w, nearest distances are unrestricted. Optional offset profiles require bg,\n"
+            "use segment-specific baseline target rates, and are independent of w. offset=5,1,50\n"
+            "has centres +/-2.5 through +/-52.5 seconds; windows are half-open." );
   add_param( "AXA" , "annot" , "N2,N3,arousal,apnea" , "Annotations to query" );
   add_param( "AXA" , "by-instance" , "" , "Define distinct annotations using class/instance ID" );
   add_param( "AXA" , "match-instance" , "" , "Only compare annotations with matching instance IDs [by-instance]" );
@@ -973,6 +998,9 @@ void cmddefs_t::init()
   add_param( "AXA" , "w" , "5" , "Time window in seconds for nearest-distance comparisons" );
   add_param( "AXA" , "truncate" , "" , "Truncate nearest distances to the search window instead of excluding them" );
   add_param( "AXA" , "trunc" , "" , "Alias for truncate" );
+  add_param( "AXA" , "bg" , "EPOCHED" , "Explicit background intervals; restrict anchors and forbid nearest matches across gaps" );
+  add_param( "AXA" , "offset" , "5,1,50" , "Optional anchor-rate lag profile: width,increment,max (centres 0,+/-increment..+/-max, windows centre+/-width/2); requires bg; independent of w" );
+  add_param( "AXA" , "offset-seed" , "arousal" , "Restrict offset profile output to these seeds (other AXA outputs remain all-by-all)" );
   add_param( "AXA" , "verbose" , "" , "Write additional event-level information to the console" );
   
   add_table( "AXA" , "SEED,ANNOT" , "AXA pairwise metrics" );
@@ -1002,6 +1030,17 @@ void cmddefs_t::init()
   add_var( "AXA" , "CH,SEED,ANNOT" , "D_N" , "Number of seeds with a nearest event" );
   add_var( "AXA" , "CH,SEED,ANNOT" , "TOT_N" , "Total number of (flattened) annotations spanning all seeds" );
   add_var( "AXA" , "CH,SEED,ANNOT" , "TOT_T" , "Total duration (secs) of (flattened) annotations spanning all seeds" );
+
+  for ( const std::string strata : { "SEED,ANNOT,OFFSET", "CH,SEED,ANNOT,OFFSET" } )
+    {
+      add_table( "AXA", strata, "Descriptive anchor-rate offset profile (no permutations)" );
+      add_var( "AXA", strata, "INT", "Half-open offset window bounds [centre-width/2,centre+width/2) in seconds; OFFSET is the centre" );
+      add_var( "AXA", strata, "N_OBS", "All seed-target anchor pairs in window" );
+      add_var( "AXA", strata, "EXPOSURE", "Summed available window duration (seconds)" );
+      add_var( "AXA", strata, "N_EXP_RATE", "Segment-specific baseline-rate expected count" );
+      add_var( "AXA", strata, "RATE", "Observed pairs per second of exposure" );
+      add_var( "AXA", strata, "ENRICHMENT", "Observed / baseline-rate expectation; missing for zero exposure or expectation" );
+    }
 
   //
   // SPANNING
@@ -1173,7 +1212,7 @@ void cmddefs_t::init()
 	    "Typically this means generating a 0/1 or otherwise annotation-driven time series that can be\n"
 	    "used by later signal-based commands." );
   add_param( "A2S" , "annot" , "spindle" , "Annotations to convert to signals" );
-  add_param( "A2S" , "sr" , "100" , "Sample rate of the derived signal" );
+  add_param( "A2S" , "sr" , "100" , "Sample rate of the derived signal (may be fractional, e.g. 0.2, if sr x record duration is an integer)" );
   add_param( "A2S" , "label" , "SPINDLE" , "Output signal label(s); defaults to the annotation names" );
   add_param( "A2S" , "numeric-inst" , "" , "Use numeric instance IDs as signal values instead of 0/1" );
 
@@ -1612,14 +1651,16 @@ void cmddefs_t::init()
   add_param( "S2C" , "waves" , "waves" , "Base label for created cycle annotations" );
   add_param( "S2C" , "add-channel-inst-label" , "" , "Add channel names to instance IDs" );
   add_param( "S2C" , "add-channel-class-label" , "" , "Add channel names to class labels" );
-  add_param( "S2C" , "half-waves" , "" , "Also annotate POS/NEG half-waves; optional value sets base label, e.g. half-waves=HW" );
+  add_param( "S2C" , "half-waves" , "" , "Annotate POS/NEG half-waves; exact boolean tokens enable/disable; other values set base label (e.g. NREM)" );
   add_param( "S2C" , "peak-points" , "PEAK" , "Add 0-duration POS/NEG peak-point annotations with this base label" );
   add_param( "S2C" , "waves-bins" , "bins" , "Annotate 12 phase bins (B01..B12) using the cycle warp" );
+  add_param( "S2C" , "waves-bins-class" , "" , "With waves-bins, write one class per bin ({label}_B01..{label}_B12) instead of instance IDs" );
+  add_param( "S2C" , "rise-fall" , "ISO" , "Annotate RISE (trough-to-peak) and FALL (peak-to-trough) segments; boolean, or a base label" );
 
   add_param( "S2C" , "pos2neg" , "" , "Segment on POS->NEG zero-crossings (default POS->NEG)" );
 
-  add_param( "S2C" , "t-min" , "2.0" , "Minimum cycle duration (seconds)" );
-  add_param( "S2C" , "t-max" , "20.0" , "Maximum cycle duration (seconds)" );
+  add_param( "S2C" , "t-min" , "2.0" , "Minimum interpolated cycle duration (seconds); also defaults each half-wave minimum to half this value" );
+  add_param( "S2C" , "t-max" , "20.0" , "Maximum interpolated cycle duration (seconds); also defaults each half-wave maximum to half this value" );
   add_param( "S2C" , "t-min-neg" , "1.0" , "Minimum negative half-wave duration (seconds)" );
   add_param( "S2C" , "t-max-neg" , "10.0" , "Maximum negative half-wave duration (seconds)" );
   add_param( "S2C" , "t-min-pos" , "1.0" , "Minimum positive half-wave duration (seconds)" );
@@ -5335,8 +5376,10 @@ void cmddefs_t::init()
   add_param( "PSD" , "epoch-spectrum" , "" , "Calculate per-epoch power spectra" );
   add_param( "PSD" , "dB" , "" , "Report power in decibel units" );
   add_param( "PSD" , "peaks" , "" , "Estimate of spectral peaks/artifacts" );
-  add_param( "PSD" , "aperiodic" , "0.5,44.75" , "Robust power-law background fit with positive-peak rejection; bare flag uses min/max" );
-  add_param( "PSD" , "aperiodic-th" , "3" , "Positive-peak rejection threshold in robust SDs (1 dB minimum)" );
+  add_param( "PSD" , "aperiodic" , "0.5,44.75" , "Robust power-law fit over inclusive, ordered lwr,upr pairs; bare flag uses min/max" );
+  add_param( "PSD" , "aperiodic-eval" , "0.5,30" , "Background evaluation lwr,upr (Hz); defaults to fitting envelope; permits extrapolation" );
+  add_param( "PSD" , "aperiodic-th" , "3" , "Positive-peak rejection threshold in robust SDs (default 3)" );
+  add_param( "PSD" , "aperiodic-min-db" , "1" , "Positive-peak rejection floor in dB (positive, default 1)" );
   add_param( "PSD" , "aperiodic-iter" , "5" , "Maximum peak-rejection passes (1-100)" );
   add_param( "PSD" , "aperiodic-pivot" , "10" , "Frequency (Hz) at which APER_OFFSET is reported (default 1); fitted line unchanged" );
 
@@ -5401,6 +5444,10 @@ void cmddefs_t::init()
       add_var("PSD",table,"APER_OFFSET","Aperiodic log10 power density at the pivot frequency (aperiodic-pivot, default 1 Hz)");
       add_var("PSD",table,"APER_EXP","Aperiodic exponent: PSD = 10^offset * (frequency/pivot)^(-exponent)");
       add_var("PSD",table,"APER_RSQ","Aperiodic log-log R-squared on retained bins");
+      add_var("PSD",table,"APER_NTOTAL","Positive finite bins within the outer fitting envelope");
+      add_var("PSD",table,"APER_NINPUT","Eligible fitting bins before rejection");
+      add_var("PSD",table,"APER_NEXCLUDED","Positive finite envelope bins excluded by gaps");
+      add_var("PSD",table,"APER_NREJECT","Eligible bins rejected in the returned fit");
       add_var("PSD",table,"APER_N","Number of retained positive frequency bins");
     }
   add_var("PSD","CH","APER_NWIN","Number of analyzed aperiodic windows");
@@ -6365,6 +6412,7 @@ void cmddefs_t::init()
   
   add_param( "SPINDLES" , "nreps" , "1000" , "SO/SP coupling: number of replications for SP/SO coupling" );
   add_param( "SPINDLES" , "perm-whole-trace" , "" , "SO/SP coupling: Do not use within-epoch shuffling" );
+  add_param( "SPINDLES" , "fixed-epoch-dur" , "30" , "SO/SP coupling: If using generic epochs, set a fixed epoch size (secs) for within-epoch permutation" );
   add_param( "SPINDLES" , "all-spindles" , "" , "SO/SP coupling: Sonsider all spindles, whether ot not they overlap a SO" );
   add_param( "SPINDLES" , "stratify-by-phase" , "" , "SO/SP coupling: Overlap statistics per SO phase bin" );
 
@@ -7109,11 +7157,11 @@ void cmddefs_t::init()
   add_var( "OVERLAP" , "SEED,OTHER" , "D1_Z" , "Z-score for absolute nearest distance" );
   add_var( "OVERLAP" , "SEED,OTHER" , "D_N" , "Number of seed events contributing to nearest-distance summaries" );
   add_var( "OVERLAP" , "SEED,OTHER" , "D_N_EXP" , "Expected number of seed events contributing to nearest-distance summaries" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_OBS" , "Observed signed distance summary" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_SEC" , "Observed mean signed nearest distance in seconds" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_LEAD" , "Proportion of seeds for which the other event leads" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_LAG" , "Proportion of seeds for which the other event lags" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_EXP" , "Expected signed distance summary under permutation" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_OBS" , "Observed signed distance summary (positive: other follows seed)" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_SEC" , "Observed mean signed nearest distance in seconds (positive: other follows seed)" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_LEAD" , "Proportion of eligible non-overlapping matches with other before seed (negative distance)" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_LAG" , "Proportion of eligible non-overlapping matches with other after seed (positive distance)" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_EXP" , "Expected signed distance summary under permutation (positive: other follows seed)" );
   add_var( "OVERLAP" , "SEED,OTHER" , "D2_P" , "Empirical p-value for the signed distance summary" );
   add_var( "OVERLAP" , "SEED,OTHER" , "D2_Z" , "Z-score for the signed distance summary" );
 
@@ -7177,6 +7225,8 @@ void cmddefs_t::init()
   add_param( "SIGDYN" , "th" , "4" , "Remove peri-event outliers beyond this SD threshold before averaging (default: disabled)" );
   add_param( "SIGDYN" , "win" , "4" , "Winsorize peri-event outliers beyond this SD threshold before averaging (default: disabled)" );
   add_param( "SIGDYN" , "min-n" , "5" , "Minimum accepted peri-event windows to emit output for an anchor (default 1)" );
+  add_param( "SIGDYN" , "norm" , "pre" , "Normalize each peri-event window before averaging, against its own pre-anchor bins (pre) or all its bins (window)" );
+  add_param( "SIGDYN" , "mode" , "sub" , "With norm=, how the baseline is applied: sub (v-mean), ratio (v/mean) or z ((v-mean)/SD) (default sub)" );
   add_param( "SIGDYN" , "bin" , "10" , "Bin width in seconds for CH,ANNOT,SEC (default: native per-sample resolution)" );
   add_param( "SIGDYN" , "inc" , "5" , "Step between bins in seconds; requires bin=; < bin overlaps, > bin gaps (default: = bin)" );
   add_param( "SIGDYN" , "require-full" , "T" , "Require an instance's entire window to be available, rather than allowing partial contributions (default F)" );
@@ -7384,20 +7434,29 @@ void cmddefs_t::init()
             "By default IPC summarizes over contig-based segments. Adding\n"
             "`epoch` requests per-epoch output; in that mode IPC respects any\n"
             "current epoching, or falls back to the default epoching if none\n"
-            "has been set." );
+            "has been set. Caller epoch definitions, masks and iteration state are preserved.\n"
+            "Contig mode uses retained records; epoch masks apply in epoch mode only.\n"
+            "Summaries equally weight finite per-interval statistics; counts are summed.\n"
+            "P_INPHASE is the fraction with absolute phase difference < 30 degrees.\n"
+            "Lag profiles use N-|lag| samples per interval, with gates recomputed at each lag.\n"
+            "no-weights also disables amplitude gating; WIPC summaries remain missing.\n"
+            "Derived channels use recording sample positions: uncovered/invalid samples are zero;\n"
+            "overlapping epoch contributions are averaged. Edge trimming affects summaries only.\n"
+            "EDF+D gaps have no samples; derived channels reject epochs spanning gaps." );
 
   add_param( "IPC" , "sig" , "C3,C4,F3,F4" , "Optionally specify channels (defaults to all)" );
   add_param( "IPC" , "sig1" , "C3" , "Alternatively specify seed channels" );
   add_param( "IPC" , "sig2" , "C4,F3,F4" , "Alternatively specify non-seed channels" );
+  add_param( "IPC" , "unique" , "" , "Only output each channel pair once (A,B), not also (B,A) which differs only in PHASE sign" );
   add_param( "IPC" , "epoch" , "" , "Emit per-epoch IPC output and respect current epoching" );
   add_param( "IPC" , "w" , "0.25" , "Optional half-window in seconds for lag-resolved IPC outputs" );
-  add_param( "IPC" , "no-weights" , "" , "Disable amplitude weighting" );
-  add_param( "IPC" , "no-gate" , "" , "Disable low-amplitude gating" );
+  add_param( "IPC" , "no-weights" , "" , "Disable amplitude weighting and gating (WIPC summaries are missing)" );
+  add_param( "IPC" , "no-gate" , "" , "Disable low-amplitude gating while retaining amplitude weighting" );
   add_param( "IPC" , "q" , "0.30" , "Quantile for low-amplitude gating (default: discard bottom 30%)" );
   add_param( "IPC" , "th" , "0" , "Absolute low-amplitude gating threshold (overrides q)" );
   add_param( "IPC" , "edge" , "0" , "Drop this many seconds from each epoch edge before summarizing" );
 
-  add_param( "IPC" , "add-channels" , "" , "Add channels (default pairwise, unless set to = 'seed'" );
+  add_param( "IPC" , "add-channels" , "" , "Add pairwise w*cos(phase difference) channels, or =seed for normalized mean across non-self targets" );
   add_param( "IPC" , "prefix" , "" , "Label for new channels, defaults to IPC_" );
   
   add_table( "IPC" , "CH1,CH2" , "Primary IPC output" );
@@ -7407,7 +7466,7 @@ void cmddefs_t::init()
   add_var( "IPC" , "CH1,CH2" , "WIPC" , "Weighted mean instantaneous phase coherence" );
   add_var( "IPC" , "CH1,CH2" , "PLV" , "Phase-locking value" );
   add_var( "IPC" , "CH1,CH2" , "PHASE" , "Circular mean phase difference" );
-  add_var( "IPC" , "CH1,CH2" , "P_INPHASE" , "Fraction of samples with positive phase coherence" );
+  add_var( "IPC" , "CH1,CH2" , "P_INPHASE" , "Fraction of used samples with absolute phase difference < 30 degrees" );
 
   add_table( "IPC" , "CH1,CH2,E" , "Per-epoch IPC output" );
   add_var( "IPC" , "CH1,CH2,E" , "N_TOT" , "Total number of sample points considered in this epoch" );
@@ -7416,7 +7475,7 @@ void cmddefs_t::init()
   add_var( "IPC" , "CH1,CH2,E" , "WIPC" , "Weighted mean instantaneous phase coherence in this epoch" );
   add_var( "IPC" , "CH1,CH2,E" , "PLV" , "Phase-locking value in this epoch" );
   add_var( "IPC" , "CH1,CH2,E" , "PHASE" , "Circular mean phase difference in this epoch" );
-  add_var( "IPC" , "CH1,CH2,E" , "P_INPHASE" , "Fraction of samples with positive phase coherence in this epoch" );
+  add_var( "IPC" , "CH1,CH2,E" , "P_INPHASE" , "Fraction of used samples within +/-30 degrees in this epoch (strict bounds)" );
 
   add_table( "IPC" , "CH1,CH2,D" , "Lag-resolved IPC output" );
   add_var( "IPC" , "CH1,CH2,D" , "T" , "Lag time (seconds)" );
@@ -7426,7 +7485,7 @@ void cmddefs_t::init()
   add_var( "IPC" , "CH1,CH2,D" , "WIPC" , "Weighted mean instantaneous phase coherence at this lag" );
   add_var( "IPC" , "CH1,CH2,D" , "PLV" , "Phase-locking value at this lag" );
   add_var( "IPC" , "CH1,CH2,D" , "PHASE" , "Circular mean phase difference at this lag" );
-  add_var( "IPC" , "CH1,CH2,D" , "P_INPHASE" , "Fraction of samples in phase at this lag" );
+  add_var( "IPC" , "CH1,CH2,D" , "P_INPHASE" , "Fraction of used samples within +/-30 degrees at this lag (strict bounds)" );
 
   //
   // CC
@@ -7724,8 +7783,52 @@ void cmddefs_t::init()
   add_var( "ADJUST" , "CH" , "R" , "Correlation between the original and adjusted signal" );
 
   //
-  // SVD
+  // Fixed numerical projection
   //
+
+  add_cmd( "multi" , "PROJECT" , "Apply a fixed numerical projection as ordinary signals" );
+  add_url( "PROJECT" , "multi/#project" );
+  add_verb( "PROJECT" , "Match named inputs, convert voltage units, apply the declared reference and fixed matrix. Outputs retain physical record timing. See docs/PROJECT.md for the resource contract." );
+  add_param( "PROJECT" , "bundle" , "/path/to/operator" , "Extracted operator directory; mutually exclusive with explicit files" );
+  add_param( "PROJECT" , "matrix" , "weights.tsv" , "Headerless matrix TSV" );
+  add_param( "PROJECT" , "channels" , "channels.tsv" , "Indexed input channel TSV" );
+  add_param( "PROJECT" , "parcels" , "parcels.tsv" , "Indexed output label/parcel TSV" );
+  add_param( "PROJECT" , "metadata" , "metadata.json" , "Operator metadata JSON" );
+  add_param( "PROJECT" , "check" , "" , "Validate and report without adding signals" );
+  add_param( "PROJECT" , "verbose" , "" , "Log full model metadata, resource hashes, channel mappings and output storage details" );
+  add_param( "PROJECT" , "prefix" , "SRC_" , "Prefix supplied output labels; collisions fail" );
+  add_param( "PROJECT" , "input-unit" , "uV" , "Explicit recording input voltage unit override" );
+  add_param( "PROJECT" , "output-unit" , "nAm" , "Supported output unit conversion; A m defaults to nAm" );
+  add_table( "PROJECT" , "" , "Projection summary" );
+  add_var( "PROJECT" , "" , "BUNDLE" , "Bundle" );
+  add_var( "PROJECT" , "" , "MODEL" , "Model" );
+  add_var( "PROJECT" , "" , "N_INPUT" , "N input" );
+  add_var( "PROJECT" , "" , "N_OUTPUT" , "N output" );
+  add_var( "PROJECT" , "" , "SR" , "Sr" );
+  add_var( "PROJECT" , "" , "N_RECORD" , "N record" );
+  add_var( "PROJECT" , "" , "N_SAMPLE" , "N sample" );
+  add_var( "PROJECT" , "" , "REFERENCE" , "Reference" );
+  add_var( "PROJECT" , "" , "EMBEDDED" , "Embedded" );
+  add_var( "PROJECT" , "" , "CHECK" , "Check" );
+  add_table( "PROJECT" , "FILE" , "Consumed resource hashes" );
+  add_var( "PROJECT" , "FILE" , "SHA256" , "SHA-256 of the actual consumed file" );
+  add_var( "PROJECT" , "FILE" , "PATH" , "Path of the actual consumed file" );
+  add_table( "PROJECT" , "INPUT" , "Input column mapping" );
+  add_var( "PROJECT" , "INPUT" , "REQUIRED" , "Required" );
+  add_var( "PROJECT" , "INPUT" , "INDEX" , "Index" );
+  add_var( "PROJECT" , "INPUT" , "LABEL" , "Label" );
+  add_var( "PROJECT" , "INPUT" , "HEADER_UNIT" , "Header unit" );
+  add_var( "PROJECT" , "INPUT" , "TO_V" , "To v" );
+  add_var( "PROJECT" , "INPUT" , "UNIT_OVERRIDE" , "Unit override" );
+  add_table( "PROJECT" , "OUTPUT" , "Output rows and storage" );
+  add_var( "PROJECT" , "OUTPUT" , "PARCEL_ID" , "Parcel id" );
+  add_var( "PROJECT" , "OUTPUT" , "LABEL" , "Label" );
+  add_var( "PROJECT" , "OUTPUT" , "NATIVE_UNIT" , "Native unit" );
+  add_var( "PROJECT" , "OUTPUT" , "STORED_UNIT" , "Stored unit" );
+  add_var( "PROJECT" , "OUTPUT" , "SCALE" , "Scale" );
+  add_var( "PROJECT" , "OUTPUT" , "PMIN" , "Pmin" );
+  add_var( "PROJECT" , "OUTPUT" , "PMAX" , "Pmax" );
+  add_var( "PROJECT" , "OUTPUT" , "STEP" , "Step" );
 
   add_cmd( "multi" , "SVD" , "Singular value decomposition" );
   add_url( "SVD" , "multi/#svd" );

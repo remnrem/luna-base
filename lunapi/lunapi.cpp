@@ -428,6 +428,7 @@ std::vector<std::vector<std::string> > lunapi_t::aliases() const
 
   // annotations
   // alias --> orig
+  nsrr_t::ensure_mappings();
   std::map<std::string,std::string>::const_iterator aa = nsrr_t::amap.begin();
   while ( aa != nsrr_t::amap.end() )
     {

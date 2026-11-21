@@ -439,7 +439,9 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
 	   << "    bin          = " << ( param.has("bin") ? param.value("bin") : "." ) << "\n"
 	   << "    inc          = " << ( param.has("inc") ? param.value("inc") : ( param.has("bin") ? param.value("bin") : "." ) ) << "\n"
 	   << "    require-full = " << ( ( param.has("require-full") ? param.yesno("require-full") : false ) ? "T" : "F" ) << "\n"
-	   << "    min-n        = " << ( param.has("min-n") ? param.value("min-n") : "1" ) << "\n";
+	   << "    min-n        = " << ( param.has("min-n") ? param.value("min-n") : "1" ) << "\n"
+	   << "    norm         = " << ( param.has("norm") ? param.value("norm") : "." ) << "\n"
+	   << "    mode         = " << ( param.has("norm") ? ( param.has("mode") ? param.value("mode") : "sub" ) : "." ) << "\n";
   }
 
   //
@@ -987,6 +989,38 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
   // per-offset/bin partial-window inclusion (see file header comment)
   const bool require_full = param.has( "require-full" ) ? param.yesno( "require-full" ) : false;
 
+  // norm= : optional per-instance (per-window) normalization, applied to
+  // each instance's own bin values *before* they are pooled across
+  // instances (i.e. TLOCK np-style, rather than normalizing the average)
+  //   norm=pre     baseline = this instance's pre-anchor bins (SEC < 0)
+  //   norm=window  baseline = all of this instance's bins
+  // mode= : how the baseline is applied (default sub)
+  //   mode=sub     v - mean(baseline)
+  //   mode=ratio   v / mean(baseline)
+  //   mode=z       ( v - mean(baseline) ) / sd(baseline)
+  // instances with no usable baseline (no baseline bins; mean==0 for
+  // ratio; <2 bins or sd==0 for z) are dropped and counted in the log
+  enum norm_base_t { NORM_NONE , NORM_PRE , NORM_WINDOW };
+  enum norm_mode_t { NORM_SUB , NORM_RATIO , NORM_Z };
+  norm_base_t norm_base = NORM_NONE;
+  norm_mode_t norm_mode = NORM_SUB;
+  if ( param.has( "norm" ) )
+    {
+      const std::string nb = param.value( "norm" );
+      if      ( nb == "pre" )    norm_base = NORM_PRE;
+      else if ( nb == "window" ) norm_base = NORM_WINDOW;
+      else Helper::halt( "norm must be pre or window" );
+    }
+  if ( param.has( "mode" ) )
+    {
+      if ( norm_base == NORM_NONE ) Helper::halt( "mode= requires norm= to also be set" );
+      const std::string nm = param.value( "mode" );
+      if      ( nm == "sub" )   norm_mode = NORM_SUB;
+      else if ( nm == "ratio" ) norm_mode = NORM_RATIO;
+      else if ( nm == "z" )     norm_mode = NORM_Z;
+      else Helper::halt( "mode must be sub, ratio or z" );
+    }
+
   std::vector<double> Fs = edf.header.sampling_freq( signals );
 
   // tolog=T: log() is undefined for values <= 0; warn once (rather than
@@ -1092,9 +1126,14 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
 	  std::map<int, std::vector<double> > bin_values;
 	  std::map<int, std::set<int> >       bin_instances;
 	  std::set<int> used; // instances contributing to at least one complete bin
+	  int n_norm_dropped = 0; // instances dropped for lack of a usable norm= baseline
 
 	  for (int i=0; i<(int)idx.size(); i++)
 	    {
+	      // this instance's own (k, bin-mean) values, pooled below only
+	      // after any per-instance norm= normalization
+	      std::vector<std::pair<int,double> > inst_vals;
+
 	      const int lo = idx[i] - half_points_pre;
 	      const int hi = idx[i] + half_points_post;
 	      const int lo_c = std::max( 0 , lo );
@@ -1168,11 +1207,56 @@ void dsptools::sigdyn( edf_t & edf , param_t & param )
 		  // contribute to this bin at all
 		  if ( cnt == 0 ) continue;
 
-		  used.insert( i );
-		  bin_instances[ k ].insert( i );
-		  bin_values[ k ].push_back( sum / cnt );
+		  inst_vals.push_back( std::make_pair( k , sum / cnt ) );
+		}
+
+	      if ( inst_vals.size() == 0 ) continue;
+
+	      // per-instance normalization
+	      if ( norm_base != NORM_NONE )
+		{
+		  std::vector<double> base;
+		  for (size_t j=0; j<inst_vals.size(); j++)
+		    if ( norm_base == NORM_WINDOW || inst_vals[j].first < 0 )
+		      base.push_back( inst_vals[j].second );
+
+		  bool ok = base.size() > 0;
+		  double bm = 0 , bsd = 0;
+		  if ( ok ) bm = MiscMath::mean( base );
+		  if ( ok && norm_mode == NORM_RATIO && bm == 0 ) ok = false;
+		  if ( ok && norm_mode == NORM_Z )
+		    {
+		      if ( base.size() < 2 ) ok = false;
+		      else
+			{
+			  bsd = MiscMath::sdev( base , bm );
+			  if ( ! ( bsd > 0 ) ) ok = false;
+			}
+		    }
+
+		  if ( ! ok ) { ++n_norm_dropped; continue; }
+
+		  for (size_t j=0; j<inst_vals.size(); j++)
+		    {
+		      double & v = inst_vals[j].second;
+		      if      ( norm_mode == NORM_SUB )   v = v - bm;
+		      else if ( norm_mode == NORM_RATIO ) v = v / bm;
+		      else                                v = ( v - bm ) / bsd;
+		    }
+		}
+
+	      used.insert( i );
+	      for (size_t j=0; j<inst_vals.size(); j++)
+		{
+		  bin_instances[ inst_vals[j].first ].insert( i );
+		  bin_values[ inst_vals[j].first ].push_back( inst_vals[j].second );
 		}
 	    }
+
+	  if ( n_norm_dropped > 0 )
+	    logger << "  " << signals.label(s) << " / " << anchors[a] << ": dropped "
+		   << n_norm_dropped << " of " << idx.size()
+		   << " instances with no usable norm= baseline\n";
 
 	  if ( used.size() == 0 ) continue;
 

@@ -3936,14 +3936,9 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 	  // track only -1 or +1 for 'before' or 'after'
 	  // overlap == 0 here, so add that qualifier
 
-	  // nb. above:
-	  //   +1 implies ANNOT is AFTER SEED
-	  //   -1         ANNOT is BEFORE SEED
-	  //  we want the output to be SEED-CENTRIC,
-	  //   i..e. -1 means SEED comes BEFORE
-	  //       and so change sign of sdist below
-
-	  const double seed_centric_dist = - dist ; 
+	  // Positive means OTHER follows SEED; negative means OTHER precedes
+	  // SEED, matching the direction of the offset-window profiles.
+	  const double target_minus_seed_dist = dist;
 	  
 	  if ( ! overlap )
 	    {
@@ -3952,16 +3947,16 @@ void annotate_t::seed_annot_stats( const std::set<interval_t> & a , const std::s
 
 		  // for output, which variant is used below for test statistic
 		  
-		  r->ssec[ astr ][ bstr ] += seed_centric_dist ;
-		  if ( seed_centric_dist < 0 )
+		  r->ssec[ astr ][ bstr ] += target_minus_seed_dist ;
+		  if ( target_minus_seed_dist < 0 )
 		    r->sleads[ astr ][ bstr ]++;
-		  else if ( seed_centric_dist > 0 )
+		  else if ( target_minus_seed_dist > 0 )
 		    r->slags[ astr ][ bstr ]++;
 			   
 		  if ( d2_signed )  // reduce to -1/+1
-		    r->sdist[ astr ][ bstr ] += seed_centric_dist > 0 ? +1 : -1 ;
+		    r->sdist[ astr ][ bstr ] += target_minus_seed_dist > 0 ? +1 : -1 ;
 		  else
-		    r->sdist[ astr ][ bstr ] += seed_centric_dist ;
+		    r->sdist[ astr ][ bstr ] += target_minus_seed_dist ;
 
 		  // denom
 		  r->nsdist[ astr ][ bstr ] += 1;

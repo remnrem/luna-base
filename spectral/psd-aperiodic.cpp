@@ -40,33 +40,46 @@ psd_aperiodic_t::psd_aperiodic_t( param_t & param, double min, double max )
 {
   if ( !enabled )
     {
-      if (param.has("aperiodic-th") || param.has("aperiodic-iter") || param.has("aperiodic-pivot"))
-        Helper::halt("PSD aperiodic-th/aperiodic-iter/aperiodic-pivot require aperiodic");
+      if (param.has("aperiodic-min-db") || param.has("aperiodic-th") || param.has("aperiodic-iter") || param.has("aperiodic-pivot") || param.has("aperiodic-eval"))
+        Helper::halt("PSD aperiodic-th/aperiodic-min-db/aperiodic-iter/aperiodic-pivot/aperiodic-eval require aperiodic");
       return;
     }
   if ( !param.empty("aperiodic") )
     {
-      const std::vector<double> range = param.dblvector("aperiodic");
-      if (range.size()!=2) Helper::halt("expecting aperiodic=lwr,upr (or bare aperiodic)");
-      lwr = range[0]; upr = range[1];
+      regions = param.dblvector("aperiodic");
     }
+  else regions={lwr,upr};
+  if (!psd_aperiodic::valid_regions(regions))
+    Helper::halt("invalid PSD aperiodic regions: expecting ordered, disjoint positive lwr,upr pairs");
+  lwr=regions.front(); upr=regions.back();
+  if (param.has("aperiodic-eval"))
+    {
+      if (param.empty("aperiodic-eval"))
+        Helper::halt("invalid PSD aperiodic-eval: expecting one positive finite lwr,upr pair");
+      evaluation=param.dblvector("aperiodic-eval");
+      if (evaluation.size()!=2 || !psd_aperiodic::valid_regions(evaluation))
+        Helper::halt("invalid PSD aperiodic-eval: expecting one positive finite lwr,upr pair");
+      lwr=evaluation.front(); upr=evaluation.back();
+    }
+  if (param.has("aperiodic-min-db")) min_db = param.requires_dbl("aperiodic-min-db");
   if (param.has("aperiodic-th")) threshold = param.requires_dbl("aperiodic-th");
   if (param.has("aperiodic-iter")) iterations = param.requires_int("aperiodic-iter");
   if (param.has("aperiodic-pivot")) pivot = param.requires_dbl("aperiodic-pivot");
   if (!std::isfinite(pivot) || pivot<=0)
     Helper::halt("invalid PSD aperiodic-pivot (expecting a positive frequency in Hz)");
   if (!std::isfinite(lwr) || !std::isfinite(upr) || lwr<=0 || upr<=lwr
-      || !std::isfinite(threshold) || threshold<=0 || iterations<1 || iterations>100 || bin_fac<1)
-    Helper::halt("invalid PSD aperiodic range, threshold, or iteration count (1-100)");
+      || !std::isfinite(min_db) || min_db<=0 || !std::isfinite(threshold) || threshold<=0 || iterations<1 || iterations>100 || bin_fac<1)
+    Helper::halt("invalid PSD aperiodic range, threshold, minimum dB, or iteration count (1-100)");
   if (adding)
     {
       prefix = param.empty("add") ? "" : param.value("add");
       const std::set<std::string> excluded = param.strset("skip-bands");
       skip.assign(excluded.begin(),excluded.end());
     }
-  logger << "  PSD aperiodic power-law fit: " << lwr << " - " << upr
-         << " Hz, positive-peak threshold " << threshold << " MAD SDs, offset pivot "
-         << pivot << " Hz\n";
+  logger << "  PSD aperiodic power-law fit: " << regions.front() << " - " << regions.back()
+         << " Hz, positive-peak threshold " << threshold << " MAD SDs, minimum " << min_db << " dB, " << regions.size()/2
+         << " fitting regions, offset pivot "
+         << pivot << " Hz; background evaluation " << lwr << " - " << upr << " Hz\n";
 }
 
 bool psd_aperiodic_t::band_in_range( int band ) const
@@ -99,6 +112,10 @@ void psd_aperiodic_t::report( const std::vector<double> & f, const std::vector<d
   writer.value("APER_EXP",fit.exponent);
   writer.value("APER_RSQ",fit.rsq);
   writer.value("APER_N",fit.n);
+  writer.value("APER_NTOTAL",fit.total_bins);
+  writer.value("APER_NINPUT",fit.input_bins);
+  writer.value("APER_NEXCLUDED",fit.excluded_bins);
+  writer.value("APER_NREJECT",fit.rejected_bins);
   if (bands)
     {
       bandaid_t original, background;
@@ -154,7 +171,7 @@ void psd_aperiodic_t::epoch( const std::vector<double> & f, const std::vector<do
   any_variable = any_variable || (finite && varies);
   // Fit every window even for summary-only requests, so failure counts always
   // refer to the same analyzed windows, independently of output verbosity.
-  auto fit = finite && varies ? psd_aperiodic::fit(f,p,lwr,upr,threshold,iterations,pivot)
+  auto fit = finite && varies ? psd_aperiodic::fit(f,p,regions,threshold,iterations,pivot,min_db,evaluation)
                               : psd_aperiodic::fit_t();
   if (!finite) fit.failure = "non-finite input samples";
   else if (!varies) fit.failure = data.empty() ? "empty input window" : "constant input window";
@@ -219,9 +236,15 @@ void psd_aperiodic_t::epoch( const std::vector<double> & f, const std::vector<do
     {
       // Fit parameters share component validity and the same 1 Hz alignment.
       // These stay in log10 power units regardless of the dB display option.
-      candidate["_APER_SLOPE"]=-fit.exponent;
+      // Positive excursions indicate a steeper aperiodic background.
+      candidate["_APER_SLOPE"]=fit.exponent;
       candidate["_APER_OFFSET"]=fit.offset;
       candidate["_APER_RSQ"]=fit.rsq;
+      candidate["_APER_N"]=fit.n;
+      candidate["_APER_NTOTAL"]=fit.total_bins;
+      candidate["_APER_NINPUT"]=fit.input_bins;
+      candidate["_APER_NEXCLUDED"]=fit.excluded_bins;
+      candidate["_APER_NREJECT"]=fit.rejected_bins;
       valid_windows.push_back(usable ? 1 : 0);
       fallback_windows.push_back(usable && fit.fallback ? 1 : 0);
       for (const auto & value : candidate)
@@ -234,7 +257,7 @@ void psd_aperiodic_t::summary( bool bands )
   if (!enabled || !count) return;
   std::vector<double> mean=sum;
   for (double & v : mean) v/=count;
-  const auto fit = any_variable ? psd_aperiodic::fit(frequencies,mean,lwr,upr,threshold,iterations,pivot)
+  const auto fit = any_variable ? psd_aperiodic::fit(frequencies,mean,regions,threshold,iterations,pivot,min_db,evaluation)
                                 : psd_aperiodic::fit_t();
   report(frequencies,mean,fit,bands,spectrum_output);
   if (!silent)
@@ -265,13 +288,17 @@ void psd_aperiodic_t::add( edf_t & edf, const std::string & label,
       std::vector<double> data=track.second;
       if ((int)data.size()!=observed || observed+pad1+pad2!=expected)
         Helper::halt("PSD aperiodic add requires all regularly spaced epochs; track length/padding mismatch");
-      psd_aperiodic::fill(data,valid_windows,
+      const bool quality=track.first.find("_APER_N")==0;
+      if (!quality) psd_aperiodic::fill(data,valid_windows,
                          !parameter && track.first.find("_APER")==0 ? (db ? -120 : 1e-12) : 0);
       for (double value : data)
         if (!std::isfinite(value)) Helper::halt("internal error: non-finite filled PSD aperiodic track");
       data.insert(data.begin(),pad1,0);
       data.insert(data.end(),pad2,0);
-      if (failed_count==count && (parameter || track.first.find("_PEX")==0))
+      if (quality)
+        edf.add_signal(prefix+label+track.first,1,data,0,
+                       std::max(1.0,*std::max_element(data.begin(),data.end())),0,32767);
+      else if (failed_count==count && (parameter || track.first.find("_PEX")==0))
         edf.add_signal(prefix+label+track.first,1,data,0,1,0,32767);
       else if (failed_count==count && !db)
         // Anchor the physical minimum at the floor. Automatic EDF scaling of

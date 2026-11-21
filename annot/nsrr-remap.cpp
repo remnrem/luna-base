@@ -23,233 +23,145 @@
 #include "defs/defs.h"
 #include "eval.h"
 
-std::string nsrr_t::remap( const std::string & s1 )
+namespace {
+
+struct remap_definition_t {
+  std::string primary;
+  std::vector<std::string> aliases;
+  bool strict;
+};
+
+// Keep definitions independent of the label settings in effect at registration.
+std::vector<remap_definition_t> definitions;
+bool lookup_dirty = true;
+bool lookup_sanitize = false;
+bool lookup_replace_spaces = false;
+char lookup_space_replacement = '_';
+
+std::string normalize_label( const std::string & label )
 {
-  
-  // always trim obvious whitespace
-  std::string a0 = Helper::trim( s1 );
-  
-  // swap internal spaces for a different character?
-  std::string a1 = globals::replace_annot_spaces
-    ? Helper::search_replace( a0 , ' ' , globals::space_replacement ) 
-    : a0 ;
-   
-  // santization (but perhaps allowing for spaces?)
-  // and then retrim on sanitized characters
+  std::string normalized = Helper::trim( label );
+  if ( globals::replace_annot_spaces )
+    normalized = Helper::search_replace( normalized , ' ' , globals::space_replacement );
   if ( globals::sanitize_everything )
-    {
-      if ( globals::replace_annot_spaces )
-	a1 = Helper::trim( Helper::sanitize( a1 ) , '_' ) ;
-      else // allow spaces in a sanitized version still
-	a1 = Helper::trim( Helper::sanitize( a1 , ' ' ) , '_' ) ;
-    }
-  
-  //
-  // reduce multiple (internal) spaces or underscores to one
-  //
-  
-  a1 = Helper::squash( Helper::squash( a1 , ' ' ) , '_' );
-  
-  //
-  // do nothing
-  //
-  // if ( ! do_remap )
-  //   {
-  //     return a1;
-  //   }
-
-  //
-  // do remapping
-  //
-  
-  std::string a = a1;
-  
-  std::string a_uc = Helper::toupper( a );
-
-
-  //
-  // found as a primary? ( return preferred case in pmap )
-  //
-    
-  if ( pmap.find( a_uc ) != pmap.end() )
-    {  
-      if ( unmapped ) return "";
-      else return pmap[ a_uc ];
-    }
-
-  //
-  // found as an alias?
-  //
-  
-  bool found = amap.find( a_uc ) != amap.end() ;
-
-  //
-  // not found as is (or map is empty)
-  //
-  
-  if ( ! found )
-    {
-
-      std::string ca = a;
-      
-      // we may still want to swap spaces
-      // note - this is prob redundant now, as we
-      // will always replace spaces above..
-      
-      if ( globals::replace_annot_spaces )
-	ca = Helper::search_replace( ca , ' ' , globals::space_replacement );
-      
-      std::string ca_uc = Helper::toupper( ca );
-      
-      // recheck that space-swapped version does not have an alias
-      found = amap.find( ca_uc ) != amap.end() ;
-
-      if ( ! found )
-	{
-	  // if in white-list mode, we return nothing (i.e. an invalid/skipped annot)
-	  if ( whitelist ) return "";
-
-	  // else leave case of original unchanged and return 
-	  return ca ; 
-	}
-      else
-	{
-	  // skipping whitelisted terms?
-	  if ( unmapped ) return "";
-
-	  return amap[ ca_uc ]; // if using as as a key, must be UC
-
-	}
-    }
-
-  // skipping whitelisted terms?
-  if ( unmapped ) return "";
-
-  // else return the remapped term (which may contain spaces, if that
-  // was so requested...)
-  return amap[ a_uc ] ;
-  
+    normalized = Helper::trim( globals::replace_annot_spaces
+                              ? Helper::sanitize( normalized )
+                              : Helper::sanitize( normalized , ' ' ) , '_' );
+  return Helper::squash( Helper::squash( normalized , ' ' ) , '_' );
 }
 
+std::string raw_label( const std::string & label )
+{
+  return Helper::repair_label_commas( Helper::unquote( label ) );
+}
+
+}
+
+void nsrr_t::ensure_mappings()
+{
+  if ( ! lookup_dirty && lookup_sanitize == globals::sanitize_everything
+       && lookup_replace_spaces == globals::replace_annot_spaces
+       && lookup_space_replacement == globals::space_replacement ) return;
+
+  amap.clear();
+  bmap.clear();
+  pmap.clear();
+  std::map<std::string,std::string> alias_sources, primary_sources;
+
+  for ( const auto & definition : definitions )
+    {
+      const std::string primary = normalize_label( definition.primary );
+      const std::string key = Helper::toupper( primary );
+      const std::string raw_primary = Helper::toupper( definition.primary );
+
+      if ( primary_sources.count( key ) && primary_sources[key] != raw_primary )
+        Helper::halt( "annotation normalization collision between primary labels: "
+                      + primary_sources[key] + " & " + definition.primary );
+      primary_sources[key] = raw_primary;
+
+      if ( definition.strict )
+        {
+          if ( pmap.count( key ) && pmap[key] != primary )
+            Helper::halt( "inconsistent case in remaps for primary: " + pmap[key] + " & " + primary );
+          if ( amap.count( key ) )
+            Helper::halt( primary + " specified as both primary annotation and mapped term" );
+        }
+      pmap[key] = primary;
+
+      for ( const auto & alias : definition.aliases )
+        {
+          const std::string mapped = Helper::toupper( normalize_label( alias ) );
+          const std::string raw_alias = Helper::toupper( alias );
+          if ( definition.strict && mapped == key ) continue;
+
+          if ( definition.strict && pmap.count( mapped ) )
+            Helper::halt( mapped + " specified as both primary annotation and mapped term" );
+
+          if ( amap.count( mapped ) && Helper::toupper( amap[mapped] ) != key )
+            {
+              // add() deliberately replaces an exact alias (e.g. Movement).
+              // Different raw aliases must not silently collide after normalization.
+              if ( definition.strict || alias_sources[mapped] != raw_alias )
+                Helper::halt( "annotation normalization collision for alias: " + alias
+                              + " (" + amap[mapped] + " & " + primary + ")" );
+            }
+          amap[mapped] = primary;
+          alias_sources[mapped] = raw_alias;
+        }
+    }
+
+  // Derive the reverse map from the final aliases so overrides leave no stale entries.
+  for ( const auto & alias : amap )
+    bmap[ Helper::toupper( alias.second ) ].push_back( alias.first );
+
+  lookup_sanitize = globals::sanitize_everything;
+  lookup_replace_spaces = globals::replace_annot_spaces;
+  lookup_space_replacement = globals::space_replacement;
+  lookup_dirty = false;
+}
+
+std::string nsrr_t::remap( const std::string & label )
+{
+  ensure_mappings();
+  const std::string normalized = normalize_label( label );
+  const std::string key = Helper::toupper( normalized );
+  const auto primary = pmap.find( key );
+  if ( primary != pmap.end() ) return unmapped ? "" : primary->second;
+  const auto alias = amap.find( key );
+  if ( alias != amap.end() ) return unmapped ? "" : alias->second;
+  return whitelist ? "" : normalized;
+}
 
 void nsrr_t::annot_remapping( const std::string & s )
 {
-  // same structure for annotation re-mappings as for signal channels;
-  // code copied from cmd_t::signal_alias()
-  
-  // the primary alias can occur multiple times, and have multiple 
-  // labels that are mapped to it; matches are case-insensitive, as
-  // all aliases and checks stored in upper-case
-  
-  // however: two rules
-  // 1. many-to-one mapping means the same label cannot have multiple primary aliases
-  // 2. following, and on principle of no transitive properties, alias cannot have alias
-  
-  // X|Y|Z
-  // X|A|B
-  
-  // W|A  bad, A already mapped
-  // V|X  bad, X already mapped
-  // i.e. things can only occur once in the RHS, or multiple times in the LHS
-  
-
-  // format canonical|alias1|alias2 , etc.
-  std::vector<std::string> tok = Helper::quoted_parse( s , "|" );    
-  if ( tok.size() < 2 ) Helper::halt( "bad format for annotation remapping:  canonical|alias 1|alias 2\n" + s );
-  
-  // The primary is the annotation class that will enter Luna's namespace.
-  const std::string primary = Helper::repair_label_commas( Helper::unquote( tok[0] ) );
-  const std::string uc_primary = Helper::toupper( primary );
-
-  // check that no | characters.. will cause problems downstream, so avoid here
-  if ( primary.find( "|" ) != std::string::npos )
+  // canonical|alias1|alias2; user rules retain the no-transitive-alias rule.
+  const std::vector<std::string> tok = Helper::quoted_parse( s , "|" );
+  if ( tok.size() < 2 )
+    Helper::halt( "bad format for annotation remapping:  canonical|alias 1|alias 2\n" + s );
+  remap_definition_t definition;
+  definition.primary = raw_label( tok[0] );
+  definition.strict = true;
+  if ( definition.primary.find( "|" ) != std::string::npos )
     Helper::halt( "primary annotation labels cannot contain pipe (|) characters" );
-  
-  
-  
-  // store primary mapping (but only on first occurrence)
-  // i.e. the primary might be listed w/ variable case in the remap file
-  // behavior here is to take the first; error if different
-  if ( pmap.find( uc_primary ) == pmap.end() )
-    {
-      pmap[ uc_primary ] = primary;
-    }
-  else
-    {
-      if ( pmap[ uc_primary ] != primary )
-	Helper::halt( "inconsistent case in remaps for primary: " + pmap[ uc_primary ] + " & " + primary ); 
-    }
-    
-  // primary already specified
-  if ( amap.find( uc_primary ) != amap.end() )
-    Helper::halt( primary + " specified as both primary annotation and mapped term" );
-
-  // add mappings
-  for (int j=1;j<tok.size();j++) 
-    {
-      
-      // impose rules
-      // optional swap spaces for another character too
-	  const std::string mapped = Helper::repair_label_commas( globals::sanitize_everything
-	    ? Helper::sanitize(  Helper::toupper( Helper::unquote( tok[j] ) ) )
-	    : ( globals::replace_annot_spaces
-		? Helper::search_replace( Helper::toupper( Helper::unquote( tok[j] ) ) , ' ' , globals::space_replacement )
-		: Helper::toupper( Helper::unquote( tok[j] ) )
-		) );
-
-      // if same, skip
-      if ( mapped == uc_primary ) continue;
-      
-      // otherwise, check no circular definitions
-      if ( bmap.find( mapped ) != bmap.end() )
-	Helper::halt( mapped + " specified as both primary annotation and mapped term" );
-      
-      if ( amap.find( mapped ) != amap.end() )
-	if ( Helper::toupper( primary ) != Helper::toupper( amap[ mapped ] ) )
-	  Helper::halt( mapped + " specified twice in alias file w/ different primary remaping" );
-      
-      // otherwise, set 
-      amap[ mapped ] = primary;
-      
-      bmap[ uc_primary ].push_back( mapped );
-    }
-    
+  for ( size_t j = 1; j < tok.size(); ++j )
+    definition.aliases.push_back( raw_label( tok[j] ) );
+  definitions.push_back( definition );
+  lookup_dirty = true;
 }
 
-
-// add a new annotation remap
-void nsrr_t::add( const std::string & p , const std::string & a )
+void nsrr_t::add( const std::string & primary , const std::string & alias )
 {
-
-  const std::string p2 = Helper::repair_label_commas( globals::sanitize_everything
-    ? Helper::sanitize(  Helper::unquote( p ) )
-    : ( globals::replace_annot_spaces
-	? Helper::search_replace( Helper::unquote( p )  , ' ' , globals::space_replacement )
-	: Helper::unquote( p ) ) );
-	
-  const std::string a2 = Helper::repair_label_commas( globals::sanitize_everything
-    ? Helper::sanitize(  Helper::unquote( a ) )
-    : ( globals::replace_annot_spaces
-	? Helper::search_replace( Helper::unquote( a )  , ' ' , globals::space_replacement )
-	: Helper::unquote( a ) ) );
-
-  // swap spaces for another char?
-  // const std::string p2 = globals::replace_annot_spaces ? Helper::search_replace( p , ' ' , globals::space_replacement ) : p;
-  // const std::string a2 = globals::replace_annot_spaces ? Helper::search_replace( a , ' ' , globals::space_replacement ) : a;
-
-  //std::cout << " mapping " << a2 << " " << p2 << "\n";
-  amap[ Helper::toupper( a2 ) ] = p2;
-  bmap[ Helper::toupper( p2 ) ].push_back( Helper::toupper( a2 ) );
-  pmap[ Helper::toupper( p2 ) ] = p2;
+  definitions.push_back( { raw_label( primary ) , { raw_label( alias ) } , false } );
+  lookup_dirty = true;
 }
 
-
-// clear existing NSRR annotations
 void nsrr_t::clear()
 {
+  definitions.clear();
   amap.clear();
   bmap.clear();
-  pmap.clear();  
+  pmap.clear();
+  lookup_dirty = true;
 }
 
 

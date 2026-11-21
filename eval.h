@@ -450,6 +450,7 @@ void proc_tclst( edf_t & , param_t & );
 
 void proc_fiplot( edf_t & , param_t & );
 void proc_mi( edf_t & , param_t & );
+void proc_project( edf_t & , param_t & );
 void proc_svd( edf_t & , param_t & );
 void proc_ica( edf_t & , param_t & );
 void proc_ssa( edf_t & , param_t & );

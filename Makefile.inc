@@ -26,6 +26,10 @@ endif
 LGBM ?= 1
 LGBM_PATH ?= /opt/homebrew
 
+# LightGBM has no public version query. Source trees provide VERSION.txt;
+# packaged installs can supply LGBM_VERSION explicitly for `luna -v`.
+LGBM_VERSION ?= $(if $(wildcard $(LGBM_PATH)/VERSION.txt),$(strip $(shell cat "$(LGBM_PATH)/VERSION.txt")))
+
 # ONNX Runtime is opt-in.  ORT_PATH should contain lib/ and include/,
 # matching the staged layout produced by the ONNX Runtime build script.
 ORT ?= 0
@@ -104,6 +108,9 @@ endif
 
 ifeq ($(LGBM),1)
 CXXFLAGS += -DHAS_LGBM
+ifneq ($(strip $(LGBM_VERSION)),)
+CXXFLAGS += -DLUNA_LGBM_VERSION='"$(LGBM_VERSION)"'
+endif
 endif
 
 ifeq ($(ORT),1)

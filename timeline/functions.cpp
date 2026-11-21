@@ -19,6 +19,8 @@
 //
 //    --------------------------------------------------------------------
 
+#include <limits>
+
 #include "timeline/timeline.h"
 #include "param.h"
 
@@ -233,8 +235,17 @@ void timeline_t::annot2signal( const param_t & param )
   if ( ! param.has( "annot" ) ) Helper::halt( "no annotations specified: e.g. annot=A1,A2" );
   std::vector<std::string> anames = param.strvector_xsigs( "annot" );
 
-  // SR of new signals
-  const int sr = param.requires_int( "sr" );
+  // SR of new signals: may be fractional/sub-1Hz (e.g. sr=0.2 with 30s
+  // records), but must give an integer number of samples per EDF record
+  const double sr = param.requires_dbl( "sr" );
+  if ( sr <= 0 ) Helper::halt( "sr must be positive" );
+
+  const double nspr_d = sr * edf->header.record_duration;
+  const int nspr = (int) std::lround( nspr_d );
+  if ( nspr < 1 || std::fabs( nspr_d - nspr ) > 1e-6 )
+    Helper::halt( "sr * EDF record duration (" + Helper::dbl2str( edf->header.record_duration )
+		  + "s) must be a positive integer number of samples per record; "
+		  + "use RECORD-SIZE to change the record size" );
 
   // use instance ID as a numeric value e.g. for NREMC 1 , 2 , 3 
   const bool numeric_instance = param.has( "numeric-inst" );
@@ -247,9 +258,9 @@ void timeline_t::annot2signal( const param_t & param )
 
   // get whole signal size for this SR
 
-  const int np = sr * edf->header.record_duration * edf->header.nr;  
+  const int np = nspr * edf->header.nr;
 
-  const uint64_t srtp = (1.0/sr) * globals::tp_1sec;
+  const uint64_t srtp = (uint64_t) std::llround( globals::tp_1sec / sr );
 
   // create synthetic signal, 0/1 for presence/absence of the annotation
   for (int a=0; a<anames.size(); a++)
@@ -326,7 +337,8 @@ void timeline_t::annot2signal( const param_t & param )
       else
 	logger << " as 0/1 signal " << labels[a] << "\n";
    
-      edf->add_signal( labels[a]  , sr , adat );
+      // pass -nspr: i.e. n_samples per record directly (exact for sub-1Hz SRs)
+      edf->add_signal( labels[a]  , -(double)nspr , adat );
 
     }
    
@@ -3716,6 +3728,75 @@ void timeline_t::annot_crosstabs( const param_t & param )
   // truncate to window (vs default, to exclude)  [ same behav as OVERLAP ] 
   const bool truncate_to_window = param.has( "truncate" ) || param.has( "trunc" );
   
+  // Background segments are half-open and shared by distance and offset analyses.
+  const bool has_bg = param.has( "bg" );
+  const bool do_offset = param.has( "offset" );
+  if ( do_offset && ! has_bg ) Helper::halt( "AXA offset requires bg" );
+  // optionally restrict (potentially large) offset output to a subset of seeds;
+  // other AXA outputs remain all-by-all
+  const bool offset_seed_subset = param.has( "offset-seed" );
+  if ( offset_seed_subset && ! do_offset ) Helper::halt( "AXA offset-seed requires offset" );
+  const std::set<std::string> offset_seeds = offset_seed_subset ?
+    param.strset_xsigs( "offset-seed" ) : std::set<std::string>();
+  std::vector<interval_t> background;
+  if ( has_bg )
+    {
+      std::set<interval_t> raw;
+      for ( const auto & name : param.strvector_xsigs( "bg" ) )
+        {
+          annot_t * bg = annotations->find( name );
+          if ( bg == NULL ) Helper::halt( "AXA background annotation not found: " + name );
+          for ( const auto & event : bg->interval_events )
+            if ( event.first.interval.stop > event.first.interval.start )
+              raw.insert( event.first.interval );
+        }
+      for ( const auto & interval : raw )
+        {
+          if ( background.empty() || interval.start > background.back().stop )
+            background.push_back( interval );
+          else if ( interval.stop > background.back().stop )
+            background.back().stop = interval.stop;
+        }
+    }
+  const auto anchor_tp = [anchor]( const interval_t & i ) {
+    return anchor == -1 ? i.start : ( anchor == 1 ? i.stop : i.mid() );
+  };
+  const auto segment = [&background,has_bg]( uint64_t t ) {
+    if ( ! has_bg ) return 0;
+    auto i = std::upper_bound( background.begin(), background.end(), t,
+                              []( uint64_t x, const interval_t & b ) { return x < b.start; } );
+    if ( i == background.begin() ) return -1;
+    --i;
+    return t < i->stop ? int( i - background.begin() ) : -1;
+  };
+  // Lag grid: centres at 0, +/-increment, ... up to +/-max; each window is the
+  // half-open interval [centre - width/2, centre + width/2). OFFSET is the centre (seconds).
+  std::vector<std::pair<double,double> > offset_windows;
+  std::vector<double> offset_centres;
+  if ( do_offset )
+    {
+      const auto v = param.dblvector( "offset" );
+      if ( v.size() != 3 ) Helper::halt( "AXA expects offset=width,increment,max" );
+      if ( ! std::isfinite(v[0]) || ! std::isfinite(v[1]) || ! std::isfinite(v[2]) ||
+           v[0] <= 0 || v[1] <= 0 || v[2] < 0 ||
+           (v[0] + v[2]) * globals::tp_1sec >= std::numeric_limits<int64_t>::max() ||
+           v[1] * globals::tp_1sec >= std::numeric_limits<int64_t>::max() )
+        Helper::halt( "AXA offset requires positive width/increment and nonnegative maximum" );
+      const uint64_t width = std::llround( v[0] * globals::tp_1sec );
+      const uint64_t increment = std::llround( v[1] * globals::tp_1sec );
+      const uint64_t maximum = std::llround( v[2] * globals::tp_1sec );
+      if ( width == 0 || increment == 0 ) Helper::halt( "AXA offset width/increment must be at least one timepoint" );
+      const int64_t n = maximum / increment;
+      const double half = width / 2.0;
+      for ( int64_t i = -n; i <= n; ++i )
+        {
+          const double c = ( i * (int64_t)increment ) / (double)globals::tp_1sec;
+          offset_windows.push_back( std::make_pair( ( i * (int64_t)increment - half ) / (double)globals::tp_1sec ,
+                                                    ( i * (int64_t)increment + half ) / (double)globals::tp_1sec ) );
+          offset_centres.push_back( c );
+        }
+    }
+
    // count implied annotations 
    if ( requested.size() == 0 )
      Helper::halt( "no annotations" );
@@ -3729,6 +3810,9 @@ void timeline_t::annot_crosstabs( const param_t & param )
 
    // track annot instance ID (for match-instance) 
    std::map<std::string,std::string> label2instance;
+
+   // label (possibly class_instance) -> class (for offset-seed matching)
+   std::map<std::string,std::string> label2class;
 
 
    //
@@ -3763,6 +3847,7 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	   const std::string ch_str = within_channel ? instance_idx.ch_str : "." ;
 	   const std::string label1  = label + ( by_instance ? "_" + instance_idx.id : "" ); 
 	   if ( match_instance ) label2instance[ label1 ] = instance_idx.id; 
+	   label2class[ label1 ] = label;
 
 	   // record
 	   events[ ch_str ][ label1 ].insert( instance_idx.interval );
@@ -3817,6 +3902,17 @@ void timeline_t::annot_crosstabs( const param_t & param )
 
        const std::map<std::string,std::set<interval_t> > & events1 = ch->second;
 
+       std::map<std::string,std::map<int,std::vector<uint64_t> > > anchors;
+       for ( const auto & cls : events1 )
+         for ( const auto & event : cls.second )
+           {
+             const uint64_t t = anchor_tp( event );
+             const int k = segment( t );
+             if ( k >= 0 ) anchors[cls.first][k].push_back( t );
+           }
+       for ( auto & cls : anchors )
+         for ( auto & seg : cls.second ) std::sort( seg.second.begin(), seg.second.end() );
+
        //
        // Nothing to do?
        //
@@ -3843,19 +3939,11 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	   //  overlap analyses;  for the nearest analysis, keep the original set,
 	   //  and extract the anchor point here:
 
-	   // for 'nearest' distance
-	   std::set<double> b1;
-	   std::set<interval_t>::const_iterator bb1 = bb->second.begin();
-	   while ( bb1 != bb->second.end() )
-	     {
-	       if      ( anchor == -1 ) b1.insert( bb1->start_sec() );	      
-	       else if ( anchor == +1 ) b1.insert( bb1->stop_sec() );
-	       else                     b1.insert( bb1->mid_sec() );
-	       ++bb1;
-	     }
-
 	   // flatten remaining values
-	   const std::set<interval_t> b = annotate_t::flatten( bb->second );
+	   std::set<interval_t> eligible_b;
+           for ( const auto & event : bb->second )
+             if ( segment( anchor_tp( event ) ) >= 0 ) eligible_b.insert( event );
+           const std::set<interval_t> b = annotate_t::flatten( eligible_b );
 
 	   std::map<std::string,std::set<interval_t> >::const_iterator aa = events1.begin();
 	   while ( aa != events1.end() )
@@ -3892,119 +3980,37 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	       //   time from seed 'anchor' to nearest 'b' 'anchor' (signed + abs) 
 	       //   % of 'a' with at least some 'b' overlap
 
-	       int sidx = 0;
-
 	       // for each 'seed' (i.e. conditioning event)
 	       std::set<interval_t>::const_iterator seed = a.begin();
 	       while ( seed != a.end() )
 		 {
 
-		   ++sidx;
+                   const uint64_t seed_tp = anchor_tp( *seed );
+                   const int k = segment( seed_tp );
+                   if ( k < 0 ) { ++seed; continue; }
+                   const auto & targets = anchors[bb->first][k];
+                   // Choose nearest before applying exclusion/capping; ties go backwards.
+                   auto next = std::lower_bound( targets.begin(), targets.end(), seed_tp );
+                   if ( ! targets.empty() )
+                     {
+                       uint64_t nearest = next == targets.end() ? targets.back() : *next;
+                       const auto distance = [seed_tp]( uint64_t t ) {
+                         return t >= seed_tp ? t - seed_tp : seed_tp - t;
+                       };
+                       if ( next != targets.begin() && distance(*(next - 1)) <= distance(nearest) )
+                         nearest = *(next - 1);
+                       double d = distance(nearest) / (double)globals::tp_1sec;
+                       if ( nearest < seed_tp ) d = -d;
+                       if ( window < 0 || fabs(d) <= window || truncate_to_window )
+                         {
+                           if ( window >= 0 && fabs(d) > window ) d = d < 0 ? -window : window;
+                           sav_d.push_back( d );
+                           sav_dabs.push_back( fabs(d) );
+                         }
+                     }
+                   // Points contribute to distances/profile, never interval-overlap means.
+                   if ( seed->stop == seed->start ) { ++seed; continue; }
 
-		   // skip zero-duration seeds here
-		   if ( fabs( seed->duration_sec() ) < 1e-8 )
-		     {
-		       ++seed;
-		       continue;
-		     }
-
-		   // which b events span this, if any?		  
-		   // find the first annot not before (at or after) the seed
-
-		   //
-		   // Find nearest distance (using the unflattened b1 list of anchor positions)
-		   //
-
-		   const double seed_sec = anchor == -1 ? seed->start_sec()
-		     : ( anchor == 1 ? seed->stop_sec() : seed->mid_sec() );
-
-		   std::set<double>::const_iterator cc = b1.upper_bound( seed_sec );
-
-		   std::set<double>::const_iterator closest = cc;
-
-		   std::vector<double> distances; 
-
-		   while ( 1 )
-		     {
-		       if ( closest == b1.end() ) break;
-		       if ( *closest > seed_sec ) break;
-		       ++closest;
-		     }
-
-		   // one past
-		   if ( closest != b1.end() )
-		     {
-		       //std::cout << " dst: back-track , considering " << *closest << "\n";  
-		       distances.push_back( *closest - seed_sec );
-		     }
-
-		   // now count back
-		   while ( 1 )
-		     {		      
-
-		       if ( closest == b1.begin() ) break;		  
-		       --closest;
-
-		       //std::cout << " dst: back-track , considering " << *closest << "\n";
-
-		       distances.push_back( *closest - seed_sec );
-
-		       if ( *closest < seed_sec )
-			 {
-			   //std::cout << " dst: gone past , breakingh\n";
-			   break;
-			 }
-
-		     }
-
-		   // get min distance (Could have done above, but whatev)
-
-		   if ( window > 0 && distances.size() > 0 ) 
-		     {
-
-		       //std::cout << sidx << "  DIST " << bb->first << " " << aa->first  << " "  << distances.size() << "\n ";
-
-		       double q1 = window + 10000;
-		       double q  = 0;
-		       int okay = 0;
-
-		       for (int i=0; i<distances.size(); i++)
-			 {
-
-			   const double d1 = fabs( distances[i] );
-
-			   //std::cout << " candidate = " << d1 << " " << distances[i] << "\n";
-			   
-			   const bool over = d1 > window;
-			   
-			   if ( truncate_to_window && over ) 
-			     {
-			       ++okay;
-			       q1 = window;
-			       q = ( distances[i] > 0 ? 1 : -1 ) * window;			       
-			     }
-			   else if ( ! over ) 
-			     {
-			       ++okay;
-			       q1 = d1;
-			       q = distances[i];
-			     }
-			 }
-
-		       // if ( okay ) 
-		       // 	std::cout << " dst: *** saving " << q << "\n";
-		       // else
-		       // 	std::cout << " dst:  no within-window match found...\n";
-		       
-		       // save signed closest annot		      
-		       if ( okay )
-			 {
-			   sav_d.push_back( q );
-			   sav_dabs.push_back( fabs( q ) );
-			 }
-		     }
-		   
-		  
 		  //
 		  // Find overlaps (using the flattened b)
 		  //
@@ -4080,6 +4086,7 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	      // mean per seed interval
 
 	      // average proportion of seed overlapped by other 
+	      if ( ! sav_p.empty() ) {
 	      writer.value( "P" , MiscMath::mean( sav_p ) );
 	      //writer.value( "P_MD" , MiscMath::median( sav_p ) );
 
@@ -4090,6 +4097,7 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	      // mean number of other events that overlap the seed
 	      writer.value( "N" , MiscMath::mean( sav_n ) );
 	      //writer.value( "N_MD" , MiscMath::median( sav_n ) );
+              }
 	      
 	      if ( sav_d.size() > 0 )
 		{
@@ -4102,11 +4110,59 @@ void timeline_t::annot_crosstabs( const param_t & param )
 	      writer.value( "D_N", (int)sav_d.size() );
 
 	      // proportion of seeds with /any/ overlap by the other 
+	      if ( ! sav_p.empty() ) {
 	      writer.value( "A" , MiscMath::mean( sav_a ) );
 	      
 	      // grand totals
 	      writer.value( "TOT_N" , MiscMath::sum( sav_n ) );
 	      writer.value( "TOT_T" , MiscMath::sum( sav_t ) );
+              }
+
+              // offset-seed matches either the full label or (by-instance) its class
+              const bool offset_this_seed = do_offset &&
+                ( ! offset_seed_subset
+                  || offset_seeds.count( aa->first )
+                  || offset_seeds.count( label2class[ aa->first ] ) );
+
+              if ( offset_this_seed )
+                for ( size_t wi = 0; wi < offset_windows.size(); ++wi )
+                  {
+                    const auto & win = offset_windows[wi];
+                    double observed = 0, exposure = 0, expected = 0;
+                    for ( const auto & seeds : anchors[aa->first] )
+                      {
+                        const int k = seeds.first;
+                        const auto & targets = anchors[bb->first][k];
+                        const uint64_t begin = background[k].start, end = background[k].stop;
+                        double segment_exposure = 0;
+                        for ( uint64_t seed : seeds.second )
+                          {
+                            // Integer timepoints keep decimal boundary anchors exact.
+                            const auto shifted = [seed]( double seconds ) {
+                              const int64_t d = std::llround( seconds * globals::tp_1sec );
+                              if ( d < 0 ) return seed < uint64_t(-d) ? uint64_t(0) : seed - uint64_t(-d);
+                              const uint64_t mx = std::numeric_limits<uint64_t>::max();
+                              return mx - seed < uint64_t(d) ? mx : seed + uint64_t(d);
+                            };
+                            const uint64_t lo = std::max( begin, shifted( win.first ) );
+                            const uint64_t hi = std::min( end, shifted( win.second ) );
+                            if ( hi <= lo ) continue;
+                            segment_exposure += (hi - lo) / (double)globals::tp_1sec;
+                            observed += std::lower_bound( targets.begin(), targets.end(), hi )
+                                      - std::lower_bound( targets.begin(), targets.end(), lo );
+                          }
+                        exposure += segment_exposure;
+                        expected += targets.size() / ((end - begin) / (double)globals::tp_1sec) * segment_exposure;
+                      }
+                    writer.level( offset_centres[wi], "OFFSET" );
+                    writer.value( "INT", "[" + Helper::dbl2str(win.first) + "," + Helper::dbl2str(win.second) + ")" );
+                    writer.value( "N_OBS", observed );
+                    writer.value( "EXPOSURE", exposure );
+                    writer.value( "N_EXP_RATE", expected );
+                    if ( exposure > 0 ) writer.value( "RATE", observed / exposure );
+                    if ( exposure > 0 && expected > 0 ) writer.value( "ENRICHMENT", observed / expected );
+                    writer.unlevel( "OFFSET" );
+                  }
 	      
 	      ++aa;
 	    }

@@ -1072,11 +1072,13 @@ int timeline_t::first_epoch()
 
 int timeline_t::next_epoch()  
 { 
+  // Exhaustion is stable even when a caller asks again without first_epoch().
+  if ( current_epoch >= (int)epochs.size() ) return -1;
   // return the next unmasked epoch
   while (1)
     {
       ++current_epoch;
-      if ( current_epoch == epochs.size() ) return -1;
+      if ( current_epoch >= (int)epochs.size() ) return -1;
       if ( ! mask_set ) break;
       if ( ! mask[ current_epoch ] ) break; 	
     }
@@ -1084,9 +1086,10 @@ int timeline_t::next_epoch()
 }
 
 int timeline_t::next_epoch_ignoring_mask()  
-{ 
+{
+  if ( current_epoch >= (int)epochs.size() ) return -1;
   ++current_epoch;
-  if ( current_epoch == epochs.size() ) return -1;
+  if ( current_epoch >= (int)epochs.size() ) return -1;
   return current_epoch;
 }
 
@@ -1401,10 +1404,11 @@ int timeline_t::calc_epochs_generic_from_annots( param_t & param )
   
   if ( epoch_generic_param_w1 < 0 ) Helper::halt( "'w' (or w-before/w-after) cannot be negative" );
   if ( epoch_generic_param_w2 < 0 ) Helper::halt( "'w' (or w-before/w-after) cannot be negative" );
-  if ( epoch_generic_param_set_point && ( (!some_w) || fabs( epoch_generic_param_w1 ) < 0.001 ) ) 
-    Helper::halt( "epochs too small: need larger 'w' (or w-before/w-after) if using 'midpoint/start/stop'" ); 
-  if ( epoch_generic_param_set_point && ( (!some_w) || fabs( epoch_generic_param_w2 ) < 0.001 ) ) 
-    Helper::halt( "epochs too small: need larger 'w' (or w-before/w-after) if using 'midpoint/start/stop'" ); 
+  // An anchored window may extend on either side, or both.
+  // Validate its total duration rather than requiring two nonzero flanks.
+  if ( epoch_generic_param_set_point &&
+       ( !some_w || epoch_generic_param_w1 + epoch_generic_param_w2 < 0.001 ) )
+    Helper::halt( "epochs too small: need a total window of at least 0.001 seconds with 'midpoint/start/stop'" );
 
   // window shift
   const bool has_shift = param.has( "shift" );

@@ -46,6 +46,33 @@ Luna processes either a single EDF or a [sample list](https://zzz.nyspi.org/luna
 ./luna -hs spindle
 ```
 
+Before using workflows that require LightGBM (such as POPS) or ONNX Runtime,
+check the capabilities compiled into your executable:
+
+```bash
+./luna -v
+# --version reports the same information
+```
+
+The Libraries section includes dependency versions and lists both enabled and
+disabled optional dependencies, for example:
+
+```text
+Libraries:
+  Eigen:         v3.4.0
+  SQLite:        v3.41.2
+  FFTW:          fftw-3.3.10
+  LightGBM:      enabled (v4.6.0)
+  ONNX Runtime:  disabled
+```
+
+Enabled features include dependency versions when available. LightGBM's version
+is read from `LGBM_PATH/VERSION.txt` at build time, or can be supplied with
+`make LGBM_VERSION=4.6.0`; otherwise it reports `version unavailable`. ONNX
+Runtime reports the linked runtime's version. Build support does not establish
+that the model files required by a workflow are installed: obtain those files
+and configure their paths separately. `luna -v` does not check model availability.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for bug reports, feature requests, and pull request guidance specific to this C++ codebase.

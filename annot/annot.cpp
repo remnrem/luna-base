@@ -3987,6 +3987,13 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
   annot_t * a2 = find( tok[1] );
   annot_t * an = add( newannot );
 
+  // plain-language description of the operation, for the log
+  std::string expr_desc;
+  if ( do_union )             expr_desc = "union of " + tok[0] + " and " + tok[1] + " (flattened)";
+  else if ( do_intersection ) expr_desc = "intersection of " + tok[0] + " and " + tok[1] + " (flattened)";
+  else if ( do_keepif )       expr_desc = tok[0] + " events that overlap " + tok[1] + " (kept whole, flattened)";
+  else                        expr_desc = tok[0] + " events that do not overlap " + tok[1] + " (kept whole, flattened)";
+
   if ( a1 == NULL )
     logger << "  *** warning, could not find any annotation " << tok[0] << "\n";
   if ( a2 == NULL )
@@ -4008,7 +4015,8 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
 	      an->add( "." , jj->first.interval , ch_label );
 	      ++jj;
 	    }
-	  logger << "  returned original annotations\n";
+	  logger << "  created " << events1.size() << " instances of " << newannot
+		 << " = all " << tok[0] << " events (no " << tok[1] << " to exclude)\n";
 	  return;
 	}
       
@@ -4171,7 +4179,7 @@ void annotation_set_t::make( param_t & param , edf_t & edf )
       ++nn;
     }
   
-  logger << "  created " << nevs.size() << " instances of " << newannot << "\n";
+  logger << "  created " << nevs.size() << " instances of " << newannot << " = " << expr_desc << "\n";
 }
 
 

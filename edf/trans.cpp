@@ -105,10 +105,14 @@ void proc_trans( edf_t & edf , param_t & param )
   // Get SR
   //
 
-  int sr = 0;
+  // track samples-per-record rather than an (int) sample rate, so that
+  // sub-1Hz channels (e.g. 5-second PP_* posteriors, SR=0.2) are not
+  // truncated to SR=0; passed to add_signal() as -n (i.e. n_samples directly)
+
+  int nspr = 0;
 
   if ( update_existing_channel )
-    sr = edf.header.sampling_freq( edf.header.signal( siglab ) ) ;
+    nspr = edf.header.n_samples[ edf.header.signal( siglab ) ] ;
   
   //
   // output
@@ -160,13 +164,13 @@ void proc_trans( edf_t & edf , param_t & param )
 	  // the expr will return the error
 	  if ( edf.header.is_annotation_channel( slot ) ) continue;
 
-	  // check SR
-	  int sr1 = edf.header.sampling_freq( slot );
+	  // check SR (as samples per record)
+	  const int nspr1 = edf.header.n_samples[ slot ];
 	  
-	  if ( sr != 0 && sr != sr1 )
+	  if ( nspr != 0 && nspr != nspr1 )
 	    Helper::halt( "all channels need to have similar sampling rates" );
 	  else
-	    sr = sr1;
+	    nspr = nspr1;
 	  
           slice_t slice( edf , slot , edf.timeline.wholetrace() );
 	  
@@ -191,7 +195,7 @@ void proc_trans( edf_t & edf , param_t & param )
   // perhaps no channels were used?
   //
 
-  if ( sr == 0 )
+  if ( nspr == 0 )
     Helper::halt( "no channels attached: i.e. no sample rate value attached" );
   
   //
@@ -231,7 +235,7 @@ void proc_trans( edf_t & edf , param_t & param )
       else
 	{
 	  logger << "  creating new channel " << siglab << "...\n";
-          edf.add_signal( siglab , sr , rdat );
+          edf.add_signal( siglab , -(double)nspr , rdat );
 	}
       
     }

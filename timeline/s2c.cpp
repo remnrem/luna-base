@@ -35,12 +35,44 @@
 #include <random>
 #include <limits>
 #include <stdexcept>
+#include <iomanip>
+#include <sstream>
 
 
 extern writer_t writer;
 extern logger_t logger;
 
 
+
+namespace {
+
+bool s2c_sample_gap(const std::vector<uint64_t>& tp, double sr, size_t a, size_t b)
+{
+  if (!std::isfinite(sr) || sr <= 0 || a >= tp.size() || b >= tp.size() || b <= a || tp[b] <= tp[a])
+    return true;
+  const long double period = static_cast<long double>(globals::tp_1sec) / sr;
+  const long double expected = period * (b - a);
+  const long double observed = tp[b] - tp[a];
+  return std::fabs(observed - expected) > period / 2;
+}
+
+bool s2c_window_bounds(uint64_t center, uint64_t half, uint64_t& lo, uint64_t& hi)
+{
+  // Reject incomplete windows before unsigned subtraction can clip their start.
+  if (center < half || std::numeric_limits<uint64_t>::max() - center < half) return false;
+  lo = center - half;
+  hi = center + half;
+  return true;
+}
+
+std::string s2c_sec_label(double seconds)
+{
+  std::ostringstream label;
+  label << std::setprecision(std::numeric_limits<double>::max_digits10) << (seconds == 0 ? 0 : seconds);
+  return label.str();
+}
+
+}
 
 class s2a2_t {
 
@@ -81,13 +113,10 @@ public:
         add_halfwaves = true;
       } else {
         const std::string v = param.value(k);
-        const bool bool_like =
-          !v.empty() &&
-          (v[0] == '0' || v[0] == '1' ||
-           v[0] == 'y' || v[0] == 'Y' ||
-           v[0] == 'n' || v[0] == 'N' ||
-           v[0] == 't' || v[0] == 'T' ||
-           v[0] == 'f' || v[0] == 'F');
+        const std::string token = Helper::toupper(v);
+        const bool bool_like = token == "0" || token == "1" ||
+          token == "Y" || token == "YES" || token == "N" || token == "NO" ||
+          token == "T" || token == "TRUE" || token == "F" || token == "FALSE";
         if (bool_like) {
           add_halfwaves = param.yesno(k);
         } else {
@@ -109,6 +138,35 @@ public:
     wave_bins_label = add_wave_bins ? param.value("waves-bins") : "";
     if (add_wave_bins && param.empty("waves-bins")) {
       Helper::halt("no annotation label specified waves-bins={label}");
+    }
+
+    // waves-bins-class: one class per bin (e.g. ISO_BIN_B01 .. ISO_BIN_B12)
+    // rather than one class with instance IDs B01 .. B12
+    wave_bins_class = param.has("waves-bins-class")
+      ? ( param.empty("waves-bins-class") ? true : param.yesno("waves-bins-class") )
+      : false;
+    if (wave_bins_class && !add_wave_bins)
+      Helper::halt("waves-bins-class requires waves-bins={label}");
+
+    // rise-fall: as half-waves (bare/boolean, or a base label)
+    add_rise_fall = false;
+    if (param.has("rise-fall")) {
+      const std::string k = "rise-fall";
+      if (param.empty(k)) {
+        add_rise_fall = true;
+      } else {
+        const std::string v = param.value(k);
+        const std::string token = Helper::toupper(v);
+        const bool bool_like = token == "0" || token == "1" ||
+          token == "Y" || token == "YES" || token == "N" || token == "NO" ||
+          token == "T" || token == "TRUE" || token == "F" || token == "FALSE";
+        if (bool_like) {
+          add_rise_fall = param.yesno(k);
+        } else {
+          add_rise_fall = true;
+          rise_fall_label = v;
+        }
+      }
     }
 
     
@@ -319,6 +377,9 @@ public:
   std::string peak_points_label;
   bool add_wave_bins = false;
   std::string wave_bins_label;
+  bool wave_bins_class = false;   // put B01..B12 into the class label
+  bool add_rise_fall = false;     // RISE (trough->peak) / FALL (peak->trough)
+  std::string rise_fall_label;
 
   // cycle detection
   // baseline for crossings
@@ -423,9 +484,9 @@ static s2a2_out_t s2a2_proc(
                                          uint64_t t_center,
                                          double window_s,
                                          double zero,
-                                         int sr_hz);
+                                         double sr_hz);
   static bool window_range_ok(const std::vector<uint64_t>& tp,
-                              int sr_hz,
+                              double sr_hz,
                               uint64_t t_lo,
                               uint64_t t_hi,
                               size_t* i0,
@@ -663,6 +724,8 @@ void timeline_t::signal2cycle( const param_t & param )
     //   chs_idx[] - one or more channels to summarize w.r.t. those
     
     par.sr_hz = edf->header.sampling_freq(segnals(s));
+    if (!std::isfinite(par.sr_hz) || par.sr_hz <= 0)
+      Helper::halt("S2C requires a finite positive sampling rate");
     
     std::vector<std::string> sig_labels;
     sig_labels.reserve(chs_idx.size());
@@ -706,10 +769,35 @@ void timeline_t::signal2cycle( const param_t & param )
     }
 
     annot_t * a_bins = nullptr;
+    std::vector<annot_t*> a_bin_classes;
     if (par.add_wave_bins) {
-      a_bins = par.add_ch_class_label ?
-        edf->annotations->add(par.wave_bins_label + "_" + seed_label) :
-        edf->annotations->add(par.wave_bins_label);
+      if (par.wave_bins_class) {
+        // one class per bin: {label}_B01 .. {label}_B12 [ _{seed} ]
+        for (int b = 0; b < 12; ++b) {
+          char lab[4];
+          snprintf(lab, sizeof(lab), "B%02d", b + 1);
+          const std::string cls = par.wave_bins_label + "_" + lab;
+          a_bin_classes.push_back( par.add_ch_class_label ?
+                                   edf->annotations->add(cls + "_" + seed_label) :
+                                   edf->annotations->add(cls) );
+        }
+      } else {
+        a_bins = par.add_ch_class_label ?
+          edf->annotations->add(par.wave_bins_label + "_" + seed_label) :
+          edf->annotations->add(par.wave_bins_label);
+      }
+    }
+
+    annot_t * a_rise = nullptr;
+    annot_t * a_fall = nullptr;
+    if (par.add_rise_fall) {
+      const std::string base = par.rise_fall_label.empty() ? par.wave_label : par.rise_fall_label;
+      a_rise = par.add_ch_class_label ?
+        edf->annotations->add(base + "_RISE_" + seed_label) :
+        edf->annotations->add(base + "_RISE");
+      a_fall = par.add_ch_class_label ?
+        edf->annotations->add(base + "_FALL_" + seed_label) :
+        edf->annotations->add(base + "_FALL");
     }
 
     // add annotations
@@ -747,7 +835,26 @@ void timeline_t::signal2cycle( const param_t & param )
         }
       }
 
-      if (par.add_wave_bins && a_bins != nullptr) {
+      // RISE = trough -> peak; FALL = peak -> trough. Within one cycle,
+      // whichever of the two is split by the cycle boundary is added as
+      // two pieces (cycle start -> first extremum; second extremum -> end)
+      if (par.add_rise_fall && c.i_pos >= 0 && c.i_neg >= 0) {
+        const std::string rid = par.add_ch_inst_label ? seed_label : "RISE";
+        const std::string fid = par.add_ch_inst_label ? seed_label : "FALL";
+        if (c.t0 < c.t_neg && c.t_neg < c.t_pos && c.t_pos < c.t1) {
+          // trough first (default pos2neg): F | R | F
+          a_fall->add(fid, interval_t(c.t0, c.t_neg), seed_label);
+          a_rise->add(rid, interval_t(c.t_neg, c.t_pos), seed_label);
+          a_fall->add(fid, interval_t(c.t_pos, c.t1), seed_label);
+        } else if (c.t0 < c.t_pos && c.t_pos < c.t_neg && c.t_neg < c.t1) {
+          // peak first (neg2pos): R | F | R
+          a_rise->add(rid, interval_t(c.t0, c.t_pos), seed_label);
+          a_fall->add(fid, interval_t(c.t_pos, c.t_neg), seed_label);
+          a_rise->add(rid, interval_t(c.t_neg, c.t1), seed_label);
+        }
+      }
+
+      if (par.add_wave_bins && ( a_bins != nullptr || ! a_bin_classes.empty() ) ) {
         const uint64_t t0 = c.t0;
         const uint64_t t1 = c.t1;
         uint64_t t_mid1 = 0;
@@ -769,7 +876,10 @@ void timeline_t::signal2cycle( const param_t & param )
             interval_t bin_iv(tb0, tb1);
             char lab[4];
             snprintf(lab, sizeof(lab), "B%02d", b + 1);
-            a_bins->add(lab, bin_iv, seed_label);
+            if (par.wave_bins_class)
+              a_bin_classes[b]->add(par.add_ch_inst_label ? seed_label : ".", bin_iv, seed_label);
+            else
+              a_bins->add(lab, bin_iv, seed_label);
           }
         }
       }
@@ -922,14 +1032,14 @@ double s2a2_t::half_width_s(
 
 bool s2a2_t::window_range_ok(
   const std::vector<uint64_t>& tp,
-  int sr_hz,
+  double sr_hz,
   uint64_t t_lo,
   uint64_t t_hi,
   size_t* i0,
   size_t* i1
 )
 {
-  if (tp.empty()) return false;
+  if (tp.empty() || !std::isfinite(sr_hz) || sr_hz <= 0) return false;
   if (t_hi < t_lo) return false;
   // Require samples that bracket [t_lo, t_hi]:
   // j0 is at/before t_lo, j1 is at/after t_hi.
@@ -958,7 +1068,7 @@ bool s2a2_t::window_range_ok(
   if (tp[j1] < t_hi) return false;
   if (sr_hz > 0 && j1 > j0) {
     for (size_t i = j0 + 1; i <= j1; ++i) {
-      if (timeline_t::discontinuity(tp, sr_hz, static_cast<int>(i - 1), static_cast<int>(i))) {
+      if (s2c_sample_gap(tp, sr_hz, i - 1, i)) {
         return false;
       }
     }
@@ -974,18 +1084,16 @@ s2a2_t::window_metrics_t s2a2_t::window_metrics(
   uint64_t t_center,
   double window_s,
   double zero,
-  int sr_hz
+  double sr_hz
 )
 {
   window_metrics_t out;
   if (sig.empty() || tp.empty() || sig.size() != tp.size()) return out;
   if (window_s <= 0.0) return out;
 
-  const double half = 0.5 * window_s;
-  const uint64_t t_lo = (t_center > static_cast<uint64_t>(llround(half / globals::tp_duration)))
-    ? t_center - static_cast<uint64_t>(llround(half / globals::tp_duration))
-    : 0;
-  const uint64_t t_hi = t_center + static_cast<uint64_t>(llround(half / globals::tp_duration));
+  const uint64_t half_ticks = static_cast<uint64_t>(llround(0.5 * window_s / globals::tp_duration));
+  uint64_t t_lo = 0, t_hi = 0;
+  if (!s2c_window_bounds(t_center, half_ticks, t_lo, t_hi)) return out;
 
   size_t i0 = 0;
   size_t i1 = 0;
@@ -1805,15 +1913,10 @@ std::vector<s2a2_t::cycle_bound_t> s2a2_t::step2_detect_cycles(
       int i1 = xc_local[k];
       ++n_put;
 
-      // duration constraints using tp at crossing indices
+      // Crossing indices supply fallback boundaries before sub-sample refinement.
       uint64_t t0 = tp[static_cast<size_t>(i0)];
       uint64_t t1 = tp[static_cast<size_t>(i1)];
       if (t1 <= t0) continue;
-      uint64_t dur = t1 - t0;
-
-      if (par.min_cycle_ticks > 0 && dur < par.min_cycle_ticks) continue;
-      if (par.max_cycle_ticks > 0 && dur > par.max_cycle_ticks) continue;
-
       // Optional: refine crossing times sub-sample using linear interpolation about zero.
       // This uses samples at (i-1,i). i0 and i1 are the right endpoint indices.
       uint64_t t0s = t0, t1s = t1;
@@ -1832,6 +1935,10 @@ std::vector<s2a2_t::cycle_bound_t> s2a2_t::step2_detect_cycles(
                                 b1);
         if (t1s <= t0s) { t0s = t0; t1s = t1; } // fallback
       }
+
+      const uint64_t dur = t1s - t0s;
+      if (par.min_cycle_ticks > 0 && dur < par.min_cycle_ticks) continue;
+      if (par.max_cycle_ticks > 0 && dur > par.max_cycle_ticks) continue;
 
       cycle_bound_t cb;
       cb.i0 = i0;
@@ -1889,7 +1996,7 @@ std::vector<s2a2_t::cycle_bound_t> s2a2_t::step2_detect_cycles(
       armed = false;
       continue;
     }
-    if (timeline_t::discontinuity(tp, static_cast<int>(par.sr_hz), i - 1, i)) {
+    if (s2c_sample_gap(tp, par.sr_hz, i - 1, i)) {
       armed = false;
       last_cross_t = 0;
       append_cycles(xc);
@@ -2203,7 +2310,7 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
       v_sharp_asym.push_back(sharp_asym);
 
       if (emit_cycle) {
-        writer.level( static_cast<int>(ci), globals::count_strat );
+        writer.level( static_cast<int>(ci), "CYCLE" );
         writer.value("T0_S", c.t0 * globals::tp_duration);
         writer.value("T1_S", c.t1 * globals::tp_duration);
         writer.value("DUR_POS", Tpos);
@@ -2225,7 +2332,7 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
           writer.value("SLOPE_ASYM", slope_asym);
           writer.value("SHARP_ASYM", sharp_asym);
         }
-        writer.unlevel( globals::count_strat );
+        writer.unlevel( "CYCLE" );
       }
     }
 
@@ -2560,12 +2667,12 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
               dt_pos_s.push_back(dt);
             }
             if (td_pos && par_work.time_window_s > 0.0) {
-              uint64_t t_lo = (tpos > half_ticks) ? (tpos - half_ticks) : 0;
-              uint64_t t_hi = tpos + half_ticks;
-              if (window_range_ok(*tp, static_cast<int>(par_work.sr_hz), t_lo, t_hi, nullptr, nullptr)) {
+              uint64_t t_lo = 0, t_hi = 0;
+              if (s2c_window_bounds(tpos, half_ticks, t_lo, t_hi) &&
+                  window_range_ok(*tp, par_work.sr_hz, t_lo, t_hi, nullptr, nullptr)) {
                 td_cycles.push_back(&cyc);
                 window_metrics_t wm = window_metrics(sig, *tp, tpos, par_work.time_window_s, zero,
-                                                    static_cast<int>(par_work.sr_hz));
+                                                    par_work.sr_hz);
               if (finite(wm.p2p)) td_pos_p2p.push_back(wm.p2p);
               }
             }
@@ -2585,12 +2692,12 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
               dt_neg_s.push_back(dt);
             }
             if (td_neg && par_work.time_window_s > 0.0) {
-              uint64_t t_lo = (tneg > half_ticks) ? (tneg - half_ticks) : 0;
-              uint64_t t_hi = tneg + half_ticks;
-              if (window_range_ok(*tp, static_cast<int>(par_work.sr_hz), t_lo, t_hi, nullptr, nullptr)) {
+              uint64_t t_lo = 0, t_hi = 0;
+              if (s2c_window_bounds(tneg, half_ticks, t_lo, t_hi) &&
+                  window_range_ok(*tp, par_work.sr_hz, t_lo, t_hi, nullptr, nullptr)) {
                 td_cycles.push_back(&cyc);
                 window_metrics_t wm = window_metrics(sig, *tp, tneg, par_work.time_window_s, zero,
-                                                    static_cast<int>(par_work.sr_hz));
+                                                    par_work.sr_hz);
               if (finite(wm.p2p)) td_neg_p2p.push_back(wm.p2p);
               }
             }
@@ -2777,14 +2884,12 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
 
             for (const auto* cyc : tcycles) {
               uint64_t ta = (par_work.time_lock == "pos") ? cyc->t_pos : cyc->t_neg;
-              double t0s = static_cast<double>(ta) * globals::tp_duration - half;
-              double t1s = static_cast<double>(ta) * globals::tp_duration + half;
-              if (t1s < 0.0) continue;
-              uint64_t t_lo = t0s > 0.0 ? static_cast<uint64_t>(llround(t0s / globals::tp_duration)) : 0;
-              uint64_t t_hi = static_cast<uint64_t>(llround(t1s / globals::tp_duration));
+              const uint64_t half_ticks = static_cast<uint64_t>(llround(half / globals::tp_duration));
+              uint64_t t_lo = 0, t_hi = 0;
+              if (!s2c_window_bounds(ta, half_ticks, t_lo, t_hi)) continue;
               size_t i0 = 0;
               size_t i1 = 0;
-              if (!window_range_ok(*tp, static_cast<int>(par_work.sr_hz), t_lo, t_hi, &i0, &i1)) {
+              if (!window_range_ok(*tp, par_work.sr_hz, t_lo, t_hi, &i0, &i1)) {
                 continue;
               }
               if (i0 >= sig.size() || i1 >= sig.size() || i0 > i1) continue;
@@ -2808,7 +2913,7 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
                 ? sum[static_cast<size_t>(b)] / static_cast<double>(cnt[static_cast<size_t>(b)])
                 : std::numeric_limits<double>::quiet_NaN();
               double sec = -half + static_cast<double>(b) * par_work.time_bin_s;
-              writer.level(Helper::dbl2str(sec, 3), "SEC");
+              writer.level(s2c_sec_label(sec), "SEC");
               writer.value("MEAN", mean);
               if (par_work.do_bootstrap) {
                 std::vector<double> vals;
@@ -2902,7 +3007,7 @@ s2a2_t::s2a2_out_t s2a2_t::s2a2_proc(
               }
               for (int b = 0; b < nbins_t; ++b) {
                 double sec = -half + static_cast<double>(b) * par_work.time_bin_s;
-                writer.level(Helper::dbl2str(sec, 3), "SEC");
+                writer.level(s2c_sec_label(sec), "SEC");
                 for (int k = 0; k < par_work.amp_bins; ++k) {
                   double z = (totals[static_cast<size_t>(b)] >= static_cast<size_t>(par_work.time_min_n))
                     ? static_cast<double>(counts[static_cast<size_t>(b)][static_cast<size_t>(k)]) /

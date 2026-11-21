@@ -41,6 +41,9 @@ struct nsrr_t {
   // do mapping
   static std::string remap( const std::string & ); 
   
+  // Refresh the lookup after definitions or label-handling settings change.
+  static void ensure_mappings();
+
   // annotation map data (one-to-one)
   static std::map<std::string,std::string> amap; // alias --> orig
 

@@ -28,6 +28,7 @@
 #include <complex>
 #include <algorithm>
 #include <numeric>
+#include <limits>
 
 struct edf_t;
 struct param_t;
@@ -50,10 +51,6 @@ enum class ipc_derived_mode_t {
 };
 
 struct ipc_param_t {
-  
-  // freq-band
-  double f_lo = -1.0;
-  double f_hi = -1.0;
   
   // Amplitude weighting and gating
   bool amplitude_weighting = true;
@@ -99,7 +96,7 @@ struct ipc_batch_result_t {
 
 struct ipc_output_t {
   std::vector<double> ipc;    // cos(dphi)
-  std::vector<double> ipcw;   // w*cos(dphi) (0 if gated)  <- output
+  std::vector<double> ipcw;   // w*cos(dphi), 0 if gated, NaN for invalid inputs
   std::vector<double> dphi;   // wrapped phase diff
   std::vector<double> w;      // weights used (0 if gated) <- output
   ipc_stats_t summary;

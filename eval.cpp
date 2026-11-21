@@ -20,6 +20,7 @@
 //    --------------------------------------------------------------------
 
 #include "eval.h"
+#include "dsp/project.h"
 #include "param.h"
 #include "luna.h"
 #include "resp/resp_desat_link.h"
@@ -1070,6 +1071,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "ACF" ) )          { fnd = true; proc_acf( edf , param(c) ); }
       if ( (!fnd) && is( c, "GP" ) )           { fnd = true; gc_wrapper( edf , param(c) );  }
       if ( (!fnd) && is( c, "ED" ) )           { fnd = true; proc_elec_distance( edf , param(c) ); }
+      if ( (!fnd) && is( c, "PROJECT" ) )      { fnd = true; proc_project( edf, param(c) ); }
       if ( (!fnd) && is( c, "SVD" ) )          { fnd = true; proc_svd( edf, param(c) ); }
       if ( (!fnd) && is( c, "ICA" ) )          { fnd = true; proc_ica( edf, param(c) ); }
       if ( (!fnd) && is( c, "ADJUST" ) )       { fnd = true; proc_adjust( edf , param(c) );  }
@@ -4080,7 +4082,27 @@ void proc_espan(  edf_t & edf , param_t & param )
 // MAKE-ANNOTS : make new annotations based on pairwse intersection,union, overlap, etc
 void proc_make_annots( edf_t & edf , param_t & param )
 {
+  // track which classes existed beforehand, so that any class newly
+  // created by MAKE-ANNOTS but left with no instances (i.e. nothing
+  // matched) can be removed afterwards -- downstream, an absent class
+  // is then unambiguous (e.g. CONTAINS annot=X skip); pre-existing
+  // classes are never removed here, even if empty
+  const std::vector<std::string> before_v = edf.annotations->names();
+  const std::set<std::string> before( before_v.begin() , before_v.end() );
+
   edf.annotations->make( param , edf );
+
+  const std::vector<std::string> after = edf.annotations->names();
+  for (int a=0; a<(int)after.size(); a++)
+    {
+      if ( before.find( after[a] ) != before.end() ) continue;
+      annot_t * annot = edf.annotations->find( after[a] );
+      if ( annot != NULL && annot->num_interval_events() == 0 )
+	{
+	  logger << "  no instances of " << after[a] << ": not adding this annotation class\n";
+	  edf.annotations->clear( after[a] );
+	}
+    }
 }
 
 
@@ -4420,6 +4442,12 @@ void proc_dfa( edf_t & edf , param_t & param )
 void proc_ica( edf_t & edf , param_t & param )
 {
   dsptools::ica_wrapper( edf , param );
+}
+
+// Fixed numerical projection
+void proc_project( edf_t & edf , param_t & param )
+{
+  project::run( edf , param );
 }
 
 // SVD : singular value decomposition on signals
@@ -6519,7 +6547,7 @@ void cmd_t::parse_special( const std::string & tok0 , const std::string & tok1 )
   // generic annotation re-labelling, same format as 'alias'
   if ( Helper::iequals( tok0 , "remap" ) )
     {
-      nsrr_t::annot_remapping( globals::sanitize_everything ? Helper::sanitize( tok1 ) : tok1 );
+      nsrr_t::annot_remapping( tok1 );
       return;
     }
 
@@ -7628,9 +7656,9 @@ void proc_has_signals( edf_t & edf , param_t & param )
 
   const bool check_annots = param.has( "annots" ) || param.has( "annot" );
 
-  // only signals has skip vs skip-if-none distinction
-  if ( ( check_stages || check_annots ) && skip_if_none )
-    Helper::halt( "cannot specify stages/annots and skip-if-none - use 'skip' instead" );
+  // signals and annots have the skip vs skip-if-none distinction; stages do not
+  if ( check_stages && skip_if_none )
+    Helper::halt( "cannot specify stages and skip-if-none - use 'skip' instead" );
     
   
   // will always have a default signal value: if not specified, means everything
@@ -7812,8 +7840,10 @@ void proc_has_signals( edf_t & edf , param_t & param )
       for (int a=0; a<na; a++)
 	{
 	  
+	  // present = class exists AND has at least one instance (e.g. an
+	  // empty class created by MAKE-ANNOTS with no matches is absent)
 	  annot_t * annot = (*edf.annotations)( annots[a] ) ;
-	  bool found = annot != NULL ; 	  
+	  bool found = annot != NULL && annot->num_interval_events() > 0 ;
 	  writer.level( annots[a] , globals::annot_strat );	  
 	  writer.value( "PRESENT" , found );
 	  if ( found ) ++count;
@@ -7842,13 +7872,18 @@ void proc_has_signals( edf_t & edf , param_t & param )
 
       
       //
-      // in skip mode, bail if none present
+      // in skip mode (as for signals):
+      //   skip          : skip unless all requested annots are present
+      //   skip-if-none  : skip only if none are present
       //
 
-      if ( skip && count == 0 )
+      if ( skip )
 	{
-	  globals::problem = true;
-	  return;
+	  if ( skip_if_none ? count == 0 : count < na )
+	    {
+	      globals::problem = true;
+	      return;
+	    }
 	}
       
       //

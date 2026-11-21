@@ -41,6 +41,7 @@ struct fit_t {
   bool valid = false;
   bool fallback = false;
   const char * failure = "fit not evaluated";
+  int total_bins = 0, excluded_bins = 0, rejected_bins = 0;
   int input_bins = 0;
   int n = 0;
   double offset = 0, exponent = 0, rsq = 0;
@@ -75,13 +76,17 @@ inline void fill( std::vector<double> & data, const std::vector<double> & valid,
 
 inline fit_t complete_fit( const std::vector<double> & f, const std::vector<double> & x,
                           const std::vector<double> & y, const std::vector<double> & keep,
-                          double a, double b, double lwr, double upr, double pivot = 1 )
+                          double a, double b, double lwr, double upr, double pivot = 1,
+                          int total_bins = -1 )
 {
   fit_t result;
   result.input_bins=x.size();
   double mean=0, ss=0, error=0;
   for (size_t i=0; i<x.size(); ++i)
     if (keep[i]) { ++result.n; mean+=y[i]; }
+  result.total_bins=total_bins<0 ? result.input_bins : total_bins;
+  result.excluded_bins=result.total_bins-result.input_bins;
+  result.rejected_bins=result.input_bins-result.n;
   mean/=result.n;
   for (size_t i=0; i<x.size(); ++i)
     if (keep[i])
@@ -121,24 +126,49 @@ inline bool line( const std::vector<double> & x, const std::vector<double> & y,
   return std::isfinite(a) && std::isfinite(b);
 }
 
-// Huber IRLS limits influence of both peaks and unusually low bins. A second
-// stage explicitly rejects positive peaks. The 1 dB rejection floor prevents
-// numerical noise in an almost exact power law from being classified as peaks.
+// Inclusive regions must be positive, finite, ordered and disjoint.
+inline bool valid_regions( const std::vector<double> & regions )
+{
+  if (regions.empty() || regions.size()%2) return false;
+  for (size_t i=0; i<regions.size(); i+=2)
+    if (!std::isfinite(regions[i]) || !std::isfinite(regions[i+1])
+        || regions[i]<=0 || regions[i+1]<=regions[i]
+        || (i && regions[i]<=regions[i-1])) return false;
+  return true;
+}
+
+// Huber IRLS followed by iterative positive-bin rejection. Only eligible bins
+// enter regression, robust-scale estimation, rejection and retained-bin RSQ.
 inline fit_t fit( const std::vector<double> & f, const std::vector<double> & p,
-                  double lwr, double upr, double threshold = 3, int iterations = 5,
-                  double pivot = 1 )
+                  const std::vector<double> & regions, double threshold = 3,
+                  int iterations = 5, double pivot = 1, double min_db = 1,
+                  const std::vector<double> & evaluation = {} )
 {
   fit_t result;
-  if ( f.size() != p.size() || !std::isfinite(lwr) || !std::isfinite(upr)
-       || lwr <= 0 || upr <= lwr || !std::isfinite(threshold)
-       || threshold <= 0 || iterations < 1 || !std::isfinite(pivot) || pivot <= 0 )
+  if ( f.size() != p.size() || !valid_regions(regions)
+       || (!evaluation.empty() && (evaluation.size()!=2 || !valid_regions(evaluation)))
+       || !std::isfinite(threshold) || threshold <= 0 || iterations < 1
+       || !std::isfinite(pivot) || pivot <= 0 || !std::isfinite(min_db) || min_db <= 0 )
     { result.failure = "invalid fitting arguments"; return result; }
+  const double lwr=regions.front(), upr=regions.back();
+  // Evaluation may extend beyond or restrict the fit envelope. It never
+  // changes regression eligibility, fit statistics, or bin counts.
+  const double eval_lwr=evaluation.empty() ? lwr : evaluation.front();
+  const double eval_upr=evaluation.empty() ? upr : evaluation.back();
   std::vector<double> x, y;
   for (size_t i=0; i<f.size(); ++i)
     if ( std::isfinite(f[i]) && f[i] >= lwr && f[i] <= upr
          && std::isfinite(p[i]) && p[i] > 0 )
-      { x.push_back(std::log10(f[i])); y.push_back(10*std::log10(p[i])); }
+      {
+        ++result.total_bins;
+        bool eligible=false;
+        for (size_t r=0; r<regions.size(); r+=2)
+          if (f[i]>=regions[r] && f[i]<=regions[r+1]) { eligible=true; break; }
+        if (eligible)
+          { x.push_back(std::log10(f[i])); y.push_back(10*std::log10(p[i])); }
+      }
   result.input_bins = x.size();
+  result.excluded_bins = result.total_bins-result.input_bins;
   if ( x.size() < 5 )
     { result.failure = "fewer than five positive finite frequency bins"; return result; }
   std::vector<double> keep(x.size(), 1), weights = keep, residual(x.size());
@@ -174,14 +204,14 @@ inline fit_t fit( const std::vector<double> & f, const std::vector<double> & p,
           a = next_a; b = next_b;
           if ( change < 1e-8 ) break;
         }
-      if (pass==0) initial=complete_fit(f,x,y,keep,a,b,lwr,upr,pivot);
+      if (pass==0) initial=complete_fit(f,x,y,keep,a,b,eval_lwr,eval_upr,pivot,result.total_bins);
       if ( pass == iterations ) break;
       std::vector<double> next = keep;
       int count = 0;
       for (size_t i=0; i<x.size(); ++i)
         {
           // Once rejected, a peak cannot pull subsequent fits upward.
-          next[i] = keep[i] && y[i]-a-b*x[i] <= location+std::max(1.0,threshold*scale);
+          next[i] = keep[i] && y[i]-a-b*x[i] <= location+std::max(min_db,threshold*scale);
           count += next[i] != 0;
         }
       if ( count < 5 )
@@ -189,8 +219,16 @@ inline fit_t fit( const std::vector<double> & f, const std::vector<double> & p,
       if ( next == keep ) break;
       keep.swap(next);
     }
-  const auto final=complete_fit(f,x,y,keep,a,b,lwr,upr,pivot);
+  const auto final=complete_fit(f,x,y,keep,a,b,eval_lwr,eval_upr,pivot,result.total_bins);
   return final.valid ? final : failed(final.failure);
+}
+
+// Preserve the original single-region API and defaults.
+inline fit_t fit( const std::vector<double> & f, const std::vector<double> & p,
+                  double lwr, double upr, double threshold = 3, int iterations = 5,
+                  double pivot = 1, double min_db = 1 )
+{
+  return fit(f,p,std::vector<double>{lwr,upr},threshold,iterations,pivot,min_db);
 }
 
 } // namespace psd_aperiodic

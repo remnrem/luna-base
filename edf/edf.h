@@ -481,7 +481,7 @@ public:
 			 double pmin , double pmax ,
 			 int16_t dmin , int16_t dmax );
 
-  bool init_signal( const std::string & label , const double Fs );
+  bool init_signal( const std::string & label , const double Fs , int samples_per_record = 0 );
   
   void copy_signal( const std::string & from_label , const std::string & to_label );
 

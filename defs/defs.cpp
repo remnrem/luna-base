@@ -267,14 +267,14 @@ void globals::init_defs()
   //
 
   // should always be 7 characters
-  version = "v1.7.2 ";
+  version = "v1.8.0 ";
 
   major_version_number = 1;
-  minor_version_number = 7;
-  patch_version_number = 2;
+  minor_version_number = 8;
+  patch_version_number = 0;
 
   // should always be 11 chars
-  date    = "03-Nov-2026";
+  date    = "21-Nov-2026";
 
   //
   // Return code

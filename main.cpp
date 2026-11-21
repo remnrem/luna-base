@@ -28,6 +28,11 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <fftw3.h>
+
+#ifdef HAS_ORT
+#include <onnxruntime/core/session/onnxruntime_c_api.h>
+#endif
 
 //
 // global resources
@@ -225,12 +230,30 @@ int main(int argc , char ** argv )
     {
       global.api();
       std::cerr << luna_base_version() ;
-      std::cerr << "Eigen library v"
+      std::cerr << "Libraries:\n";
+      std::cerr << "  Eigen:         v"
 		<< EIGEN_WORLD_VERSION << "."
 		<< EIGEN_MAJOR_VERSION << "."
 		<< EIGEN_MINOR_VERSION << "\n";
-      std::cerr << "sqlite v"
+      std::cerr << "  SQLite:        v"
 		<< sqlite3_libversion() << "\n";
+      std::cerr << "  FFTW:          " << fftw_version << "\n";
+#ifdef HAS_LGBM
+      std::cerr << "  LightGBM:      enabled";
+#ifdef LUNA_LGBM_VERSION
+      std::cerr << " (v" << LUNA_LGBM_VERSION << ")\n";
+#else
+      std::cerr << " (version unavailable)\n";
+#endif
+#else
+      std::cerr << "  LightGBM:      disabled\n";
+#endif
+#ifdef HAS_ORT
+      std::cerr << "  ONNX Runtime:  enabled (v"
+                << OrtGetApiBase()->GetVersionString() << ")\n";
+#else
+      std::cerr << "  ONNX Runtime:  disabled\n";
+#endif
       std::exit( globals::retcode );
     }
   

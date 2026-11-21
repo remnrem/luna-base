@@ -44,7 +44,8 @@ private:
   bool enabled, db, silent, epoch_output, spectrum_output, epoch_spectrum,
     adding, adding_spectrum, any_variable = false;
   double lwr, upr, threshold, bin_fac;
-  double pivot = 1;
+  double pivot = 1, min_db = 1;
+  std::vector<double> regions, evaluation;
   int iterations, count = 0, failed_count = 0, fallback_count = 0,
     flat_count = 0, gap = 0, max_gap = 0;
   std::string prefix, channel_label;

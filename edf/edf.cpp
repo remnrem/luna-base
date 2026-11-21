@@ -364,7 +364,90 @@ void edf_t::description( const param_t & param , std::vector<std::string> * r )
 	}
       return;
     }
-  
+
+  //
+  // special case of 'table' mode: write CH and ANNOT tables via writer
+  //
+
+  if ( param.has( "table" ) )
+    {
+      // baseline: core header info
+      std::string edf_type = "EDF";
+      if ( header.edfplus ) edf_type = header.continuous ? "EDF+C" : "EDF+D" ;
+      writer.value( "EDF_TYPE" , edf_type );
+
+      clocktime_t st( header.starttime );
+      writer.value( "START_TIME" , st.valid ? st.as_string( ':' ) : "." );
+
+      const uint64_t dur_tp = globals::tp_1sec * (uint64_t)header.nr * header.record_duration ;
+      writer.value( "REC_DUR_HMS" , Helper::timestring( dur_tp , ':' , false ) );
+
+      int ns_sel = 0;
+      for (int s1=0;s1<signals.size();s1++)
+	if ( header.is_data_channel( signals(s1) ) ) ++ns_sel;
+      writer.value( "NS" , ns_sel );
+      writer.value( "NA" , (int)annotations->names().size() );
+      writer.value( "NSEGS" , (int)timeline.segments().size() );
+
+      // channels: label, SR, units
+      for (int s1=0;s1<signals.size();s1++)
+	{
+	  const int s = signals(s1);
+	  if ( ! header.is_data_channel( s ) ) continue;
+	  writer.level( header.label[s] , globals::signal_strat );
+	  writer.value( "SR" , header.sampling_freq( s ) );
+	  std::string pdim = Helper::trim( header.phys_dimension[s] );
+	  writer.value( "PDIM" , pdim != "" ? pdim : "." );
+	}
+      writer.unlevel( globals::signal_strat );
+
+      // annotations: # instances, total coverage (union of intervals, secs)
+      std::vector<std::string> anames = annotations->names();
+      for (int a=0;a<anames.size();a++)
+	{
+	  annot_t * annot = annotations->find( anames[a] );
+	  if ( annot == NULL ) continue;
+
+	  std::vector<interval_t> ints;
+	  ints.reserve( annot->interval_events.size() );
+	  annot_map_t::const_iterator ii = annot->interval_events.begin();
+	  while ( ii != annot->interval_events.end() )
+	    {
+	      ints.push_back( ii->first.interval );
+	      ++ii;
+	    }
+	  std::sort( ints.begin() , ints.end() );
+
+	  // merge overlapping intervals --> coverage
+	  uint64_t cov_tp = 0;
+	  if ( ints.size() > 0 )
+	    {
+	      uint64_t cur_start = ints[0].start , cur_stop = ints[0].stop;
+	      for (size_t i=1;i<ints.size();i++)
+		{
+		  if ( ints[i].start <= cur_stop )
+		    {
+		      if ( ints[i].stop > cur_stop ) cur_stop = ints[i].stop;
+		    }
+		  else
+		    {
+		      cov_tp += cur_stop - cur_start;
+		      cur_start = ints[i].start;
+		      cur_stop = ints[i].stop;
+		    }
+		}
+	      cov_tp += cur_stop - cur_start;
+	    }
+
+	  writer.level( anames[a] , globals::annot_strat );
+	  writer.value( "N" , (int)ints.size() );
+	  writer.value( "DUR" , cov_tp / (double)globals::tp_1sec );
+	}
+      writer.unlevel( globals::annot_strat );
+
+      return;
+    }
+
   //
   // if 'r' is non-NULL, then instead of writing to std::cout, return a map
   // (used in lunapi)
@@ -3189,14 +3272,14 @@ void edf_record_t::drop( const int s )
 }
 
 
-bool edf_t::init_signal( const std::string & label, const double Fs )
+bool edf_t::init_signal( const std::string & label, const double Fs, int samples_per_record )
 {
 
   Helper::require_label_without_commas( label , "signal" );
 
   if ( header.has_signal( label ) ) return false;
   
-  const int n_samples = Fs * header.record_duration ;
+  const int n_samples = samples_per_record > 0 ? samples_per_record : Fs * header.record_duration ;
   const int64_t dmax = 32767;
   const int16_t dmin = -32768;
   const double  pmax = 1.0;
