@@ -24,6 +24,8 @@ on:
         type: string
 
 env:
+  PYTHONIOENCODING: utf-8
+  PYTHONUTF8: '1'
   FFTW_VERSION: 3.3.10
   LIGHTGBM_REF: v4.6.0
   ORT_REF: v1.29.0

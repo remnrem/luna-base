@@ -20,6 +20,9 @@ runs:
     - name: Identify toolchain
       id: toolchain
       shell: ${{ inputs.shell }}
+      env:
+        PYTHONIOENCODING: utf-8
+        PYTHONUTF8: '1'
       run: |
         python3 - <<'PYTHON'
         import hashlib, os, platform, subprocess
@@ -27,7 +30,7 @@ runs:
         identity = compiler + subprocess.check_output(['g++', '-dumpmachine'])
         identity += platform.platform().encode()
         name = {'Windows': 'duckdb.dll', 'Darwin': 'libduckdb.dylib', 'Linux': 'libduckdb.so'}[platform.system()]
-        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+        with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
             f.write('key=' + hashlib.sha256(identity).hexdigest()[:20] + '\n')
             f.write('library=.ci-deps/duckdb/lib/' + name + '\n')
         PYTHON
@@ -39,6 +42,9 @@ runs:
     - name: Build dependency
       if: inputs.rebuild == 'true' || steps.cache.outputs.cache-hit != 'true'
       shell: ${{ inputs.shell }}
+      env:
+        PYTHONIOENCODING: utf-8
+        PYTHONUTF8: '1'
       run: |
         if [[ "${RUNNER_OS}" == "macOS" ]]; then
           command -v cmake >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake

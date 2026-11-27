@@ -25,7 +25,7 @@ def build(args):
         source.parent.mkdir(parents=True, exist_ok=True)
         run("git", "clone", "--depth", "1", "--branch", "v" + VERSION,
             "https://github.com/duckdb/duckdb.git", source)
-    commit = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+    commit = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], encoding="utf-8").strip()
     if commit != COMMIT:
         raise SystemExit(f"Expected DuckDB {VERSION} at {COMMIT}, found {commit}")
     configure = [args.cmake, "-S", source, "-B", build_dir,
@@ -49,8 +49,8 @@ def build(args):
     notices = []
     for path in sorted((source / "third_party").rglob("*")):
         if path.is_file() and path.name.upper().startswith(("LICENSE", "COPYING", "NOTICE")):
-            notices.append(str(path.relative_to(source)) + "\n" + path.read_text(errors="replace"))
-    (output / "DUCKDB-THIRD-PARTY-NOTICES.txt").write_text("\n\n".join(notices))
+            notices.append(str(path.relative_to(source)) + "\n" + path.read_text(encoding="utf-8", errors="replace"))
+    (output / "DUCKDB-THIRD-PARTY-NOTICES.txt").write_text("\n\n".join(notices), encoding="utf-8")
     # Explicit registration roots all extension archives, without relying on
     # platform-specific whole-archive flags or global constructors.
     with tempfile.TemporaryDirectory(prefix="duckdb-bundle-", dir=build_dir) as temp:
@@ -78,7 +78,7 @@ def build(args):
             run(os.environ.get("RANLIB", "ranlib"), work / "bundle.a")
         shutil.copy2(work / "bundle.a", output / "lib/libduckdb_static.a")
     (output / "include/luna_duckdb_static.h").write_text(
-        "// This SDK includes an explicit static extension registry.\n")
+        "// This SDK includes an explicit static extension registry.\n", encoding="utf-8")
     # A matching shared library is for Python ctypes parity checks only.
     shared_name = "duckdb.dll" if os.name == "nt" else (
         "libduckdb.dylib" if platform.system() == "Darwin" else "libduckdb.so")
@@ -88,8 +88,8 @@ def build(args):
     shutil.copy2(shared, output / "lib" / shared_name)
     manifest = {"version": VERSION, "commit": COMMIT, "extensions": EXTENSIONS,
                 "pic": True, "platform": platform.platform(),
-                "compiler": subprocess.check_output([os.environ.get("CXX", "c++"), "--version"], text=True)}
-    (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+                "compiler": subprocess.check_output([os.environ.get("CXX", "c++"), "--version"], encoding="utf-8", errors="replace")}
+    (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"Staged static DuckDB {VERSION}: {output}")
 
 
