@@ -86,7 +86,7 @@ CSRCS = $(wildcard db/*.c) \
         $(wildcard zlib-1.3.1/*.c) \
         $(wildcard dsp/libsamplerate/*.c)
 
-OBJS = $(SRCS:.cpp=.o) $(CSRCS:.c=.o)
+OBJS = $(SRCS:.cpp=.o) $(CSRCS:.c=.o) duckdb/reader_sqlite.o
 DEPS := $(OBJS:.o=.d)
 
 
@@ -98,7 +98,7 @@ DEPS := $(OBJS:.o=.d)
 ##############################################################################
 
 DUCKDB ?= 0
-# The default reader always supports DuckDB; DUCKDB controls Luna's writer.
+# The default reader always supports DuckDB; DUCKDB controls the CLI/library backend.
 DUCKDB_PATH ?= /usr/local
 DUCKDB_LINK ?= static
 DUCK_INCLUDES = -I"$(DUCKDB_PATH)" -I"$(DUCKDB_PATH)/include"
@@ -134,7 +134,9 @@ $(error DUCKDB_LINK must be static or shared)
 endif
 duckdb/%.o: CPPFLAGS += $(DUCK_INCLUDES) $(DUCK_DEFINES)
 ifeq ($(DUCKDB),1)
-DUCK_WRITER = duckdb/writer.o duckdb/catalog.o
+DUCK_LIBRARY_OBJS = duckdb/writer.o duckdb/catalog.o duckdb/reader_source.o duckdb/reader_typed.o
+OBJS += $(DUCK_LIBRARY_OBJS)
+lunapi/lunapi.o lunapi/result_io.o: CPPFLAGS += -DHAS_DUCKDB $(DUCK_INCLUDES) $(DUCK_DEFINES)
 main.o: CPPFLAGS += -DHAS_DUCKDB $(DUCK_INCLUDES) $(DUCK_DEFINES)
 endif
 
@@ -146,13 +148,28 @@ DUCK_MODE_STAMP = duckdb/.build-mode-$(DUCK_CONFIG_KEY)
 $(DUCK_MODE_STAMP):
 	$(RM) duckdb/.build-mode-*
 	touch $@
-main.o: $(DUCK_MODE_STAMP)
+main.o lunapi/lunapi.o lunapi/result_io.o libluna.a: $(DUCK_MODE_STAMP)
 DUCK_READER_OBJS = duckdb/reader.o duckdb/reader_source.o duckdb/reader_sqlite.o duckdb/reader_typed.o duckdb/catalog.o
 $(DUCK_READER_OBJS) duckdb/writer.o: $(DUCK_MODE_STAMP)
 ifeq ($(DUCKDB_LINK),static)
 destrat destrat-duckdb: $(DUCK_ARCHIVE)
 ifeq ($(DUCKDB),1)
-luna: $(DUCK_ARCHIVE)
+luna $(SHARED_LIB): $(DUCK_ARCHIVE)
+endif
+endif
+
+# Changing LightGBM link mode/path must relink even when objects are unchanged.
+ifneq ($(ARCH),WINDOWS)
+LGBM_LINK_KEY := $(shell printf '%s\n' '$(LGBM)|$(LGBM_LINK)|$(LGBM_PATH)|$(LIBOMP)' | cksum | cut -d ' ' -f 1)
+LGBM_LINK_STAMP = lgbm/.link-mode-$(LGBM_LINK_KEY)
+$(LGBM_LINK_STAMP):
+	$(RM) lgbm/.link-mode-*
+	touch $@
+luna $(SHARED_LIB) destrat destrat-duckdb destrat-sqlite tests/native-result-io-test: $(LGBM_LINK_STAMP)
+ifeq ($(LGBM),1)
+ifeq ($(LGBM_LINK),static)
+luna $(SHARED_LIB) destrat destrat-duckdb destrat-sqlite tests/native-result-io-test: $(LGBM_STATIC_ARCHIVE)
+endif
 endif
 endif
 
@@ -173,11 +190,11 @@ libluna: libluna.a $(SHARED_LIB)
 # - Link lines only when dependency/link-order requirements actually change.
 ##############################################################################
 
-luna: main.o $(OBJS) $(DUCK_WRITER)
-	$(CXX) -o $@ main.o $(OBJS) $(DUCK_WRITER) $(DEP_LIB) $(LDFLAGS) $(if $(filter 1,$(DUCKDB)),$(DUCK_LIBS))
+luna: main.o $(OBJS)
+	$(CXX) -o $@ main.o $(OBJS) $(DEP_LIB) $(LDFLAGS) $(if $(filter 1,$(DUCKDB)),$(DUCK_LIBS))
 
 # Auto-generated header dependency files produced by `-MMD -MP`.
--include main.d $(DEPS)
+-include main.d $(DEPS) tests/native-result-io-test.d
 -include utils/reader2.d duckdb/writer.d duckdb/reader.d duckdb/reader_source.d duckdb/reader_sqlite.d duckdb/reader_typed.d duckdb/catalog.d
 
 .PHONY: hdstats-pc-schema
@@ -187,14 +204,15 @@ hdstats-pc-schema:
 
 ifeq ($(ARCH),MAC)
 $(SHARED_LIB): $(OBJS)
-	$(LD) -dynamiclib $(DEP_LIB) $(LDFLAGS) -o $(SHARED_LIB) $(OBJS)
+	$(CXX) -dynamiclib $(LDFLAGS) -o $(SHARED_LIB) $(OBJS) $(DEP_LIB) $(if $(filter 1,$(DUCKDB)),$(DUCK_LIBS))
 else ifeq ($(ARCH),LINUX)
 $(SHARED_LIB): $(OBJS)
-	$(LD) -shared $(DEP_LIB) $(LDFLAGS) -o $(SHARED_LIB) $(OBJS)
+	$(CXX) -shared $(LDFLAGS) -o $(SHARED_LIB) $(OBJS) $(DEP_LIB) $(if $(filter 1,$(DUCKDB)),$(DUCK_LIBS))
 endif
 
 libluna.a: $(OBJS)
-	$(AR) $(ARFLAGS) $@ $^
+	$(RM) $@
+	$(AR) $(ARFLAGS) $@ $(OBJS)
 	$(RANLIB) $@
 
 
@@ -212,7 +230,14 @@ static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a
 
 # The original utils/reader.cpp is retained as reference source only.
 destrat-sqlite: utils/reader2.o libluna.a
-	$(CXX) -o $@ $^ -L. $(LDFLAGS) $(DEP_LIB)
+	$(CXX) -o $@ utils/reader2.o libluna.a -L. $(LDFLAGS) $(DEP_LIB)
+
+# Standalone consumer checks that the library archive exposes native result I/O.
+.PHONY: test-lunapi-io
+tests/native-result-io-test: tests/native_result_io.cc libluna.a $(DUCK_MODE_STAMP) $(if $(filter 1,$(DUCKDB)),$(DUCK_ARCHIVE))
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) $(if $(filter 1,$(DUCKDB)),-DHAS_DUCKDB $(DUCK_INCLUDES) $(DUCK_DEFINES)) -o $@ tests/native_result_io.cc libluna.a $(DEP_LIB) $(LDFLAGS) $(if $(filter 1,$(DUCKDB)),$(DUCK_LIBS))
+test-lunapi-io: tests/native-result-io-test
+	./tests/native-result-io-test
 
 regional: utils/region-annotate.o
 	$(CXX) -o $@ $^
@@ -261,6 +286,6 @@ test-destrat2: test-destrat
 
 clean:
 	-$(RM) $(TARGETS) destrat2 regional tocol cgi-mapper dmerge simassoc \
-		libluna.dylib libluna.so libluna.a luna-static main.o main.d \
+		libluna.dylib libluna.so libluna.a luna-static main.o main.d tests/native-result-io-test tests/native-result-io-test.d \
 		$(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))
-	-$(RM) utils/*.o utils/*.d utils/*~ duckdb/*.o duckdb/*.d duckdb/.build-mode-* destrat-duckdb
+	-$(RM) utils/*.o utils/*.d utils/*~ duckdb/*.o duckdb/*.d duckdb/.build-mode-* lgbm/.link-mode-* destrat-duckdb

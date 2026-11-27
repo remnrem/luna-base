@@ -1,2 +1,6 @@
 # Local/CI native dependency builds and staged release archives.
 /.ci-deps/
+
+# SDK downloaded for local builds.
+/duckdb-sdk/
+/.duckdb-downloads/

@@ -87,9 +87,9 @@ public:
 };
 
 // Detects the format from the file header (not the extension).
-std::unique_ptr<source_t> open_source(const std::string &path);
+std::unique_ptr<source_t> open_source(const std::string &path, bool sqlite_index = true);
 
-std::unique_ptr<source_t> make_sqlite_source(const std::string &path);
+std::unique_ptr<source_t> make_sqlite_source(const std::string &path, bool create_index = true);
 std::unique_ptr<source_t> make_typed_source(const std::string &path);
 
 } // namespace luna_reader

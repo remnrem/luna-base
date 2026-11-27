@@ -28,6 +28,7 @@
 #include <vector>
 #include <sstream>
 #include <variant>
+#include <cstdint>
 
 #include "helper/helper.h"
 #include "db/retval.h"
@@ -39,7 +40,7 @@
 struct retval_t;
 
 // internal elements
-typedef std::variant<std::string,double,int,std::monostate> rtable_elem_t;
+typedef std::variant<std::string,double,int,std::monostate,int64_t,bool> rtable_elem_t;
 typedef std::vector<std::vector<rtable_elem_t> > rtable_data_t;
 
 // return elements:
@@ -81,6 +82,7 @@ struct rtable_t {
   void add( const std::string & v , const std::vector<int> & x );
   
   void add( const std::string & v , const std::vector<int> & x , const std::vector<bool> & m );
+  void add( const std::string & v, const std::vector<int64_t> & x, const std::vector<bool> & m );
     
 };
 

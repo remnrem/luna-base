@@ -25,6 +25,8 @@ endif
 
 LGBM ?= 1
 LGBM_PATH ?= /opt/homebrew
+# CI opts into an explicit archive; shared remains convenient for Homebrew builds.
+LGBM_LINK ?= shared
 
 # LightGBM has no public version query. Source trees provide VERSION.txt;
 # packaged installs can supply LGBM_VERSION explicitly for `luna -v`.
@@ -169,7 +171,9 @@ ifdef LGBM_PATH
 ifeq ($(ARCH),WINDOWS)
 DEP_LIB += -L/mingw64/bin/
 else
+ifeq ($(LGBM_LINK),shared)
 DEP_LIB += -Wl,-rpath,$(LGBM_PATH)/lib/ -Wl,-rpath,$(LGBM_PATH)/
+endif
 endif
 endif
 endif
@@ -187,8 +191,17 @@ endif
 ifeq ($(LGBM),1)
 ifeq ($(ARCH),WINDOWS)
 DEP_LIB += -l:lib_lightgbm.dll
-else
+else ifeq ($(LGBM_LINK),static)
+LGBM_STATIC_ARCHIVE = $(firstword $(wildcard $(LGBM_PATH)/lib/lib_lightgbm.a $(LGBM_PATH)/lib_lightgbm.a))
+ifeq ($(strip $(LGBM_STATIC_ARCHIVE)),)
+LGBM_STATIC_ARCHIVE = $(LGBM_PATH)/lib_lightgbm.a
+endif
+# Never let -l choose a stale shared library alongside the static archive.
+DEP_LIB += "$(LGBM_STATIC_ARCHIVE)"
+else ifeq ($(LGBM_LINK),shared)
 DEP_LIB += -l_lightgbm
+else
+$(error LGBM_LINK must be static or shared)
 endif
 endif
 

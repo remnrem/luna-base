@@ -153,7 +153,7 @@ jobs:
             ~/LightGBM
             ~/fftw-${{ env.FFTW_VERSION }}
             ~/onnxruntime/dist/cpu-shared
-          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-ort-${{ env.ORT_REF }}-omp-on
+          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-ort-${{ env.ORT_REF }}-static-omp-off-v2
       - name: Native deps cache status
         run: |
           echo "NATIVE_DEPS_MODE=${NATIVE_DEPS_MODE}"
@@ -162,9 +162,6 @@ jobs:
         if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
         run: |
           command -v cmake >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake
-      - name: Ensure LightGBM OpenMP runtime
-        run: |
-          brew list --versions libomp >/dev/null 2>&1 || HOMEBREW_NO_AUTO_UPDATE=1 brew install libomp
       - name: Install LightGBM
         if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
         run: |
@@ -173,7 +170,7 @@ jobs:
           git clone --recursive --branch ${LIGHTGBM_REF} --depth 1 https://github.com/microsoft/LightGBM 
           cd LightGBM
           mkdir -p build && cd build
-          cmake -DCMAKE_BUILD_TYPE=Release ..
+          cmake -DBUILD_STATIC_LIB=ON -DUSE_OPENMP=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release ..
           make -j4
       - name: Install fftw
         if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
@@ -184,7 +181,7 @@ jobs:
           curl -L -o fftw-${FFTW_VERSION}.tar.gz http://www.fftw.org/fftw-${FFTW_VERSION}.tar.gz
           tar -xzvf fftw-${FFTW_VERSION}.tar.gz
           cd fftw-${FFTW_VERSION}
-          ./configure --prefix=${HOME}/fftw-${FFTW_VERSION}/
+          ./configure --disable-shared --enable-static --with-pic --prefix=${HOME}/fftw-${FFTW_VERSION}/
           make -j$(sysctl -n hw.ncpu)
           make install
           cd ${GITHUB_WORKSPACE}
@@ -200,20 +197,23 @@ jobs:
           rebuild: ${{ env.NATIVE_DEPS_MODE == 'all' }}
       - name: Make
         run: |
-          [[ -e ${HOME}/LightGBM/lib_lightgbm.so ]] && cp ${HOME}/LightGBM/lib_lightgbm.so .
-          [[ -e ${HOME}/LightGBM/lib_lightgbm.dylib ]] && cp ${HOME}/LightGBM/lib_lightgbm.dylib .
-          make -j$(sysctl -n hw.ncpu) ARCH=MAC DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_PATH=${HOME}/LightGBM ORT=0
-          python3 scripts/ci/check_duckdb.py --library "${{ steps.duckdb.outputs.library }}"
+          make -j$(sysctl -n hw.ncpu) ARCH=MAC DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_LINK=static LGBM_PATH=${HOME}/LightGBM ORT=0
+          ./luna __LUNA_TESTS__ lgbm verbose
+          python3 scripts/ci/check_duckdb.py --static-lightgbm --library "${{ steps.duckdb.outputs.library }}"
           v="${{ needs.release-meta.outputs.version }}"
           v="${v:-dev}"
           mkdir luna-${v}
           cp luna destrat destrat-sqlite behead luna-${v}/
+          python3 scripts/ci/test_bundle_macos.py
+          python3 scripts/ci/bundle_macos.py "luna-${v}" --search-dir "${HOME}/LightGBM" --search-dir "${HOME}/LightGBM/lib"
+          cp "${HOME}/LightGBM/LICENSE" "luna-${v}/LIGHTGBM-LICENSE"
+          cp "${HOME}/fftw-${FFTW_VERSION}/COPYING" "luna-${v}/FFTW-LICENSE"
           cd luna-${v}/
           otool -l ./luna
           cd ..
           cp .ci-deps/duckdb/DUCKDB-LICENSE .ci-deps/duckdb/DUCKDB-THIRD-PARTY-NOTICES.txt .ci-deps/duckdb/manifest.json luna-${v}/
           tar cvzf mac-luna.tar.gz luna-${v}/
-          python3 scripts/ci/check_duckdb.py --archive mac-luna.tar.gz --library "${{ steps.duckdb.outputs.library }}"
+          python3 scripts/ci/check_duckdb.py --static-lightgbm --archive mac-luna.tar.gz --library "${{ steps.duckdb.outputs.library }}"
       - uses: actions/upload-artifact@v6
         with:
           name: mac-luna.tar.gz
@@ -232,7 +232,7 @@ jobs:
             ~/LightGBM
             ~/fftw-${{ env.FFTW_VERSION }}
             ~/onnxruntime/dist/cpu-shared
-          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-ort-${{ env.ORT_REF }}-omp-off
+          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-ort-${{ env.ORT_REF }}-static-omp-off-v2
       - name: Native deps cache status
         run: |
           echo "NATIVE_DEPS_MODE=${NATIVE_DEPS_MODE}"
@@ -251,7 +251,7 @@ jobs:
           git clone --recursive --branch ${LIGHTGBM_REF} --depth 1 https://github.com/microsoft/LightGBM
           cd LightGBM
           mkdir -p build && cd build
-          cmake -DUSE_OPENMP=OFF -DBUILD_STATIC_LIB=ON -DCMAKE_BUILD_TYPE=Release ..
+          cmake -DBUILD_STATIC_LIB=ON -DUSE_OPENMP=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release ..
           make -j4
           
       - name: Build FFTW
@@ -263,7 +263,7 @@ jobs:
           curl -L -o fftw-${FFTW_VERSION}.tar.gz http://www.fftw.org/fftw-${FFTW_VERSION}.tar.gz
           tar -xzvf fftw-${FFTW_VERSION}.tar.gz
           cd fftw-${FFTW_VERSION}
-          ./configure --prefix=$HOME/fftw-${FFTW_VERSION} CFLAGS="-arch arm64"
+          ./configure --disable-shared --enable-static --with-pic --prefix=$HOME/fftw-${FFTW_VERSION} CFLAGS="-arch arm64"
           make -j$(sysctl -n hw.ncpu)
           make install
       # ONNX Runtime source build is paused on macOS; see the Intel job above.
@@ -275,18 +275,23 @@ jobs:
           rebuild: ${{ env.NATIVE_DEPS_MODE == 'all' }}
       - name: Final Build
         run: |
-          make -j$(sysctl -n hw.ncpu) ARCH=MAC DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb LGBM=1 LGBM_PATH=${HOME}/LightGBM/ FFTW=$HOME/fftw-${FFTW_VERSION} ORT=0
-          python3 scripts/ci/check_duckdb.py --library "${{ steps.duckdb.outputs.library }}"
+          make -j$(sysctl -n hw.ncpu) ARCH=MAC DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb LGBM=1 LGBM_LINK=static LGBM_PATH=${HOME}/LightGBM/ FFTW=$HOME/fftw-${FFTW_VERSION} ORT=0
+          ./luna __LUNA_TESTS__ lgbm verbose
+          python3 scripts/ci/check_duckdb.py --static-lightgbm --library "${{ steps.duckdb.outputs.library }}"
           v="${{ needs.release-meta.outputs.version }}"
           v="${v:-dev}"
           mkdir luna-${v}
           cp luna destrat destrat-sqlite behead luna-${v}/
+          python3 scripts/ci/test_bundle_macos.py
+          python3 scripts/ci/bundle_macos.py "luna-${v}" --search-dir "${HOME}/LightGBM" --search-dir "${HOME}/LightGBM/lib"
+          cp "${HOME}/LightGBM/LICENSE" "luna-${v}/LIGHTGBM-LICENSE"
+          cp "${HOME}/fftw-${FFTW_VERSION}/COPYING" "luna-${v}/FFTW-LICENSE"
           cd luna-${v}/
           otool -L ./luna
           cd ..
           cp .ci-deps/duckdb/DUCKDB-LICENSE .ci-deps/duckdb/DUCKDB-THIRD-PARTY-NOTICES.txt .ci-deps/duckdb/manifest.json luna-${v}/
           tar cvzf macos-arm64-luna.tar.gz luna-${v}/
-          python3 scripts/ci/check_duckdb.py --archive macos-arm64-luna.tar.gz --library "${{ steps.duckdb.outputs.library }}"
+          python3 scripts/ci/check_duckdb.py --static-lightgbm --archive macos-arm64-luna.tar.gz --library "${{ steps.duckdb.outputs.library }}"
     
       - uses: actions/upload-artifact@v6
         with:
@@ -305,7 +310,7 @@ jobs:
           path: |
             ~/LightGBM
             ~/fftw-${{ env.FFTW_VERSION }}
-          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}
+          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-static-omp-off-v2
       - name: Native deps cache status
         run: |
           echo "NATIVE_DEPS_MODE=${NATIVE_DEPS_MODE}"
@@ -319,7 +324,7 @@ jobs:
           wget http://www.fftw.org/fftw-${FFTW_VERSION}.tar.gz
           tar -xzvf fftw-${FFTW_VERSION}.tar.gz
           cd fftw-${FFTW_VERSION}
-          ./configure --enable-shared --prefix=${HOME}/fftw-${FFTW_VERSION}/
+          ./configure --disable-shared --enable-static --with-pic --prefix=${HOME}/fftw-${FFTW_VERSION}/
           make -j$(nproc)
           make install
       - name: Install LightGBM
@@ -331,7 +336,7 @@ jobs:
           cd LightGBM
           mkdir build
           cd build
-          cmake -DCMAKE_BUILD_TYPE=Release ..
+          cmake -DBUILD_STATIC_LIB=ON -DUSE_OPENMP=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release ..
           make -j$(nproc)
           cd ${GITHUB_WORKSPACE}
       - name: Build pinned DuckDB
@@ -341,9 +346,11 @@ jobs:
           rebuild: ${{ env.NATIVE_DEPS_MODE == 'all' }}
       - name: make
         run: |
-          make -j$(nproc) DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_PATH=${HOME}/LightGBM
+          make -j$(nproc) DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_LINK=static LGBM_PATH=${HOME}/LightGBM
       - name: Verify DuckDB and reader parity
-        run: python3 scripts/ci/check_duckdb.py --library "${{ steps.duckdb.outputs.library }}"
+        run: |
+          ./luna __LUNA_TESTS__ lgbm verbose
+          python3 scripts/ci/check_duckdb.py --static-lightgbm --library "${{ steps.duckdb.outputs.library }}"
       - name: Package and verify Linux binaries
         run: |
           v="${{ needs.release-meta.outputs.version }}"
@@ -351,8 +358,10 @@ jobs:
           mkdir "luna-${v}"
           cp luna destrat destrat-sqlite behead "luna-${v}/"
           cp .ci-deps/duckdb/DUCKDB-LICENSE .ci-deps/duckdb/DUCKDB-THIRD-PARTY-NOTICES.txt .ci-deps/duckdb/manifest.json "luna-${v}/"
+          cp "${HOME}/LightGBM/LICENSE" "luna-${v}/LIGHTGBM-LICENSE"
+          cp "${HOME}/fftw-${FFTW_VERSION}/COPYING" "luna-${v}/FFTW-LICENSE"
           tar czf linux-luna.tar.gz "luna-${v}/"
-          python3 scripts/ci/check_duckdb.py --archive linux-luna.tar.gz --library "${{ steps.duckdb.outputs.library }}"
+          python3 scripts/ci/check_duckdb.py --static-lightgbm --archive linux-luna.tar.gz --library "${{ steps.duckdb.outputs.library }}"
       - uses: actions/upload-artifact@v6
         with:
           name: linux-luna.tar.gz

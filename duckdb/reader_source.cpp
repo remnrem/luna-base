@@ -28,10 +28,10 @@ std::string cell_text(const cell_t &c)
   return "";
 }
 
-std::unique_ptr<source_t> open_source(const std::string &path)
+std::unique_ptr<source_t> open_source(const std::string &path, bool sqlite_index)
 {
   switch (luna_duck::detect_format(path)) {
-  case luna_duck::file_format::sqlite: return make_sqlite_source(path);
+  case luna_duck::file_format::sqlite: return make_sqlite_source(path, sqlite_index);
   case luna_duck::file_format::duckdb: return make_typed_source(path);
   case luna_duck::file_format::absent: throw std::runtime_error("could not find stout file " + path);
   default: throw std::runtime_error(path + " is neither an SQLite nor a DuckDB Luna results database");

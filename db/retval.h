@@ -262,6 +262,9 @@ struct retval_factor_level_t {
   retval_factor_level_t( const std::string & f , int i )
   { factor = f ; is_int = true ; is_str = false ; is_dbl = false; int_level = i; }
 
+  retval_factor_level_t( const std::string & f , int64_t i )
+  { factor = f; is_int = true; is_str = false; is_dbl = false; int_level = i; }
+
   retval_factor_level_t( const std::string & f , double d )
   { factor = f ; is_dbl = true ; is_str = false ; is_int = false; dbl_level = d; }
 		        
@@ -271,7 +274,7 @@ struct retval_factor_level_t {
   bool        is_str, is_int, is_dbl;
 
   std::string str_level;
-  int         int_level;
+  int64_t     int_level;
   double      dbl_level;
   
   std::string print() const
@@ -306,7 +309,7 @@ struct retval_strata_t {
   // set of text key=value pairs, e.g. 
   // e.g. SS=N2, F=11,
   
-  retval_strata_t( strata_t & strata , timepoint_t & tp );
+  retval_strata_t( const strata_t & strata , const timepoint_t & tp );
 
   retval_strata_t() { }  // dummy baseline strata, used in lw_prep_t
 

@@ -20,6 +20,7 @@
 //    --------------------------------------------------------------------
 
 #include "lunapi/rtables.h"
+#include <climits>
 
 rtable_t::rtable_t()
 {
@@ -54,8 +55,12 @@ std::string rtable_t::dump() const
 
 	  if ( std::holds_alternative<double>( e ) )
 	    ss << *std::get_if<double>( &e ) ;
-	  else if ( std::holds_alternative<double>( e ) )
+	  else if ( std::holds_alternative<int>( e ) )
 	    ss << *std::get_if<int>( &e ) ;
+		  else if ( std::holds_alternative<int64_t>( e ) )
+	    ss << std::get<int64_t>(e);
+	  else if ( std::holds_alternative<bool>( e ) )
+	    ss << std::get<bool>(e);
 	  else if ( std::holds_alternative<std::string>( e ) )
 	    ss << *std::get_if<std::string>( &e ) ;
 	  else
@@ -230,4 +235,17 @@ void rtables_t::dump() const
 	}
       ++tt;
     }
+}
+
+void rtable_t::add(const std::string &v, const std::vector<int64_t> &x, const std::vector<bool> &m)
+{
+  cols.push_back(v);
+  checkrows(x.size()); checkrows(m.size());
+  std::vector<rtable_elem_t> d(nrows, std::monostate{});
+  for (int i=0; i<nrows; ++i) if (!m[i]) {
+    // Preserve existing small-integer alternatives for C++ consumers.
+    if (x[i] >= INT_MIN && x[i] <= INT_MAX) d[i] = int(x[i]);
+    else d[i] = x[i];
+  }
+  data.push_back(std::move(d));
 }

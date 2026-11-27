@@ -33,6 +33,41 @@ Shared Windows builds require `duckdb.dll` alongside the executables. Static
 builds do not. `make luna` without `DUCKDB=1` builds Luna without DuckDB output;
 the new `destrat` still needs its SDK. `make destrat-sqlite` needs no DuckDB SDK.
 
+## Download an SDK for local builds
+
+From the Luna checkout, run:
+
+```sh
+python3 scripts/download_duckdb.py
+make -j8 ARCH=MAC DUCKDB=1 DUCKDB_PATH="$PWD/duckdb-sdk" FFTW=/opt/homebrew LGBM_PATH=/opt/homebrew
+```
+
+The installer puts `duckdb-sdk/` in **your current working directory**, regardless
+of where the script itself lives. `--prefix` selects another location. It caches
+verified downloads in `.duckdb-downloads/2.0.1/` beside the SDK and does not install
+anything under your home directory or system library directories.
+
+It downloads official, SHA-256-pinned DuckDB 2.0.1 static archives for the native
+architecture, combines the engine/core_functions/Parquet/JSON archives, and
+compiles a small C registration shim. It does not compile DuckDB itself and
+needs no CMake or Git. Python 3, curl and the normal native C/C++ build tools are
+required. The installer tests an actual native link and JSON/Parquet round trip
+before installing. A matching verified SDK is reused; unrelated or incomplete
+existing directories are never overwritten.
+
+Supported targets are macOS Intel/ARM64, Linux x86-64/ARM64 (glibc or musl), and
+Windows x86-64 in MSYS2 MINGW64. The Windows archive is not compatible with
+MSVC. Use the matching `ARCH` and Make tool for your platform. Official prebuilt
+Linux libraries still require a compatible system C/C++ runtime.
+
+`--with-shared` additionally downloads the macOS/Linux shared library for the
+ctypes parity tests. Production builds still link the static archive. Request
+this on the initial install, or use a new prefix to add it later.
+
+The downloader records upstream provenance and third-party license source links.
+CI continues using the source builder below, including its aggregated license
+notices and controlled build flags; the downloader does not change CI caches.
+
 ## Native dependency build and CI
 
 `scripts/ci/build_duckdb.py` builds DuckDB 2.0.1 at the pinned commit
@@ -61,6 +96,30 @@ dependency-script revision. Development pushes to `luna-2.0-dev` run CI too.
 Every job verifies the embedded version, checks the executables have no
 DuckDB shared-library dependency, runs parity tests, packages both readers,
 and repeats checks on the extracted archive with a fresh home directory.
+macOS and Linux CI explicitly link static LightGBM built with OpenMP disabled
+and PIC enabled. They also build static FFTW. This removes the LightGBM,
+OpenMP and FFTW runtime-library requirements from those downloads; the normal
+OS C/C++ runtime remains required. Native cache keys distinguish this setup
+from older shared-library builds. Windows retains its existing DLL packaging.
+
+For local macOS/Linux builds, `LGBM_LINK=shared` remains the default so existing
+Homebrew installations work. To use a static LightGBM SDK, pass
+`LGBM_LINK=static LGBM_PATH=/path/to/LightGBM`; the archive must be at
+`lib/lib_lightgbm.a` or `lib_lightgbm.a`. The archive is linked explicitly even
+if a shared library is present alongside it; a missing archive is an error.
+Link-mode changes force relinking. CI builds the archive with
+`BUILD_STATIC_LIB=ON`, `USE_OPENMP=OFF`, and
+`CMAKE_POSITION_INDEPENDENT_CODE=ON`, and tests the native LightGBM wrapper.
+`check_duckdb.py --static-lightgbm` rejects unexpected shared LightGBM/OpenMP
+or FFTW dependencies before testing binaries or extracted archives.
+
+macOS archives bundle non-system dylibs (including shared LightGBM and OpenMP
+when needed) in `lib/`, rewrite references relative to each binary, and ad-hoc
+sign the edited Mach-O files. Archive checks reject external runtime dependencies
+before launching, so libraries installed on the runner cannot hide omissions.
+A relocation regression test exercises a transitive dylib chain after its build
+directory has been moved out of reach.
+
 Archives are uploaded on development builds as well as releases. The
 `check_duckdb.py` helper can also be run locally:
 
@@ -68,8 +127,9 @@ Archives are uploaded on development builds as well as releases. The
 python3 scripts/ci/check_duckdb.py --library .ci-deps/duckdb/lib/libduckdb.so
 ```
 
-Use `libduckdb.dylib` on macOS or `duckdb.dll` on Windows. This work does not
-enable DuckDB in `libluna`/lunapi yet; that integration remains separate.
+Use `libduckdb.dylib` on macOS or `duckdb.dll` on Windows. `DUCKDB=1` also enables the native `libluna` result backends and `lunapi_t`
+import/export methods; see [native API documentation](../lunapi/RESULTS-IO.md).
+Python bindings and wheel integration remain separate.
 
 ## Output options
 

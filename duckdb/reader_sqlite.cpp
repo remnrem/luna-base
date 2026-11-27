@@ -6,8 +6,6 @@
 
 #include <stdexcept>
 
-extern writer_t writer;
-
 namespace luna_reader {
 namespace {
 
@@ -21,22 +19,26 @@ std::string sql_ids(const std::set<int> &ids)
 class sqlite_source final : public source_t {
   SQL db;
   std::string path;
+  std::map<std::string,char> kinds;
 
   template <class F> void each(const std::string &q, F f)
   {
     sqlite3_stmt *s = db.prepare(q);
-    if (!s) Helper::halt("could not read from " + path);
-    while (db.step(s)) f(s);
+    if (!s) throw std::runtime_error("could not read from " + path + ": " + db.error_message() + " [" + q + "]");
+    try { while (db.step(s)) f(s); }
+    catch (...) { db.finalise(s); throw; }
     db.finalise(s);
   }
 
 public:
-  explicit sqlite_source(const std::string &p) : path(p)
+  explicit sqlite_source(const std::string &p, bool create_index) : path(p)
   {
-    db.open(p);
-    db.synchronous(false);
-    // As destrat: create the strata index on demand (needs write access).
-    db.query("CREATE INDEX IF NOT EXISTS vIndex ON datapoints(strata_id);");
+    if (create_index) {
+      db.open(p);
+      db.synchronous(false);
+      // CLI optimization; library reads must not modify their input database.
+      db.query("CREATE INDEX IF NOT EXISTS vIndex ON datapoints(strata_id);");
+    } else db.open_readonly(p);
   }
   ~sqlite_source() override { db.close(); }
 
@@ -67,6 +69,7 @@ public:
       v.factor_id = db.get_int(s, 0);
       v.factor_name = db.get_text(s, 1);
       v.is_numeric = db.get_int(s, 2) == 1;
+      kinds[v.factor_name] = v.is_numeric ? 'n' : 't';
       w.factors_idmap[v.factor_name] = v.factor_id;
       w.factors.emplace(v.factor_id, std::move(v));
     });
@@ -199,14 +202,12 @@ public:
 
   std::map<std::string, char> factor_kinds() const override
   {
-    std::map<std::string, char> k;
-    for (const auto &f : writer.factors) k[f.second.factor_name] = f.second.is_numeric ? 'n' : 't';
-    return k;
+    return kinds;
   }
 };
 
 } // namespace
 
-std::unique_ptr<source_t> make_sqlite_source(const std::string &path) { return std::make_unique<sqlite_source>(path); }
+std::unique_ptr<source_t> make_sqlite_source(const std::string &path, bool create_index) { return std::make_unique<sqlite_source>(path, create_index); }
 
 } // namespace luna_reader

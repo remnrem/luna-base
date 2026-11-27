@@ -38,6 +38,22 @@ extern globals global;
 
 extern cmd_t cmd;
 
+namespace {
+struct api_writer_guard {
+  bool done = false;
+  ~api_writer_guard() {
+    if (done) return;
+    try { lunapi_t::inaugurate()->output_close(); }
+    catch (...) { /* Still detach local accumulators if closing output fails. */ }
+    try {
+      writer.use_retval(nullptr);
+      writer.set_types();
+    } catch (...) { /* Preserve the original evaluation exception. */ }
+    globals::problem = false;
+  }
+};
+}
+
 // --------------------------------------------------------------------------------
 // global singleton class functions
 
@@ -443,33 +459,6 @@ std::vector<std::vector<std::string> > lunapi_t::aliases() const
 
 // import a generic Luna db
 
-std::vector<std::string> lunapi_t::import_db( const std::string & dbfile )
-{
-  std::set<std::string> ids0;
-  return import_db( dbfile , ids0 );
-}
-
-// import subset of indivs from a generic luna db
-std::vector<std::string> lunapi_t::import_db( const std::string & dbfile , const std::set<std::string> & ids )
-{
-
-  // this gets populated by the IDs actually read
-  std::vector<std::string> obs_ids;
-
-  if ( ! Helper::fileExists( dbfile ) ) return obs_ids;
-    
-  retval_t ret = writer_t::dump_to_retval( dbfile , &ids , &obs_ids );
-  
-  logger << "  read data on " << obs_ids.size() << " individuals from " << dbfile << "\n" ;
-
-  // store in the internal rtables cache
-  rtables = rtables_t( ret );
-  
-  return obs_ids;
-
-}
-
-
 // --------------------------------------------------------------------------------
 // sample list functions
 
@@ -771,10 +760,10 @@ rtables_return_t lunapi_t::eval( const std::string & cmdstr )
 {
   
   retval_t accumulator;
+  api_writer_guard output_guard;
   
-  writer.clear();
-  writer.set_types(); // likely not needed, but harmless to keep
   writer.use_retval( &accumulator );
+  writer.set_types();
     
   for (int i=0; i<nobs(); i++)
     {
@@ -831,99 +820,11 @@ rtables_return_t lunapi_t::eval( const std::string & cmdstr )
       
   //  rtables.dump();
   
+  output_guard.done = true;
   return rtables.data();
   
 }
 
-
-void lunapi_t::output_attach( const std::string & path )
-{
-  _file_output_path = path;
-  _file_output_plaintext = false;
-  if ( !path.empty() ) Helper::deleteFile( path );
-  // clear stale in-memory idmaps from the prior nodb()/attach(":memory:") call so that
-  // set_types() re-inserts all standard factors into the file DB rather than skipping them
-  writer.clear();
-  writer.attach( path );
-}
-
-void lunapi_t::write_db( const std::string & path,
-                         const std::string & id,
-                         const std::string & file,
-                         const rtables_return_t & tables )
-{
-  if ( !path.empty() ) Helper::deleteFile( path );
-
-  writer.clear();
-  writer.attach( path );
-  writer.set_types();
-
-  int cmd_number = 0;
-  for ( auto const & cc : writer.commands )
-    cmd_number = std::max( cmd_number , cc.second.cmd_number );
-  for ( auto const & cc : tables )
-    {
-      const int this_cmd_number = ++cmd_number;
-      writer.cmd( cc.first, this_cmd_number, "" );
-      writer.level( cc.first, "_" + cc.first );
-      for ( auto const & ss : cc.second )
-        {
-          const std::string & cmd = cc.first;
-          const std::string & strata = ss.first;
-          const std::vector<std::string> & cols = std::get<0>( ss.second );
-          const rtable_data_t & data = std::get<1>( ss.second );
-          if ( cols.empty() || data.size() != cols.size() ) continue;
-
-          std::vector<std::string> factors;
-          if ( strata != "." && strata != "BL" )
-            {
-              std::stringstream in( strata );
-              std::string factor;
-              while ( std::getline( in, factor, '_' ) )
-                if ( ! factor.empty() ) factors.push_back( factor );
-            }
-
-          const int nrows = data[0].size();
-          for ( int r = 0; r < nrows; ++r )
-            {
-              std::string row_id = id;
-              if ( ! data[0][r].valueless_by_exception() &&
-                   std::holds_alternative<std::string>( data[0][r] ) )
-                row_id = std::get<std::string>( data[0][r] );
-              writer.id( row_id, file );
-
-              const int factor_offset = row_id == id ? 1 : 1;
-              for ( int f = 0; f < (int)factors.size() && factor_offset + f < (int)cols.size(); ++f )
-                {
-                  const auto & v = data[factor_offset + f][r];
-                  if ( std::holds_alternative<std::string>( v ) )
-                    writer.level( std::get<std::string>( v ), factors[f] );
-                  else if ( std::holds_alternative<int>( v ) )
-                    writer.level( std::get<int>( v ), factors[f] );
-                  else if ( std::holds_alternative<double>( v ) )
-                    writer.level( std::get<double>( v ), factors[f] );
-                }
-
-              for ( int c = factor_offset + factors.size(); c < (int)cols.size(); ++c )
-                {
-                  const auto & v = data[c][r];
-                  if ( std::holds_alternative<double>( v ) )
-                    writer.value( cols[c], std::get<double>( v ) );
-                  else if ( std::holds_alternative<int>( v ) )
-                    writer.value( cols[c], std::get<int>( v ) );
-                  else if ( std::holds_alternative<std::string>( v ) )
-                    writer.value( cols[c], std::get<std::string>( v ) );
-                }
-              for ( const auto & factor : factors ) writer.unlevel( factor );
-            }
-        }
-      writer.unlevel( "_" + cc.first );
-    }
-  writer.commit();
-  writer.use_retval( NULL );
-  writer.clear();
-  writer.set_types();
-}
 
 void lunapi_t::output_plaintext( const std::string & path )
 {
@@ -1567,12 +1468,12 @@ std::string lunapi_inst_t::eval1( const std::string & cmdstr , retval_t * accumu
   //
 
   retval_t ret;
+  api_writer_guard output_guard;
 
   if ( ! accumulator )
     {
-      writer.clear();
-      writer.set_types(); // not sure this is needed now...
       writer.use_retval( &ret );
+      writer.set_types();
     }
   
   //
@@ -1632,6 +1533,7 @@ std::string lunapi_inst_t::eval1( const std::string & cmdstr , retval_t * accumu
   // all done
   //
 
+  output_guard.done = true;
   if ( accumulator ) return "";
 
   return logger.print_buffer();
@@ -1641,23 +1543,17 @@ std::string lunapi_inst_t::eval1( const std::string & cmdstr , retval_t * accumu
 
 std::string lunapi_inst_t::eval_file( const std::string & cmdstr )
 {
-  // Writer must already be configured for file output by the caller
-  // (lunapi_t::output_attach() or output_plaintext() called first).
-  // We do NOT call writer.clear()/use_retval() — that would reset the DB
-  // connection. Mirror the main.cpp per-individual DB loop: id/begin/eval/commit.
-
-  writer.id( id , edf_filename );
-
-  cmd_t cmd( cmdstr );
-  cmd.replace_wildcards( id );
-
+  api_writer_guard output_guard;
+  cmd_t cmd(cmdstr);
+  cmd.replace_wildcards(id);
+  // Include subject metadata in the transaction: failed subjects must not persist.
   writer.begin();
-  cmd.eval( edf );
+  writer.id(id, edf_filename);
+  cmd.eval(edf);
+  if (globals::problem)
+    Helper::halt("problem flag set: likely no unmasked records left?");
   writer.commit();
-
-  if ( globals::problem )
-    Helper::halt( "problem flag set: likely no unmasked records left?" );
-
+  output_guard.done = true;
   return logger.print_buffer();
 }
 

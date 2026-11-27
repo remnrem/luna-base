@@ -126,6 +126,7 @@ struct row_t {
 
 class duck_writer final : public output_store_t {
   const bool append_mode;
+  const duckdb_output_schema extra_schema;
   connection con;
   std::string filename;
   bool in_tx = false;
@@ -272,11 +273,31 @@ class duck_writer final : public output_store_t {
 
   static std::string core_string(const tfac_t &core) { return join(std::vector<std::string>(core.fac.begin(), core.fac.end()), ","); }
 
+  vtype_t variable_type(const table_t &t, const std::string &v) const
+  {
+    const auto declared = globals::cmddefs().fetch_type_var(t.def.command, t.core, v);
+    if (declared != VT_UNDEFINED) return declared;
+    const auto table = extra_schema.variables.find({t.def.command, {t.def.factors.begin(),t.def.factors.end()}});
+    if (table == extra_schema.variables.end()) return VT_UNDEFINED;
+    const auto col = table->second.find(v);
+    if (col == table->second.end()) return VT_UNDEFINED;
+    switch (col->second) {
+    case ltype::integer: return VT_INTEGER;
+    case ltype::real: return VT_REAL;
+    case ltype::boolean: return VT_BOOLEAN;
+    default: return VT_TEXT;
+    }
+  }
+
   std::vector<std::string> registered_vars(const table_t &t) const
   {
     std::vector<std::string> out;
     for (const auto &v : globals::cmddefs().fetch_vars(t.def.command, t.def.core_factors))
       if (!globals::cmddefs().is_hidden_var(t.def.command, t.core, v)) out.push_back(v);
+    const auto extra = extra_schema.variables.find({t.def.command, {t.def.factors.begin(),t.def.factors.end()}});
+    if (extra != extra_schema.variables.end())
+      for (const auto &v : extra->second)
+        if (std::find(out.begin(),out.end(),v.first) == out.end()) out.push_back(v.first);
     return out;
   }
 
@@ -304,7 +325,7 @@ class duck_writer final : public output_store_t {
         push_column(*t, f, role_factor, ft, "");
     }
     for (const auto &v : registered_vars(*t)) {
-      const vtype_t vt = globals::cmddefs().fetch_type_var(cmd, t->core, v);
+      const vtype_t vt = variable_type(*t, v);
       if (vt == VT_UNDEFINED)
         fail("variable " + v + " of " + cmd + " [" + t->def.core_factors + "] has no type in cmddefs");
       push_column(*t, v, role_variable, var_ltype(vt), globals::cmddefs().fetch_desc_var(cmd, t->def.core_factors, v), vt);
@@ -347,7 +368,7 @@ class duck_writer final : public output_store_t {
         fail("factor " + c.def.name + " of " + t.def.sql_name + " is stored as " + ltype_name(c.def.type)
              + " but this Luna declares it " + ltype_name(factor_kind(c.def.name)) + " (writer_t::set_types)");
     for (const auto &v : registered_vars(t)) {
-      const vtype_t vt = globals::cmddefs().fetch_type_var(t.def.command, t.core, v);
+      const vtype_t vt = variable_type(t, v);
       if (vt == VT_UNDEFINED) continue;
       const auto c = t.var_col.find(v);
       if (c == t.var_col.end()) add_variable_column(t, v, vt);
@@ -562,7 +583,7 @@ class duck_writer final : public output_store_t {
   }
 
 public:
-  explicit duck_writer(bool append) : append_mode(append) {}
+  explicit duck_writer(bool append, const duckdb_output_schema &schema = {}) : append_mode(append), extra_schema(schema) {}
 
   ~duck_writer() override { abort_session(); }
 
@@ -673,14 +694,16 @@ public:
 
   factor_t insert_factor(const std::string &name, bool numeric, bool integer) override
   {
-    const ltype type = name == globals::time_strat ? ltype::timepoint
+    const auto custom = extra_schema.factors.find(name);
+    const ltype type = custom != extra_schema.factors.end() ? custom->second
+                       : name == globals::time_strat ? ltype::timepoint
                        : !numeric ? ltype::text : integer ? ltype::integer : ltype::real;
     factor_types[name] = type;
     // Declaration order defines the factor order readers use for labels.
     if (recorded_factors.insert(name).second)
       insert(ins_factor, int64_t(recorded_factors.size()), name, std::string(ltype_name(type)));
     factor_t f(name);
-    f.is_numeric = numeric;
+    f.is_numeric = type == ltype::integer || type == ltype::real || type == ltype::timepoint;
     f.factor_id = int(factor_names.size());
     factor_names.push_back(name);
     return f;
@@ -742,7 +765,7 @@ public:
       auto c = t.var_col.find(vname);
       if (c != t.var_col.end()) col = c->second;
       else {
-        const vtype_t vt = globals::cmddefs().fetch_type_var(t.def.command, t.core, vname);
+        const vtype_t vt = variable_type(t, vname);
         if (vt == VT_UNDEFINED)
           fail("variable " + vname + " of " + t.def.command + " [" + (t.def.core_factors.empty() ? "baseline" : t.def.core_factors)
                + "] is not defined in cmddefs");
@@ -757,3 +780,6 @@ public:
 } // namespace
 
 std::unique_ptr<output_store_t> make_duckdb_output(bool append) { return std::make_unique<duck_writer>(append); }
+
+std::unique_ptr<output_store_t> make_duckdb_output(bool append, const duckdb_output_schema &schema)
+{ return std::make_unique<duck_writer>(append, schema); }

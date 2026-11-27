@@ -2407,6 +2407,90 @@ static void test_lunapi( lunapi_t * eng,
     // Whether or not it threw, the process should still be alive here
     record(R,"lunapi/error-no-crash", true, "no crash after eval error", V);
   } catch(std::exception & e) { record(R,"lunapi/error-no-crash",false,e.what(),V); }
+
+  // Native library result backends: live writes, rollback, import, replay, Parquet.
+  for (const std::string format : {"sqlite", "duckdb"}) {
+    if (format=="duckdb" && !eng->has_duckdb()) continue;
+    const std::string base=temp_base_path("native_results_"+format);
+    const std::string db=base+".db", copy=base+"_copy.db", parquet=base+".parquet";
+    try {
+      auto p=make_sine_inst(eng);
+      p->eval("STATS epoch");
+      const auto expected=p->results();
+      eng->output_attach_format(db,format);
+      p->eval_file("STATS epoch");
+      bool failed=false;
+      try { p->eval_file("ACF"); } catch (const std::exception &) { failed=true; }
+      p->eval("STATS epoch"); // must recover in this same session
+      auto ids=eng->import_db(db);
+      auto numeric_tables=[](rtables_return_t data) {
+        for (auto &cmd : data) for (auto &table : cmd.second)
+          for (auto &col : std::get<1>(table.second)) for (auto &cell : col)
+            if (const auto i=std::get_if<int>(&cell)) cell=double(*i);
+        return data;
+      };
+      const bool live=failed && ids.size()==1 && numeric_tables(eng->results())==numeric_tables(expected);
+      record(R,"lunapi/native-live-rollback-"+format,live,"live import and prior commit survive failed ACF",V);
+      const auto imported=eng->results();
+      eng->write_db_format(copy,"unused","",imported,format);
+      eng->import_db(copy);
+      record(R,"lunapi/native-replay-"+format,eng->results()==imported,"replay epoch results",V);
+      eng->import_db(copy,{"__no_match__"});
+      record(R,"lunapi/native-subset-"+format,eng->results().empty(),"unknown subject yields empty results",V);
+      if (eng->has_duckdb()) {
+        eng->export_parquet(db,parquet,"STATS","CH_E");
+        std::ifstream in(parquet,std::ios::binary); char magic[4]={}; in.read(magic,4);
+        record(R,"lunapi/native-parquet-"+format,std::string(magic,4)=="PAR1","native Parquet artifact",V);
+      }
+    } catch(const std::exception &e) { record(R,"lunapi/native-results-"+format,false,e.what(),V); }
+    eng->output_close();
+    std::remove(db.c_str()); std::remove(copy.c_str()); std::remove(parquet.c_str());
+  }
+
+  // Injected user tables, reordered columns, exact 64-bit values and T1/T2 replay.
+  for (const std::string format : {"sqlite","duckdb"}) {
+    if (format=="duckdb" && !eng->has_duckdb()) continue;
+    const std::string db=temp_base_path("native_custom_"+format)+".db";
+    try {
+      const int64_t large=9007199254740993LL;
+      rtables_return_t tables;
+      tables["USER_RESULT"]["CH_E"] = {
+        {"BIG","E","ID","CH","FLAG","LABEL","VALUE"},
+        {{large,large+1},{1,2},{std::string("one"),std::string("two")},
+         {std::string("EEG"),std::string("EEG")},{true,false},
+         {std::string("21.58.17"),std::string("NA")},{std::monostate{},2.5}}};
+      tables["USER_TEXT"]["BL"] = {{"ID","BIG"},{{std::string("one")},{std::string("text")}}};
+      tables["USER_INTERVAL"]["T1_T2"] = {
+        {"ID","T1","T2","BIG"},
+        {{std::string("one")},{0.0},{double(globals::tp_1sec)},{large}}};
+      eng->write_db_format(db,"fallback","",tables,format);
+      eng->import_db(db);
+      const auto t=eng->table("USER_RESULT","CH_E");
+      auto column=[&](const std::string &v)->const std::vector<rtable_elem_t>& {
+        return t.data.at(std::find(t.cols.begin(),t.cols.end(),v)-t.cols.begin());
+      };
+      const auto &big=column("BIG"); const auto &values=column("VALUE");
+      const bool exact=big.size()==2 && std::get<int64_t>(big[0])==large && std::get<int64_t>(big[1])==large+1;
+      const bool missing=std::holds_alternative<std::monostate>(values[0]) && std::get<double>(values[1])==2.5;
+      const bool interval=eng->table("USER_INTERVAL","T1_T2").nrows==1;
+      bool boolean=true;
+      if (format=="duckdb") boolean=std::get<bool>(column("FLAG")[0]) && !std::get<bool>(column("FLAG")[1]);
+      record(R,"lunapi/native-custom-"+format,exact && missing && interval && boolean,"64-bit, bool, missing, text and interval types",V);
+      // Invalid shape/format must be rejected before replacing an existing file.
+      auto bad=tables; std::get<1>(bad["USER_RESULT"]["CH_E"])[0].pop_back();
+      bool rejected=false; try { eng->write_db_format(db,"","",bad,format); } catch(const std::exception &) { rejected=true; }
+      bool badformat=false; try { eng->output_attach_format(db,"invalid"); } catch(const std::exception &) { badformat=true; }
+      eng->import_db(db);
+      record(R,"lunapi/native-validation-"+format,rejected && badformat && eng->table("USER_RESULT","CH_E").nrows==2,"existing file survives invalid requests",V);
+      if (!eng->has_duckdb()) {
+        bool unsupported=false; try { eng->output_attach_format(db,"duckdb"); } catch(const std::exception &) { unsupported=true; }
+        eng->import_db(db);
+        record(R,"lunapi/native-disabled",unsupported && eng->table("USER_RESULT","CH_E").nrows==2,"unsupported backend preserves file",V);
+      }
+    } catch(const std::exception &e) { record(R,"lunapi/native-custom-"+format,false,e.what(),V); }
+    eng->output_close(); std::remove(db.c_str());
+  }
+
 }
 
 // ============================================================

@@ -43,6 +43,17 @@ bool SQL::open(std::string n)
   return rc == 0;
 }
 
+bool SQL::open_readonly(const std::string &n)
+{
+  name = Helper::expand(n);
+  rc = sqlite3_open_v2(name.c_str(), &db, SQLITE_OPEN_READONLY, nullptr);
+  if (rc) {
+    if (db) { sqlite3_close(db); db = nullptr; }
+    Helper::halt("problem opening read-only database: " + name);
+  }
+  return rc == SQLITE_OK;
+}
+
 void SQL::synchronous(bool b)
 {
   if ( !b ) 
@@ -68,7 +79,13 @@ void SQL::close()
 {
   if ( db ) 
     {
-      sqlite3_close(db);	    
+      // Finalize every remaining statement, including ad-hoc queries not in
+      // StratOutDBase::release(). Otherwise sqlite3_close returns SQLITE_BUSY
+      // and a failed evaluation can retain a transaction/file lock indefinitely.
+      while (auto stmt = sqlite3_next_stmt(db, nullptr)) sqlite3_finalize(stmt);
+      qset.clear();
+      qmap.clear();
+      sqlite3_close(db);
       db = NULL;
     }
 }

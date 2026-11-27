@@ -121,6 +121,18 @@ public:
   { rtables.tables[cmd][strata] = t; }
 
   void output_attach( const std::string & path );
+  // Explicit format; original entry points retain their SQLite behavior.
+  void output_attach_format( const std::string & path, const std::string & format );
+  static bool has_duckdb();
+  static std::string duckdb_version();
+
+  // One selected native result table (BL or sorted underscore-separated factors).
+  // T intervals use the existing API's T1/T2 columns, in native time-points.
+  // No column pivots; variables/IDs empty means all. Numeric precision is retained.
+  void export_parquet( const std::string & database, const std::string & path,
+                       const std::string & command, const std::string & strata,
+                       const std::set<std::string> & variables = {},
+                       const std::set<std::string> & ids = {} );
   void output_plaintext( const std::string & path );
   void output_close();
 
@@ -129,6 +141,9 @@ public:
                  const std::string & id,
                  const std::string & file,
                  const rtables_return_t & tables );
+  void write_db_format( const std::string & path, const std::string & id,
+                        const std::string & file, const rtables_return_t & tables,
+                        const std::string & format );
 
   //
   // Import/read helper functions

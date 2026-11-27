@@ -78,9 +78,11 @@ class SQL {
     }
     
   bool open(std::string n);
+  bool open_readonly(const std::string &n);
   void synchronous(bool);
   void close();
   bool is_open() const { return db; }
+  std::string error_message() const { return db ? sqlite3_errmsg(db) : "database is closed"; }
   bool query( const std::string & q);
   bool table_exists( const std::string & );
 

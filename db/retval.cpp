@@ -26,6 +26,7 @@
 #include "sstore/sstore.h" 
 
 #include <iostream>
+#include <stdexcept>
 
 void retval_t::clear()
 {
@@ -123,7 +124,7 @@ retval_factor_t::retval_factor_t( const strata_t & s , const timepoint_t & tp )
 
 }
 
-retval_strata_t::retval_strata_t( strata_t & strata , timepoint_t & tp )
+retval_strata_t::retval_strata_t( const strata_t & strata , const timepoint_t & tp )
 {
 
   std::map<factor_t,level_t>::const_iterator aa = strata.levels.begin();
@@ -596,7 +597,7 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables() co
 		is_int_factor = true;
 		
 	      std::vector<std::string> strcol;
-	      std::vector<int> intcol;
+	      std::vector<int64_t> intcol;
 	      std::vector<double> dblcol;
 	      std::vector<bool> missing( nrows , false );
 		
@@ -626,7 +627,7 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables() co
 		      if ( lvl.is_str )
 			strcol[ r_cnt ] = lvl.str_level;
 		      else if ( lvl.is_int )
-			strcol[ r_cnt ]	= Helper::int2str(lvl.int_level);
+			strcol[ r_cnt ]	= std::to_string(lvl.int_level);
 		      else if ( lvl.is_dbl )
 			strcol[ r_cnt ] = Helper::dbl2str(lvl.dbl_level);
 		      else
@@ -636,14 +637,17 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables() co
 		    {
 		      if ( lvl.is_dbl )
 			dblcol[ r_cnt ] = lvl.dbl_level;		      
-		      else if ( lvl.is_int )
-			dblcol[ r_cnt ] = lvl.int_level;
+                      else if ( lvl.is_int ) {
+                        if (lvl.int_level < -9007199254740992LL || lvl.int_level > 9007199254740992LL)
+                          throw std::overflow_error("integer factor cannot be represented exactly in a mixed real column");
+                        dblcol[r_cnt] = lvl.int_level;
+                      }
 		      else
 			missing[ r_cnt ] = true;
 		    }
 		  else if ( is_int_factor )
 		    {
-		      int i = lvl.int_level;
+		      int64_t i = lvl.int_level;
 		      if ( lvl.is_int )
 			intcol[ r_cnt ] = lvl.int_level;
 		      else if ( lvl.is_dbl )
@@ -658,7 +662,7 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables() co
 
 
 	      if ( is_int_factor )
-		df.add( *ff , intcol );
+		df.add( *ff , intcol, std::vector<bool>(intcol.size(),false) );
 	      else if ( is_dbl_factor )
 		df.add( *ff , dblcol );
 	      else
@@ -686,16 +690,21 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables() co
 	      // what type of variable is this?
 	      // vv->is_string(), vv->is_double(), vv->is_int()
 	      
-	      bool var_is_string = var_has_strings.find( var.name ) != var_has_strings.end();
-	      bool var_is_double = var_has_doubles.find( var.name ) != var_has_doubles.end();	      
+	      bool var_is_string = false, var_is_double = false;
+              // Types belong to this command/factor table, not every variable
+              // with the same name elsewhere in a multi-command result store.
+              for (const auto &stratum : vv->second)
+                for (const auto &value : stratum.second) {
+                  var_is_string = var_is_string || value.second.is_str;
+                  var_is_double = var_is_double || value.second.is_dbl;
+                }
 	      
 	      std::vector<std::string> strcol;
 	      std::vector<double> dblcol;
-	      std::vector<int> intcol;
+	      std::vector<int64_t> intcol;
 	      std::vector<bool> missing( nrows );
 		
-	      // note - cases were we might have long long ints...
-	      //   make int -> int64_t ? 
+              // Preserve signed 64-bit imported values.
 	      
 	      if      ( var_is_string )
 		strcol.resize( nrows );
@@ -753,8 +762,11 @@ std::map<std::string,std::map<std::string,rtable_t> > retval_t::make_tables() co
 			  else if ( var_is_double ) 
 			    {
 			      // special case
-			      if ( zz->second.is_int )
-				dblcol[ r_cnt ] = zz->second.i ;
+                              if ( zz->second.is_int ) {
+                                if (zz->second.i < -9007199254740992LL || zz->second.i > 9007199254740992LL)
+                                  throw std::overflow_error("integer result cannot be represented exactly in a mixed real column");
+                                dblcol[r_cnt] = zz->second.i;
+                              }
 			      else
 				dblcol[ r_cnt ] = zz->second.d ;			      
 			    }

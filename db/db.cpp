@@ -19,6 +19,7 @@
 //
 //    --------------------------------------------------------------------
 
+#include "factor_types.h"
 #include "db.h"
 
 #include <iostream>
@@ -1503,46 +1504,43 @@ bool writer_t::string_factor( const std::string & fac_name )
   }
 
 
+std::vector<std::pair<std::string,char>> luna_standard_factors()
+{
+  return {
+    {globals::epoch_strat, 'i'},
+    {globals::comp_strat, 'i'},
+    {globals::sample_strat, 'i'},
+    {globals::freq_strat, 'r'},
+    {globals::sec_strat, 'r'},
+    {globals::cycle_strat, 'i'},
+    {globals::band_strat, 't'},
+    {globals::annot_strat, 't'},
+    {globals::annot_instance_strat, 't'},
+    {globals::annot_meta_strat, 't'},
+    {globals::signal_strat, 't'},
+    {globals::stage_strat, 't'},
+    {globals::count_strat, 'i'},
+    {globals::time_strat, 'r'},
+    {globals::value_strat, 'r'},
+    {"EID", 'i'},
+    {"IC", 'i'},
+    {"I", 'i'},
+    {"TAP", 'i'},
+    {"TH", 'r'},
+    {"SPINDLE", 'i'},
+    {"MSEC", 'r'},
+    {"PHASE", 'r'},
+    {"PSC", 'i'},
+    {"SEG", 'i'},
+    {"OFFSET", 'r'}
+  };
+}
+
 void writer_t::set_types()
 {
-
-  //  std::cout << "SETTING_TYPES()\n";
-
-  // Factor types: the single declaration. SQLite records numeric/string;
-  // typed (DuckDB) output also uses integer vs real for numeric factors.
-  // E and T levels come from timepoints (epoch number; interval start/stop).
-  // Factors not declared here are string factors.
-
-  const bool integer = true;
-
-  numeric_factor( globals::epoch_strat , integer );
-  numeric_factor( globals::comp_strat , integer );
-  numeric_factor( globals::sample_strat , integer );
-  numeric_factor( globals::freq_strat );
-  numeric_factor( globals::sec_strat );
-  numeric_factor( globals::cycle_strat , integer );
-  string_factor( globals::band_strat );
-  string_factor( globals::annot_strat );
-  string_factor( globals::annot_instance_strat );
-  string_factor( globals::annot_meta_strat );
-  string_factor( globals::signal_strat );
-  string_factor( globals::stage_strat );
-  numeric_factor( globals::count_strat , integer );
-  numeric_factor( globals::time_strat );
-  numeric_factor( globals::value_strat );
-
-  numeric_factor( "EID" , integer );
-  numeric_factor( "IC" , integer );
-  numeric_factor( "I" , integer ); // from PSC
-  numeric_factor( "TAP" , integer );
-  numeric_factor( "TH" );
-  numeric_factor( "SPINDLE" , integer );
-  numeric_factor( "MSEC" );
-  numeric_factor( "PHASE" );
-  numeric_factor( "PSC" , integer );
-  numeric_factor( "SEG" , integer );
-  numeric_factor( "OFFSET" );
-
+  for (const auto &f : luna_standard_factors())
+    if (f.second == 't') string_factor(f.first);
+    else numeric_factor(f.first, f.second == 'i');
 }
 
 
