@@ -1081,7 +1081,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
 
 
   // ------------------------------------------------------------------
-  // 19. Verbose per-annotation-event table  (strata: ANNOT x ANN_N)
+  // 19. Verbose per-annotation-event table  (strata: ANNOT x ANNN)
   //     Only emitted when verbose param is set.
   // ------------------------------------------------------------------
 
@@ -1107,7 +1107,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
           const int idx = ++label_idx[ label ];
 
           writer.level( label , "ANNOT" );
-          writer.level( idx   , "ANN_N" );
+          writer.level( idx   , "ANNN" );
 
           const double start_sec = iv.start / (double)globals::tp_1sec;
           const double stop_sec  = iv.stop  / (double)globals::tp_1sec;
@@ -1192,7 +1192,7 @@ void proc_review_alignment( edf_t & edf , param_t & param )
           writer.value( "REC_START" , rec_first );
           writer.value( "REC_STOP"  , rec_last  );
 
-          writer.unlevel( "ANN_N"  );
+          writer.unlevel( "ANNN"  );
           writer.unlevel( "ANNOT" );
         }
     }

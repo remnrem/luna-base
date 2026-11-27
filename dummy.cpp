@@ -551,13 +551,13 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       
       globals::cmddefs().add_cmd( "misc" , "comm1" , "this is a dummy command" );
       globals::cmddefs().add_table( "comm1" , "XX" , "A simple table" , false );
-      globals::cmddefs().add_var( "comm1" , "XX" , "X", "Var X" );
-      globals::cmddefs().add_var( "comm1" , "XX" , "Y" , "Var Y" );
+      globals::cmddefs().add_var( "comm1" , "XX" , "X", "Var X" , VT_REAL );
+      globals::cmddefs().add_var( "comm1" , "XX" , "Y" , "Var Y" , VT_REAL );
       
       globals::cmddefs().add_cmd( "misc" , "comm2" , "this is a dummy command" );
       globals::cmddefs().add_table( "comm2" , "CH,B" , "A nice table" , true );
-      globals::cmddefs().add_var( "comm2" , "CH,B" , "V1" , "Variable 1" );
-      globals::cmddefs().add_var( "comm2" , "CH,B" , "V2" , "Variable 2" );
+      globals::cmddefs().add_var( "comm2" , "CH,B" , "V1" , "Variable 1" , VT_REAL );
+      globals::cmddefs().add_var( "comm2" , "CH,B" , "V2" , "Variable 2" , VT_REAL );
       
       //   std::cout << globals::cmddefs().help( "comm1" , true )  << "\n\n\n";
       std::cout << globals::cmddefs().help( "comm2" , true )  << "\n";
@@ -607,21 +607,21 @@ void proc_dummy( const std::string & p , const std::string & p2 )
       globals::cmddefs().add_table( "NEWONE" , "CH,X,Y" , "Table 2a, by channel and X/Y" , true );
       globals::cmddefs().add_table( "NEWONE" , "CH,X,Z" , "Table 2b, by channel and X/Z"  );
 
-      globals::cmddefs().add_var( "NEWONE" , "" , "V1" , "some var1" );
-      globals::cmddefs().add_var( "NEWONE" , "" , "V2" , "some var2" );
+      globals::cmddefs().add_var( "NEWONE" , "" , "V1" , "some var1" , VT_REAL );
+      globals::cmddefs().add_var( "NEWONE" , "" , "V2" , "some var2" , VT_REAL );
 
-      globals::cmddefs().add_var( "NEWONE" , "CH" , "V1" , "some var1" );
-      globals::cmddefs().add_var( "NEWONE" , "CH" , "V2" , "some var2" );
-      globals::cmddefs().add_var( "NEWONE" , "CH" , "V3" , "some var3" );
+      globals::cmddefs().add_var( "NEWONE" , "CH" , "V1" , "some var1" , VT_REAL );
+      globals::cmddefs().add_var( "NEWONE" , "CH" , "V2" , "some var2" , VT_REAL );
+      globals::cmddefs().add_var( "NEWONE" , "CH" , "V3" , "some var3" , VT_REAL );
 
-      globals::cmddefs().add_var( "NEWONE" , "CH,X" , "V2a" , "some var2" );
-      globals::cmddefs().add_var( "NEWONE" , "CH,X" , "V3a" , "some var3" );
+      globals::cmddefs().add_var( "NEWONE" , "CH,X" , "V2a" , "some var2" , VT_REAL );
+      globals::cmddefs().add_var( "NEWONE" , "CH,X" , "V3a" , "some var3" , VT_REAL );
 
-      globals::cmddefs().add_var( "NEWONE" , "CH,X,Y" , "V2a" , "some var2" );
-      globals::cmddefs().add_var( "NEWONE" , "CH,X,Y" , "V3a" , "some var3" );
+      globals::cmddefs().add_var( "NEWONE" , "CH,X,Y" , "V2a" , "some var2" , VT_REAL );
+      globals::cmddefs().add_var( "NEWONE" , "CH,X,Y" , "V3a" , "some var3" , VT_REAL );
 
-      globals::cmddefs().add_var( "NEWONE" , "CH,X,Z" , "V2a" , "some var2" );
-      globals::cmddefs().add_var( "NEWONE" , "CH,X,Z" , "V3a" , "some var3" );
+      globals::cmddefs().add_var( "NEWONE" , "CH,X,Z" , "V2a" , "some var2" , VT_REAL );
+      globals::cmddefs().add_var( "NEWONE" , "CH,X,Z" , "V3a" , "some var3" , VT_REAL );
 
       //  std::cout << globals::cmddefs().help_domains() << "\n";
       //std::cout << globals::cmddefs().help_commands() << "\n";

@@ -1500,7 +1500,7 @@ static void fit_json_hdstats_panels( param_t & param )
               for ( int g = 0; g < (int)panel.group_ids.size(); ++g )
                 { writer.level(panel.group_ids[g],"GROUP"); writer.value("MASS",panel.group_mass(g,k)); writer.unlevel("GROUP"); }
               for ( int b = 0; b < panel.rotation.rows(); ++b )
-                { writer.level(panel.source_components[b],"BASIS_PC"); writer.value("ROTATION",panel.rotation(b,k)); writer.unlevel("BASIS_PC"); }
+                { writer.level(panel.source_components[b],"BASISPC"); writer.value("ROTATION",panel.rotation(b,k)); writer.unlevel("BASISPC"); }
             }
           for ( int j = 0; j < (int)model.names.size(); ++j )
             {

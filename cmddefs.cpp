@@ -220,20 +220,20 @@ void cmddefs_t::init()
   add_param( "DESC" , "table" , "" , "Write CH and ANNOT summary tables to the output stream (not console)" );
 
   add_table( "DESC" , "" , "Baseline summary (table mode)" );
-  add_var( "DESC" , "" , "EDF_TYPE" , "EDF, EDF+C or EDF+D" );
-  add_var( "DESC" , "" , "START_TIME" , "Start time (hh:mm:ss)" );
-  add_var( "DESC" , "" , "REC_DUR_HMS" , "Recording duration, excluding gaps (hh:mm:ss)" );
-  add_var( "DESC" , "" , "NS" , "Number of (selected) data channels" );
-  add_var( "DESC" , "" , "NA" , "Number of annotation classes" );
-  add_var( "DESC" , "" , "NSEGS" , "Number of contiguous segments (as SEGMENTS)" );
+  add_var( "DESC" , "" , "EDF_TYPE" , "EDF, EDF+C or EDF+D" , VT_TEXT );
+  add_var( "DESC" , "" , "START_TIME" , "Start time (hh:mm:ss)" , VT_TEXT );
+  add_var( "DESC" , "" , "REC_DUR_HMS" , "Recording duration, excluding gaps (hh:mm:ss)" , VT_TEXT );
+  add_var( "DESC" , "" , "NS" , "Number of (selected) data channels" , VT_INTEGER );
+  add_var( "DESC" , "" , "NA" , "Number of annotation classes" , VT_INTEGER );
+  add_var( "DESC" , "" , "NSEGS" , "Number of contiguous segments (as SEGMENTS)" , VT_INTEGER );
 
   add_table( "DESC" , "CH" , "Per-channel summary (table mode)" );
-  add_var( "DESC" , "CH" , "SR" , "Sample rate (Hz)" );
-  add_var( "DESC" , "CH" , "PDIM" , "Physical dimension (units)" );
+  add_var( "DESC" , "CH" , "SR" , "Sample rate (Hz)" , VT_REAL );
+  add_var( "DESC" , "CH" , "PDIM" , "Physical dimension (units)" , VT_TEXT );
 
   add_table( "DESC" , "ANNOT" , "Per-annotation-class summary (table mode)" );
-  add_var( "DESC" , "ANNOT" , "N" , "Number of instances" );
-  add_var( "DESC" , "ANNOT" , "DUR" , "Total coverage (seconds; union of instance intervals)" );
+  add_var( "DESC" , "ANNOT" , "N" , "Number of instances" , VT_INTEGER );
+  add_var( "DESC" , "ANNOT" , "DUR" , "Total coverage (seconds; union of instance intervals)" , VT_REAL );
 
   //
   // SUMMARY
@@ -261,33 +261,33 @@ void cmddefs_t::init()
   add_param( "HEADERS" , "signals" , "" , "Include a comma-delimited list of selected signals" );
   
   add_table( "HEADERS" , "" , "Basic EDF header information" );
-  add_var( "HEADERS" , "" , "NR" , "Number of records" );
-  add_var( "HEADERS" , "" , "NS" , "Number of signals/channels" );
-  add_var( "HEADERS" , "" , "EDF_ID" , "ID in the EDF header" );
-  add_var( "HEADERS" , "" , "START_TIME" , "Start time in the EDF header" );
-  add_var( "HEADERS" , "" , "STOP_TIME" , "Stop time" );
-  add_var( "HEADERS" , "" , "START_DATE" , "Start date in the EDF header" );
-  add_var( "HEADERS" , "" , "REC_DUR" , "Duration of each record (seconds)" );
-  add_var( "HEADERS" , "" , "TOT_DUR_SEC" , "Current EDF duration (seconds)" );
-  add_var( "HEADERS" , "" , "TOT_DUR_HMS" , "Current EDF duration (hh:mm:ss)" );
-  add_var( "HEADERS" , "" , "EDF_TYPE" , "EDF, EDF+C or EDF+D" );
-  add_var( "HEADERS" , "" , "NS_ALL" , "Number of signals in original EDF" );
-  add_var( "HEADERS" , "" , "REC_DUR_HMS" , "Original recording duration (hh:mm:ss)" );
-  add_var( "HEADERS" , "" , "REC_DUR_SEC" , "Original recording duration (seconds)" );
-  add_var( "HEADERS" , "" , "STOP_DATE" , "Stop date" );
-  add_var( "HEADERS" , "" , "SIGNALS" , "Comma-delimited list of selected signals [signals]" );
+  add_var( "HEADERS" , "" , "NR" , "Number of records" , VT_INTEGER );
+  add_var( "HEADERS" , "" , "NS" , "Number of signals/channels" , VT_INTEGER );
+  add_var( "HEADERS" , "" , "EDF_ID" , "ID in the EDF header" , VT_TEXT );
+  add_var( "HEADERS" , "" , "START_TIME" , "Start time in the EDF header" , VT_TEXT );
+  add_var( "HEADERS" , "" , "STOP_TIME" , "Stop time" , VT_TEXT );
+  add_var( "HEADERS" , "" , "START_DATE" , "Start date in the EDF header" , VT_TEXT );
+  add_var( "HEADERS" , "" , "REC_DUR" , "Duration of each record (seconds)" , VT_REAL );
+  add_var( "HEADERS" , "" , "TOT_DUR_SEC" , "Current EDF duration (seconds)" , VT_REAL );
+  add_var( "HEADERS" , "" , "TOT_DUR_HMS" , "Current EDF duration (hh:mm:ss)" , VT_TEXT );
+  add_var( "HEADERS" , "" , "EDF_TYPE" , "EDF, EDF+C or EDF+D" , VT_TEXT );
+  add_var( "HEADERS" , "" , "NS_ALL" , "Number of signals in original EDF" , VT_INTEGER );
+  add_var( "HEADERS" , "" , "REC_DUR_HMS" , "Original recording duration (hh:mm:ss)" , VT_TEXT );
+  add_var( "HEADERS" , "" , "REC_DUR_SEC" , "Original recording duration (seconds)" , VT_REAL );
+  add_var( "HEADERS" , "" , "STOP_DATE" , "Stop date" , VT_TEXT );
+  add_var( "HEADERS" , "" , "SIGNALS" , "Comma-delimited list of selected signals [signals]" , VT_TEXT );
   
   add_table( "HEADERS" , "CH" , "Per-channel header information" );
-  add_var( "HEADERS" , "CH" , "DMAX" , "Digital max" );
-  add_var( "HEADERS" , "CH" , "DMIN" , "Digital min" );
-  add_var( "HEADERS" , "CH" , "PDIM", "Physical dimension" );
-  add_var( "HEADERS" , "CH" , "PMAX", "Physical max" );
-  add_var( "HEADERS" , "CH" , "PMIN", "Physical min" );
-  add_var( "HEADERS" , "CH" , "SR", "Sample rate (Hz)" );
-  add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" );
-  add_var( "HEADERS" , "CH" , "TRANS", "Transducer type" );
-  add_var( "HEADERS" , "CH" , "POS", "Position in EDF" );
-  add_var( "HEADERS" , "CH" , "TYPE", "Channel type (from Luna TYPES)" );
+  add_var( "HEADERS" , "CH" , "DMAX" , "Digital max" , VT_INTEGER );
+  add_var( "HEADERS" , "CH" , "DMIN" , "Digital min" , VT_INTEGER );
+  add_var( "HEADERS" , "CH" , "PDIM", "Physical dimension" , VT_TEXT );
+  add_var( "HEADERS" , "CH" , "PMAX", "Physical max" , VT_REAL );
+  add_var( "HEADERS" , "CH" , "PMIN", "Physical min" , VT_REAL );
+  add_var( "HEADERS" , "CH" , "SR", "Sample rate (Hz)" , VT_REAL );
+  add_var( "HEADERS" , "CH" , "SENS", "Sensitivity (unit/bit)" , VT_REAL );
+  add_var( "HEADERS" , "CH" , "TRANS", "Transducer type" , VT_TEXT );
+  add_var( "HEADERS" , "CH" , "POS", "Position in EDF" , VT_INTEGER );
+  add_var( "HEADERS" , "CH" , "TYPE", "Channel type (from Luna TYPES)" , VT_TEXT );
 
   //
   // TYPES
@@ -313,8 +313,8 @@ void cmddefs_t::init()
 	    "This includes variables created earlier in the command stream, whether they\n"
 	    "are individual-specific, and their current values." );
   add_table( "VARS" , "VAR" , "Defined variables" );
-  add_var( "VARS" , "VAR" , "INDIV" , "Indicator for an individual-specific variable (0/1)" );
-  add_var( "VARS" , "VAR" , "VAL" , "Variable value" );
+  add_var( "VARS" , "VAR" , "INDIV" , "Indicator for an individual-specific variable (0/1)" , VT_BOOLEAN );
+  add_var( "VARS" , "VAR" , "VAL" , "Variable value" , VT_TEXT );
 
   //
   // DUPES
@@ -333,15 +333,15 @@ void cmddefs_t::init()
   add_param( "DUPES" , "eps" , "0.01" , "Epsilon used for physical-value comparisons" );
   add_param( "DUPES" , "prop" , "0.1" , "Minimum discordant proportion required to call channels different" );
   add_table( "DUPES" , "" , "Duplicate and flat-signal summary" );
-  add_var( "DUPES" , "" , "INVALID" , "Number of signals with invalid ranges" );
-  add_var( "DUPES" , "" , "FLAT" , "Number of flat signals" );
-  add_var( "DUPES" , "" , "DUPES" , "Number of duplicated channel pairs" );
+  add_var( "DUPES" , "" , "INVALID" , "Number of signals with invalid ranges" , VT_INTEGER );
+  add_var( "DUPES" , "" , "FLAT" , "Number of flat signals" , VT_INTEGER );
+  add_var( "DUPES" , "" , "DUPES" , "Number of duplicated channel pairs" , VT_INTEGER );
   add_table( "DUPES" , "CH" , "Per-channel duplicate and flat-signal flags" );
-  add_var( "DUPES" , "CH" , "INVALID" , "Signal has an invalid range" );
-  add_var( "DUPES" , "CH" , "FLAT" , "Signal is flat" );
-  add_var( "DUPES" , "CH" , "DUPE" , "Signal is part of at least one duplicated pair" );
+  add_var( "DUPES" , "CH" , "INVALID" , "Signal has an invalid range" , VT_BOOLEAN );
+  add_var( "DUPES" , "CH" , "FLAT" , "Signal is flat" , VT_BOOLEAN );
+  add_var( "DUPES" , "CH" , "DUPE" , "Signal is part of at least one duplicated pair" , VT_BOOLEAN );
   add_table( "DUPES" , "CHS" , "Duplicated channel pairs" );
-  add_var( "DUPES" , "CHS" , "DUPE" , "Channel pair is duplicated" );
+  add_var( "DUPES" , "CHS" , "DUPE" , "Channel pair is duplicated" , VT_BOOLEAN );
 
   //
   // CONTAINS
@@ -366,23 +366,23 @@ void cmddefs_t::init()
   add_param( "CONTAINS" , "skip-if-none" , "" , "Skip only if none of the requested signals/annotations are present" );
 
   add_table( "CONTAINS" , "" , "Base" );
-  add_var( "CONTAINS" , "" , "OVERLAP" , "Sleep stage annotations overlapped one another (0/1)" );
-  add_var( "CONTAINS" , "" , "STAGES" , "Valid staging present (0/1)" );
-  add_var( "CONTAINS" , "" , "STAGE_COUNTS" , "Sleep stage counts" );
-  add_var( "CONTAINS" , "" , "UNIQ_STAGES" , "Number of unique stage labels" );
-  add_var( "CONTAINS" , "" , "NA_REQ" , "Number of required annots" );
-  add_var( "CONTAINS" , "" , "NA_OBS" , "Number of observed annots" );
+  add_var( "CONTAINS" , "" , "OVERLAP" , "Sleep stage annotations overlapped one another (0/1)" , VT_BOOLEAN );
+  add_var( "CONTAINS" , "" , "STAGES" , "Valid staging present (0/1)" , VT_BOOLEAN );
+  add_var( "CONTAINS" , "" , "STAGE_COUNTS" , "Sleep stage counts" , VT_TEXT );
+  add_var( "CONTAINS" , "" , "UNIQ_STAGES" , "Number of unique stage labels" , VT_INTEGER );
+  add_var( "CONTAINS" , "" , "NA_REQ" , "Number of required annots" , VT_INTEGER );
+  add_var( "CONTAINS" , "" , "NA_OBS" , "Number of observed annots" , VT_INTEGER );
 
-  add_var( "CONTAINS" , "" , "NS_OBS" , "Number of observed channels" );
-  add_var( "CONTAINS" , "" , "NS_REQ" , "Number of required channels" );
-  add_var( "CONTAINS" , "" , "NS_TOT" , "Total number of channels" );
-  add_var( "CONTAINS" , "" , "NE" , "Total number of epochs" );
+  add_var( "CONTAINS" , "" , "NS_OBS" , "Number of observed channels" , VT_INTEGER );
+  add_var( "CONTAINS" , "" , "NS_REQ" , "Number of required channels" , VT_INTEGER );
+  add_var( "CONTAINS" , "" , "NS_TOT" , "Total number of channels" , VT_INTEGER );
+  add_var( "CONTAINS" , "" , "NE" , "Total number of epochs" , VT_INTEGER );
 
   add_table( "CONTAINS" , "ANNOT" , "Annotation information" );
-  add_var( "CONTAINS" , "ANNOT" , "PRESENT" , "Annotation present" );
+  add_var( "CONTAINS" , "ANNOT" , "PRESENT" , "Annotation present" , VT_BOOLEAN );
 
   add_table( "CONTAINS" , "CH" , "Channel information" );
-  add_var( "CONTAINS" , "CH" , "PRESENT" , "Channel present" );
+  add_var( "CONTAINS" , "CH" , "PRESENT" , "Channel present" , VT_BOOLEAN );
 
   //
   // ALIASES
@@ -397,10 +397,10 @@ void cmddefs_t::init()
 	    "see the original labels that were replaced by the current canonical labels." );
   
   add_table( "ALIASES" , "CH" , "Channel aliasing" );
-  add_var( "ALIASES" , "CH" , "ORIG" , "Original channel label in EDF" );
+  add_var( "ALIASES" , "CH" , "ORIG" , "Original channel label in EDF" , VT_TEXT );
 
   add_table( "ALIASES" , "ANNOT" , "Annotation aliasing" );
-  add_var( "ALIASES" , "ANNOT" , "ORIG" , "Original annotation label" );
+  add_var( "ALIASES" , "ANNOT" , "ORIG" , "Original annotation label" , VT_TEXT );
 
   //
   // TAG
@@ -439,75 +439,75 @@ void cmddefs_t::init()
   add_param( "STATS" , "dynam" , "" , "Run quantile dynamics on epoch-level statistics" );
   
   add_table( "STATS" , "CH" , "Whole-night, per-channel statistics, based on all epochs" );
-  add_var( "STATS" , "CH" , "MEAN_MD" , "Median of epoch-level means [epoch]" );
-  add_var( "STATS" , "CH" , "MEDIAN_MD" , "Median of epoch-level medians [epoch]" );
-  add_var( "STATS" , "CH" , "RMS_MN" , "Mean of epoch-level RMS values [epoch]" );
-  add_var( "STATS" , "CH" , "SKEW_MN" , "Mean of epoch-level skewness values [epoch]" );
-  add_var( "STATS" , "CH" , "KURT_MN" , "Mean of epoch-level kurtosis values [epoch]" );
-  add_var( "STATS" , "CH" , "RMS_MD" , "Median of epoch-level RMS values [epoch]" );
-  add_var( "STATS" , "CH" , "SKEW_MD" , "Median of epoch-level skewness values [epoch]" );
-  add_var( "STATS" , "CH" , "KURT_MD" , "Median of epoch-level kurtosis values [epoch]" );
-  add_var( "STATS" , "CH" , "MIN" , "Signal minimum (from data, not EDF header)" );
-  add_var( "STATS" , "CH" , "MAX" , "Signal maximum (from data, not EDF header)" );
-  add_var( "STATS" , "CH" , "MEAN" , "Signal mean" );
-  add_var( "STATS" , "CH" , "RMS" , "Signal root mean square" );
-  add_var( "STATS" , "CH" , "SKEW" , "Signal skewness" );
-  add_var( "STATS" , "CH" , "KURT" , "Signal kurtosis" );
-  add_var( "STATS" , "CH" , "SD" , "Signal SD" );
+  add_var( "STATS" , "CH" , "MEAN_MD" , "Median of epoch-level means [epoch]" , VT_REAL );
+  add_var( "STATS" , "CH" , "MEDIAN_MD" , "Median of epoch-level medians [epoch]" , VT_REAL );
+  add_var( "STATS" , "CH" , "RMS_MN" , "Mean of epoch-level RMS values [epoch]" , VT_REAL );
+  add_var( "STATS" , "CH" , "SKEW_MN" , "Mean of epoch-level skewness values [epoch]" , VT_REAL );
+  add_var( "STATS" , "CH" , "KURT_MN" , "Mean of epoch-level kurtosis values [epoch]" , VT_REAL );
+  add_var( "STATS" , "CH" , "RMS_MD" , "Median of epoch-level RMS values [epoch]" , VT_REAL );
+  add_var( "STATS" , "CH" , "SKEW_MD" , "Median of epoch-level skewness values [epoch]" , VT_REAL );
+  add_var( "STATS" , "CH" , "KURT_MD" , "Median of epoch-level kurtosis values [epoch]" , VT_REAL );
+  add_var( "STATS" , "CH" , "MIN" , "Signal minimum (from data, not EDF header)" , VT_REAL );
+  add_var( "STATS" , "CH" , "MAX" , "Signal maximum (from data, not EDF header)" , VT_REAL );
+  add_var( "STATS" , "CH" , "MEAN" , "Signal mean" , VT_REAL );
+  add_var( "STATS" , "CH" , "RMS" , "Signal root mean square" , VT_REAL );
+  add_var( "STATS" , "CH" , "SKEW" , "Signal skewness" , VT_REAL );
+  add_var( "STATS" , "CH" , "KURT" , "Signal kurtosis" , VT_REAL );
+  add_var( "STATS" , "CH" , "SD" , "Signal SD" , VT_REAL );
 
-  add_var( "STATS" , "CH" , "P01" , "1st percentile" );
-  add_var( "STATS" , "CH" , "P02" , "2nd percentile" );
-  add_var( "STATS" , "CH" , "P05" , "5th percentile" );
-  add_var( "STATS" , "CH" , "P10" , "10th percentile" );
-  add_var( "STATS" , "CH" , "P20" , "20th percentile" );
-  add_var( "STATS" , "CH" , "P30" , "30th percentile" );
-  add_var( "STATS" , "CH" , "P40" , "40th percentile" );
-  add_var( "STATS" , "CH" , "P50" , "50th percentile" );
-  add_var( "STATS" , "CH" , "P60" , "60th percentile" );
-  add_var( "STATS" , "CH" , "P70" , "70th percentile" );
-  add_var( "STATS" , "CH" , "P80" , "80th percentile" );
-  add_var( "STATS" , "CH" , "P90" , "90th percentile" );
-  add_var( "STATS" , "CH" , "P95" , "95th percentile" );
-  add_var( "STATS" , "CH" , "P98" , "98th percentile" );
-  add_var( "STATS" , "CH" , "P99" , "99th percentile" );
+  add_var( "STATS" , "CH" , "P01" , "1st percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P02" , "2nd percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P05" , "5th percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P10" , "10th percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P20" , "20th percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P30" , "30th percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P40" , "40th percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P50" , "50th percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P60" , "60th percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P70" , "70th percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P80" , "80th percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P90" , "90th percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P95" , "95th percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P98" , "98th percentile" , VT_REAL );
+  add_var( "STATS" , "CH" , "P99" , "99th percentile" , VT_REAL );
 
 
-  add_var( "STATS" , "CH" , "MAX_ENCODING" , "Possible # of unique values" );
-  add_var( "STATS" , "CH" , "OBS_ENCODING" , "Observed # of unique values" );
-  add_var( "STATS" , "CH" , "PCT_ENCODING" , "Obs/possible unique values" );
+  add_var( "STATS" , "CH" , "MAX_ENCODING" , "Possible # of unique values" , VT_INTEGER );
+  add_var( "STATS" , "CH" , "OBS_ENCODING" , "Observed # of unique values" , VT_INTEGER );
+  add_var( "STATS" , "CH" , "PCT_ENCODING" , "Obs/possible unique values" , VT_REAL );
 
   add_table( "STATS" , "CH,VAL" , "Encoding value distribution [encoding]" );
-  add_var( "STATS" , "CH,VAL" , "CNT" , "Number of observations" );
+  add_var( "STATS" , "CH,VAL" , "CNT" , "Number of observations" , VT_INTEGER );
 
-  add_var( "STATS" , "CH" , "NE" ,  "Total number of epochs in record [epoch]" );
-  add_var( "STATS" , "CH" , "NE1" , "Number of unmasked epochs actually used in calculations [epoch]" );
+  add_var( "STATS" , "CH" , "NE" ,  "Total number of epochs in record [epoch]" , VT_INTEGER );
+  add_var( "STATS" , "CH" , "NE1" , "Number of unmasked epochs actually used in calculations [epoch]" , VT_INTEGER );
 
   add_table( "STATS" , "CH,E" , "Per-epoch, per-channel statistics for unmasked epochs only" );
-  add_var( "STATS" , "CH,E" , "N" , "Number of samples in the epoch" );
-  add_var( "STATS" , "CH,E" , "MIN" , "Signal minimum (from data, not EDF header)" );
-  add_var( "STATS" , "CH,E" , "MAX" , "Signal maximum (from data, not EDF header)" );
-  add_var( "STATS" , "CH,E" , "MEAN" , "Signal mean" );
-  add_var( "STATS" , "CH,E" , "MEDIAN" , "Signal median" );
-  add_var( "STATS" , "CH,E" , "RMS" , "Signal root mean square" );
-  add_var( "STATS" , "CH,E" , "SD" , "Signal SD" );
-  add_var( "STATS" , "CH,E" , "SKEW" , "Signal skewness" );
-  add_var( "STATS" , "CH,E" , "KURT" , "Signal kurtosis" );
+  add_var( "STATS" , "CH,E" , "N" , "Number of samples in the epoch" , VT_INTEGER );
+  add_var( "STATS" , "CH,E" , "MIN" , "Signal minimum (from data, not EDF header)" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "MAX" , "Signal maximum (from data, not EDF header)" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "MEAN" , "Signal mean" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "MEDIAN" , "Signal median" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "RMS" , "Signal root mean square" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "SD" , "Signal SD" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "SKEW" , "Signal skewness" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "KURT" , "Signal kurtosis" , VT_REAL );
 
-  add_var( "STATS" , "CH,E" , "P01" , "1st percentile" );
-  add_var( "STATS" , "CH,E" , "P02" , "2nd percentile" );
-  add_var( "STATS" , "CH,E" , "P05" , "5th percentile" );
-  add_var( "STATS" , "CH,E" , "P10" , "10th percentile" );
-  add_var( "STATS" , "CH,E" , "P20" , "20th percentile" );
-  add_var( "STATS" , "CH,E" , "P30" , "30th percentile" );
-  add_var( "STATS" , "CH,E" , "P40" , "40th percentile" );
-  add_var( "STATS" , "CH,E" , "P50" , "50th percentile" );
-  add_var( "STATS" , "CH,E" , "P60" , "60th percentile" );
-  add_var( "STATS" , "CH,E" , "P70" , "70th percentile" );
-  add_var( "STATS" , "CH,E" , "P80" , "80th percentile" );
-  add_var( "STATS" , "CH,E" , "P90" , "90th percentile" );
-  add_var( "STATS" , "CH,E" , "P95" , "95th percentile" );
-  add_var( "STATS" , "CH,E" , "P98" , "98th percentile" );
-  add_var( "STATS" , "CH,E" , "P99" , "99th percentile" );
+  add_var( "STATS" , "CH,E" , "P01" , "1st percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P02" , "2nd percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P05" , "5th percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P10" , "10th percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P20" , "20th percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P30" , "30th percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P40" , "40th percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P50" , "50th percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P60" , "60th percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P70" , "70th percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P80" , "80th percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P90" , "90th percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P95" , "95th percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P98" , "98th percentile" , VT_REAL );
+  add_var( "STATS" , "CH,E" , "P99" , "99th percentile" , VT_REAL );
 
   //
   // SIGSTATS
@@ -544,117 +544,117 @@ void cmddefs_t::init()
   add_param( "SIGSTATS" , "hjorth2-inc" , "1" , "Window increment in seconds for second-order Hjorth statistics" );
 
   add_table( "SIGSTATS" , "CH" , "Per-channel whole-signal statistics" );
-  add_var( "SIGSTATS" , "CH" , "H1" , "First Hjorth parameter (activity)" );
-  add_var( "SIGSTATS" , "CH" , "H2" , "Second Hjorth parameter (mobility)" );
-  add_var( "SIGSTATS" , "CH" , "H3" , "Third Hjorth parameter (complexity)" );
-  add_var( "SIGSTATS" , "CH" , "CLIP" , "Proportion of clipped sample points" );
-  add_var( "SIGSTATS" , "CH" , "FLAT" , "Proportion of flat sample points" );
-  add_var( "SIGSTATS" , "CH" , "MAX" , "Proportion of sample points exceeding the max threshold" );
-  add_var( "SIGSTATS" , "CH" , "RMS" , "Signal root mean square" );
-  add_var( "SIGSTATS" , "CH" , "EC22_NC" , "Number of contiguous epoch blocks used for epoch-catch22 summaries" );
-  add_var( "SIGSTATS" , "CH" , "EC22_NE" , "Total number of epochs contributing to epoch-catch22 summaries" );
+  add_var( "SIGSTATS" , "CH" , "H1" , "First Hjorth parameter (activity)" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "H2" , "Second Hjorth parameter (mobility)" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "H3" , "Third Hjorth parameter (complexity)" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "CLIP" , "Proportion of clipped sample points" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "FLAT" , "Proportion of flat sample points" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "MAX" , "Proportion of sample points exceeding the max threshold" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "RMS" , "Signal root mean square" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "EC22_NC" , "Number of contiguous epoch blocks used for epoch-catch22 summaries" , VT_INTEGER );
+  add_var( "SIGSTATS" , "CH" , "EC22_NE" , "Total number of epochs contributing to epoch-catch22 summaries" , VT_INTEGER );
 
-  add_var( "SIGSTATS" , "CH" , "acf_first_min" , "First minimum of the autocorrelation function" );
-  add_var( "SIGSTATS" , "CH" , "acf_timescale" , "First 1/e crossing of the autocorrelation function" );
-  add_var( "SIGSTATS" , "CH" , "ami2" , "Histogram-based automutual information at lag 2" );
-  add_var( "SIGSTATS" , "CH" , "ami_timescale" , "First minimum of the automutual information function" );
-  add_var( "SIGSTATS" , "CH" , "centroid_freq" , "Welch spectral centroid frequency" );
-  add_var( "SIGSTATS" , "CH" , "dfa" , "Detrended fluctuation analysis scaling statistic" );
-  add_var( "SIGSTATS" , "CH" , "embedding_dist" , "Goodness of exponential fit to embedding distance distribution" );
-  add_var( "SIGSTATS" , "CH" , "entropy_pairs" , "Entropy of successive pairs in a symbolized series" );
-  add_var( "SIGSTATS" , "CH" , "forecast_error" , "Error of a 3-point rolling mean forecast" );
-  add_var( "SIGSTATS" , "CH" , "high_fluctuation" , "Proportion of high incremental changes in the series" );
-  add_var( "SIGSTATS" , "CH" , "low_freq_power" , "Power in the lowest 20% of frequencies" );
-  add_var( "SIGSTATS" , "CH" , "mean" , "Series mean" );
-  add_var( "SIGSTATS" , "CH" , "mode_10" , "10-bin histogram mode" );
-  add_var( "SIGSTATS" , "CH" , "mode_5" , "5-bin histogram mode" );
-  add_var( "SIGSTATS" , "CH" , "outlier_timing_neg" , "Timing statistic for negative outliers" );
-  add_var( "SIGSTATS" , "CH" , "outlier_timing_pos" , "Timing statistic for positive outliers" );
-  add_var( "SIGSTATS" , "CH" , "periodicity" , "Wang periodicity metric" );
-  add_var( "SIGSTATS" , "CH" , "rs_range" , "Rescaled-range fluctuation analysis scaling statistic" );
-  add_var( "SIGSTATS" , "CH" , "SD" , "Series standard deviation" );
-  add_var( "SIGSTATS" , "CH" , "stretch_decreasing" , "Longest stretch of consecutive decreases" );
-  add_var( "SIGSTATS" , "CH" , "stretch_high" , "Longest stretch of above-mean values" );
-  add_var( "SIGSTATS" , "CH" , "transition_matrix" , "Transition matrix column variance in a symbolized series" );
-  add_var( "SIGSTATS" , "CH" , "trev" , "Time-reversibility statistic" );
-  add_var( "SIGSTATS" , "CH" , "whiten_timescale" , "Change in autocorrelation timescale after differencing" );
+  add_var( "SIGSTATS" , "CH" , "acf_first_min" , "First minimum of the autocorrelation function" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "acf_timescale" , "First 1/e crossing of the autocorrelation function" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "ami2" , "Histogram-based automutual information at lag 2" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "ami_timescale" , "First minimum of the automutual information function" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "centroid_freq" , "Welch spectral centroid frequency" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "dfa" , "Detrended fluctuation analysis scaling statistic" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "embedding_dist" , "Goodness of exponential fit to embedding distance distribution" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "entropy_pairs" , "Entropy of successive pairs in a symbolized series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "forecast_error" , "Error of a 3-point rolling mean forecast" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "high_fluctuation" , "Proportion of high incremental changes in the series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "low_freq_power" , "Power in the lowest 20% of frequencies" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "mean" , "Series mean" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "mode_10" , "10-bin histogram mode" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "mode_5" , "5-bin histogram mode" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "outlier_timing_neg" , "Timing statistic for negative outliers" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "outlier_timing_pos" , "Timing statistic for positive outliers" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "periodicity" , "Wang periodicity metric" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "rs_range" , "Rescaled-range fluctuation analysis scaling statistic" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "SD" , "Series standard deviation" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "stretch_decreasing" , "Longest stretch of consecutive decreases" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "stretch_high" , "Longest stretch of above-mean values" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "transition_matrix" , "Transition matrix column variance in a symbolized series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "trev" , "Time-reversibility statistic" , VT_REAL );
+  add_var( "SIGSTATS" , "CH" , "whiten_timescale" , "Change in autocorrelation timescale after differencing" , VT_REAL );
 
   add_table( "SIGSTATS" , "CH,EC22" , "Epoch-series catch22 summaries" );
-  add_var( "SIGSTATS" , "CH,EC22" , "H1" , "Catch22 summary for the epoch-wise H1 series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "H2" , "Catch22 summary for the epoch-wise H2 series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "H3" , "Catch22 summary for the epoch-wise H3 series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "acf_first_min" , "Catch22 summary for the epoch-wise acf_first_min series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "acf_timescale" , "Catch22 summary for the epoch-wise acf_timescale series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "ami2" , "Catch22 summary for the epoch-wise ami2 series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "ami_timescale" , "Catch22 summary for the epoch-wise ami_timescale series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "centroid_freq" , "Catch22 summary for the epoch-wise centroid_freq series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "dfa" , "Catch22 summary for the epoch-wise dfa series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "embedding_dist" , "Catch22 summary for the epoch-wise embedding_dist series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "entropy_pairs" , "Catch22 summary for the epoch-wise entropy_pairs series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "forecast_error" , "Catch22 summary for the epoch-wise forecast_error series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "high_fluctuation" , "Catch22 summary for the epoch-wise high_fluctuation series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "low_freq_power" , "Catch22 summary for the epoch-wise low_freq_power series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "mean" , "Catch22 summary for the epoch-wise mean series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "mode_10" , "Catch22 summary for the epoch-wise mode_10 series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "mode_5" , "Catch22 summary for the epoch-wise mode_5 series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "outlier_timing_neg" , "Catch22 summary for the epoch-wise outlier_timing_neg series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "outlier_timing_pos" , "Catch22 summary for the epoch-wise outlier_timing_pos series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "periodicity" , "Catch22 summary for the epoch-wise periodicity series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "rs_range" , "Catch22 summary for the epoch-wise rs_range series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "SD" , "Catch22 summary for the epoch-wise SD series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "stretch_decreasing" , "Catch22 summary for the epoch-wise stretch_decreasing series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "stretch_high" , "Catch22 summary for the epoch-wise stretch_high series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "transition_matrix" , "Catch22 summary for the epoch-wise transition_matrix series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "trev" , "Catch22 summary for the epoch-wise trev series" );
-  add_var( "SIGSTATS" , "CH,EC22" , "whiten_timescale" , "Catch22 summary for the epoch-wise whiten_timescale series" );
+  add_var( "SIGSTATS" , "CH,EC22" , "H1" , "Catch22 summary for the epoch-wise H1 series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "H2" , "Catch22 summary for the epoch-wise H2 series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "H3" , "Catch22 summary for the epoch-wise H3 series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "acf_first_min" , "Catch22 summary for the epoch-wise acf_first_min series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "acf_timescale" , "Catch22 summary for the epoch-wise acf_timescale series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "ami2" , "Catch22 summary for the epoch-wise ami2 series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "ami_timescale" , "Catch22 summary for the epoch-wise ami_timescale series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "centroid_freq" , "Catch22 summary for the epoch-wise centroid_freq series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "dfa" , "Catch22 summary for the epoch-wise dfa series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "embedding_dist" , "Catch22 summary for the epoch-wise embedding_dist series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "entropy_pairs" , "Catch22 summary for the epoch-wise entropy_pairs series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "forecast_error" , "Catch22 summary for the epoch-wise forecast_error series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "high_fluctuation" , "Catch22 summary for the epoch-wise high_fluctuation series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "low_freq_power" , "Catch22 summary for the epoch-wise low_freq_power series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "mean" , "Catch22 summary for the epoch-wise mean series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "mode_10" , "Catch22 summary for the epoch-wise mode_10 series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "mode_5" , "Catch22 summary for the epoch-wise mode_5 series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "outlier_timing_neg" , "Catch22 summary for the epoch-wise outlier_timing_neg series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "outlier_timing_pos" , "Catch22 summary for the epoch-wise outlier_timing_pos series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "periodicity" , "Catch22 summary for the epoch-wise periodicity series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "rs_range" , "Catch22 summary for the epoch-wise rs_range series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "SD" , "Catch22 summary for the epoch-wise SD series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "stretch_decreasing" , "Catch22 summary for the epoch-wise stretch_decreasing series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "stretch_high" , "Catch22 summary for the epoch-wise stretch_high series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "transition_matrix" , "Catch22 summary for the epoch-wise transition_matrix series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "trev" , "Catch22 summary for the epoch-wise trev series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,EC22" , "whiten_timescale" , "Catch22 summary for the epoch-wise whiten_timescale series" , VT_REAL );
 
   add_table( "SIGSTATS" , "CH,E" , "Per-channel per-epoch statistics [epoch]" );
-  add_var( "SIGSTATS" , "CH,E" , "H1" , "First Hjorth parameter (activity)" );
-  add_var( "SIGSTATS" , "CH,E" , "H2" , "Second Hjorth parameter (mobility)" );
-  add_var( "SIGSTATS" , "CH,E" , "H3" , "Third Hjorth parameter (complexity)" );
-  add_var( "SIGSTATS" , "CH,E" , "H1H1" , "Second-order Hjorth summary for H1 activity" );
-  add_var( "SIGSTATS" , "CH,E" , "H1H2" , "Second-order Hjorth summary for H1 mobility" );
-  add_var( "SIGSTATS" , "CH,E" , "H1H3" , "Second-order Hjorth summary for H1 complexity" );
-  add_var( "SIGSTATS" , "CH,E" , "H2H1" , "Second-order Hjorth summary for H2 activity" );
-  add_var( "SIGSTATS" , "CH,E" , "H2H2" , "Second-order Hjorth summary for H2 mobility" );
-  add_var( "SIGSTATS" , "CH,E" , "H2H3" , "Second-order Hjorth summary for H2 complexity" );
-  add_var( "SIGSTATS" , "CH,E" , "H3H1" , "Second-order Hjorth summary for H3 activity" );
-  add_var( "SIGSTATS" , "CH,E" , "H3H2" , "Second-order Hjorth summary for H3 mobility" );
-  add_var( "SIGSTATS" , "CH,E" , "H3H3" , "Second-order Hjorth summary for H3 complexity" );
-  add_var( "SIGSTATS" , "CH,E" , "CLIP" , "Proportion of clipped sample points" );
-  add_var( "SIGSTATS" , "CH,E" , "FLAT" , "Proportion of flat sample points" );
-  add_var( "SIGSTATS" , "CH,E" , "MAX" , "Proportion of sample points exceeding the max threshold" );
-  add_var( "SIGSTATS" , "CH,E" , "RMS" , "Signal root mean square" );
-  add_var( "SIGSTATS" , "CH,E" , "PFD" , "Petrosian fractal dimension" );
-  add_var( "SIGSTATS" , "CH,E" , "PE3" , "Permutation entropy with embedding dimension 3" );
-  add_var( "SIGSTATS" , "CH,E" , "PE4" , "Permutation entropy with embedding dimension 4" );
-  add_var( "SIGSTATS" , "CH,E" , "PE5" , "Permutation entropy with embedding dimension 5" );
-  add_var( "SIGSTATS" , "CH,E" , "PE6" , "Permutation entropy with embedding dimension 6" );
-  add_var( "SIGSTATS" , "CH,E" , "PE7" , "Permutation entropy with embedding dimension 7" );
-  add_var( "SIGSTATS" , "CH,E" , "acf_first_min" , "First minimum of the autocorrelation function" );
-  add_var( "SIGSTATS" , "CH,E" , "acf_timescale" , "First 1/e crossing of the autocorrelation function" );
-  add_var( "SIGSTATS" , "CH,E" , "ami2" , "Histogram-based automutual information at lag 2" );
-  add_var( "SIGSTATS" , "CH,E" , "ami_timescale" , "First minimum of the automutual information function" );
-  add_var( "SIGSTATS" , "CH,E" , "centroid_freq" , "Welch spectral centroid frequency" );
-  add_var( "SIGSTATS" , "CH,E" , "dfa" , "Detrended fluctuation analysis scaling statistic" );
-  add_var( "SIGSTATS" , "CH,E" , "embedding_dist" , "Goodness of exponential fit to embedding distance distribution" );
-  add_var( "SIGSTATS" , "CH,E" , "entropy_pairs" , "Entropy of successive pairs in a symbolized series" );
-  add_var( "SIGSTATS" , "CH,E" , "forecast_error" , "Error of a 3-point rolling mean forecast" );
-  add_var( "SIGSTATS" , "CH,E" , "high_fluctuation" , "Proportion of high incremental changes in the series" );
-  add_var( "SIGSTATS" , "CH,E" , "low_freq_power" , "Power in the lowest 20% of frequencies" );
-  add_var( "SIGSTATS" , "CH,E" , "mean" , "Series mean" );
-  add_var( "SIGSTATS" , "CH,E" , "mode_10" , "10-bin histogram mode" );
-  add_var( "SIGSTATS" , "CH,E" , "mode_5" , "5-bin histogram mode" );
-  add_var( "SIGSTATS" , "CH,E" , "outlier_timing_neg" , "Timing statistic for negative outliers" );
-  add_var( "SIGSTATS" , "CH,E" , "outlier_timing_pos" , "Timing statistic for positive outliers" );
-  add_var( "SIGSTATS" , "CH,E" , "periodicity" , "Wang periodicity metric" );
-  add_var( "SIGSTATS" , "CH,E" , "rs_range" , "Rescaled-range fluctuation analysis scaling statistic" );
-  add_var( "SIGSTATS" , "CH,E" , "SD" , "Series standard deviation" );
-  add_var( "SIGSTATS" , "CH,E" , "stretch_decreasing" , "Longest stretch of consecutive decreases" );
-  add_var( "SIGSTATS" , "CH,E" , "stretch_high" , "Longest stretch of above-mean values" );
-  add_var( "SIGSTATS" , "CH,E" , "transition_matrix" , "Transition matrix column variance in a symbolized series" );
-  add_var( "SIGSTATS" , "CH,E" , "trev" , "Time-reversibility statistic" );
-  add_var( "SIGSTATS" , "CH,E" , "whiten_timescale" , "Change in autocorrelation timescale after differencing" );
+  add_var( "SIGSTATS" , "CH,E" , "H1" , "First Hjorth parameter (activity)" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "H2" , "Second Hjorth parameter (mobility)" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "H3" , "Third Hjorth parameter (complexity)" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "H1H1" , "Second-order Hjorth summary for H1 activity" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "H1H2" , "Second-order Hjorth summary for H1 mobility" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "H1H3" , "Second-order Hjorth summary for H1 complexity" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "H2H1" , "Second-order Hjorth summary for H2 activity" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "H2H2" , "Second-order Hjorth summary for H2 mobility" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "H2H3" , "Second-order Hjorth summary for H2 complexity" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "H3H1" , "Second-order Hjorth summary for H3 activity" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "H3H2" , "Second-order Hjorth summary for H3 mobility" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "H3H3" , "Second-order Hjorth summary for H3 complexity" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "CLIP" , "Proportion of clipped sample points" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "FLAT" , "Proportion of flat sample points" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "MAX" , "Proportion of sample points exceeding the max threshold" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "RMS" , "Signal root mean square" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "PFD" , "Petrosian fractal dimension" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "PE3" , "Permutation entropy with embedding dimension 3" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "PE4" , "Permutation entropy with embedding dimension 4" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "PE5" , "Permutation entropy with embedding dimension 5" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "PE6" , "Permutation entropy with embedding dimension 6" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "PE7" , "Permutation entropy with embedding dimension 7" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "acf_first_min" , "First minimum of the autocorrelation function" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "acf_timescale" , "First 1/e crossing of the autocorrelation function" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "ami2" , "Histogram-based automutual information at lag 2" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "ami_timescale" , "First minimum of the automutual information function" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "centroid_freq" , "Welch spectral centroid frequency" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "dfa" , "Detrended fluctuation analysis scaling statistic" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "embedding_dist" , "Goodness of exponential fit to embedding distance distribution" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "entropy_pairs" , "Entropy of successive pairs in a symbolized series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "forecast_error" , "Error of a 3-point rolling mean forecast" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "high_fluctuation" , "Proportion of high incremental changes in the series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "low_freq_power" , "Power in the lowest 20% of frequencies" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "mean" , "Series mean" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "mode_10" , "10-bin histogram mode" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "mode_5" , "5-bin histogram mode" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "outlier_timing_neg" , "Timing statistic for negative outliers" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "outlier_timing_pos" , "Timing statistic for positive outliers" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "periodicity" , "Wang periodicity metric" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "rs_range" , "Rescaled-range fluctuation analysis scaling statistic" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "SD" , "Series standard deviation" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "stretch_decreasing" , "Longest stretch of consecutive decreases" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "stretch_high" , "Longest stretch of above-mean values" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "transition_matrix" , "Transition matrix column variance in a symbolized series" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "trev" , "Time-reversibility statistic" , VT_REAL );
+  add_var( "SIGSTATS" , "CH,E" , "whiten_timescale" , "Change in autocorrelation timescale after differencing" , VT_REAL );
 
   //
   // TABULATE
@@ -675,18 +675,18 @@ void cmddefs_t::init()
   add_param( "TABULATE" , "max" , "1.0" , "Upper bound for histogram bins (default: data maximum)" );
 
   add_table( "TABULATE" , "CH" , "Per-channel tabulation" );
-  add_var( "TABULATE" , "CH" , "NV" , "Number of discrete values (or non-empty bins if bin=N) observed for this channel" );
+  add_var( "TABULATE" , "CH" , "NV" , "Number of discrete values (or non-empty bins if bin=N) observed for this channel" , VT_INTEGER );
 
   add_table( "TABULATE" , "CH,REQ" , "Per-channel required-count summaries" );
-  add_var( "TABULATE" , "CH,REQ" , "NV" , "Number of values (or bins) observed at least REQ times" );
+  add_var( "TABULATE" , "CH,REQ" , "NV" , "Number of values (or bins) observed at least REQ times" , VT_INTEGER );
 
   add_table( "TABULATE" , "CH,VALUE" , "Per-channel/value tabulation statistics (default, without bin=N)" );
-  add_var( "TABULATE" , "CH,VALUE" , "N" , "Number of sample points for this value/channel" );
+  add_var( "TABULATE" , "CH,VALUE" , "N" , "Number of sample points for this value/channel" , VT_INTEGER );
 
   add_table( "TABULATE" , "CH,BIN" , "Per-channel histogram bin tabulation (with bin=N); BIN is 1-based index" );
-  add_var( "TABULATE" , "CH,BIN" , "BLWR" , "Lower bound of this histogram bin" );
-  add_var( "TABULATE" , "CH,BIN" , "BUPR" , "Upper bound of this histogram bin" );
-  add_var( "TABULATE" , "CH,BIN" , "N" , "Number of sample points in this histogram bin" );
+  add_var( "TABULATE" , "CH,BIN" , "BLWR" , "Lower bound of this histogram bin" , VT_REAL );
+  add_var( "TABULATE" , "CH,BIN" , "BUPR" , "Upper bound of this histogram bin" , VT_REAL );
+  add_var( "TABULATE" , "CH,BIN" , "N" , "Number of sample points in this histogram bin" , VT_INTEGER );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -759,12 +759,12 @@ void cmddefs_t::init()
   add_param( "S2A" , "state" , "" , "Wave mode: add state annotations for monotonic waves" );
 
   add_table( "S2A" , "CH" , "Channel-level metrics (for waves option)" );
-  add_var( "S2A" , "CH" , "N"  , "Final number of included waves" );
-  add_var( "S2A" , "CH" , "N0" , "Original (pre-QC) number of included waves" );
-  add_var( "S2A" , "CH" , "EXC1_DUR"  , "Number of exclusions due to duration criteria" );
-  add_var( "S2A" , "CH" , "EXC2_MONO" , "Number of exclusions due to monotonic phase constraint" );
-  add_var( "S2A" , "CH" , "EXC3_MAG" , "Number of exclusions due to magnitude criteria" );
-  add_var( "S2A" , "CH" , "EXC4_PDUR"  , "Number of exclusions due to phase-bin duration criteria" );
+  add_var( "S2A" , "CH" , "N"  , "Final number of included waves" , VT_INTEGER );
+  add_var( "S2A" , "CH" , "N0" , "Original (pre-QC) number of included waves" , VT_INTEGER );
+  add_var( "S2A" , "CH" , "EXC1_DUR"  , "Number of exclusions due to duration criteria" , VT_INTEGER );
+  add_var( "S2A" , "CH" , "EXC2_MONO" , "Number of exclusions due to monotonic phase constraint" , VT_INTEGER );
+  add_var( "S2A" , "CH" , "EXC3_MAG" , "Number of exclusions due to magnitude criteria" , VT_INTEGER );
+  add_var( "S2A" , "CH" , "EXC4_PDUR"  , "Number of exclusions due to phase-bin duration criteria" , VT_INTEGER );
 
   //
   // S2C
@@ -782,125 +782,125 @@ void cmddefs_t::init()
             "within contiguous data; SEC coordinates retain submillisecond precision." );
 
   add_table( "S2C" , "SEED" , "Seed-level summary statistics" );
-  add_var( "S2C" , "SEED" , "N_PRE" , "Number of detected cycles before magnitude filtering" );
-  add_var( "S2C" , "SEED" , "N_POST" , "Number of detected cycles after magnitude filtering" );
-  add_var( "S2C" , "SEED" , "DUR_POS" , "Mean positive half-wave duration (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_POS_MD" , "Median positive half-wave duration (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_POS_MAD" , "MAD of positive half-wave duration (seconds) [emit-mad]" );
-  add_var( "S2C" , "SEED" , "DUR_NEG" , "Mean negative half-wave duration (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_NEG_MD" , "Median negative half-wave duration (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_NEG_MAD" , "MAD of negative half-wave duration (seconds) [emit-mad]" );
-  add_var( "S2C" , "SEED" , "DUR" , "Mean total cycle duration (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_MD" , "Median total cycle duration (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_MAD" , "MAD of total cycle duration (seconds) [emit-mad]" );
-  add_var( "S2C" , "SEED" , "DUR_ZC_NEG" , "Mean duration from zero-crossing to negative peak (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_ZC_NEG_MD" , "Median duration from zero-crossing to negative peak (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_ZC_NEG_MAD" , "MAD of zero-crossing to negative peak duration [emit-mad]" );
-  add_var( "S2C" , "SEED" , "DUR_NEG_ZC" , "Mean duration from negative peak to next zero-crossing (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_NEG_ZC_MD" , "Median duration from negative peak to next zero-crossing (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_NEG_ZC_MAD" , "MAD of negative peak to zero-crossing duration [emit-mad]" );
-  add_var( "S2C" , "SEED" , "DUR_ZC_POS" , "Mean duration from zero-crossing to positive peak (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_ZC_POS_MD" , "Median duration from zero-crossing to positive peak (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_ZC_POS_MAD" , "MAD of zero-crossing to positive peak duration [emit-mad]" );
-  add_var( "S2C" , "SEED" , "DUR_POS_ZC" , "Mean duration from positive peak to next zero-crossing (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_POS_ZC_MD" , "Median duration from positive peak to next zero-crossing (seconds)" );
-  add_var( "S2C" , "SEED" , "DUR_POS_ZC_MAD" , "MAD of positive peak to zero-crossing duration [emit-mad]" );
-  add_var( "S2C" , "SEED" , "AMP_POS" , "Mean positive-peak amplitude (from baseline)" );
-  add_var( "S2C" , "SEED" , "AMP_POS_MD" , "Median positive-peak amplitude" );
-  add_var( "S2C" , "SEED" , "AMP_POS_MAD" , "MAD of positive-peak amplitude [emit-mad]" );
-  add_var( "S2C" , "SEED" , "AMP_NEG" , "Mean absolute negative-peak amplitude (from baseline)" );
-  add_var( "S2C" , "SEED" , "AMP_NEG_MD" , "Median absolute negative-peak amplitude" );
-  add_var( "S2C" , "SEED" , "AMP_NEG_MAD" , "MAD of absolute negative-peak amplitude [emit-mad]" );
-  add_var( "S2C" , "SEED" , "AMP_P2P" , "Mean per-cycle peak-to-peak amplitude (v_pos - v_neg)" );
-  add_var( "S2C" , "SEED" , "AMP_P2P_MD" , "Median per-cycle peak-to-peak amplitude" );
-  add_var( "S2C" , "SEED" , "AMP_P2P_MAD" , "MAD of per-cycle peak-to-peak amplitude [emit-mad]" );
-  add_var( "S2C" , "SEED" , "SLOPE_POS" , "Mean absolute positive slope" );
-  add_var( "S2C" , "SEED" , "SLOPE_POS_MD" , "Median absolute positive slope" );
-  add_var( "S2C" , "SEED" , "SLOPE_POS_MAD" , "MAD of absolute positive slope [emit-mad]" );
-  add_var( "S2C" , "SEED" , "SLOPE_NEG" , "Mean absolute negative slope" );
-  add_var( "S2C" , "SEED" , "SLOPE_NEG_MD" , "Median absolute negative slope" );
-  add_var( "S2C" , "SEED" , "SLOPE_NEG_MAD" , "MAD of absolute negative slope [emit-mad]" );
-  add_var( "S2C" , "SEED" , "SHARP_POS" , "Mean positive-peak sharpness" );
-  add_var( "S2C" , "SEED" , "SHARP_POS_MD" , "Median positive-peak sharpness" );
-  add_var( "S2C" , "SEED" , "SHARP_POS_MAD" , "MAD of positive-peak sharpness [emit-mad]" );
-  add_var( "S2C" , "SEED" , "SHARP_NEG" , "Mean negative-peak sharpness" );
-  add_var( "S2C" , "SEED" , "SHARP_NEG_MD" , "Median negative-peak sharpness" );
-  add_var( "S2C" , "SEED" , "SHARP_NEG_MAD" , "MAD of negative-peak sharpness [emit-mad]" );
-  add_var( "S2C" , "SEED" , "DUR_RATIO" , "Mean ratio of pos/neg half-wave duration [emit-asym]" );
-  add_var( "S2C" , "SEED" , "DUR_RATIO_MD" , "Median ratio of pos/neg half-wave duration [emit-asym]" );
-  add_var( "S2C" , "SEED" , "DUR_RATIO_MAD" , "MAD of pos/neg half-wave duration ratio [emit-asym,emit-mad]" );
-  add_var( "S2C" , "SEED" , "AMP_ASYM" , "Mean amplitude asymmetry [emit-asym]" );
-  add_var( "S2C" , "SEED" , "AMP_ASYM_MD" , "Median amplitude asymmetry [emit-asym]" );
-  add_var( "S2C" , "SEED" , "AMP_ASYM_MAD" , "MAD of amplitude asymmetry [emit-asym,emit-mad]" );
-  add_var( "S2C" , "SEED" , "SLOPE_ASYM" , "Mean slope asymmetry [emit-asym]" );
-  add_var( "S2C" , "SEED" , "SLOPE_ASYM_MD" , "Median slope asymmetry [emit-asym]" );
-  add_var( "S2C" , "SEED" , "SLOPE_ASYM_MAD" , "MAD of slope asymmetry [emit-asym,emit-mad]" );
-  add_var( "S2C" , "SEED" , "SHARP_ASYM" , "Mean sharpness asymmetry [emit-asym]" );
-  add_var( "S2C" , "SEED" , "SHARP_ASYM_MD" , "Median sharpness asymmetry [emit-asym]" );
-  add_var( "S2C" , "SEED" , "SHARP_ASYM_MAD" , "MAD of sharpness asymmetry [emit-asym,emit-mad]" );
+  add_var( "S2C" , "SEED" , "N_PRE" , "Number of detected cycles before magnitude filtering" , VT_INTEGER );
+  add_var( "S2C" , "SEED" , "N_POST" , "Number of detected cycles after magnitude filtering" , VT_INTEGER );
+  add_var( "S2C" , "SEED" , "DUR_POS" , "Mean positive half-wave duration (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_POS_MD" , "Median positive half-wave duration (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_POS_MAD" , "MAD of positive half-wave duration (seconds) [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_NEG" , "Mean negative half-wave duration (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_NEG_MD" , "Median negative half-wave duration (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_NEG_MAD" , "MAD of negative half-wave duration (seconds) [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR" , "Mean total cycle duration (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_MD" , "Median total cycle duration (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_MAD" , "MAD of total cycle duration (seconds) [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_ZC_NEG" , "Mean duration from zero-crossing to negative peak (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_ZC_NEG_MD" , "Median duration from zero-crossing to negative peak (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_ZC_NEG_MAD" , "MAD of zero-crossing to negative peak duration [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_NEG_ZC" , "Mean duration from negative peak to next zero-crossing (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_NEG_ZC_MD" , "Median duration from negative peak to next zero-crossing (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_NEG_ZC_MAD" , "MAD of negative peak to zero-crossing duration [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_ZC_POS" , "Mean duration from zero-crossing to positive peak (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_ZC_POS_MD" , "Median duration from zero-crossing to positive peak (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_ZC_POS_MAD" , "MAD of zero-crossing to positive peak duration [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_POS_ZC" , "Mean duration from positive peak to next zero-crossing (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_POS_ZC_MD" , "Median duration from positive peak to next zero-crossing (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_POS_ZC_MAD" , "MAD of positive peak to zero-crossing duration [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "AMP_POS" , "Mean positive-peak amplitude (from baseline)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "AMP_POS_MD" , "Median positive-peak amplitude" , VT_REAL );
+  add_var( "S2C" , "SEED" , "AMP_POS_MAD" , "MAD of positive-peak amplitude [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "AMP_NEG" , "Mean absolute negative-peak amplitude (from baseline)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "AMP_NEG_MD" , "Median absolute negative-peak amplitude" , VT_REAL );
+  add_var( "S2C" , "SEED" , "AMP_NEG_MAD" , "MAD of absolute negative-peak amplitude [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "AMP_P2P" , "Mean per-cycle peak-to-peak amplitude (v_pos - v_neg)" , VT_REAL );
+  add_var( "S2C" , "SEED" , "AMP_P2P_MD" , "Median per-cycle peak-to-peak amplitude" , VT_REAL );
+  add_var( "S2C" , "SEED" , "AMP_P2P_MAD" , "MAD of per-cycle peak-to-peak amplitude [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SLOPE_POS" , "Mean absolute positive slope" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SLOPE_POS_MD" , "Median absolute positive slope" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SLOPE_POS_MAD" , "MAD of absolute positive slope [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SLOPE_NEG" , "Mean absolute negative slope" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SLOPE_NEG_MD" , "Median absolute negative slope" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SLOPE_NEG_MAD" , "MAD of absolute negative slope [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SHARP_POS" , "Mean positive-peak sharpness" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SHARP_POS_MD" , "Median positive-peak sharpness" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SHARP_POS_MAD" , "MAD of positive-peak sharpness [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SHARP_NEG" , "Mean negative-peak sharpness" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SHARP_NEG_MD" , "Median negative-peak sharpness" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SHARP_NEG_MAD" , "MAD of negative-peak sharpness [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_RATIO" , "Mean ratio of pos/neg half-wave duration [emit-asym]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_RATIO_MD" , "Median ratio of pos/neg half-wave duration [emit-asym]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "DUR_RATIO_MAD" , "MAD of pos/neg half-wave duration ratio [emit-asym,emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "AMP_ASYM" , "Mean amplitude asymmetry [emit-asym]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "AMP_ASYM_MD" , "Median amplitude asymmetry [emit-asym]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "AMP_ASYM_MAD" , "MAD of amplitude asymmetry [emit-asym,emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SLOPE_ASYM" , "Mean slope asymmetry [emit-asym]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SLOPE_ASYM_MD" , "Median slope asymmetry [emit-asym]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SLOPE_ASYM_MAD" , "MAD of slope asymmetry [emit-asym,emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SHARP_ASYM" , "Mean sharpness asymmetry [emit-asym]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SHARP_ASYM_MD" , "Median sharpness asymmetry [emit-asym]" , VT_REAL );
+  add_var( "S2C" , "SEED" , "SHARP_ASYM_MAD" , "MAD of sharpness asymmetry [emit-asym,emit-mad]" , VT_REAL );
 
   add_table( "S2C" , "SEED,BIN" , "12-bin cycle-locked seed summary (B01..B12)" );
-  add_var( "S2C" , "SEED,BIN" , "MEAN" , "Mean seed value in cycle bin" );
+  add_var( "S2C" , "SEED,BIN" , "MEAN" , "Mean seed value in cycle bin" , VT_REAL );
 
   add_table( "S2C" , "SEED,CYCLE" , "Per-cycle metrics (optional)" );
-  add_var( "S2C" , "SEED,CYCLE" , "T0_S" , "Cycle start time (seconds)" );
-  add_var( "S2C" , "SEED,CYCLE" , "T1_S" , "Cycle end time (seconds)" );
-  add_var( "S2C" , "SEED,CYCLE" , "DUR_POS" , "Positive half-wave duration (seconds)" );
-  add_var( "S2C" , "SEED,CYCLE" , "DUR_NEG" , "Negative half-wave duration (seconds)" );
-  add_var( "S2C" , "SEED,CYCLE" , "DUR_ZC_NEG" , "Duration from zero-crossing to negative peak (seconds)" );
-  add_var( "S2C" , "SEED,CYCLE" , "DUR_NEG_ZC" , "Duration from negative peak to next zero-crossing (seconds)" );
-  add_var( "S2C" , "SEED,CYCLE" , "DUR_ZC_POS" , "Duration from zero-crossing to positive peak (seconds)" );
-  add_var( "S2C" , "SEED,CYCLE" , "DUR_POS_ZC" , "Duration from positive peak to next zero-crossing (seconds)" );
-  add_var( "S2C" , "SEED,CYCLE" , "AMP_POS" , "Positive-peak amplitude (from baseline)" );
-  add_var( "S2C" , "SEED,CYCLE" , "AMP_NEG" , "Absolute negative-peak amplitude (from baseline)" );
-  add_var( "S2C" , "SEED,CYCLE" , "AMP_P2P" , "Peak-to-peak amplitude (v_pos - v_neg)" );
-  add_var( "S2C" , "SEED,CYCLE" , "SLOPE_POS" , "Absolute positive slope" );
-  add_var( "S2C" , "SEED,CYCLE" , "SLOPE_NEG" , "Absolute negative slope" );
-  add_var( "S2C" , "SEED,CYCLE" , "SHARP_POS" , "Positive-peak sharpness" );
-  add_var( "S2C" , "SEED,CYCLE" , "SHARP_NEG" , "Negative-peak sharpness" );
-  add_var( "S2C" , "SEED,CYCLE" , "DUR_RATIO" , "Ratio of pos/neg half-wave duration [emit-asym]" );
-  add_var( "S2C" , "SEED,CYCLE" , "AMP_ASYM" , "Amplitude asymmetry [emit-asym]" );
-  add_var( "S2C" , "SEED,CYCLE" , "SLOPE_ASYM" , "Slope asymmetry [emit-asym]" );
-  add_var( "S2C" , "SEED,CYCLE" , "SHARP_ASYM" , "Sharpness asymmetry [emit-asym]" );
+  add_var( "S2C" , "SEED,CYCLE" , "T0_S" , "Cycle start time (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "T1_S" , "Cycle end time (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "DUR_POS" , "Positive half-wave duration (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "DUR_NEG" , "Negative half-wave duration (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "DUR_ZC_NEG" , "Duration from zero-crossing to negative peak (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "DUR_NEG_ZC" , "Duration from negative peak to next zero-crossing (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "DUR_ZC_POS" , "Duration from zero-crossing to positive peak (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "DUR_POS_ZC" , "Duration from positive peak to next zero-crossing (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "AMP_POS" , "Positive-peak amplitude (from baseline)" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "AMP_NEG" , "Absolute negative-peak amplitude (from baseline)" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "AMP_P2P" , "Peak-to-peak amplitude (v_pos - v_neg)" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "SLOPE_POS" , "Absolute positive slope" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "SLOPE_NEG" , "Absolute negative slope" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "SHARP_POS" , "Positive-peak sharpness" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "SHARP_NEG" , "Negative-peak sharpness" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "DUR_RATIO" , "Ratio of pos/neg half-wave duration [emit-asym]" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "AMP_ASYM" , "Amplitude asymmetry [emit-asym]" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "SLOPE_ASYM" , "Slope asymmetry [emit-asym]" , VT_REAL );
+  add_var( "S2C" , "SEED,CYCLE" , "SHARP_ASYM" , "Sharpness asymmetry [emit-asym]" , VT_REAL );
 
   add_table( "S2C" , "SEED,SIG" , "Seed-by-signal summary statistics" );
-  add_var( "S2C" , "SEED,SIG" , "D" , "Mean waveform peak-to-peak amplitude" );
-  add_var( "S2C" , "SEED,SIG" , "TAU_MAX_DEG" , "Phase (deg) of peak in mean waveform" );
-  add_var( "S2C" , "SEED,SIG" , "SINFIT_OVER_P2P" , "Sin/cos fit amplitude divided by peak-to-peak amplitude" );
-  add_var( "S2C" , "SEED,SIG" , "D_SD" , "SD of per-cycle peak-to-peak amplitude" );
-  add_var( "S2C" , "SEED,SIG" , "CIRC_MEAN_DEG" , "Circular mean phase of per-cycle peaks (deg)" );
-  add_var( "S2C" , "SEED,SIG" , "R" , "Resultant vector length of per-cycle peak phases" );
-  add_var( "S2C" , "SEED,SIG" , "CC_LAG" , "Cross-correlation lag (seconds)" );
-  add_var( "S2C" , "SEED,SIG" , "CC_R" , "Cross-correlation at lag" );
+  add_var( "S2C" , "SEED,SIG" , "D" , "Mean waveform peak-to-peak amplitude" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "TAU_MAX_DEG" , "Phase (deg) of peak in mean waveform" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "SINFIT_OVER_P2P" , "Sin/cos fit amplitude divided by peak-to-peak amplitude" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "D_SD" , "SD of per-cycle peak-to-peak amplitude" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "CIRC_MEAN_DEG" , "Circular mean phase of per-cycle peaks (deg)" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "R" , "Resultant vector length of per-cycle peak phases" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "CC_LAG" , "Cross-correlation lag (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "CC_R" , "Cross-correlation at lag" , VT_REAL );
 
-  add_var( "S2C" , "SEED,SIG" , "DT" , "Mean lag to nearest local extremum (seconds)" );
-  add_var( "S2C" , "SEED,SIG" , "DT_MD" , "Median lag to nearest local extremum (seconds)" );
-  add_var( "S2C" , "SEED,SIG" , "DT_MAD" , "MAD of lag to nearest local extremum [emit-mad]" );
-  add_var( "S2C" , "SEED,SIG" , "TD_USED_PCT" , "Proportion of cycles with valid time-domain windows" );
-  add_var( "S2C" , "SEED,SIG" , "TD_P2P" , "Mean window peak-to-peak amplitude" );
-  add_var( "S2C" , "SEED,SIG" , "TD_P2P_MD" , "Median window peak-to-peak amplitude" );
-  add_var( "S2C" , "SEED,SIG" , "TD_P2P_MAD" , "MAD of window peak-to-peak amplitude [emit-mad]" );
+  add_var( "S2C" , "SEED,SIG" , "DT" , "Mean lag to nearest local extremum (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "DT_MD" , "Median lag to nearest local extremum (seconds)" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "DT_MAD" , "MAD of lag to nearest local extremum [emit-mad]" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "TD_USED_PCT" , "Proportion of cycles with valid time-domain windows" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "TD_P2P" , "Mean window peak-to-peak amplitude" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "TD_P2P_MD" , "Median window peak-to-peak amplitude" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG" , "TD_P2P_MAD" , "MAD of window peak-to-peak amplitude [emit-mad]" , VT_REAL );
 
   add_table( "S2C" , "SEED,SIG,BIN" , "12-bin cycle-locked means (B01..B12)" );
-  add_var( "S2C" , "SEED,SIG,BIN" , "MEAN" , "Mean signal value in cycle bin" );
+  add_var( "S2C" , "SEED,SIG,BIN" , "MEAN" , "Mean signal value in cycle bin" , VT_REAL );
 
   add_table( "S2C" , "SEED,SIG,PH" , "Phase-bin mean waveform" );
-  add_var( "S2C" , "SEED,SIG,PH" , "MEAN" , "Mean amplitude in phase bin" );
-  add_var( "S2C" , "SEED,SIG,PH" , "SE" , "Bootstrap SE of mean [emit-se]" );
-  add_var( "S2C" , "SEED,SIG,PH" , "CI_LO" , "Bootstrap CI lower bound" );
-  add_var( "S2C" , "SEED,SIG,PH" , "CI_HI" , "Bootstrap CI upper bound" );
+  add_var( "S2C" , "SEED,SIG,PH" , "MEAN" , "Mean amplitude in phase bin" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG,PH" , "SE" , "Bootstrap SE of mean [emit-se]" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG,PH" , "CI_LO" , "Bootstrap CI lower bound" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG,PH" , "CI_HI" , "Bootstrap CI upper bound" , VT_REAL );
 
   add_table( "S2C" , "SEED,SIG,PH,AMP" , "Phase-by-amplitude density" );
-  add_var( "S2C" , "SEED,SIG,PH,AMP" , "DENS" , "Density in phase/amplitude bin" );
+  add_var( "S2C" , "SEED,SIG,PH,AMP" , "DENS" , "Density in phase/amplitude bin" , VT_REAL );
 
   add_table( "S2C" , "SEED,SIG,SEC" , "Time-domain grid (time-locked)" );
-  add_var( "S2C" , "SEED,SIG,SEC" , "MEAN" , "Mean amplitude at time bin" );
-  add_var( "S2C" , "SEED,SIG,SEC" , "SE" , "Bootstrap SE of mean [emit-se]" );
-  add_var( "S2C" , "SEED,SIG,SEC" , "CI_LO" , "Bootstrap CI lower bound" );
-  add_var( "S2C" , "SEED,SIG,SEC" , "CI_HI" , "Bootstrap CI upper bound" );
+  add_var( "S2C" , "SEED,SIG,SEC" , "MEAN" , "Mean amplitude at time bin" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG,SEC" , "SE" , "Bootstrap SE of mean [emit-se]" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG,SEC" , "CI_LO" , "Bootstrap CI lower bound" , VT_REAL );
+  add_var( "S2C" , "SEED,SIG,SEC" , "CI_HI" , "Bootstrap CI upper bound" , VT_REAL );
 
   add_table( "S2C" , "SEED,SIG,SEC,AMP" , "Time-by-amplitude density" );
-  add_var( "S2C" , "SEED,SIG,SEC,AMP" , "DENS" , "Density in time/amplitude bin" );
+  add_var( "S2C" , "SEED,SIG,SEC,AMP" , "DENS" , "Density in time/amplitude bin" , VT_REAL );
 
   //
   // DROP-ANNOTS
@@ -944,33 +944,33 @@ void cmddefs_t::init()
   add_param( "ANNOTS" , "start" , "" , "Keep annotations that start in an unmasked epoch" );
 
   add_table( "ANNOTS" , "ANNOT" , "Class-level annotation summary" );
-  add_var( "ANNOTS" , "ANNOT" , "COUNT" , "Number of instances of that annotation class" );
-  add_var( "ANNOTS" , "ANNOT" , "DUR" , "Combined duration (seconds) of all instances of that annotation class" );
+  add_var( "ANNOTS" , "ANNOT" , "COUNT" , "Number of instances of that annotation class" , VT_INTEGER );
+  add_var( "ANNOTS" , "ANNOT" , "DUR" , "Combined duration (seconds) of all instances of that annotation class" , VT_REAL );
 
   add_table( "ANNOTS" , "ANNOT,INST" , "Instance-level annotation summary" );
-  add_var( "ANNOTS" , "ANNOT,INST" , "COUNT" , "Number of instances of that annotation class and instance ID" );
-  add_var( "ANNOTS" , "ANNOT,INST" , "DUR" , "Combined duration (seconds) of all instances of that annotation class and instance ID" );
+  add_var( "ANNOTS" , "ANNOT,INST" , "COUNT" , "Number of instances of that annotation class and instance ID" , VT_INTEGER );
+  add_var( "ANNOTS" , "ANNOT,INST" , "DUR" , "Combined duration (seconds) of all instances of that annotation class and instance ID" , VT_REAL );
 
   add_table( "ANNOTS" , "ANNOT,INST,T" , "Instance-level annotation tabulation" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "START" , "Start time (secs) of this instance" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "STOP" , "Stop time (secs) of this instance" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "DUR" , "Annotation duration (secs)" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "VAL" , "The meta-data for this instance, if any exists (otherwise missing NA)" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "ALL_MASKED" , "Annotation interval is completely masked (1/0) [show-masked]" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "ALL_UNMASKED" , "Annotation interval is completely unmasked (1/0) [show-masked]" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "SOME_MASKED" , "Annotation interval overlaps any masked region (1/0) [show-masked]" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "SOME_UNMASKED" , "Annotation interval overlaps any unmasked region (1/0) [show-masked]" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "START_MASKED" , "Annotation start lies in a masked region (1/0) [show-masked]" );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "START" , "Start time (secs) of this instance" , VT_REAL );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "STOP" , "Stop time (secs) of this instance" , VT_REAL );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "DUR" , "Annotation duration (secs)" , VT_REAL );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "VAL" , "The meta-data for this instance, if any exists (otherwise missing NA)" , VT_TEXT );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "ALL_MASKED" , "Annotation interval is completely masked (1/0) [show-masked]" , VT_BOOLEAN );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "ALL_UNMASKED" , "Annotation interval is completely unmasked (1/0) [show-masked]" , VT_BOOLEAN );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "SOME_MASKED" , "Annotation interval overlaps any masked region (1/0) [show-masked]" , VT_BOOLEAN );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "SOME_UNMASKED" , "Annotation interval overlaps any unmasked region (1/0) [show-masked]" , VT_BOOLEAN );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "START_MASKED" , "Annotation start lies in a masked region (1/0) [show-masked]" , VT_BOOLEAN );
 
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "CH" , "Any associated channel(s)" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "START_ELAPSED_HMS" , "Annotation start (elapsed hh:mm:ss)" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "START_HMS" , "Annotation start" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "STOP_ELAPSED_HMS" , "Annotation stop (elapsed hh:mm:ss)" );
-  add_var( "ANNOTS" , "ANNOT,INST,T" , "STOP_HMS" , "Annotation stop" );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "CH" , "Any associated channel(s)" , VT_TEXT );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "START_ELAPSED_HMS" , "Annotation start (elapsed hh:mm:ss)" , VT_TEXT );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "START_HMS" , "Annotation start" , VT_TEXT );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "STOP_ELAPSED_HMS" , "Annotation stop (elapsed hh:mm:ss)" , VT_TEXT );
+  add_var( "ANNOTS" , "ANNOT,INST,T" , "STOP_HMS" , "Annotation stop" , VT_TEXT );
 
   add_table( "ANNOTS" , "E,INTERVAL,INST,CH" , "Per-epoch instance-level annotation tabulation" );
-  add_var( "ANNOTS" , "E,INTERVAL,INST,CH" , "AMASK" , "Annotation instance is masked/excluded under the current overlap rule (1/0) [epoch]" );
-  add_var( "ANNOTS" , "E,INTERVAL,INST,CH" , "EMASK" , "Epoch is masked/excluded (1/0) [epoch]" );
+  add_var( "ANNOTS" , "E,INTERVAL,INST,CH" , "AMASK" , "Annotation instance is masked/excluded under the current overlap rule (1/0) [epoch]" , VT_BOOLEAN );
+  add_var( "ANNOTS" , "E,INTERVAL,INST,CH" , "EMASK" , "Epoch is masked/excluded (1/0) [epoch]" , VT_BOOLEAN );
 
   //
   // AXA
@@ -1004,42 +1004,42 @@ void cmddefs_t::init()
   add_param( "AXA" , "verbose" , "" , "Write additional event-level information to the console" );
   
   add_table( "AXA" , "SEED,ANNOT" , "AXA pairwise metrics" );
-  add_var( "AXA" , "SEED,ANNOT" , "P" , "Mean proportion of each seed spanned by annotation" );
+  add_var( "AXA" , "SEED,ANNOT" , "P" , "Mean proportion of each seed spanned by annotation" , VT_REAL );
   //add_var( "AXA" , "SEED,ANNOT" , "P_MD" , "Median proportion of each seed spanned by annotation" );
-  add_var( "AXA" , "SEED,ANNOT" , "T" , "Mean time (secs) spanned by annotation per seed event" );
+  add_var( "AXA" , "SEED,ANNOT" , "T" , "Mean time (secs) spanned by annotation per seed event" , VT_REAL );
   //add_var( "AXA" , "SEED,ANNOT" , "T_MD" , "Median time (secs) spanned by annotation per seed event" );
-  add_var( "AXA" , "SEED,ANNOT" , "N" , "Mean number of spanning annotations per seed event" );
+  add_var( "AXA" , "SEED,ANNOT" , "N" , "Mean number of spanning annotations per seed event" , VT_REAL );
   //add_var( "AXA" , "SEED,ANNOT" , "N_MD" , "Median number of spanning annotations per seed event" );
-  add_var( "AXA" , "SEED,ANNOT" , "A" , "Proportion of seeds with any spanning annotation" );
-  add_var( "AXA" , "SEED,ANNOT" , "D" , "Time (distance) to nearest" );
-  add_var( "AXA" , "SEED,ANNOT" , "DABS" , "|Time| (distance) to nearest" );
-  add_var( "AXA" , "SEED,ANNOT" , "D_N" , "Number of seeds with a nearest event" );
-  add_var( "AXA" , "SEED,ANNOT" , "TOT_N" , "Total number of (flattened) annotations spanning all seeds" );
-  add_var( "AXA" , "SEED,ANNOT" , "TOT_T" , "Total duration (secs) of (flattened) annotations spanning all seeds" );
+  add_var( "AXA" , "SEED,ANNOT" , "A" , "Proportion of seeds with any spanning annotation" , VT_REAL );
+  add_var( "AXA" , "SEED,ANNOT" , "D" , "Time (distance) to nearest" , VT_REAL );
+  add_var( "AXA" , "SEED,ANNOT" , "DABS" , "|Time| (distance) to nearest" , VT_REAL );
+  add_var( "AXA" , "SEED,ANNOT" , "D_N" , "Number of seeds with a nearest event" , VT_INTEGER );
+  add_var( "AXA" , "SEED,ANNOT" , "TOT_N" , "Total number of (flattened) annotations spanning all seeds" , VT_INTEGER );
+  add_var( "AXA" , "SEED,ANNOT" , "TOT_T" , "Total duration (secs) of (flattened) annotations spanning all seeds" , VT_REAL );
 
   add_table( "AXA" , "CH,SEED,ANNOT" , "AXA pairwise metrics, within-channel" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "P" , "Mean proportion of each seed spanned by annotation" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "P" , "Mean proportion of each seed spanned by annotation" , VT_REAL );
   //add_var( "AXA" , "CH,SEED,ANNOT" , "P_MD" , "Median proportion of each seed spanned by annotation" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "T" , "Mean time (secs) spanned by annotation per seed event" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "T" , "Mean time (secs) spanned by annotation per seed event" , VT_REAL );
   //add_var( "AXA" , "CH,SEED,ANNOT" , "T_MD" , "Median time (secs) spanned by annotation per seed event" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "N" , "Mean number of spanning annotations per seed event" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "N" , "Mean number of spanning annotations per seed event" , VT_REAL );
   //add_var( "AXA" , "CH,SEED,ANNOT" , "N_MD" , "Median number of spanning annotations per seed event" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "A" , "Proportion of seeds with any spanning annotation" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "D" , "Time (distance) to nearest" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "DABS" , "|Time| (distance) to nearest" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "D_N" , "Number of seeds with a nearest event" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "TOT_N" , "Total number of (flattened) annotations spanning all seeds" );
-  add_var( "AXA" , "CH,SEED,ANNOT" , "TOT_T" , "Total duration (secs) of (flattened) annotations spanning all seeds" );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "A" , "Proportion of seeds with any spanning annotation" , VT_REAL );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "D" , "Time (distance) to nearest" , VT_REAL );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "DABS" , "|Time| (distance) to nearest" , VT_REAL );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "D_N" , "Number of seeds with a nearest event" , VT_INTEGER );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "TOT_N" , "Total number of (flattened) annotations spanning all seeds" , VT_INTEGER );
+  add_var( "AXA" , "CH,SEED,ANNOT" , "TOT_T" , "Total duration (secs) of (flattened) annotations spanning all seeds" , VT_REAL );
 
   for ( const std::string strata : { "SEED,ANNOT,OFFSET", "CH,SEED,ANNOT,OFFSET" } )
     {
       add_table( "AXA", strata, "Descriptive anchor-rate offset profile (no permutations)" );
-      add_var( "AXA", strata, "INT", "Half-open offset window bounds [centre-width/2,centre+width/2) in seconds; OFFSET is the centre" );
-      add_var( "AXA", strata, "N_OBS", "All seed-target anchor pairs in window" );
-      add_var( "AXA", strata, "EXPOSURE", "Summed available window duration (seconds)" );
-      add_var( "AXA", strata, "N_EXP_RATE", "Segment-specific baseline-rate expected count" );
-      add_var( "AXA", strata, "RATE", "Observed pairs per second of exposure" );
-      add_var( "AXA", strata, "ENRICHMENT", "Observed / baseline-rate expectation; missing for zero exposure or expectation" );
+      add_var( "AXA", strata, "INT", "Half-open offset window bounds [centre-width/2,centre+width/2) in seconds; OFFSET is the centre" , VT_TEXT );
+      add_var( "AXA", strata, "N_OBS", "All seed-target anchor pairs in window" , VT_INTEGER );
+      add_var( "AXA", strata, "EXPOSURE", "Summed available window duration (seconds)" , VT_REAL );
+      add_var( "AXA", strata, "N_EXP_RATE", "Segment-specific baseline-rate expected count" , VT_REAL );
+      add_var( "AXA", strata, "RATE", "Observed pairs per second of exposure" , VT_REAL );
+      add_var( "AXA", strata, "ENRICHMENT", "Observed / baseline-rate expectation; missing for zero exposure or expectation" , VT_REAL );
     }
 
   //
@@ -1056,35 +1056,35 @@ void cmddefs_t::init()
   add_param( "SPANNING" , "annot" , "N1,N2,N3,R,W" , "Spanning annotation group" );
 
   add_table( "SPANNING" , "N" , "Invalid annotations" );
-  add_var( "SPANNING" , "N" , "ANNOT" , "Annotation class" );
-  add_var( "SPANNING" , "N" , "INST" , "Annotation instance" );
-  add_var( "SPANNING" , "N" , "START" , "Start (seconds)" );
-  add_var( "SPANNING" , "N" , "STOP" , "Stop (seconds)" );
-  add_var( "SPANNING" , "N" , "DUR" , "Duration beyond the EDF timeline (seconds)" );
+  add_var( "SPANNING" , "N" , "ANNOT" , "Annotation class" , VT_TEXT );
+  add_var( "SPANNING" , "N" , "INST" , "Annotation instance" , VT_TEXT );
+  add_var( "SPANNING" , "N" , "START" , "Start (seconds)" , VT_REAL );
+  add_var( "SPANNING" , "N" , "STOP" , "Stop (seconds)" , VT_REAL );
+  add_var( "SPANNING" , "N" , "DUR" , "Duration beyond the EDF timeline (seconds)" , VT_REAL );
 
   add_table( "SPANNING" , "" , "Spanning summary report" );
-  add_var( "SPANNING" , "" , "REC_SEC" , "EDF recording duration (seconds)" );
-  add_var( "SPANNING" , "" , "REC_HMS" , "EDF recording duration (hh:mm:ss)" );
+  add_var( "SPANNING" , "" , "REC_SEC" , "EDF recording duration (seconds)" , VT_REAL );
+  add_var( "SPANNING" , "" , "REC_HMS" , "EDF recording duration (hh:mm:ss)" , VT_TEXT );
 
-  add_var( "SPANNING" , "" , "ANNOT_N" , "Number of annotations in group" );
-  add_var( "SPANNING" , "" , "ANNOT_SEC" , "Total (potentially overlapping) annotation duration (secs)" );
-  add_var( "SPANNING" , "" , "ANNOT_HMS" , "Total (potentially overlapping) annotation duration (hh:mm:ss)" );
+  add_var( "SPANNING" , "" , "ANNOT_N" , "Number of annotations in group" , VT_INTEGER );
+  add_var( "SPANNING" , "" , "ANNOT_SEC" , "Total (potentially overlapping) annotation duration (secs)" , VT_REAL );
+  add_var( "SPANNING" , "" , "ANNOT_HMS" , "Total (potentially overlapping) annotation duration (hh:mm:ss)" , VT_TEXT );
 
-  add_var( "SPANNING" , "" , "ANNOT_OVERLAP" , "Do any annotations in group overlap w/ one another (0/1)?" );
+  add_var( "SPANNING" , "" , "ANNOT_OVERLAP" , "Do any annotations in group overlap w/ one another (0/1)?" , VT_BOOLEAN );
 
-  add_var( "SPANNING" , "" , "INVALID_N" , "Number of annotations that over-extend EDF duration" );
-  add_var( "SPANNING" , "" , "VALID_N" , "Number of valid annotations, ANNOT_N - INVALID_N" );
-  add_var( "SPANNING" , "" , "NSEGS" , "Number of contiguous annotation blocks" );
+  add_var( "SPANNING" , "" , "INVALID_N" , "Number of annotations that over-extend EDF duration" , VT_INTEGER );
+  add_var( "SPANNING" , "" , "VALID_N" , "Number of valid annotations, ANNOT_N - INVALID_N" , VT_INTEGER );
+  add_var( "SPANNING" , "" , "NSEGS" , "Number of contiguous annotation blocks" , VT_INTEGER );
 
-  add_var( "SPANNING" , "" , "INVALID_SEC" , "Total duration of all annotation beyond EDF end" );
+  add_var( "SPANNING" , "" , "INVALID_SEC" , "Total duration of all annotation beyond EDF end" , VT_REAL );
 
-  add_var( "SPANNING" , "" , "SPANNED_PCT" , "% of EDF spanned by 1+ of these annotations" );
-  add_var( "SPANNING" , "" , "SPANNED_SEC" , "Duration of EDF spanned by 1+ of these annotations (secs)" );
-  add_var( "SPANNING" , "" , "SPANNED_HMS" , "Duration of EDF spanned by 1+ of these annotations (hh:mm:ss)" );
+  add_var( "SPANNING" , "" , "SPANNED_PCT" , "% of EDF spanned by 1+ of these annotations" , VT_REAL );
+  add_var( "SPANNING" , "" , "SPANNED_SEC" , "Duration of EDF spanned by 1+ of these annotations (secs)" , VT_REAL );
+  add_var( "SPANNING" , "" , "SPANNED_HMS" , "Duration of EDF spanned by 1+ of these annotations (hh:mm:ss)" , VT_TEXT );
 
-  add_var( "SPANNING" , "" , "UNSPANNED_PCT" , "% of EDF unspanned by 1+ of these annotations" );
-  add_var( "SPANNING" , "" , "UNSPANNED_SEC" , "Duration of EDF unspanned by 1+ of these annotations (secs)" );
-  add_var( "SPANNING" , "" , "UNSPANNED_HMS" , "Duration of EDF unspanned by 1+ of these annotations (hh:mm:ss)" );
+  add_var( "SPANNING" , "" , "UNSPANNED_PCT" , "% of EDF unspanned by 1+ of these annotations" , VT_REAL );
+  add_var( "SPANNING" , "" , "UNSPANNED_SEC" , "Duration of EDF unspanned by 1+ of these annotations (secs)" , VT_REAL );
+  add_var( "SPANNING" , "" , "UNSPANNED_HMS" , "Duration of EDF unspanned by 1+ of these annotations (hh:mm:ss)" , VT_TEXT );
 
   //
   // WRITE-ANNOTS
@@ -1182,24 +1182,24 @@ void cmddefs_t::init()
   add_param( "ESPAN" , "verbose" , "" , "Emit original and clipped per-instance overlaps" );
 
   add_table( "ESPAN" , "E" , "Per-epoch summary across all selected annotations" );
-  add_var( "ESPAN" , "E" , "SEC" , "Seconds spanned by any selected annotation in the epoch [sec]" );
-  add_var( "ESPAN" , "E" , "PCT" , "Proportion of the epoch spanned [pct]" );
-  add_var( "ESPAN" , "E" , "HAS" , "Epoch has any selected annotation overlap (1/0) [has]" );
-  add_var( "ESPAN" , "E" , "CNT" , "Count of overlapping annotation instances across all selected annotations [cnt]" );
+  add_var( "ESPAN" , "E" , "SEC" , "Seconds spanned by any selected annotation in the epoch [sec]" , VT_REAL );
+  add_var( "ESPAN" , "E" , "PCT" , "Proportion of the epoch spanned [pct]" , VT_REAL );
+  add_var( "ESPAN" , "E" , "HAS" , "Epoch has any selected annotation overlap (1/0) [has]" , VT_BOOLEAN );
+  add_var( "ESPAN" , "E" , "CNT" , "Count of overlapping annotation instances across all selected annotations [cnt]" , VT_INTEGER );
 
   add_table( "ESPAN" , "E,ANNOT" , "Per-epoch summary within annotation class" );
-  add_var( "ESPAN" , "E,ANNOT" , "SEC" , "Seconds spanned by this annotation in the epoch [sec]" );
-  add_var( "ESPAN" , "E,ANNOT" , "PCT" , "Proportion of the epoch spanned by this annotation [pct]" );
-  add_var( "ESPAN" , "E,ANNOT" , "HAS" , "This annotation overlaps the epoch (1/0) [has]" );
-  add_var( "ESPAN" , "E,ANNOT" , "CNT" , "Count of overlapping instances of this annotation [cnt]" );
+  add_var( "ESPAN" , "E,ANNOT" , "SEC" , "Seconds spanned by this annotation in the epoch [sec]" , VT_REAL );
+  add_var( "ESPAN" , "E,ANNOT" , "PCT" , "Proportion of the epoch spanned by this annotation [pct]" , VT_REAL );
+  add_var( "ESPAN" , "E,ANNOT" , "HAS" , "This annotation overlaps the epoch (1/0) [has]" , VT_BOOLEAN );
+  add_var( "ESPAN" , "E,ANNOT" , "CNT" , "Count of overlapping instances of this annotation [cnt]" , VT_INTEGER );
 
   add_table( "ESPAN" , "E,ANNOT,INST" , "Verbose per-instance overlaps within epoch [verbose]" );
-  add_var( "ESPAN" , "E,ANNOT,INST" , "START" , "Original annotation start time (seconds)" );
-  add_var( "ESPAN" , "E,ANNOT,INST" , "STOP" , "Original annotation stop time (seconds)" );
-  add_var( "ESPAN" , "E,ANNOT,INST" , "DUR" , "Original annotation duration (seconds)" );
-  add_var( "ESPAN" , "E,ANNOT,INST" , "XSTART" , "Clipped overlap start within the epoch (seconds)" );
-  add_var( "ESPAN" , "E,ANNOT,INST" , "XSTOP" , "Clipped overlap stop within the epoch (seconds)" );
-  add_var( "ESPAN" , "E,ANNOT,INST" , "XDUR" , "Clipped overlap duration within the epoch (seconds)" );
+  add_var( "ESPAN" , "E,ANNOT,INST" , "START" , "Original annotation start time (seconds)" , VT_REAL );
+  add_var( "ESPAN" , "E,ANNOT,INST" , "STOP" , "Original annotation stop time (seconds)" , VT_REAL );
+  add_var( "ESPAN" , "E,ANNOT,INST" , "DUR" , "Original annotation duration (seconds)" , VT_REAL );
+  add_var( "ESPAN" , "E,ANNOT,INST" , "XSTART" , "Clipped overlap start within the epoch (seconds)" , VT_REAL );
+  add_var( "ESPAN" , "E,ANNOT,INST" , "XSTOP" , "Clipped overlap stop within the epoch (seconds)" , VT_REAL );
+  add_var( "ESPAN" , "E,ANNOT,INST" , "XDUR" , "Clipped overlap duration within the epoch (seconds)" , VT_REAL );
 
   //
   // A2S
@@ -1469,121 +1469,121 @@ void cmddefs_t::init()
 	     "Requires sig=<channel>." );
 
   add_table( "ACTIG" , "" , "Individual-level output" );
-  add_var( "ACTIG" , "" , "NP_IS" , "Interdaily stability" );
-  add_var( "ACTIG" , "" , "NP_IV" , "Intradaily variability" );
-  add_var( "ACTIG" , "" , "NP_RA" , "Relative amplitude: (M-L)/(M+L)" );
-  add_var( "ACTIG" , "" , "NP_L5" , "Mean activity in the least-active 5h window" );
-  add_var( "ACTIG" , "" , "NP_L5_ONSET" , "Clock time of L5 window onset (HH:MM:SS; sub-hour precision with default np-step=1)" );
-  add_var( "ACTIG" , "" , "NP_L5_ONSET_MIN" , "L5 onset in decimal minutes from midnight (0=00:00, 120=02:00, 1380=23:00); use for regression/correlation" );
-  add_var( "ACTIG" , "" , "NP_M10" , "Mean activity in the most-active 10h window" );
-  add_var( "ACTIG" , "" , "NP_M10_ONSET" , "Clock time of M10 window onset (HH:MM:SS)" );
-  add_var( "ACTIG" , "" , "NP_M10_ONSET_MIN" , "M10 onset in decimal minutes from midnight" );
-  add_var( "ACTIG" , "" , "NP_NE" , "Epoch bin count used for NP metrics (including gaps)" );
-  add_var( "ACTIG" , "" , "NP_NE_VALID" , "Valid (non-gap) epoch bin count used for NP metrics" );
-  add_var( "ACTIG" , "" , "NP_NE_GAP" , "Gap epoch bin count used for NP metrics" );
-  add_var( "ACTIG" , "" , "NP_NBINS" , "NP bin count used for NP metrics (including gaps)" );
-  add_var( "ACTIG" , "" , "NP_NBINS_VALID" , "Valid NP bin count used for NP metrics" );
-  add_var( "ACTIG" , "" , "NP_NDAYS" , "Number of complete recording days" );
-  add_var( "ACTIG" , "" , "SCORE_TST_MIN" , "Total sleep time (minutes, valid epochs only)" );
-  add_var( "ACTIG" , "" , "SCORE_TWT_MIN" , "Total wake time (minutes, valid epochs only)" );
-  add_var( "ACTIG" , "" , "SCORE_GAP_MIN" , "Total gap time (minutes)" );
-  add_var( "ACTIG" , "" , "SCORE_SLEEP_PCT" , "Sleep % of valid (non-gap) scored epochs" );
-  add_var( "ACTIG" , "" , "DAY_N" , "Total number of days" );
-  add_var( "ACTIG" , "" , "DAY_N_INCLUDED" , "Days meeting day-min-valid threshold (coverage-only)" );
-  add_var( "ACTIG" , "" , "DAY_N_EXCLUDED" , "Days below day-min-valid threshold (coverage-only)" );
-  add_var( "ACTIG" , "" , "DAY_N_QC_OK" , "Days included after QC with no warnings" );
-  add_var( "ACTIG" , "" , "DAY_N_QC_EXCLUDED" , "Days excluded after applying coverage + day QC" );
-  add_var( "ACTIG" , "" , "DAY_N_QC_WARN" , "Days included after QC but flagged with warnings" );
-  add_var( "ACTIG" , "" , "DAY_N_INCLUDED_POSTQC" , "Days contributing to cross-day averages after coverage + QC filtering" );
-  add_var( "ACTIG" , "" , "SCORE_TST_DAYAVG_MIN" , "Mean TST across post-QC included days (minutes)" );
-  add_var( "ACTIG" , "" , "SCORE_TWT_DAYAVG_MIN" , "Mean TWT across post-QC included days (minutes)" );
-  add_var( "ACTIG" , "" , "SCORE_TST_SP_DAYAVG_MIN" , "Mean TST within SP (sleep period) window across post-QC included days (minutes)" );
-  add_var( "ACTIG" , "" , "SCORE_TWT_SP_DAYAVG_MIN" , "Mean TWT within SP (sleep period) window across post-QC included days (minutes)" );
-  add_var( "ACTIG" , "" , "SCORE_TST_WP_DAYAVG_MIN" , "Mean TST within WP (wake period) window across post-QC included days (minutes)" );
-  add_var( "ACTIG" , "" , "SCORE_TWT_WP_DAYAVG_MIN" , "Mean TWT within WP (wake period) window across post-QC included days (minutes)" );
-  add_var( "ACTIG" , "" , "SCORE_SLEEP_PCT_DAYAVG" , "Mean sleep % across post-QC included days" );
-  add_var( "ACTIG" , "" , "FRAG_SFI"            , "Day-averaged SFI: sleep->wake transitions per hour sleep (within S period)" );
-  add_var( "ACTIG" , "" , "FRAG_MI_ACT"         , "Day-averaged movement index: % wake epochs within the sleep period" );
-  add_var( "ACTIG" , "" , "FRAG_FI_ACT"         , "Day-averaged fragmentation index: % sleep bouts <=1 epoch within S period" );
-  add_var( "ACTIG" , "" , "FRAG_SFI_ACT"        , "Day-averaged actigraphy FI: MI_ACT + FI_ACT" );
-  add_var( "ACTIG" , "" , "FRAG_WAKE_BOUT_MED_MIN" , "Day-averaged median wake bout duration within S period (minutes)" );
-  add_var( "ACTIG" , "" , "FRAG_WAKE_BOUT_P90_MIN" , "Day-averaged P90 wake bout duration within S period (minutes)" );
-  add_var( "ACTIG" , "" , "FRAG_WAKE_BOUT_MAX_MIN" , "Day-averaged maximum wake bout duration within S period (minutes)" );
-  add_var( "ACTIG" , "" , "FRAG_SLEEP_BOUT_MED_MIN" , "Day-averaged median sleep bout duration within S period (minutes)" );
-  add_var( "ACTIG" , "" , "FRAG_SLEEP_BOUT_P10_MIN" , "Day-averaged P10 sleep bout duration within S period (minutes)" );
-  add_var( "ACTIG" , "" , "FRAG_SLEEP_BOUT_MAX_MIN" , "Day-averaged maximum sleep bout duration within S period (minutes)" );
-  add_var( "ACTIG" , "" , "FRAG_TRANS_ENT_S"    , "Day-averaged conditional transition entropy H(X_t|X_{t-1}) within S period (bits)" );
-  add_var( "ACTIG" , "" , "FRAG_RL_ENT_SE_S"    , "Day-averaged run-length entropy of sleep bouts within S period (bits)" );
-  add_var( "ACTIG" , "" , "FRAG_RL_ENT_WE_S"    , "Day-averaged run-length entropy of wake bouts within S period (bits)" );
-  add_var( "ACTIG" , "" , "FRAG_TP_SW_S"        , "Day-averaged P(sleep->wake) within S period (Bayesian ML estimator)" );
-  add_var( "ACTIG" , "" , "FRAG_TP_WS_S"        , "Day-averaged P(wake->sleep) within S period (Bayesian ML estimator)" );
-  add_var( "ACTIG" , "" , "FRAG_N"              , "Number of days contributing to S-period fragmentation day-averages" );
-  add_var( "ACTIG" , "" , "FRAG_TRANS_ENT_W"    , "Day-averaged conditional transition entropy H(X_t|X_{t-1}) within W period (bits)" );
-  add_var( "ACTIG" , "" , "FRAG_RL_ENT_SE_W"    , "Day-averaged run-length entropy of sleep bouts within W period (bits)" );
-  add_var( "ACTIG" , "" , "FRAG_RL_ENT_WE_W"    , "Day-averaged run-length entropy of wake bouts within W period (bits)" );
-  add_var( "ACTIG" , "" , "FRAG_TP_SW_W"        , "Day-averaged P(sleep->wake) within W period (Bayesian ML estimator)" );
-  add_var( "ACTIG" , "" , "FRAG_TP_WS_W"        , "Day-averaged P(wake->sleep) within W period (Bayesian ML estimator)" );
+  add_var( "ACTIG" , "" , "NP_IS" , "Interdaily stability" , VT_REAL );
+  add_var( "ACTIG" , "" , "NP_IV" , "Intradaily variability" , VT_REAL );
+  add_var( "ACTIG" , "" , "NP_RA" , "Relative amplitude: (M-L)/(M+L)" , VT_REAL );
+  add_var( "ACTIG" , "" , "NP_L5" , "Mean activity in the least-active 5h window" , VT_REAL );
+  add_var( "ACTIG" , "" , "NP_L5_ONSET" , "Clock time of L5 window onset (HH:MM:SS; sub-hour precision with default np-step=1)" , VT_TEXT );
+  add_var( "ACTIG" , "" , "NP_L5_ONSET_MIN" , "L5 onset in decimal minutes from midnight (0=00:00, 120=02:00, 1380=23:00); use for regression/correlation" , VT_REAL );
+  add_var( "ACTIG" , "" , "NP_M10" , "Mean activity in the most-active 10h window" , VT_REAL );
+  add_var( "ACTIG" , "" , "NP_M10_ONSET" , "Clock time of M10 window onset (HH:MM:SS)" , VT_TEXT );
+  add_var( "ACTIG" , "" , "NP_M10_ONSET_MIN" , "M10 onset in decimal minutes from midnight" , VT_REAL );
+  add_var( "ACTIG" , "" , "NP_NE" , "Epoch bin count used for NP metrics (including gaps)" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "NP_NE_VALID" , "Valid (non-gap) epoch bin count used for NP metrics" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "NP_NE_GAP" , "Gap epoch bin count used for NP metrics" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "NP_NBINS" , "NP bin count used for NP metrics (including gaps)" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "NP_NBINS_VALID" , "Valid NP bin count used for NP metrics" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "NP_NDAYS" , "Number of complete recording days" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "SCORE_TST_MIN" , "Total sleep time (minutes, valid epochs only)" , VT_REAL );
+  add_var( "ACTIG" , "" , "SCORE_TWT_MIN" , "Total wake time (minutes, valid epochs only)" , VT_REAL );
+  add_var( "ACTIG" , "" , "SCORE_GAP_MIN" , "Total gap time (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "SCORE_SLEEP_PCT" , "Sleep % of valid (non-gap) scored epochs" , VT_REAL );
+  add_var( "ACTIG" , "" , "DAY_N" , "Total number of days" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "DAY_N_INCLUDED" , "Days meeting day-min-valid threshold (coverage-only)" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "DAY_N_EXCLUDED" , "Days below day-min-valid threshold (coverage-only)" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "DAY_N_QC_OK" , "Days included after QC with no warnings" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "DAY_N_QC_EXCLUDED" , "Days excluded after applying coverage + day QC" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "DAY_N_QC_WARN" , "Days included after QC but flagged with warnings" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "DAY_N_INCLUDED_POSTQC" , "Days contributing to cross-day averages after coverage + QC filtering" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "SCORE_TST_DAYAVG_MIN" , "Mean TST across post-QC included days (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "SCORE_TWT_DAYAVG_MIN" , "Mean TWT across post-QC included days (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "SCORE_TST_SP_DAYAVG_MIN" , "Mean TST within SP (sleep period) window across post-QC included days (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "SCORE_TWT_SP_DAYAVG_MIN" , "Mean TWT within SP (sleep period) window across post-QC included days (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "SCORE_TST_WP_DAYAVG_MIN" , "Mean TST within WP (wake period) window across post-QC included days (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "SCORE_TWT_WP_DAYAVG_MIN" , "Mean TWT within WP (wake period) window across post-QC included days (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "SCORE_SLEEP_PCT_DAYAVG" , "Mean sleep % across post-QC included days" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_SFI"            , "Day-averaged SFI: sleep->wake transitions per hour sleep (within S period)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_MI_ACT"         , "Day-averaged movement index: % wake epochs within the sleep period" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_FI_ACT"         , "Day-averaged fragmentation index: % sleep bouts <=1 epoch within S period" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_SFI_ACT"        , "Day-averaged actigraphy FI: MI_ACT + FI_ACT" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_WAKE_BOUT_MED_MIN" , "Day-averaged median wake bout duration within S period (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_WAKE_BOUT_P90_MIN" , "Day-averaged P90 wake bout duration within S period (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_WAKE_BOUT_MAX_MIN" , "Day-averaged maximum wake bout duration within S period (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_SLEEP_BOUT_MED_MIN" , "Day-averaged median sleep bout duration within S period (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_SLEEP_BOUT_P10_MIN" , "Day-averaged P10 sleep bout duration within S period (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_SLEEP_BOUT_MAX_MIN" , "Day-averaged maximum sleep bout duration within S period (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_TRANS_ENT_S"    , "Day-averaged conditional transition entropy H(X_t|X_{t-1}) within S period (bits)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_RL_ENT_SE_S"    , "Day-averaged run-length entropy of sleep bouts within S period (bits)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_RL_ENT_WE_S"    , "Day-averaged run-length entropy of wake bouts within S period (bits)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_TP_SW_S"        , "Day-averaged P(sleep->wake) within S period (Bayesian ML estimator)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_TP_WS_S"        , "Day-averaged P(wake->sleep) within S period (Bayesian ML estimator)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_N"              , "Number of days contributing to S-period fragmentation day-averages" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "FRAG_TRANS_ENT_W"    , "Day-averaged conditional transition entropy H(X_t|X_{t-1}) within W period (bits)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_RL_ENT_SE_W"    , "Day-averaged run-length entropy of sleep bouts within W period (bits)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_RL_ENT_WE_W"    , "Day-averaged run-length entropy of wake bouts within W period (bits)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_TP_SW_W"        , "Day-averaged P(sleep->wake) within W period (Bayesian ML estimator)" , VT_REAL );
+  add_var( "ACTIG" , "" , "FRAG_TP_WS_W"        , "Day-averaged P(wake->sleep) within W period (Bayesian ML estimator)" , VT_REAL );
 
   add_table( "ACTIG" , "DAY" , "Per-day output (day-anchor boundaries)" );
-  add_var( "ACTIG" , "DAY" , "SCORE_TST_MIN" , "Daily total sleep time (minutes, all epochs)" );
-  add_var( "ACTIG" , "DAY" , "SCORE_TWT_MIN" , "Daily total wake time (minutes, all epochs)" );
-  add_var( "ACTIG" , "DAY" , "SCORE_TST_SP_MIN" , "Daily TST within SP (sleep period) window (minutes)" );
-  add_var( "ACTIG" , "DAY" , "SCORE_TWT_SP_MIN" , "Daily TWT within SP (sleep period) window (minutes)" );
-  add_var( "ACTIG" , "DAY" , "SCORE_TST_WP_MIN" , "Daily TST within WP (wake period) window — nap sleep (minutes)" );
-  add_var( "ACTIG" , "DAY" , "SCORE_TWT_WP_MIN" , "Daily TWT within WP (wake period) window (minutes)" );
-  add_var( "ACTIG" , "DAY" , "SCORE_GAP_MIN" , "Daily within-record gap time (minutes); EDF+D holes excluded" );
-  add_var( "ACTIG" , "DAY" , "VALID_MIN" , "Daily valid (non-gap) minutes" );
-  add_var( "ACTIG" , "DAY" , "VALID_PCT" , "Daily valid % of total day duration" );
-  add_var( "ACTIG" , "DAY" , "INCLUDED" , "1 if day meets day-min-valid threshold, 0 otherwise" );
-  add_var( "ACTIG" , "DAY" , "QC_DAY_OK" , "1 if day is included after QC and has no warnings" );
-  add_var( "ACTIG" , "DAY" , "QC_DAY_EXCLUDED" , "1 if day is excluded after applying coverage + day QC" );
-  add_var( "ACTIG" , "DAY" , "QC_DAY_WARN" , "1 if day remains included but is flagged with warnings" );
-  add_var( "ACTIG" , "DAY" , "QC_TECH_FLAG_N" , "Number of technical day-QC flags triggered" );
-  add_var( "ACTIG" , "DAY" , "SCORE_SLEEP_PCT" , "Daily sleep % (of valid scored epochs)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_SFI"            , "Daily SFI: sleep->wake transitions per hour sleep (within S period)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_SFI_N"          , "Daily sleep->wake transition count within S period" );
-  add_var( "ACTIG" , "DAY" , "FRAG_SFI_ACT"        , "Daily actigraphy FI: MI_ACT + FI_ACT" );
-  add_var( "ACTIG" , "DAY" , "FRAG_MI_ACT"         , "Daily movement index: % wake epochs within S period" );
-  add_var( "ACTIG" , "DAY" , "FRAG_FI_ACT"         , "Daily fragmentation index: % sleep bouts <=1 epoch within S period" );
-  add_var( "ACTIG" , "DAY" , "FRAG_WAKE_BOUT_N"    , "Daily wake bout count within S period" );
-  add_var( "ACTIG" , "DAY" , "FRAG_WAKE_BOUT_MED_MIN" , "Daily median wake bout duration within S period (minutes)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_WAKE_BOUT_P90_MIN" , "Daily P90 wake bout duration within S period (minutes)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_WAKE_BOUT_MAX_MIN" , "Daily maximum wake bout duration within S period (minutes)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_SLEEP_BOUT_MED_MIN" , "Daily median sleep bout duration within S period (minutes)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_SLEEP_BOUT_P10_MIN" , "Daily P10 sleep bout duration within S period (minutes)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_SLEEP_BOUT_MAX_MIN" , "Daily maximum sleep bout duration within S period (minutes)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_TRANS_ENT_S"   , "Daily conditional transition entropy H(X_t|X_{t-1}) within S period (bits)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_RL_ENT_SE_S"   , "Daily run-length entropy of sleep bouts within S period (bits)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_RL_ENT_WE_S"   , "Daily run-length entropy of wake bouts within S period (bits)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_TP_SW_S"       , "Daily P(sleep->wake) within S period (Bayesian ML estimator)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_TP_WS_S"       , "Daily P(wake->sleep) within S period (Bayesian ML estimator)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_TRANS_ENT_W"   , "Daily conditional transition entropy H(X_t|X_{t-1}) within W period (bits)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_RL_ENT_SE_W"   , "Daily run-length entropy of sleep bouts within W period (bits)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_RL_ENT_WE_W"   , "Daily run-length entropy of wake bouts within W period (bits)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_TP_SW_W"       , "Daily P(sleep->wake) within W period (Bayesian ML estimator)" );
-  add_var( "ACTIG" , "DAY" , "FRAG_TP_WS_W"       , "Daily P(wake->sleep) within W period (Bayesian ML estimator)" );
-  add_var( "ACTIG" , "DAY" , "SCORE_EPOCH_N"      , "Daily valid (non-gap) epoch count" );
-  add_var( "ACTIG" , "DAY" , "SCORE_WAKE_EPOCH_N" , "Daily wake epoch count" );
-  add_var( "ACTIG" , "DAY" , "QC_FLAT_FRAC" , "Daily fraction of adjacent valid epoch pairs with minimal change" );
-  add_var( "ACTIG" , "DAY" , "QC_LOWVAR_CV" , "Daily coefficient of variation of valid raw activity" );
-  add_var( "ACTIG" , "DAY" , "QC_NEARFLOOR_FRAC" , "Daily fraction of valid epochs near the day-specific lower tail" );
-  add_var( "ACTIG" , "DAY" , "QC_ACTIVE_EPOCH_N" , "Daily active-structure epoch count based on within-day activity reference" );
-  add_var( "ACTIG" , "DAY" , "QC_LONGEST_QUIET_RUN_MIN" , "Daily longest contiguous run of near-floor epochs (minutes)" );
-  add_var( "ACTIG" , "DAY" , "QC_LONGEST_LOWVAR_RUN_MIN" , "Daily longest contiguous rolling low-variability run (minutes)" );
-  add_var( "ACTIG" , "DAY" , "QC_ACT_MED" , "Daily median raw activity across valid epochs" );
-  add_var( "ACTIG" , "DAY" , "QC_ACT_MAD" , "Daily MAD of raw activity across valid epochs" );
-  add_var( "ACTIG" , "DAY" , "QC_ACT_SD" , "Daily SD of raw activity across valid epochs" );
-  add_var( "ACTIG" , "DAY" , "QC_ACT_P05" , "Daily P05 raw activity across valid epochs" );
-  add_var( "ACTIG" , "DAY" , "QC_ACT_P95" , "Daily P95 raw activity across valid epochs" );
-  add_var( "ACTIG" , "DAY" , "QC_LONGEST_SLEEP_BOUT_MIN" , "Daily longest contiguous sleep bout (minutes)" );
-  add_var( "ACTIG" , "DAY" , "QC_LONGEST_WAKE_BOUT_MIN" , "Daily longest contiguous wake bout (minutes)" );
-  add_var( "ACTIG" , "DAY" , "QC_FLAG_FLAT" , "Daily technical flag: flatline-like activity" );
-  add_var( "ACTIG" , "DAY" , "QC_FLAG_LOWVAR" , "Daily technical flag: collapsed variability and low active structure" );
-  add_var( "ACTIG" , "DAY" , "QC_FLAG_NEARFLOOR" , "Daily technical flag: near-floor day with low active structure" );
-  add_var( "ACTIG" , "DAY" , "QC_WARN_HIGHSLEEP"   , "Daily warning: high sleep fraction" );
-  add_var( "ACTIG" , "DAY" , "QC_WARN_LONGSLEEP"   , "Daily warning: very long sleep bout" );
-  add_var( "ACTIG" , "DAY" , "QC_WARN_LOWWAKERUNS" , "Daily warning: too few wake runs" );
-  add_var( "ACTIG" , "DAY" , "QC_WARN_IMPLAUSIBLE" , "Daily warning: implausible combined sleep pattern (possible non-wear)" );
+  add_var( "ACTIG" , "DAY" , "SCORE_TST_MIN" , "Daily total sleep time (minutes, all epochs)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "SCORE_TWT_MIN" , "Daily total wake time (minutes, all epochs)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "SCORE_TST_SP_MIN" , "Daily TST within SP (sleep period) window (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "SCORE_TWT_SP_MIN" , "Daily TWT within SP (sleep period) window (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "SCORE_TST_WP_MIN" , "Daily TST within WP (wake period) window — nap sleep (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "SCORE_TWT_WP_MIN" , "Daily TWT within WP (wake period) window (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "SCORE_GAP_MIN" , "Daily within-record gap time (minutes); EDF+D holes excluded" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "VALID_MIN" , "Daily valid (non-gap) minutes" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "VALID_PCT" , "Daily valid % of total day duration" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "INCLUDED" , "1 if day meets day-min-valid threshold, 0 otherwise" , VT_BOOLEAN );
+  add_var( "ACTIG" , "DAY" , "QC_DAY_OK" , "1 if day is included after QC and has no warnings" , VT_BOOLEAN );
+  add_var( "ACTIG" , "DAY" , "QC_DAY_EXCLUDED" , "1 if day is excluded after applying coverage + day QC" , VT_BOOLEAN );
+  add_var( "ACTIG" , "DAY" , "QC_DAY_WARN" , "1 if day remains included but is flagged with warnings" , VT_BOOLEAN );
+  add_var( "ACTIG" , "DAY" , "QC_TECH_FLAG_N" , "Number of technical day-QC flags triggered" , VT_INTEGER );
+  add_var( "ACTIG" , "DAY" , "SCORE_SLEEP_PCT" , "Daily sleep % (of valid scored epochs)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_SFI"            , "Daily SFI: sleep->wake transitions per hour sleep (within S period)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_SFI_N"          , "Daily sleep->wake transition count within S period" , VT_INTEGER );
+  add_var( "ACTIG" , "DAY" , "FRAG_SFI_ACT"        , "Daily actigraphy FI: MI_ACT + FI_ACT" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_MI_ACT"         , "Daily movement index: % wake epochs within S period" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_FI_ACT"         , "Daily fragmentation index: % sleep bouts <=1 epoch within S period" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_WAKE_BOUT_N"    , "Daily wake bout count within S period" , VT_INTEGER );
+  add_var( "ACTIG" , "DAY" , "FRAG_WAKE_BOUT_MED_MIN" , "Daily median wake bout duration within S period (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_WAKE_BOUT_P90_MIN" , "Daily P90 wake bout duration within S period (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_WAKE_BOUT_MAX_MIN" , "Daily maximum wake bout duration within S period (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_SLEEP_BOUT_MED_MIN" , "Daily median sleep bout duration within S period (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_SLEEP_BOUT_P10_MIN" , "Daily P10 sleep bout duration within S period (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_SLEEP_BOUT_MAX_MIN" , "Daily maximum sleep bout duration within S period (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_TRANS_ENT_S"   , "Daily conditional transition entropy H(X_t|X_{t-1}) within S period (bits)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_RL_ENT_SE_S"   , "Daily run-length entropy of sleep bouts within S period (bits)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_RL_ENT_WE_S"   , "Daily run-length entropy of wake bouts within S period (bits)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_TP_SW_S"       , "Daily P(sleep->wake) within S period (Bayesian ML estimator)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_TP_WS_S"       , "Daily P(wake->sleep) within S period (Bayesian ML estimator)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_TRANS_ENT_W"   , "Daily conditional transition entropy H(X_t|X_{t-1}) within W period (bits)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_RL_ENT_SE_W"   , "Daily run-length entropy of sleep bouts within W period (bits)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_RL_ENT_WE_W"   , "Daily run-length entropy of wake bouts within W period (bits)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_TP_SW_W"       , "Daily P(sleep->wake) within W period (Bayesian ML estimator)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "FRAG_TP_WS_W"       , "Daily P(wake->sleep) within W period (Bayesian ML estimator)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "SCORE_EPOCH_N"      , "Daily valid (non-gap) epoch count" , VT_INTEGER );
+  add_var( "ACTIG" , "DAY" , "SCORE_WAKE_EPOCH_N" , "Daily wake epoch count" , VT_INTEGER );
+  add_var( "ACTIG" , "DAY" , "QC_FLAT_FRAC" , "Daily fraction of adjacent valid epoch pairs with minimal change" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "QC_LOWVAR_CV" , "Daily coefficient of variation of valid raw activity" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "QC_NEARFLOOR_FRAC" , "Daily fraction of valid epochs near the day-specific lower tail" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "QC_ACTIVE_EPOCH_N" , "Daily active-structure epoch count based on within-day activity reference" , VT_INTEGER );
+  add_var( "ACTIG" , "DAY" , "QC_LONGEST_QUIET_RUN_MIN" , "Daily longest contiguous run of near-floor epochs (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "QC_LONGEST_LOWVAR_RUN_MIN" , "Daily longest contiguous rolling low-variability run (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "QC_ACT_MED" , "Daily median raw activity across valid epochs" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "QC_ACT_MAD" , "Daily MAD of raw activity across valid epochs" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "QC_ACT_SD" , "Daily SD of raw activity across valid epochs" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "QC_ACT_P05" , "Daily P05 raw activity across valid epochs" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "QC_ACT_P95" , "Daily P95 raw activity across valid epochs" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "QC_LONGEST_SLEEP_BOUT_MIN" , "Daily longest contiguous sleep bout (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "QC_LONGEST_WAKE_BOUT_MIN" , "Daily longest contiguous wake bout (minutes)" , VT_REAL );
+  add_var( "ACTIG" , "DAY" , "QC_FLAG_FLAT" , "Daily technical flag: flatline-like activity" , VT_BOOLEAN );
+  add_var( "ACTIG" , "DAY" , "QC_FLAG_LOWVAR" , "Daily technical flag: collapsed variability and low active structure" , VT_BOOLEAN );
+  add_var( "ACTIG" , "DAY" , "QC_FLAG_NEARFLOOR" , "Daily technical flag: near-floor day with low active structure" , VT_BOOLEAN );
+  add_var( "ACTIG" , "DAY" , "QC_WARN_HIGHSLEEP"   , "Daily warning: high sleep fraction" , VT_BOOLEAN );
+  add_var( "ACTIG" , "DAY" , "QC_WARN_LONGSLEEP"   , "Daily warning: very long sleep bout" , VT_BOOLEAN );
+  add_var( "ACTIG" , "DAY" , "QC_WARN_LOWWAKERUNS" , "Daily warning: too few wake runs" , VT_BOOLEAN );
+  add_var( "ACTIG" , "DAY" , "QC_WARN_IMPLAUSIBLE" , "Daily warning: implausible combined sleep pattern (possible non-wear)" , VT_BOOLEAN );
 
   add_param( "ACTIG" , "debt" , "" , "Compute local sleep debt relative to a target night" );
   add_param( "ACTIG" , "debt-target" , "" ,
@@ -1599,19 +1599,19 @@ void cmddefs_t::init()
   add_param( "ACTIG" , "debt-w" , "0.5" ,
 	     "Weight given to TST in DEBT_INDEX (0=fragmentation only, 1=TST only; default: 0.5)" );
 
-  add_var( "ACTIG" , "" , "DEBT_MAPPED"     , "1 if debt-target was within the recording, 0 if outside (outputs skipped)" );
-  add_var( "ACTIG" , "" , "DEBT_TARGET_DAY" , "Target day number (1-based) used for debt calculation" );
-  add_var( "ACTIG" , "" , "DEBT_N_RECENT"   , "Valid included nights in the recent window" );
-  add_var( "ACTIG" , "" , "DEBT_N_BASE"     , "Valid included nights in the baseline window" );
-  add_var( "ACTIG" , "" , "DEBT_TST_RECENT" , "Mean TST (min) over recent nights" );
-  add_var( "ACTIG" , "" , "DEBT_TST_BASE"   , "Median TST (min) over baseline nights" );
-  add_var( "ACTIG" , "" , "DEBT_FRAG_RECENT", "Mean SFI over recent nights (sleep->wake transitions per hour)" );
-  add_var( "ACTIG" , "" , "DEBT_FRAG_BASE"  , "Median SFI over baseline nights" );
-  add_var( "ACTIG" , "" , "DEBT_TST_DELTA"  , "Baseline median TST minus recent mean TST (min; positive = deficit); needs debt-min-base" );
-  add_var( "ACTIG" , "" , "DEBT_TST_REL"    , "Fractional TST deficit: DELTA / baseline median (0..1); needs debt-min-base" );
-  add_var( "ACTIG" , "" , "DEBT_TST_Z"      , "Z-score of recent mean TST vs baseline distribution (negative = deprived); needs debt-min-z" );
-  add_var( "ACTIG" , "" , "DEBT_FRAG_Z"     , "Z-score of recent mean SFI vs baseline distribution (positive = more fragmented); needs debt-min-z" );
-  add_var( "ACTIG" , "" , "DEBT_INDEX"      , "Composite debt: w*(-TST_Z) + (1-w)*FRAG_Z; higher = more deprived; needs debt-min-z" );
+  add_var( "ACTIG" , "" , "DEBT_MAPPED"     , "1 if debt-target was within the recording, 0 if outside (outputs skipped)" , VT_BOOLEAN );
+  add_var( "ACTIG" , "" , "DEBT_TARGET_DAY" , "Target day number (1-based) used for debt calculation" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "DEBT_N_RECENT"   , "Valid included nights in the recent window" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "DEBT_N_BASE"     , "Valid included nights in the baseline window" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "DEBT_TST_RECENT" , "Mean TST (min) over recent nights" , VT_REAL );
+  add_var( "ACTIG" , "" , "DEBT_TST_BASE"   , "Median TST (min) over baseline nights" , VT_REAL );
+  add_var( "ACTIG" , "" , "DEBT_FRAG_RECENT", "Mean SFI over recent nights (sleep->wake transitions per hour)" , VT_REAL );
+  add_var( "ACTIG" , "" , "DEBT_FRAG_BASE"  , "Median SFI over baseline nights" , VT_REAL );
+  add_var( "ACTIG" , "" , "DEBT_TST_DELTA"  , "Baseline median TST minus recent mean TST (min; positive = deficit); needs debt-min-base" , VT_REAL );
+  add_var( "ACTIG" , "" , "DEBT_TST_REL"    , "Fractional TST deficit: DELTA / baseline median (0..1); needs debt-min-base" , VT_REAL );
+  add_var( "ACTIG" , "" , "DEBT_TST_Z"      , "Z-score of recent mean TST vs baseline distribution (negative = deprived); needs debt-min-z" , VT_REAL );
+  add_var( "ACTIG" , "" , "DEBT_FRAG_Z"     , "Z-score of recent mean SFI vs baseline distribution (positive = more fragmented); needs debt-min-z" , VT_REAL );
+  add_var( "ACTIG" , "" , "DEBT_INDEX"      , "Composite debt: w*(-TST_Z) + (1-w)*FRAG_Z; higher = more deprived; needs debt-min-z" , VT_REAL );
 
   add_param( "ACTIG" , "norm" , "" ,
 	     "Z-score target night against all other valid nights (alternative to debt when no prior baseline is available)" );
@@ -1622,18 +1622,18 @@ void cmddefs_t::init()
   add_param( "ACTIG" , "norm-w" , "0.5" ,
 	     "Weight given to TST in NORM_INDEX (0=fragmentation only, 1=TST only; default: 0.5)" );
 
-  add_var( "ACTIG" , "" , "NORM_MAPPED"     , "1 if norm-target was within the recording, 0 if outside (outputs skipped)" );
-  add_var( "ACTIG" , "" , "NORM_TARGET_DAY" , "Target day number (1-based) used for norm calculation" );
-  add_var( "ACTIG" , "" , "NORM_N"          , "Number of valid reference nights (all valid non-target nights)" );
-  add_var( "ACTIG" , "" , "NORM_TST"        , "Target night TST (min)" );
-  add_var( "ACTIG" , "" , "NORM_FRAG"       , "Target night SFI (sleep->wake transitions per hour)" );
-  add_var( "ACTIG" , "" , "NORM_TST_MN"     , "Mean TST (min) of reference nights; needs norm-min" );
-  add_var( "ACTIG" , "" , "NORM_TST_SD"     , "SD of TST (min) across reference nights; needs norm-min" );
-  add_var( "ACTIG" , "" , "NORM_TST_Z"      , "Z-score of target TST vs all other valid nights (negative = short); needs norm-min" );
-  add_var( "ACTIG" , "" , "NORM_FRAG_MN"    , "Mean SFI of reference nights; needs norm-min" );
-  add_var( "ACTIG" , "" , "NORM_FRAG_SD"    , "SD of SFI across reference nights; needs norm-min" );
-  add_var( "ACTIG" , "" , "NORM_FRAG_Z"     , "Z-score of target SFI vs all other valid nights (positive = more fragmented); needs norm-min" );
-  add_var( "ACTIG" , "" , "NORM_INDEX"      , "Composite norm: w*(-TST_Z) + (1-w)*FRAG_Z; higher = more deprived; needs norm-min" );
+  add_var( "ACTIG" , "" , "NORM_MAPPED"     , "1 if norm-target was within the recording, 0 if outside (outputs skipped)" , VT_BOOLEAN );
+  add_var( "ACTIG" , "" , "NORM_TARGET_DAY" , "Target day number (1-based) used for norm calculation" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "NORM_N"          , "Number of valid reference nights (all valid non-target nights)" , VT_INTEGER );
+  add_var( "ACTIG" , "" , "NORM_TST"        , "Target night TST (min)" , VT_REAL );
+  add_var( "ACTIG" , "" , "NORM_FRAG"       , "Target night SFI (sleep->wake transitions per hour)" , VT_REAL );
+  add_var( "ACTIG" , "" , "NORM_TST_MN"     , "Mean TST (min) of reference nights; needs norm-min" , VT_REAL );
+  add_var( "ACTIG" , "" , "NORM_TST_SD"     , "SD of TST (min) across reference nights; needs norm-min" , VT_REAL );
+  add_var( "ACTIG" , "" , "NORM_TST_Z"      , "Z-score of target TST vs all other valid nights (negative = short); needs norm-min" , VT_REAL );
+  add_var( "ACTIG" , "" , "NORM_FRAG_MN"    , "Mean SFI of reference nights; needs norm-min" , VT_REAL );
+  add_var( "ACTIG" , "" , "NORM_FRAG_SD"    , "SD of SFI across reference nights; needs norm-min" , VT_REAL );
+  add_var( "ACTIG" , "" , "NORM_FRAG_Z"     , "Z-score of target SFI vs all other valid nights (positive = more fragmented); needs norm-min" , VT_REAL );
+  add_var( "ACTIG" , "" , "NORM_INDEX"      , "Composite norm: w*(-TST_Z) + (1-w)*FRAG_Z; higher = more deprived; needs norm-min" , VT_REAL );
 
 
   //
@@ -1772,7 +1772,7 @@ void cmddefs_t::init()
   add_param( "DERIVE" , "all" , "" , "Only keep annotations fully contained in unmasked regions" );
   add_param( "DERIVE" , "start" , "" , "Keep annotations that start in an unmasked region" );
   add_table( "DERIVE" , "" , "Per-record derived outputs" );
-  add_var( "DERIVE" , "" , "REQN" , "Number of annotation instances that satisfied req filters" );
+  add_var( "DERIVE" , "" , "REQN" , "Number of annotation instances that satisfied req filters" , VT_INTEGER );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -1828,31 +1828,31 @@ void cmddefs_t::init()
   add_param( "EPOCH" , "debug" , "" , "Verbose debug logging for generic epoch construction" );
 
   add_table( "EPOCH" , "" , "Epoch-level summaries" );
-  add_var( "EPOCH" , "" , "DUR" , "Epoch duration (seconds)" );
-  add_var( "EPOCH" , "" , "INC" , "Epoch increment (seconds)" );
-  add_var( "EPOCH" , "" , "NE" , "Number of epochs" );
-  add_var( "EPOCH" , "" , "NE_MASKED" , "Number of masked epochs when masked epochs are included" );
-  add_var( "EPOCH" , "" , "FIXED_DUR" , "Fixed epoch duration in seconds, or 0 for variable-length generic epochs" );
-  add_var( "EPOCH" , "" , "GENERIC" , "0/1 indicator that generic rather than standard epochs are in use" );
-  add_var( "EPOCH" , "" , "CONTIG" , "0/1 indicator that epochs were defined from contiguous valid-data segments" );
-  add_var( "EPOCH" , "" , "OFFSET" , "Epoch offset from EDF start (seconds)" );
-  add_var( "EPOCH" , "" , "TOT_DUR" , "Total epoch duration" );
-  add_var( "EPOCH" , "" , "TOT_PCT" , "Percent of record epoched" );
-  add_var( "EPOCH" , "" , "TOT_REC" , "Total record duration" );
-  add_var( "EPOCH" , "" , "TOT_SPANNED" , "Total duration spanned by epoch" );
-  add_var( "EPOCH" , "" , "TOT_UNSPANNED" , "Total record duration not spanned by any epoch" );
+  add_var( "EPOCH" , "" , "DUR" , "Epoch duration (seconds)" , VT_REAL );
+  add_var( "EPOCH" , "" , "INC" , "Epoch increment (seconds)" , VT_REAL );
+  add_var( "EPOCH" , "" , "NE" , "Number of epochs" , VT_INTEGER );
+  add_var( "EPOCH" , "" , "NE_MASKED" , "Number of masked epochs when masked epochs are included" , VT_INTEGER );
+  add_var( "EPOCH" , "" , "FIXED_DUR" , "Fixed epoch duration in seconds, or 0 for variable-length generic epochs" , VT_REAL );  // TYPE? emitter casts epoch_length() to (int) - truncates non-integer epoch durations
+  add_var( "EPOCH" , "" , "GENERIC" , "0/1 indicator that generic rather than standard epochs are in use" , VT_BOOLEAN );
+  add_var( "EPOCH" , "" , "CONTIG" , "0/1 indicator that epochs were defined from contiguous valid-data segments" , VT_BOOLEAN );
+  add_var( "EPOCH" , "" , "OFFSET" , "Epoch offset from EDF start (seconds)" , VT_REAL );
+  add_var( "EPOCH" , "" , "TOT_DUR" , "Total epoch duration" , VT_REAL );
+  add_var( "EPOCH" , "" , "TOT_PCT" , "Percent of record epoched" , VT_REAL );
+  add_var( "EPOCH" , "" , "TOT_REC" , "Total record duration" , VT_REAL );
+  add_var( "EPOCH" , "" , "TOT_SPANNED" , "Total duration spanned by epoch" , VT_REAL );
+  add_var( "EPOCH" , "" , "TOT_UNSPANNED" , "Total record duration not spanned by any epoch" , VT_REAL );
 
   add_table( "EPOCH" , "E" , "Per-epoch interval information [verbose]" );
-  add_var( "EPOCH" , "E" , "E1" , "Current epoch number (which may differ from E if the EDF has been restructured)" );
-  add_var( "EPOCH" , "E" , "EMASK" , "0/1 indicator that this epoch is currently masked [masked dump mode]" );
-  add_var( "EPOCH" , "E" , "HMS" , "Clock-time for epoch start (hh:mm:ss)" );
-  add_var( "EPOCH" , "E" , "LABEL" , "Epoch label" );
-  add_var( "EPOCH" , "E" , "INTERVAL" , "String label of epoch interval (seconds)" );
-  add_var( "EPOCH" , "E" , "DUR" , "Epoch duration (seconds)" );
-  add_var( "EPOCH" , "E" , "MID" , "Midpoint of epoch (seconds elapsed from EDF start)" );
-  add_var( "EPOCH" , "E" , "START" , "Start of epoch (seconds elapsed from EDF start)" );
-  add_var( "EPOCH" , "E" , "STOP" , "Stop of epoch (seconds elapsed from EDF start)" );
-  add_var( "EPOCH" , "E" , "TP" , "Interval in time-points" );
+  add_var( "EPOCH" , "E" , "E1" , "Current epoch number (which may differ from E if the EDF has been restructured)" , VT_INTEGER );
+  add_var( "EPOCH" , "E" , "EMASK" , "0/1 indicator that this epoch is currently masked [masked dump mode]" , VT_BOOLEAN );
+  add_var( "EPOCH" , "E" , "HMS" , "Clock-time for epoch start (hh:mm:ss)" , VT_TEXT );
+  add_var( "EPOCH" , "E" , "LABEL" , "Epoch label" , VT_TEXT );
+  add_var( "EPOCH" , "E" , "INTERVAL" , "String label of epoch interval (seconds)" , VT_TEXT );
+  add_var( "EPOCH" , "E" , "DUR" , "Epoch duration (seconds)" , VT_REAL );
+  add_var( "EPOCH" , "E" , "MID" , "Midpoint of epoch (seconds elapsed from EDF start)" , VT_REAL );
+  add_var( "EPOCH" , "E" , "START" , "Start of epoch (seconds elapsed from EDF start)" , VT_REAL );
+  add_var( "EPOCH" , "E" , "STOP" , "Stop of epoch (seconds elapsed from EDF start)" , VT_REAL );
+  add_var( "EPOCH" , "E" , "TP" , "Interval in time-points" , VT_TEXT );
 
   //
   // EPOCH-ANNOT
@@ -1956,24 +1956,24 @@ void cmddefs_t::init()
   
   add_table( "MASK" , "" , "Mask-operation summaries" );
   add_table( "MASK" , "EMASK" , "Mask-operation summaries by mask expression/label" );
-  add_var( "MASK" , "", "N_MATCHES" , "Number of epochs that match the condition (e.g. having annotation A)");
-  add_var( "MASK" , "", "N_MASK_SET" , "Number of previously unmasked epochs that were masked by this operation");
-  add_var( "MASK" , "", "N_MASK_UNSET" , "Number of previously masked epochs that were unmasked by this operation");
-  add_var( "MASK" , "", "N_UNCHANGED" , "Number of epochs whose mask status was not changed by this operation");
-  add_var( "MASK" , "", "N_RETAINED" , "Number of epochs retained after this operation");
-  add_var( "MASK" , "", "N_TOTAL" , "Total number of epochs");
-  add_var( "MASK" , "", "MASK_MODE" , "Mask mode" );
-  add_var( "MASK" , "", "MATCH_LOGIC" , "Match logic" );
-  add_var( "MASK" , "", "MATCH_TYPE" , "Match type" );
-  add_var( "MASK" , "EMASK", "N_MATCHES" , "Number of epochs that match the condition (e.g. having annotation A)");
-  add_var( "MASK" , "EMASK", "N_MASK_SET" , "Number of previously unmasked epochs that were masked by this operation");
-  add_var( "MASK" , "EMASK", "N_MASK_UNSET" , "Number of previously masked epochs that were unmasked by this operation");
-  add_var( "MASK" , "EMASK", "N_UNCHANGED" , "Number of epochs whose mask status was not changed by this operation");
-  add_var( "MASK" , "EMASK", "N_RETAINED" , "Number of epochs retained after this operation");
-  add_var( "MASK" , "EMASK", "N_TOTAL" , "Total number of epochs");
-  add_var( "MASK" , "EMASK", "MASK_MODE" , "Mask mode" );
-  add_var( "MASK" , "EMASK", "MATCH_LOGIC" , "Match logic" );
-  add_var( "MASK" , "EMASK", "MATCH_TYPE" , "Match type" );
+  add_var( "MASK" , "", "N_MATCHES" , "Number of epochs that match the condition (e.g. having annotation A)" , VT_INTEGER);
+  add_var( "MASK" , "", "N_MASK_SET" , "Number of previously unmasked epochs that were masked by this operation" , VT_INTEGER);
+  add_var( "MASK" , "", "N_MASK_UNSET" , "Number of previously masked epochs that were unmasked by this operation" , VT_INTEGER);
+  add_var( "MASK" , "", "N_UNCHANGED" , "Number of epochs whose mask status was not changed by this operation" , VT_INTEGER);
+  add_var( "MASK" , "", "N_RETAINED" , "Number of epochs retained after this operation" , VT_INTEGER);
+  add_var( "MASK" , "", "N_TOTAL" , "Total number of epochs" , VT_INTEGER);
+  add_var( "MASK" , "", "MASK_MODE" , "Mask mode" , VT_TEXT );
+  add_var( "MASK" , "", "MATCH_LOGIC" , "Match logic" , VT_TEXT );
+  add_var( "MASK" , "", "MATCH_TYPE" , "Match type" , VT_TEXT );
+  add_var( "MASK" , "EMASK", "N_MATCHES" , "Number of epochs that match the condition (e.g. having annotation A)" , VT_INTEGER);
+  add_var( "MASK" , "EMASK", "N_MASK_SET" , "Number of previously unmasked epochs that were masked by this operation" , VT_INTEGER);
+  add_var( "MASK" , "EMASK", "N_MASK_UNSET" , "Number of previously masked epochs that were unmasked by this operation" , VT_INTEGER);
+  add_var( "MASK" , "EMASK", "N_UNCHANGED" , "Number of epochs whose mask status was not changed by this operation" , VT_INTEGER);
+  add_var( "MASK" , "EMASK", "N_RETAINED" , "Number of epochs retained after this operation" , VT_INTEGER);
+  add_var( "MASK" , "EMASK", "N_TOTAL" , "Total number of epochs" , VT_INTEGER);
+  add_var( "MASK" , "EMASK", "MASK_MODE" , "Mask mode" , VT_TEXT );
+  add_var( "MASK" , "EMASK", "MATCH_LOGIC" , "Match logic" , VT_TEXT );
+  add_var( "MASK" , "EMASK", "MATCH_TYPE" , "Match type" , VT_TEXT );
 
   //
   // DUMP-MASK
@@ -1992,7 +1992,7 @@ void cmddefs_t::init()
   add_param( "DUMP-MASK" , "output" , "F" , "Suppress standard output and only create the annotation" );
 
   add_table( "DUMP-MASK" , "E" , "Epoch-level mask tabulation" );
-  add_var( "DUMP-MASK" , "E" , "EMASK" , "Mask status: 0=unmasked (included), 1=masked (excluded)" );
+  add_var( "DUMP-MASK" , "E" , "EMASK" , "Mask status: 0=unmasked (included), 1=masked (excluded)" , VT_BOOLEAN );
 
   //
   // RE
@@ -2011,12 +2011,12 @@ void cmddefs_t::init()
   add_param( "RE" , "require" , "100" , "Set the empty flag if fewer than this many epochs remain" );
 
   add_table( "RE" , "" , "Restructured data duration" );
-  add_var( "RE" , "" , "DUR1" , "Duration pre-restructuring (secs)");
-  add_var( "RE" , "" , "DUR2" , "Duration post-restructuring (secs)");
-  add_var( "RE" , "" , "NR1" , "Number of records pre-restructuring");
-  add_var( "RE" , "" , "NR2" , "Number of records post-restructuring");
-  add_var( "RE" , "" , "NA" , "Number of annotation channels after restructuring" );
-  add_var( "RE" , "" , "NS" , "Number of data channels after restructuring" );
+  add_var( "RE" , "" , "DUR1" , "Duration pre-restructuring (secs)" , VT_REAL);
+  add_var( "RE" , "" , "DUR2" , "Duration post-restructuring (secs)" , VT_REAL);
+  add_var( "RE" , "" , "NR1" , "Number of records pre-restructuring" , VT_INTEGER);
+  add_var( "RE" , "" , "NR2" , "Number of records post-restructuring" , VT_INTEGER);
+  add_var( "RE" , "" , "NA" , "Number of annotation channels after restructuring" , VT_INTEGER );
+  add_var( "RE" , "" , "NS" , "Number of data channels after restructuring" , VT_INTEGER );
 
   //
   // RESTRUCTURE
@@ -2036,12 +2036,12 @@ void cmddefs_t::init()
   add_param( "RESTRUCTURE" , "require" , "100" , "Set the empty flag if fewer than this many epochs remain" );
 
   add_table( "RESTRUCTURE" , "" , "Restructured data duration" );
-  add_var( "RESTRUCTURE" , "" , "DUR1" , "Duration pre-restructuring (secs)");
-  add_var( "RESTRUCTURE" , "" , "DUR2" , "Duration post-restructuring (secs)");
-  add_var( "RESTRUCTURE" , "" , "NR1" , "Number of records pre-restructuring");
-  add_var( "RESTRUCTURE" , "" , "NR2" , "Number of records post-restructuring");
-  add_var( "RESTRUCTURE" , "" , "NA" , "Number of annotation channels after restructuring" );
-  add_var( "RESTRUCTURE" , "" , "NS" , "Number of data channels after restructuring" );
+  add_var( "RESTRUCTURE" , "" , "DUR1" , "Duration pre-restructuring (secs)" , VT_REAL);
+  add_var( "RESTRUCTURE" , "" , "DUR2" , "Duration post-restructuring (secs)" , VT_REAL);
+  add_var( "RESTRUCTURE" , "" , "NR1" , "Number of records pre-restructuring" , VT_INTEGER);
+  add_var( "RESTRUCTURE" , "" , "NR2" , "Number of records post-restructuring" , VT_INTEGER);
+  add_var( "RESTRUCTURE" , "" , "NA" , "Number of annotation channels after restructuring" , VT_INTEGER );
+  add_var( "RESTRUCTURE" , "" , "NS" , "Number of data channels after restructuring" , VT_INTEGER );
 
   //
   // CHEP
@@ -2070,13 +2070,13 @@ void cmddefs_t::init()
 
   // CHEP output....  
   add_table( "CHEP" , "CH" , "CHEP mask channel-wise summaries" );
-  add_var( "CHEP" , "CH" , "CHEP" , "Masked epochs" );
+  add_var( "CHEP" , "CH" , "CHEP" , "Masked epochs" , VT_INTEGER );
 
   add_table( "CHEP" , "E" , "CHEP mask epoch-wise summaries" );
-  add_var( "CHEP" , "E" , "CHEP" , "Masked channels" );
+  add_var( "CHEP" , "E" , "CHEP" , "Masked channels" , VT_INTEGER );
 
   add_table( "CHEP" , "CH,E" , "CHEP mask" );
-  add_var( "CHEP" , "CH,E" , "CHEP" , "CHannel/EPoch mask" );
+  add_var( "CHEP" , "CH,E" , "CHEP" , "CHannel/EPoch mask" , VT_BOOLEAN );
 
   //
   // CHEP-MASK
@@ -2206,19 +2206,19 @@ void cmddefs_t::init()
   add_param( "CANONICAL" , "prefiltering" , "T" , "Retain prefiltering header fields on canonical signals" );
 
   add_table( "CANONICAL" , "" , "Canonical signal summaries" );
-  add_var( "CANONICAL" , "" , "CS_SET" , "Number of canonical signals set" );
-  add_var( "CANONICAL" , "" , "CS_NOT" , "Number of canonical signals not set" );
-  add_var( "CANONICAL" , "" , "USED_CH" , "Number of used EDF channels" );
-  add_var( "CANONICAL" , "" , "UNUSED_CH" , "Number of unused EDF channels" );
+  add_var( "CANONICAL" , "" , "CS_SET" , "Number of canonical signals set" , VT_INTEGER );
+  add_var( "CANONICAL" , "" , "CS_NOT" , "Number of canonical signals not set" , VT_INTEGER );
+  add_var( "CANONICAL" , "" , "USED_CH" , "Number of used EDF channels" , VT_INTEGER );
+  add_var( "CANONICAL" , "" , "UNUSED_CH" , "Number of unused EDF channels" , VT_INTEGER );
 
   add_table( "CANONICAL" , "CS" , "Canonical signal information" );
-  add_var( "CANONICAL" , "CS" , "DEFINED" , "Is canonical signal present/defined?" );
-  add_var( "CANONICAL" , "CS" , "SIG" , "Primary signal" );
-  add_var( "CANONICAL" , "CS" , "REF" , "Reference signal" );
+  add_var( "CANONICAL" , "CS" , "DEFINED" , "Is canonical signal present/defined?" , VT_BOOLEAN );
+  add_var( "CANONICAL" , "CS" , "SIG" , "Primary signal" , VT_TEXT );
+  add_var( "CANONICAL" , "CS" , "REF" , "Reference signal" , VT_TEXT );
 
   add_table( "CANONICAL" , "CH" , "EDF channel information" );
-  add_var( "CANONICAL" , "CH" , "DROPPED" , "Original channel dropped" );
-  add_var( "CANONICAL" , "CH" , "USED" , "0/1 indicator that this channel was used in constructing canonical signals" );
+  add_var( "CANONICAL" , "CH" , "DROPPED" , "Original channel dropped" , VT_BOOLEAN );
+  add_var( "CANONICAL" , "CH" , "USED" , "0/1 indicator that this channel was used in constructing canonical signals" , VT_BOOLEAN );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -2356,7 +2356,7 @@ void cmddefs_t::init()
   add_param( "FLIP" , "sig" , "C3,C4" , "List of signals to flip" );
 
   add_table( "FLIP" , "CH" , "Tracking flipped channels" );
-  add_var( "FLIP" , "CH" , "FLIP" , "Channel flipped" );
+  add_var( "FLIP" , "CH" , "FLIP" , "Channel flipped" , VT_BOOLEAN );
 
   //
   // ZC
@@ -2494,10 +2494,10 @@ void cmddefs_t::init()
   add_param( "RECORD-SIZE" , "no-problem" , "" , "Do not set the problem flag after writing the new EDF" );
 
   add_table( "RECORD-SIZE" , "" , "Restructured data duration" );
-  add_var( "RECORD-SIZE", "" , "NR1" , "Pre-restructure number of records" );
-  add_var( "RECORD-SIZE", "" , "NR2" , "Post-restructure number of records" );
-  add_var( "RECORD-SIZE", "" , "DUR1" , "Pre-restructure duration (seconds)" );
-  add_var( "RECORD-SIZE", "" , "DUR2" , "Post-restructure duration (seconds)" );
+  add_var( "RECORD-SIZE", "" , "NR1" , "Pre-restructure number of records" , VT_INTEGER );
+  add_var( "RECORD-SIZE", "" , "NR2" , "Post-restructure number of records" , VT_INTEGER );
+  add_var( "RECORD-SIZE", "" , "DUR1" , "Pre-restructure duration (seconds)" , VT_REAL );
+  add_var( "RECORD-SIZE", "" , "DUR2" , "Post-restructure duration (seconds)" , VT_REAL );
 
   //
   // EDF-MINUS
@@ -2526,18 +2526,18 @@ void cmddefs_t::init()
   add_param( "EDF-MINUS" , "hms" , "" , "Write annotations using clock-time formatting" );
   add_param( "EDF-MINUS" , "dhms" , "" , "Write annotations using date/time formatting" );
   add_table( "EDF-MINUS" , "" , "EDF-MINUS summary" );
-  add_var( "EDF-MINUS" , "" , "OKAY" , "0/1 indicator that EDF-MINUS completed successfully" );
-  add_var( "EDF-MINUS" , "" , "MSG" , "Failure message if EDF-MINUS could not proceed" );
+  add_var( "EDF-MINUS" , "" , "OKAY" , "0/1 indicator that EDF-MINUS completed successfully" , VT_BOOLEAN );
+  add_var( "EDF-MINUS" , "" , "MSG" , "Failure message if EDF-MINUS could not proceed" , VT_TEXT );
   add_table( "EDF-MINUS" , "SEG" , "Segment-level EDF-MINUS output" );
-  add_var( "EDF-MINUS" , "SEG" , "ORIG" , "Original segment interval" );
-  add_var( "EDF-MINUS" , "SEG" , "EDIT" , "Edited segment interval" );
-  add_var( "EDF-MINUS" , "SEG" , "INCLUDED" , "0/1 indicator that this segment was retained" );
-  add_var( "EDF-MINUS" , "SEG" , "DUR_ORIG" , "Original segment duration (seconds)" );
-  add_var( "EDF-MINUS" , "SEG" , "DUR_EDIT" , "Edited segment duration (seconds)" );
+  add_var( "EDF-MINUS" , "SEG" , "ORIG" , "Original segment interval" , VT_TEXT );
+  add_var( "EDF-MINUS" , "SEG" , "EDIT" , "Edited segment interval" , VT_TEXT );
+  add_var( "EDF-MINUS" , "SEG" , "INCLUDED" , "0/1 indicator that this segment was retained" , VT_BOOLEAN );
+  add_var( "EDF-MINUS" , "SEG" , "DUR_ORIG" , "Original segment duration (seconds)" , VT_REAL );
+  add_var( "EDF-MINUS" , "SEG" , "DUR_EDIT" , "Edited segment duration (seconds)" , VT_REAL );
   add_table( "EDF-MINUS" , "SEG,ANNOT" , "Per-segment annotation counts" );
-  add_var( "EDF-MINUS" , "SEG,ANNOT" , "N_ALIGN" , "Number of alignment annotations in this segment" );
-  add_var( "EDF-MINUS" , "SEG,ANNOT" , "N_REQ" , "Number of required annotations in this segment" );
-  add_var( "EDF-MINUS" , "SEG,ANNOT" , "N_ALL" , "Total number of this annotation in this segment" );
+  add_var( "EDF-MINUS" , "SEG,ANNOT" , "N_ALIGN" , "Number of alignment annotations in this segment" , VT_INTEGER );
+  add_var( "EDF-MINUS" , "SEG,ANNOT" , "N_REQ" , "Number of required annotations in this segment" , VT_INTEGER );
+  add_var( "EDF-MINUS" , "SEG,ANNOT" , "N_ALL" , "Total number of this annotation in this segment" , VT_INTEGER );
 
   //
   // ANON
@@ -2696,7 +2696,7 @@ void cmddefs_t::init()
 	    "The command reports which channels were reversed." );
   add_param( "REVERSE" , "sig" , "C3,C4" , "Signals to reverse in time" );
   add_table( "REVERSE" , "CH" , "Tracking reversed channels" );
-  add_var( "REVERSE" , "CH" , "REVERSE" , "Channel reversed" );
+  add_var( "REVERSE" , "CH" , "REVERSE" , "Channel reversed" , VT_BOOLEAN );
 
   //
   // MOVING-AVERAGE
@@ -2817,129 +2817,129 @@ void cmddefs_t::init()
   add_table( "INSERT" , "" ,
              "Summary alignment fit across all accepted windows" );
   add_var( "INSERT" , "" , "OKAY" ,
-           "1 if the summary alignment quality passed warning thresholds, else 0" );
+           "1 if the summary alignment quality passed warning thresholds, else 0" , VT_BOOLEAN );
   add_var( "INSERT" , "" , "N_WIN_ALL" ,
-           "Total number of windows evaluated before xcorr quality gating" );
+           "Total number of windows evaluated before xcorr quality gating" , VT_INTEGER );
   add_var( "INSERT" , "" , "N_WIN" ,
-           "Number of accepted windows used in the summary fit" );
+           "Number of accepted windows used in the summary fit" , VT_INTEGER );
   add_var( "INSERT" , "" , "N_OUTLIER" ,
-           "Number of windows removed as regression outliers" );
+           "Number of windows removed as regression outliers" , VT_INTEGER );
   add_var( "INSERT" , "" , "N_FIT" ,
-           "Number of accepted windows retained for the final drift fit after outlier removal" );
+           "Number of accepted windows retained for the final drift fit after outlier removal" , VT_INTEGER );
   add_var( "INSERT" , "" , "P_OK" ,
-           "Proportion of evaluated windows that passed the alignment-quality threshold" );
+           "Proportion of evaluated windows that passed the alignment-quality threshold" , VT_REAL );
   add_var( "INSERT" , "" , "MEDIAN_SEC" ,
-           "Median waveform shift in seconds across accepted windows" );
+           "Median waveform shift in seconds across accepted windows" , VT_REAL );
   add_var( "INSERT" , "" , "MEAN_SEC" ,
-           "Mean waveform shift in seconds across accepted windows" );
+           "Mean waveform shift in seconds across accepted windows" , VT_REAL );
   add_var( "INSERT" , "" , "MIN_SEC" ,
-           "Minimum waveform shift in seconds across accepted windows" );
+           "Minimum waveform shift in seconds across accepted windows" , VT_REAL );
   add_var( "INSERT" , "" , "MAX_SEC" ,
-           "Maximum waveform shift in seconds across accepted windows" );
+           "Maximum waveform shift in seconds across accepted windows" , VT_REAL );
   add_var( "INSERT" , "" , "RANGE_SEC" ,
-           "Range of waveform shifts in seconds across accepted windows" );
+           "Range of waveform shifts in seconds across accepted windows" , VT_REAL );
   add_var( "INSERT" , "" , "P10_SEC" ,
-           "10th percentile waveform shift in seconds across accepted windows" );
+           "10th percentile waveform shift in seconds across accepted windows" , VT_REAL );
   add_var( "INSERT" , "" , "P25_SEC" ,
-           "25th percentile waveform shift in seconds across accepted windows" );
+           "25th percentile waveform shift in seconds across accepted windows" , VT_REAL );
   add_var( "INSERT" , "" , "P75_SEC" ,
-           "75th percentile waveform shift in seconds across accepted windows" );
+           "75th percentile waveform shift in seconds across accepted windows" , VT_REAL );
   add_var( "INSERT" , "" , "P90_SEC" ,
-           "90th percentile waveform shift in seconds across accepted windows" );
+           "90th percentile waveform shift in seconds across accepted windows" , VT_REAL );
   add_var( "INSERT" , "" , "FIT_MEDIAN_SEC" ,
-           "Median waveform shift in seconds across windows retained for the final drift fit" );
+           "Median waveform shift in seconds across windows retained for the final drift fit" , VT_REAL );
   add_var( "INSERT" , "" , "FIT_MEAN_SEC" ,
-           "Mean waveform shift in seconds across windows retained for the final drift fit" );
+           "Mean waveform shift in seconds across windows retained for the final drift fit" , VT_REAL );
   add_var( "INSERT" , "" , "FIT_MIN_SEC" ,
-           "Minimum waveform shift in seconds across windows retained for the final drift fit" );
+           "Minimum waveform shift in seconds across windows retained for the final drift fit" , VT_REAL );
   add_var( "INSERT" , "" , "FIT_MAX_SEC" ,
-           "Maximum waveform shift in seconds across windows retained for the final drift fit" );
+           "Maximum waveform shift in seconds across windows retained for the final drift fit" , VT_REAL );
   add_var( "INSERT" , "" , "FIT_RANGE_SEC" ,
-           "Range of waveform shifts in seconds across windows retained for the final drift fit" );
+           "Range of waveform shifts in seconds across windows retained for the final drift fit" , VT_REAL );
   add_var( "INSERT" , "" , "FIT_P10_SEC" ,
-           "10th percentile waveform shift in seconds across windows retained for the final drift fit" );
+           "10th percentile waveform shift in seconds across windows retained for the final drift fit" , VT_REAL );
   add_var( "INSERT" , "" , "FIT_P25_SEC" ,
-           "25th percentile waveform shift in seconds across windows retained for the final drift fit" );
+           "25th percentile waveform shift in seconds across windows retained for the final drift fit" , VT_REAL );
   add_var( "INSERT" , "" , "FIT_P75_SEC" ,
-           "75th percentile waveform shift in seconds across windows retained for the final drift fit" );
+           "75th percentile waveform shift in seconds across windows retained for the final drift fit" , VT_REAL );
   add_var( "INSERT" , "" , "FIT_P90_SEC" ,
-           "90th percentile waveform shift in seconds across windows retained for the final drift fit" );
+           "90th percentile waveform shift in seconds across windows retained for the final drift fit" , VT_REAL );
   add_var( "INSERT" , "" , "MEDIAN_PEAK" ,
-           "Median per-window matched-window correlation magnitude across all evaluated windows" );
+           "Median per-window matched-window correlation magnitude across all evaluated windows" , VT_REAL );
   add_var( "INSERT" , "" , "MEAN_PEAK" ,
-           "Mean per-window matched-window correlation magnitude across all evaluated windows" );
+           "Mean per-window matched-window correlation magnitude across all evaluated windows" , VT_REAL );
   add_var( "INSERT" , "" , "MIN_PEAK" ,
-           "Minimum per-window matched-window correlation magnitude across all evaluated windows" );
+           "Minimum per-window matched-window correlation magnitude across all evaluated windows" , VT_REAL );
   add_var( "INSERT" , "" , "MAX_PEAK" ,
-           "Maximum per-window matched-window correlation magnitude across all evaluated windows" );
+           "Maximum per-window matched-window correlation magnitude across all evaluated windows" , VT_REAL );
   add_var( "INSERT" , "" , "INTERCEPT" ,
-           "Fitted start-of-record waveform shift in seconds" );
+           "Fitted start-of-record waveform shift in seconds" , VT_REAL );
   add_var( "INSERT" , "" , "SLOPE" ,
-           "Fitted drift slope in seconds per second" );
+           "Fitted drift slope in seconds per second" , VT_REAL );
   add_var( "INSERT" , "" , "SLOPE_HR" ,
-           "Fitted drift slope in seconds per hour" );
+           "Fitted drift slope in seconds per hour" , VT_REAL );
   add_var( "INSERT" , "" , "R2" ,
-           "R-squared for the fitted offset-versus-time regression" );
+           "R-squared for the fitted offset-versus-time regression" , VT_REAL );
   add_var( "INSERT" , "" , "IMPLIED_SR" ,
-           "Implied secondary sample rate from the fitted drift" );
+           "Implied secondary sample rate from the fitted drift" , VT_REAL );
   add_var( "INSERT" , "" , "HDR_OFFSET" ,
-           "Header-derived offset in seconds from the EDF start times alone" );
+           "Header-derived offset in seconds from the EDF start times alone" , VT_REAL );
   add_var( "INSERT" , "" , "HDR_OFFSET_VALID" ,
-           "1 if both EDF start times were valid and HDR_OFFSET was available, else 0" );
+           "1 if both EDF start times were valid and HDR_OFFSET was available, else 0" , VT_BOOLEAN );
   add_var( "INSERT" , "" , "TOTAL_OFFSET" ,
-           "Net offset correction in seconds after combining header_offset and fitted start_shift" );
+           "Net offset correction in seconds after combining header_offset and fitted start_shift" , VT_REAL );
   add_var( "INSERT" , "" , "USED_START_SEC" ,
-           "Window start time in seconds used for the selected fit" );
+           "Window start time in seconds used for the selected fit" , VT_REAL );
   add_var( "INSERT" , "" , "USED_LEN_SEC" ,
-           "Window length in seconds used for the selected fit" );
+           "Window length in seconds used for the selected fit" , VT_REAL );
   add_var( "INSERT" , "" , "USED_INC_SEC" ,
-           "Window increment in seconds used for the selected fit" );
+           "Window increment in seconds used for the selected fit" , VT_REAL );
   add_var( "INSERT" , "" , "AUTO_TUNED" ,
-           "1 if auto-try or try-start/try-len/try-inc selected the final window settings, else 0" );
+           "1 if auto-try or try-start/try-len/try-inc selected the final window settings, else 0" , VT_BOOLEAN );
   add_var( "INSERT" , "" , "FIT_OUTLIER_SD" ,
-           "Residual SD threshold used for drift-fit outlier removal" );
+           "Residual SD threshold used for drift-fit outlier removal" , VT_REAL );
   add_var( "INSERT" , "" , "FIT_OUTLIER_PASSES" ,
-           "Number of residual outlier-removal passes used for drift fitting" );
+           "Number of residual outlier-removal passes used for drift fitting" , VT_INTEGER );
 
   add_table( "INSERT" , "WIN" ,
              "Per-window offset estimates and quality flags" );
   add_var( "INSERT" , "WIN" , "OK" ,
-           "1 if the window passed the alignment-quality threshold, else 0" );
+           "1 if the window passed the alignment-quality threshold, else 0" , VT_BOOLEAN );
   add_var( "INSERT" , "WIN" , "PEAK" ,
-           "Median matched-window correlation magnitude across signal pairs for this window" );
+           "Median matched-window correlation magnitude across signal pairs for this window" , VT_REAL );
   add_var( "INSERT" , "WIN" , "SP" ,
-           "Estimated offset in sample points for this window" );
+           "Estimated offset in sample points for this window" , VT_INTEGER );
   add_var( "INSERT" , "WIN" , "SEC" ,
-           "Estimated waveform shift in seconds for this window" );
+           "Estimated waveform shift in seconds for this window" , VT_REAL );
   add_var( "INSERT" , "WIN" , "TOT_SEC" ,
-           "Estimated net offset correction in seconds for this window after combining waveform_shift and header_offset" );
+           "Estimated net offset correction in seconds for this window after combining waveform_shift and header_offset" , VT_REAL );
   add_var( "INSERT" , "WIN" , "DSEC" ,
-           "Change in waveform shift in seconds relative to the first accepted window" );
+           "Change in waveform shift in seconds relative to the first accepted window" , VT_REAL );
   add_var( "INSERT" , "WIN" , "T1_SEC" ,
-           "Matched primary time in seconds for this window" );
+           "Matched primary time in seconds for this window" , VT_REAL );
   add_var( "INSERT" , "WIN" , "T2_SEC" ,
-           "Secondary window start time in seconds" );
+           "Secondary window start time in seconds" , VT_REAL );
   add_var( "INSERT" , "WIN" , "T1_HMS" ,
-           "Matched primary wall-clock time for this window, when EDF headers are valid" );
+           "Matched primary wall-clock time for this window, when EDF headers are valid" , VT_TEXT );
   add_var( "INSERT" , "WIN" , "T2_HMS" ,
-           "Secondary wall-clock time for this window, when EDF headers are valid" );
+           "Secondary wall-clock time for this window, when EDF headers are valid" , VT_TEXT );
   add_var( "INSERT" , "WIN" , "FIT_USED" ,
-           "1 if the window was used in the drift fit before outlier removal, else 0" );
+           "1 if the window was used in the drift fit before outlier removal, else 0" , VT_BOOLEAN );
   add_var( "INSERT" , "WIN" , "FIT_OUTLIER" ,
-           "1 if the window was removed as a drift-fit outlier, 0 if retained, -1 if not fit" );
+           "1 if the window was removed as a drift-fit outlier, 0 if retained, -1 if not fit" , VT_BOOLEAN );
 
   add_table( "INSERT" , "CHS" ,
              "Per-signal-pair drift fits" );
   add_var( "INSERT" , "CHS" , "INTERCEPT" ,
-           "Per-pair fitted start-of-record waveform shift in seconds" );
+           "Per-pair fitted start-of-record waveform shift in seconds" , VT_REAL );
   add_var( "INSERT" , "CHS" , "SLOPE" ,
-           "Per-pair fitted drift slope in seconds per second" );
+           "Per-pair fitted drift slope in seconds per second" , VT_REAL );
   add_var( "INSERT" , "CHS" , "SLOPE_HR" ,
-           "Per-pair fitted drift slope in seconds per hour" );
+           "Per-pair fitted drift slope in seconds per hour" , VT_REAL );
   add_var( "INSERT" , "CHS" , "IMPLIED_SR" ,
-           "Per-pair implied secondary sample rate from the fitted drift" );
+           "Per-pair implied secondary sample rate from the fitted drift" , VT_REAL );
   add_var( "INSERT" , "CHS" , "N_OUTLIER" ,
-           "Number of outlier windows removed from the per-pair fit" );
+           "Number of outlier windows removed from the per-pair fit" , VT_INTEGER );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -2970,10 +2970,10 @@ void cmddefs_t::init()
   add_param( "WRITE" , "channels" , "C3,C4,EOG-L" , "Write only these channels, in this order" );
   
   add_table( "WRITE", "" , "Summary from the implicit pre-WRITE restructure step" );
-  add_var( "WRITE", "" , "NR1" , "Number of EDF records before restructuring" );
-  add_var( "WRITE", "" , "NR2" , "Number of EDF records after restructuring" );
-  add_var( "WRITE", "" , "DUR1" , "Duration before restructuring (seconds)" );
-  add_var( "WRITE", "" , "DUR2" , "Duration after restructuring (seconds)" );
+  add_var( "WRITE", "" , "NR1" , "Number of EDF records before restructuring" , VT_INTEGER );
+  add_var( "WRITE", "" , "NR2" , "Number of EDF records after restructuring" , VT_INTEGER );
+  add_var( "WRITE", "" , "DUR1" , "Duration before restructuring (seconds)" , VT_REAL );
+  add_var( "WRITE", "" , "DUR2" , "Duration after restructuring (seconds)" , VT_REAL );
 
   //
   // MATRIX
@@ -3032,29 +3032,29 @@ void cmddefs_t::init()
   add_param( "SEGMENTS" , "requires-min" , "10" , "With largest, only annotate segments at least this many minutes long" );
 
   add_table( "SEGMENTS" , "" , "Segment and gap summary" );
-  add_var( "SEGMENTS" , "" , "NSEGS" , "Number of contiguous segments" );
-  add_var( "SEGMENTS" , "" , "NGAPS" , "Number of discontinuity gaps" );
-  add_var( "SEGMENTS" , "" , "LARGEST" , "Duration of the largest segment (seconds)" );
+  add_var( "SEGMENTS" , "" , "NSEGS" , "Number of contiguous segments" , VT_INTEGER );
+  add_var( "SEGMENTS" , "" , "NGAPS" , "Number of discontinuity gaps" , VT_INTEGER );
+  add_var( "SEGMENTS" , "" , "LARGEST" , "Duration of the largest segment (seconds)" , VT_REAL );
 
   add_table( "SEGMENTS" , "SEG" , "Information on each segment" );
-  add_var( "SEGMENTS" , "SEG" , "DUR_HR" , "Segment duration (hours)" );
-  add_var( "SEGMENTS" , "SEG" , "DUR_MIN" , "Segment duration (minutes)" );
-  add_var( "SEGMENTS" , "SEG" , "DUR_SEC" , "Segment duration (seconds)" );
+  add_var( "SEGMENTS" , "SEG" , "DUR_HR" , "Segment duration (hours)" , VT_REAL );
+  add_var( "SEGMENTS" , "SEG" , "DUR_MIN" , "Segment duration (minutes)" , VT_REAL );
+  add_var( "SEGMENTS" , "SEG" , "DUR_SEC" , "Segment duration (seconds)" , VT_REAL );
 
-  add_var( "SEGMENTS" , "SEG" , "START" , "Segment start (seconds)" );
-  add_var( "SEGMENTS" , "SEG" , "START_HMS" , "Segment start (hh:mm:ss)" );
+  add_var( "SEGMENTS" , "SEG" , "START" , "Segment start (seconds)" , VT_REAL );
+  add_var( "SEGMENTS" , "SEG" , "START_HMS" , "Segment start (hh:mm:ss)" , VT_TEXT );
     
-  add_var( "SEGMENTS" , "SEG" , "STOP" , "Segment stop (seconds)" );
-  add_var( "SEGMENTS" , "SEG" , "STOP_HMS" , "Segment stop (hh:mm:ss)" );
+  add_var( "SEGMENTS" , "SEG" , "STOP" , "Segment stop (seconds)" , VT_REAL );
+  add_var( "SEGMENTS" , "SEG" , "STOP_HMS" , "Segment stop (hh:mm:ss)" , VT_TEXT );
 
   add_table( "SEGMENTS" , "GAP" , "Information on each discontinuity gap" );
-  add_var( "SEGMENTS" , "GAP" , "DUR_HR" , "Gap duration (hours)" );
-  add_var( "SEGMENTS" , "GAP" , "DUR_MIN" , "Gap duration (minutes)" );
-  add_var( "SEGMENTS" , "GAP" , "DUR_SEC" , "Gap duration (seconds)" );
-  add_var( "SEGMENTS" , "GAP" , "START" , "Gap start (seconds)" );
-  add_var( "SEGMENTS" , "GAP" , "START_HMS" , "Gap start (hh:mm:ss)" );
-  add_var( "SEGMENTS" , "GAP" , "STOP" , "Gap stop (seconds)" );
-  add_var( "SEGMENTS" , "GAP" , "STOP_HMS" , "Gap stop (hh:mm:ss)" );
+  add_var( "SEGMENTS" , "GAP" , "DUR_HR" , "Gap duration (hours)" , VT_REAL );
+  add_var( "SEGMENTS" , "GAP" , "DUR_MIN" , "Gap duration (minutes)" , VT_REAL );
+  add_var( "SEGMENTS" , "GAP" , "DUR_SEC" , "Gap duration (seconds)" , VT_REAL );
+  add_var( "SEGMENTS" , "GAP" , "START" , "Gap start (seconds)" , VT_REAL );
+  add_var( "SEGMENTS" , "GAP" , "START_HMS" , "Gap start (hh:mm:ss)" , VT_TEXT );
+  add_var( "SEGMENTS" , "GAP" , "STOP" , "Gap stop (seconds)" , VT_REAL );
+  add_var( "SEGMENTS" , "GAP" , "STOP_HMS" , "Gap stop (hh:mm:ss)" , VT_TEXT );
 
   //
   // ALIGN-SCAN
@@ -3067,82 +3067,82 @@ void cmddefs_t::init()
   add_param( "ALIGN-SCAN" , "annot-prefix" , "align_"  , "Prefix for derived issue and record annotations" );
   add_param( "ALIGN-SCAN" , "annot-epoch"  , ""        , "Also annotate epochs with the annotation class <annot-prefix>EPOCH" );
   add_param( "ALIGN-SCAN" , "annot-rec"    , ""        , "Also annotate retained EDF records with the annotation class <annot-prefix>REC" );
-  add_param( "ALIGN-SCAN" , "verbose" , ""             , "Also emit per-epoch (E) and per-annotation-event (ANNOT/ANN_N) tables" );
+  add_param( "ALIGN-SCAN" , "verbose" , ""             , "Also emit per-epoch (E) and per-annotation-event (ANNOT/ANNN) tables" );
 
   add_table( "ALIGN-SCAN" , "" , "Alignment summary" );
 
-  add_var( "ALIGN-SCAN" , "" , "OK"               , "1 = no issues; 0 = warnings detected" );
+  add_var( "ALIGN-SCAN" , "" , "OK"               , "1 = no issues; 0 = warnings detected" , VT_BOOLEAN );
 
-  add_var( "ALIGN-SCAN" , "" , "EDF_TYPE"         , "EDF type string (EDF, EDF+C, EDF+D)" );
-  add_var( "ALIGN-SCAN" , "" , "REC_DUR"          , "EDF record duration (seconds)" );
-  add_var( "ALIGN-SCAN" , "" , "NRECS"            , "Number of retained records" );
-  add_var( "ALIGN-SCAN" , "" , "TOT_DUR"          , "Total retained duration (seconds)" );
-  add_var( "ALIGN-SCAN" , "" , "NSEGS"            , "Number of contiguous segments" );
-  add_var( "ALIGN-SCAN" , "" , "NGAPS"            , "Number of discontinuity gaps" );
+  add_var( "ALIGN-SCAN" , "" , "EDF_TYPE"         , "EDF type string (EDF, EDF+C, EDF+D)" , VT_TEXT );
+  add_var( "ALIGN-SCAN" , "" , "REC_DUR"          , "EDF record duration (seconds)" , VT_REAL );
+  add_var( "ALIGN-SCAN" , "" , "NRECS"            , "Number of retained records" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "" , "TOT_DUR"          , "Total retained duration (seconds)" , VT_REAL );
+  add_var( "ALIGN-SCAN" , "" , "NSEGS"            , "Number of contiguous segments" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "" , "NGAPS"            , "Number of discontinuity gaps" , VT_INTEGER );
 
-  add_var( "ALIGN-SCAN" , "" , "EPOCH_DUR"          , "Epoch duration (seconds)" );
-  add_var( "ALIGN-SCAN" , "" , "EPOCH_INC"          , "Epoch step (seconds)" );
-  add_var( "ALIGN-SCAN" , "" , "EPOCH_OFFSET"       , "Effective epoch grid offset (seconds)" );
-  add_var( "ALIGN-SCAN" , "" , "EPOCH_N"            , "Number of epochs" );
-  add_var( "ALIGN-SCAN" , "" , "EPOCH_AUTO"         , "1 = default 30s epoch was applied by this command" );
-  add_var( "ALIGN-SCAN" , "" , "EPOCH_ALIGN_ACTIVE" , "1 = EPOCH align annotation alignment is active" );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_DUR"          , "Epoch duration (seconds)" , VT_REAL );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_INC"          , "Epoch step (seconds)" , VT_REAL );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_OFFSET"       , "Effective epoch grid offset (seconds)" , VT_REAL );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_N"            , "Number of epochs" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_AUTO"         , "1 = default 30s epoch was applied by this command" , VT_BOOLEAN );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_ALIGN_ACTIVE" , "1 = EPOCH align annotation alignment is active" , VT_BOOLEAN );
 
-  add_var( "ALIGN-SCAN" , "" , "ANN_FOUND"    , "Annotation labels present in file" );
-  add_var( "ALIGN-SCAN" , "" , "ANN_MISSING"  , "Annotation labels absent from file" );
-  add_var( "ALIGN-SCAN" , "" , "ANN_N"        , "Total staging annotation instances" );
-  add_var( "ALIGN-SCAN" , "" , "ANN_STARTS"   , "Distinct annotation start time-points" );
+  add_var( "ALIGN-SCAN" , "" , "ANN_FOUND"    , "Annotation labels present in file" , VT_TEXT );
+  add_var( "ALIGN-SCAN" , "" , "ANN_MISSING"  , "Annotation labels absent from file" , VT_TEXT );
+  add_var( "ALIGN-SCAN" , "" , "ANN_N"        , "Total staging annotation instances" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "" , "ANN_STARTS"   , "Distinct annotation start time-points" , VT_INTEGER );
 
-  add_var( "ALIGN-SCAN" , "" , "REC_DIVIDES_EPOCH"   , "1 = record duration evenly divides epoch duration" );
-  add_var( "ALIGN-SCAN" , "" , "EPOCH_ON_REC"         , "Epochs whose start falls on a record boundary" );
-  add_var( "ALIGN-SCAN" , "" , "EPOCH_OFF_REC"        , "Epochs whose start falls mid-record" );
-  add_var( "ALIGN-SCAN" , "" , "EPOCH_ON_REC_PCT"     , "Percentage of epochs starting on a record boundary" );
+  add_var( "ALIGN-SCAN" , "" , "REC_DIVIDES_EPOCH"   , "1 = record duration evenly divides epoch duration" , VT_BOOLEAN );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_ON_REC"         , "Epochs whose start falls on a record boundary" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_OFF_REC"        , "Epochs whose start falls mid-record" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_ON_REC_PCT"     , "Percentage of epochs starting on a record boundary" , VT_REAL );
 
-  add_var( "ALIGN-SCAN" , "" , "ANN_AT_EPOCH"          , "Annotation starts coinciding with an epoch start" );
-  add_var( "ALIGN-SCAN" , "" , "ANN_OFF_EPOCH"         , "Annotation starts falling between epoch starts" );
-  add_var( "ALIGN-SCAN" , "" , "ANN_OFF_EPOCH_EDF_TAIL", "Subset of ANN_OFF_EPOCH that start on the next theoretical epoch boundary after the last full epoch and extend beyond the EDF end" );
-  add_var( "ALIGN-SCAN" , "" , "ANN_AT_EPOCH_PCT"      , "Percentage of annotation starts on an epoch boundary" );
-  add_var( "ALIGN-SCAN" , "" , "ALIGN_OFFSET"          , "Offset EPOCH align would use (seconds from EDF start)" );
-  add_var( "ALIGN-SCAN" , "" , "ALIGN_WOULD_FIX_DRIFT" , "1 = running EPOCH align would resolve all annotation drift" );
+  add_var( "ALIGN-SCAN" , "" , "ANN_AT_EPOCH"          , "Annotation starts coinciding with an epoch start" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "" , "ANN_OFF_EPOCH"         , "Annotation starts falling between epoch starts" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "" , "ANN_OFF_EPOCH_EDF_TAIL", "Subset of ANN_OFF_EPOCH that start on the next theoretical epoch boundary after the last full epoch and extend beyond the EDF end" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "" , "ANN_AT_EPOCH_PCT"      , "Percentage of annotation starts on an epoch boundary" , VT_REAL );
+  add_var( "ALIGN-SCAN" , "" , "ALIGN_OFFSET"          , "Offset EPOCH align would use (seconds from EDF start)" , VT_REAL );
+  add_var( "ALIGN-SCAN" , "" , "ALIGN_WOULD_FIX_DRIFT" , "1 = running EPOCH align would resolve all annotation drift" , VT_BOOLEAN );
 
-  add_var( "ALIGN-SCAN" , "" , "EPOCH_ONE_STAGE"   , "Epochs with a single unambiguous stage label" );
-  add_var( "ALIGN-SCAN" , "" , "EPOCH_NO_STAGE"    , "Epochs with no overlapping stage annotation" );
-  add_var( "ALIGN-SCAN" , "" , "EPOCH_MULTI_STAGE" , "Epochs spanning >1 distinct stage label (annotation boundary mid-epoch)" );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_ONE_STAGE"   , "Epochs with a single unambiguous stage label" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_NO_STAGE"    , "Epochs with no overlapping stage annotation" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "" , "EPOCH_MULTI_STAGE" , "Epochs spanning >1 distinct stage label (annotation boundary mid-epoch)" , VT_INTEGER );
 
-  add_var( "ALIGN-SCAN" , "" , "REC_AMBIG" , "Records shared between epochs with different stage labels (MASK/RE ambiguity)" );
+  add_var( "ALIGN-SCAN" , "" , "REC_AMBIG" , "Records shared between epochs with different stage labels (MASK/RE ambiguity)" , VT_INTEGER );
 
-  add_var( "ALIGN-SCAN" , "" , "ANN_IN_GAP"   , "Annotations falling entirely within an EDF+D gap" );
-  add_var( "ALIGN-SCAN" , "" , "ANN_SPAN_GAP" , "Annotations spanning a segment/gap boundary" );
+  add_var( "ALIGN-SCAN" , "" , "ANN_IN_GAP"   , "Annotations falling entirely within an EDF+D gap" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "" , "ANN_SPAN_GAP" , "Annotations spanning a segment/gap boundary" , VT_INTEGER );
 
-  add_var( "ALIGN-SCAN" , "" , "WARN_REC_NOT_DIV"   , "1 = epoch size is not an exact multiple of record size" );
-  add_var( "ALIGN-SCAN" , "" , "WARN_EPOCH_OFF_REC" , "1 = some epoch starts are not on record boundaries" );
-  add_var( "ALIGN-SCAN" , "" , "WARN_STAGE_DRIFT"   , "1 = some annotation starts fall between epoch boundaries" );
-  add_var( "ALIGN-SCAN" , "" , "WARN_STAGE_DRIFT_EDF_TAIL" , "1 = at least one off-epoch annotation is an end-of-EDF tail case, where the final annotation extends beyond the EDF end because no last full epoch exists" );
-  add_var( "ALIGN-SCAN" , "" , "WARN_MULTI_STAGE"   , "1 = some epochs span >1 stage label" );
-  add_var( "ALIGN-SCAN" , "" , "WARN_GAP_ANNS"      , "1 = some annotations fall in or span EDF+D gaps" );
+  add_var( "ALIGN-SCAN" , "" , "WARN_REC_NOT_DIV"   , "1 = epoch size is not an exact multiple of record size" , VT_BOOLEAN );
+  add_var( "ALIGN-SCAN" , "" , "WARN_EPOCH_OFF_REC" , "1 = some epoch starts are not on record boundaries" , VT_BOOLEAN );
+  add_var( "ALIGN-SCAN" , "" , "WARN_STAGE_DRIFT"   , "1 = some annotation starts fall between epoch boundaries" , VT_BOOLEAN );
+  add_var( "ALIGN-SCAN" , "" , "WARN_STAGE_DRIFT_EDF_TAIL" , "1 = at least one off-epoch annotation is an end-of-EDF tail case, where the final annotation extends beyond the EDF end because no last full epoch exists" , VT_BOOLEAN );
+  add_var( "ALIGN-SCAN" , "" , "WARN_MULTI_STAGE"   , "1 = some epochs span >1 stage label" , VT_BOOLEAN );
+  add_var( "ALIGN-SCAN" , "" , "WARN_GAP_ANNS"      , "1 = some annotations fall in or span EDF+D gaps" , VT_BOOLEAN );
 
   add_table( "ALIGN-SCAN" , "E" , "Per-epoch detail (verbose only)" );
-  add_var( "ALIGN-SCAN" , "E" , "START"     , "Epoch start (seconds from EDF start)" );
-  add_var( "ALIGN-SCAN" , "E" , "STOP"      , "Epoch stop (seconds from EDF start)" );
-  add_var( "ALIGN-SCAN" , "E" , "START_HMS" , "Epoch start (hh:mm:ss)" );
-  add_var( "ALIGN-SCAN" , "E" , "STOP_HMS"  , "Epoch stop (hh:mm:ss)" );
-  add_var( "ALIGN-SCAN" , "E" , "STAGE"     , "Stage label(s) overlapping this epoch (. if none)" );
-  add_var( "ALIGN-SCAN" , "E" , "N_STAGES"  , "Number of distinct stage labels overlapping this epoch" );
-  add_var( "ALIGN-SCAN" , "E" , "ON_REC"    , "1 = epoch start falls on a record boundary" );
-  add_var( "ALIGN-SCAN" , "E" , "REC_START" , "First EDF record overlapping this epoch" );
-  add_var( "ALIGN-SCAN" , "E" , "REC_STOP"  , "Last EDF record overlapping this epoch" );
-  add_var( "ALIGN-SCAN" , "E" , "NRECS"     , "Number of EDF records spanned by this epoch" );
+  add_var( "ALIGN-SCAN" , "E" , "START"     , "Epoch start (seconds from EDF start)" , VT_REAL );
+  add_var( "ALIGN-SCAN" , "E" , "STOP"      , "Epoch stop (seconds from EDF start)" , VT_REAL );
+  add_var( "ALIGN-SCAN" , "E" , "START_HMS" , "Epoch start (hh:mm:ss)" , VT_TEXT );
+  add_var( "ALIGN-SCAN" , "E" , "STOP_HMS"  , "Epoch stop (hh:mm:ss)" , VT_TEXT );
+  add_var( "ALIGN-SCAN" , "E" , "STAGE"     , "Stage label(s) overlapping this epoch (. if none)" , VT_TEXT );
+  add_var( "ALIGN-SCAN" , "E" , "N_STAGES"  , "Number of distinct stage labels overlapping this epoch" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "E" , "ON_REC"    , "1 = epoch start falls on a record boundary" , VT_BOOLEAN );
+  add_var( "ALIGN-SCAN" , "E" , "REC_START" , "First EDF record overlapping this epoch" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "E" , "REC_STOP"  , "Last EDF record overlapping this epoch" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "E" , "NRECS"     , "Number of EDF records spanned by this epoch" , VT_INTEGER );
 
-  add_table( "ALIGN-SCAN" , "ANNOT,ANN_N" , "Per-annotation-event detail (verbose only)" );
-  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "START"     , "Annotation start (seconds from EDF start)" );
-  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "STOP"      , "Annotation stop (seconds from EDF start)" );
-  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "START_HMS" , "Annotation start (hh:mm:ss)" );
-  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "STOP_HMS"  , "Annotation stop (hh:mm:ss)" );
-  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "AT_EPOCH"  , "1 = annotation start coincides with an epoch start" );
-  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "EDF_TAIL_TRUNC" , "1 = annotation starts on the next theoretical epoch boundary after the last full epoch, but extends beyond the EDF end" );
-  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "EPOCH"     , "Epoch number (1-based) if AT_EPOCH=1, else -1" );
-  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "OFF_SEC"   , "Offset (seconds) from nearest epoch boundary" );
-  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "REC_START" , "First EDF record overlapping this annotation" );
-  add_var( "ALIGN-SCAN" , "ANNOT,ANN_N" , "REC_STOP"  , "Last EDF record overlapping this annotation" );
+  add_table( "ALIGN-SCAN" , "ANNOT,ANNN" , "Per-annotation-event detail (verbose only)" );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANNN" , "START"     , "Annotation start (seconds from EDF start)" , VT_REAL );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANNN" , "STOP"      , "Annotation stop (seconds from EDF start)" , VT_REAL );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANNN" , "START_HMS" , "Annotation start (hh:mm:ss)" , VT_TEXT );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANNN" , "STOP_HMS"  , "Annotation stop (hh:mm:ss)" , VT_TEXT );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANNN" , "AT_EPOCH"  , "1 = annotation start coincides with an epoch start" , VT_BOOLEAN );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANNN" , "EDF_TAIL_TRUNC" , "1 = annotation starts on the next theoretical epoch boundary after the last full epoch, but extends beyond the EDF end" , VT_BOOLEAN );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANNN" , "EPOCH"     , "Epoch number (1-based) if AT_EPOCH=1, else -1" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANNN" , "OFF_SEC"   , "Offset (seconds) from nearest epoch boundary" , VT_REAL );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANNN" , "REC_START" , "First EDF record overlapping this annotation" , VT_INTEGER );
+  add_var( "ALIGN-SCAN" , "ANNOT,ANNN" , "REC_STOP"  , "Last EDF record overlapping this annotation" , VT_INTEGER );
 
   //
   // HEAD
@@ -3201,21 +3201,17 @@ void cmddefs_t::init()
   add_param( "--fir" , "blackman" , "" , "Specify a Blackman window" );
 
   add_table( "--fir" , "" , "FIR design parameters" );
-  add_var( "--fir" , "" , "FIR" , "Label for FIR filter (constructed from input parameters)" );
-  add_var( "--fir" , "" , "FS" , "Sampling rate (from fs input parameter)" );
-  add_var( "--fir" , "" , "NTAPS" , "Filter order (number of taps)" );
+  add_var( "--fir" , "" , "FIR" , "Label for FIR filter (constructed from input parameters)" , VT_TEXT );
+  add_var( "--fir" , "" , "FS" , "Sampling rate (from fs input parameter)" , VT_REAL );
+  add_var( "--fir" , "" , "NTAPS" , "Filter order (number of taps)" , VT_INTEGER );
 
   add_table( "--fir" , "F,FIR" , "Frequency response characteristics" );
-  add_var( "--fir" , "F,FIR" , "F" , "Frequency (Hz)" );
-  add_var( "--fir" , "F,FIR" , "FIR" , "FIR filter label" );
-  add_var( "--fir" , "F,FIR" , "MAG" , "Magnitude" );
-  add_var( "--fir" , "F,FIR" , "MAG_DB" , "Magnitude (dB)" );
-  add_var( "--fir" , "F,FIR" , "PHASE" , "Phase" );
+  add_var( "--fir" , "F,FIR" , "MAG" , "Magnitude" , VT_REAL );
+  add_var( "--fir" , "F,FIR" , "MAG_DB" , "Magnitude (dB)" , VT_REAL );
+  add_var( "--fir" , "F,FIR" , "PHASE" , "Phase" , VT_REAL );
 
   add_table( "--fir" , "FIR,SEC" , "Impulse response" );
-  add_var( "--fir" , "FIR,SEC" , "SEC" , "Time (seconds)" );
-  add_var( "--fir" , "FIR,SEC" , "FIR" , "FIR filter label" );
-  add_var( "--fir" , "FIR,SEC" , "IR" , "Impulse response" );
+  add_var( "--fir" , "FIR,SEC" , "IR" , "Impulse response" , VT_REAL );
 
   //
   // FILTER
@@ -3287,26 +3283,26 @@ void cmddefs_t::init()
       add_param( cmd , "n" , "2048" , "Number of samples used for ngaus summaries; overrides dur; defaults to 2048 if neither n nor dur is specified" );
 
       add_table( cmd , "" , "Filter design parameters" );
-      add_var( cmd , "" , "FIR" , "Filter label constructed from input parameters" );
-      add_var( cmd , "" , "TYPE" , "Filter type" );
-      add_var( cmd , "" , "FS" , "Sampling rate used to evaluate the filter" );
-      add_var( cmd , "" , "NTAPS" , "Number of FIR taps for FIR filters" );
-      add_var( cmd , "" , "N" , "Number of samples used for narrow Gaussian summaries" );
-      add_var( cmd , "" , "FC" , "Center frequency for narrow Gaussian summaries" );
-      add_var( cmd , "" , "FWHM" , "Full-width at half maximum for narrow Gaussian summaries" );
+      add_var( cmd , "" , "FIR" , "Filter label constructed from input parameters" , VT_TEXT );
+      add_var( cmd , "" , "TYPE" , "Filter type" , VT_TEXT );
+      add_var( cmd , "" , "FS" , "Sampling rate used to evaluate the filter" , VT_REAL );
+      add_var( cmd , "" , "NTAPS" , "Number of FIR taps for FIR filters" , VT_INTEGER );
+      add_var( cmd , "" , "N" , "Number of samples used for narrow Gaussian summaries" , VT_INTEGER );
+      add_var( cmd , "" , "FC" , "Center frequency for narrow Gaussian summaries" , VT_REAL );
+      add_var( cmd , "" , "FWHM" , "Full-width at half maximum for narrow Gaussian summaries" , VT_REAL );
 
       add_table( cmd , "F,FIR" , "Frequency-response characteristics" );
-      add_var( cmd , "F,FIR" , "F" , "Frequency (Hz)" );
-      add_var( cmd , "F,FIR" , "FIR" , "Filter label" );
-      add_var( cmd , "F,FIR" , "MAG" , "Magnitude response" );
-      add_var( cmd , "F,FIR" , "MAG_DB" , "Magnitude response (dB)" );
-      add_var( cmd , "F,FIR" , "PHASE" , "Phase response" );
+      add_var( cmd , "F,FIR" , "F" , "Frequency (Hz)" , VT_REAL );
+      add_var( cmd , "F,FIR" , "FIR" , "Filter label" , VT_TEXT );
+      add_var( cmd , "F,FIR" , "MAG" , "Magnitude response" , VT_REAL );
+      add_var( cmd , "F,FIR" , "MAG_DB" , "Magnitude response (dB)" , VT_REAL );
+      add_var( cmd , "F,FIR" , "PHASE" , "Phase response" , VT_REAL );
 
       add_table( cmd , "FIR,SEC" , "Impulse and step response" );
-      add_var( cmd , "FIR,SEC" , "SEC" , "Time (seconds)" );
-      add_var( cmd , "FIR,SEC" , "FIR" , "Filter label" );
-      add_var( cmd , "FIR,SEC" , "IR" , "Impulse-response coefficient" );
-      add_var( cmd , "FIR,SEC" , "SR" , "Step response" );
+      add_var( cmd , "FIR,SEC" , "SEC" , "Time (seconds)" , VT_REAL );
+      add_var( cmd , "FIR,SEC" , "FIR" , "Filter label" , VT_TEXT );
+      add_var( cmd , "FIR,SEC" , "IR" , "Impulse-response coefficient" , VT_REAL );
+      add_var( cmd , "FIR,SEC" , "SR" , "Step response" , VT_REAL );
     }
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -3343,24 +3339,24 @@ void cmddefs_t::init()
   add_param( "EDGER" , "mask" , "" , "Set epoch mask based, for subsequent RE" );
 
   add_table( "EDGER" , "" , "Individual-level summaries" );
-  add_var( "EDGER" , "" , "EOFF", "Epoch for lights off, if set (i.e. leading period trimming)" );
-  add_var( "EDGER" , "" , "LOFF", "Clock-time for lights off, if set (i.e. leading period trimming)" );
-  add_var( "EDGER" , "" , "EON" , "Epoch for lights on, if set (i.e. trailing period trimming)" );
-  add_var( "EDGER" , "" , "LON" , "Clock-time for lights on, if set (i.e. leading period trimming)" );
+  add_var( "EDGER" , "" , "EOFF", "Epoch for lights off, if set (i.e. leading period trimming)" , VT_INTEGER );
+  add_var( "EDGER" , "" , "LOFF", "Clock-time for lights off, if set (i.e. leading period trimming)" , VT_TEXT );
+  add_var( "EDGER" , "" , "EON" , "Epoch for lights on, if set (i.e. trailing period trimming)" , VT_INTEGER );
+  add_var( "EDGER" , "" , "LON" , "Clock-time for lights on, if set (i.e. leading period trimming)" , VT_TEXT );
 
   add_table( "EDGER" , "CH" , "Individual-level summaries" );
-  add_var( "EDGER" , "CH" , "EOFF", "Epoch for lights off, if set based on this channel" );
-  add_var( "EDGER" , "CH" , "EON" , "Epoch for lights on, if set, based on this channel" );
+  add_var( "EDGER" , "CH" , "EOFF", "Epoch for lights off, if set based on this channel" , VT_INTEGER );
+  add_var( "EDGER" , "CH" , "EON" , "Epoch for lights on, if set, based on this channel" , VT_INTEGER );
 
   add_table( "EDGER" , "CH,E" , "Individual-level summaries" );
-  add_var( "EDGER" , "CH,E" , "H1", "First Hjorth statistic" );
-  add_var( "EDGER" , "CH,E" , "H2", "Second Hjorth statistic (if h2 set)" );
-  add_var( "EDGER" , "CH,E" , "H3", "Third Hjorth statistic" );
-  add_var( "EDGER" , "CH,E" , "FLAG", "Indicator of whether epoch is bad (0=good/1=bad)" );
-  add_var( "EDGER" , "CH,E" , "STAT", "Smoothed flag (0/1) indicator" );
-  add_var( "EDGER" , "CH,E" , "XON", "Primary statistic to determine lights on (trailing artifact)" );
-  add_var( "EDGER" , "CH,E" , "XOFF", "Primary statistic to determine lights off (leading artifact)" );
-  add_var( "EDGER" , "CH,E" , "TRIM", "Indicator (0/1) for whether this epoch should be trimmed" );
+  add_var( "EDGER" , "CH,E" , "H1", "First Hjorth statistic" , VT_REAL );
+  add_var( "EDGER" , "CH,E" , "H2", "Second Hjorth statistic (if h2 set)" , VT_REAL );
+  add_var( "EDGER" , "CH,E" , "H3", "Third Hjorth statistic" , VT_REAL );
+  add_var( "EDGER" , "CH,E" , "FLAG", "Indicator of whether epoch is bad (0=good/1=bad)" , VT_BOOLEAN );
+  add_var( "EDGER" , "CH,E" , "STAT", "Smoothed flag (0/1) indicator" , VT_BOOLEAN );
+  add_var( "EDGER" , "CH,E" , "XON", "Primary statistic to determine lights on (trailing artifact)" , VT_REAL );
+  add_var( "EDGER" , "CH,E" , "XOFF", "Primary statistic to determine lights off (leading artifact)" , VT_REAL );
+  add_var( "EDGER" , "CH,E" , "TRIM", "Indicator (0/1) for whether this epoch should be trimmed" , VT_BOOLEAN );
 
   //
   // ARTIFACTS
@@ -3379,23 +3375,23 @@ void cmddefs_t::init()
   add_param( "ARTIFACTS" , "no-mask" , "" , "Do not set mask for outlier epochs" );
 
   add_table( "ARTIFACTS" , "CH" , "Per-channel output" );
-  add_var( "ARTIFACTS" , "CH" , "FLAGGED_EPOCHS" , "Number of epochs failing" );
-  add_var( "ARTIFACTS" , "CH" , "ALTERED_EPOCHS" , "Number of epochs actually masked" );
-  add_var( "ARTIFACTS" , "CH" , "TOTAL_EPOCHS" , "Number of epochs tested" );
+  add_var( "ARTIFACTS" , "CH" , "FLAGGED_EPOCHS" , "Number of epochs failing" , VT_INTEGER );
+  add_var( "ARTIFACTS" , "CH" , "ALTERED_EPOCHS" , "Number of epochs actually masked" , VT_INTEGER );
+  add_var( "ARTIFACTS" , "CH" , "TOTAL_EPOCHS" , "Number of epochs tested" , VT_INTEGER );
 
 
   add_table( "ARTIFACTS" , "CH,E" , "Per-channel per-epoch output [verbose]" );
-  add_var( "ARTIFACTS" , "CH,E" , "DELTA" , "Delta power" );
-  add_var( "ARTIFACTS" , "CH,E" , "DELTA_AVG" , "Local average delta power" );
-  add_var( "ARTIFACTS" , "CH,E" , "DELTA_FAC" , "Relative delta factor" );
+  add_var( "ARTIFACTS" , "CH,E" , "DELTA" , "Delta power" , VT_REAL );
+  add_var( "ARTIFACTS" , "CH,E" , "DELTA_AVG" , "Local average delta power" , VT_REAL );
+  add_var( "ARTIFACTS" , "CH,E" , "DELTA_FAC" , "Relative delta factor" , VT_REAL );
 
-  add_var( "ARTIFACTS" , "CH,E" , "BETA" , "Beta power" );
-  add_var( "ARTIFACTS" , "CH,E" , "BETA_AVG" , "Local average beta power" );
-  add_var( "ARTIFACTS" , "CH,E" , "BETA_FAC" , "Relative beta factor" );
+  add_var( "ARTIFACTS" , "CH,E" , "BETA" , "Beta power" , VT_REAL );
+  add_var( "ARTIFACTS" , "CH,E" , "BETA_AVG" , "Local average beta power" , VT_REAL );
+  add_var( "ARTIFACTS" , "CH,E" , "BETA_FAC" , "Relative beta factor" , VT_REAL );
 
-  add_var( "ARTIFACTS" , "CH,E" , "DELTA_MASK" , "Masked based on delta power?" );
-  add_var( "ARTIFACTS" , "CH,E" , "BETA_MASK" , "Masked based on beta power?" );
-  add_var( "ARTIFACTS" , "CH,E" , "MASK" , "Is this epoch masked?" );
+  add_var( "ARTIFACTS" , "CH,E" , "DELTA_MASK" , "Masked based on delta power?" , VT_BOOLEAN );
+  add_var( "ARTIFACTS" , "CH,E" , "BETA_MASK" , "Masked based on beta power?" , VT_BOOLEAN );
+  add_var( "ARTIFACTS" , "CH,E" , "MASK" , "Is this epoch masked?" , VT_BOOLEAN );
 
   //
   // SUPPRESS-ECG
@@ -3415,21 +3411,21 @@ void cmddefs_t::init()
   add_param( "SUPPRESS-ECG" , "mask-bad-epochs" , "" , "Mask epochs with invalid ECG-derived heart-rate estimates" );
   
   add_table( "SUPPRESS-ECG" , "" , "Individual-level summaries" );
-  add_var( "SUPPRESS-ECG" , "" , "BPM" , "Mean heart rate (bpm)" );
-  add_var( "SUPPRESS-ECG" , "" , "BPM_L95" , "Lower 95% confidence interval for mean HR" );
-  add_var( "SUPPRESS-ECG" , "" , "BPM_U95" , "Upper 95% confidence interval for mean HR" );
-  add_var( "SUPPRESS-ECG" , "" , "BPM_N_REMOVED" , "Number of epochs flagged as having invalid HR estimates" );
-  add_var( "SUPPRESS-ECG" , "" , "BPM_PCT_REMOVED" , "Proportion of epochs flagged as having invalid HR estimates" );
+  add_var( "SUPPRESS-ECG" , "" , "BPM" , "Mean heart rate (bpm)" , VT_REAL );
+  add_var( "SUPPRESS-ECG" , "" , "BPM_L95" , "Lower 95% confidence interval for mean HR" , VT_REAL );
+  add_var( "SUPPRESS-ECG" , "" , "BPM_U95" , "Upper 95% confidence interval for mean HR" , VT_REAL );
+  add_var( "SUPPRESS-ECG" , "" , "BPM_N_REMOVED" , "Number of epochs flagged as having invalid HR estimates" , VT_INTEGER );
+  add_var( "SUPPRESS-ECG" , "" , "BPM_PCT_REMOVED" , "Proportion of epochs flagged as having invalid HR estimates" , VT_REAL );
 
   add_table( "SUPPRESS-ECG" , "E" , "Epoch-level metrics" );
-  add_var( "SUPPRESS-ECG" , "E" , "BPM" , "HR for this epoch" );
-  add_var( "SUPPRESS-ECG" , "E" , "BPM_MASK" , "Was this epoch invalid?" );
+  add_var( "SUPPRESS-ECG" , "E" , "BPM" , "HR for this epoch" , VT_REAL );
+  add_var( "SUPPRESS-ECG" , "E" , "BPM_MASK" , "Was this epoch invalid?" , VT_BOOLEAN );
   
   add_table( "SUPPRESS-ECG" , "CH" , "Channel-level metrics" );
-  add_var( "SUPPRESS-ECG" , "CH" , "ART_RMS" , "Root mean square of correction signature" );
+  add_var( "SUPPRESS-ECG" , "CH" , "ART_RMS" , "Root mean square of correction signature" , VT_REAL );
   
   add_table( "SUPPRESS-ECG" , "CH,SP" , "Details of artifact signature" );
-  add_var( "SUPPRESS-ECG" , "CH,SP" , "ART" , "Estimated artifact template value at each sample point in the correction window" );
+  add_var( "SUPPRESS-ECG" , "CH,SP" , "ART" , "Estimated artifact template value at each sample point in the correction window" , VT_REAL );
 
   //
   // ALTER
@@ -3450,7 +3446,7 @@ void cmddefs_t::init()
 
   add_param( "ALTER" , "segment-sec" , "4" , "Segment size" );
   add_table( "ALTER" , "NC" , "EMD correction summaries" );
-  add_var( "ALTER" , "NC" , "REMOVED" , "Number of segments where this many components were removed" );
+  add_var( "ALTER" , "NC" , "REMOVED" , "Number of segments where this many components were removed" , VT_INTEGER );
 
   //
   // LINE-DENOISE
@@ -3642,171 +3638,171 @@ void cmddefs_t::init()
 
   // Cross-domain summary (one row per channel per domain)
   add_table( "QC" , "CH,DOMAIN" , "Cross-domain channel QC summary" );
-  add_var( "QC" , "CH,DOMAIN" , "FLAGGED"      , "Channel flagged in this domain (0/1)" );
-  add_var( "QC" , "CH,DOMAIN" , "N_FLAG_EPOCH" , "Number of bad epochs" );
-  add_var( "QC" , "CH,DOMAIN" , "MAX_FLAG_RUN" , "Longest contiguous run of bad epochs (sec)" );
-  add_var( "QC" , "CH,DOMAIN" , "LN_FLAG"      , "Channel flagged for line noise in this domain (0/1); EEG/EMG/ECG/EOG only" );
-  add_var( "QC" , "CH,DOMAIN" , "MAX_LN_RUN"  , "Longest contiguous run of line-noise epochs (sec); EEG/EMG/ECG/EOG only" );
+  add_var( "QC" , "CH,DOMAIN" , "FLAGGED"      , "Channel flagged in this domain (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,DOMAIN" , "N_FLAG_EPOCH" , "Number of bad epochs" , VT_INTEGER );
+  add_var( "QC" , "CH,DOMAIN" , "MAX_FLAG_RUN" , "Longest contiguous run of bad epochs (sec)" , VT_REAL );
+  add_var( "QC" , "CH,DOMAIN" , "LN_FLAG"      , "Channel flagged for line noise in this domain (0/1); EEG/EMG/ECG/EOG only" , VT_BOOLEAN );
+  add_var( "QC" , "CH,DOMAIN" , "MAX_LN_RUN"  , "Longest contiguous run of line-noise epochs (sec); EEG/EMG/ECG/EOG only" , VT_REAL );
 
   // RESP per-channel summary
   add_table( "QC" , "CH,RESP" , "Per-channel respiratory QC summary" );
-  add_var( "QC" , "CH,RESP" , "N_VALID_WIN"  , "Number of valid (non-artifact) windows" );
-  add_var( "QC" , "CH,RESP" , "P_VALID_WIN"  , "Proportion of valid windows" );
-  add_var( "QC" , "CH,RESP" , "P_NOISE1"     , "Proportion of windows with SNR below threshold" );
-  add_var( "QC" , "CH,RESP" , "P_NOISE2"     , "Proportion of windows with elevated noise-band power" );
-  add_var( "QC" , "CH,RESP" , "P_NOISE3"     , "Proportion of windows failing both SNR and noise-band criteria" );
-  add_var( "QC" , "CH,RESP" , "P_FLAG_EPOCH"  , "Proportion of bad epochs" );
-  add_var( "QC" , "CH,RESP" , "P_FLAT"       , "Proportion of flatline epochs" );
-  add_var( "QC" , "CH,RESP" , "P_CLIP"       , "Proportion of clipped epochs" );
-  add_var( "QC" , "CH,RESP" , "P_JUMP"       , "Proportion of jump-artifact epochs" );
-  add_var( "QC" , "CH,RESP" , "FLAGGED"       , "Channel flagged (0/1)" );
+  add_var( "QC" , "CH,RESP" , "N_VALID_WIN"  , "Number of valid (non-artifact) windows" , VT_INTEGER );
+  add_var( "QC" , "CH,RESP" , "P_VALID_WIN"  , "Proportion of valid windows" , VT_REAL );
+  add_var( "QC" , "CH,RESP" , "P_NOISE1"     , "Proportion of windows with SNR below threshold" , VT_REAL );
+  add_var( "QC" , "CH,RESP" , "P_NOISE2"     , "Proportion of windows with elevated noise-band power" , VT_REAL );
+  add_var( "QC" , "CH,RESP" , "P_NOISE3"     , "Proportion of windows failing both SNR and noise-band criteria" , VT_REAL );
+  add_var( "QC" , "CH,RESP" , "P_FLAG_EPOCH"  , "Proportion of bad epochs" , VT_REAL );
+  add_var( "QC" , "CH,RESP" , "P_FLAT"       , "Proportion of flatline epochs" , VT_REAL );
+  add_var( "QC" , "CH,RESP" , "P_CLIP"       , "Proportion of clipped epochs" , VT_REAL );
+  add_var( "QC" , "CH,RESP" , "P_JUMP"       , "Proportion of jump-artifact epochs" , VT_REAL );
+  add_var( "QC" , "CH,RESP" , "FLAGGED"       , "Channel flagged (0/1)" , VT_BOOLEAN );
 
   // RESP per-window output [epoch]
   add_table( "QC" , "CH,RESP,WIN" , "Per-window respiratory QC metrics [epoch]" );
-  add_var( "QC" , "CH,RESP,WIN" , "P1"        , "Respiratory band power estimate" );
-  add_var( "QC" , "CH,RESP,WIN" , "SNR"       , "Signal-to-noise ratio for this window" );
-  add_var( "QC" , "CH,RESP,WIN" , "CRIT"      , "Noise criteria value" );
-  add_var( "QC" , "CH,RESP,WIN" , "FLAT"      , "Flatline flag (0/1)" );
-  add_var( "QC" , "CH,RESP,WIN" , "CLIP"      , "Clipping flag (0/1)" );
-  add_var( "QC" , "CH,RESP,WIN" , "JUMP"      , "Jump artifact flag (0/1)" );
-  add_var( "QC" , "CH,RESP,WIN" , "FLAG_EPOCH" , "Window flagged as bad (0/1)" );
+  add_var( "QC" , "CH,RESP,WIN" , "P1"        , "Respiratory band power estimate" , VT_REAL );
+  add_var( "QC" , "CH,RESP,WIN" , "SNR"       , "Signal-to-noise ratio for this window" , VT_REAL );
+  add_var( "QC" , "CH,RESP,WIN" , "CRIT"      , "Noise criteria value" , VT_REAL );
+  add_var( "QC" , "CH,RESP,WIN" , "FLAT"      , "Flatline flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,RESP,WIN" , "CLIP"      , "Clipping flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,RESP,WIN" , "JUMP"      , "Jump artifact flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,RESP,WIN" , "FLAG_EPOCH" , "Window flagged as bad (0/1)" , VT_BOOLEAN );
 
   // SpO2/OXY per-channel summary
   add_table( "QC" , "CH,OXY" , "Per-channel SpO2 QC summary" );
-  add_var( "QC" , "CH,OXY" , "RESCALED"     , "Signal was auto-rescaled from 0-1 to 0-100 (0/1)" );
-  add_var( "QC" , "CH,OXY" , "P_FLAG_EPOCH"  , "Proportion of bad epochs" );
-  add_var( "QC" , "CH,OXY" , "P_RANGE"      , "Proportion of epochs with out-of-range values" );
-  add_var( "QC" , "CH,OXY" , "P_FLAT"       , "Proportion of flatline epochs" );
-  add_var( "QC" , "CH,OXY" , "P_JUMP"       , "Proportion of jump-artifact epochs" );
-  add_var( "QC" , "CH,OXY" , "P_MISSING"    , "Proportion of epochs with excessive missing/invalid data" );
-  add_var( "QC" , "CH,OXY" , "FLAGGED"       , "Channel flagged (0/1)" );
+  add_var( "QC" , "CH,OXY" , "RESCALED"     , "Signal was auto-rescaled from 0-1 to 0-100 (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,OXY" , "P_FLAG_EPOCH"  , "Proportion of bad epochs" , VT_REAL );
+  add_var( "QC" , "CH,OXY" , "P_RANGE"      , "Proportion of epochs with out-of-range values" , VT_REAL );
+  add_var( "QC" , "CH,OXY" , "P_FLAT"       , "Proportion of flatline epochs" , VT_REAL );
+  add_var( "QC" , "CH,OXY" , "P_JUMP"       , "Proportion of jump-artifact epochs" , VT_REAL );
+  add_var( "QC" , "CH,OXY" , "P_MISSING"    , "Proportion of epochs with excessive missing/invalid data" , VT_REAL );
+  add_var( "QC" , "CH,OXY" , "FLAGGED"       , "Channel flagged (0/1)" , VT_BOOLEAN );
 
   // SpO2/OXY per-window output [epoch]
   add_table( "QC" , "CH,OXY,WIN" , "Per-window SpO2 QC metrics [epoch]" );
-  add_var( "QC" , "CH,OXY,WIN" , "RANGE"     , "Out-of-range flag (0/1)" );
-  add_var( "QC" , "CH,OXY,WIN" , "FLAT"      , "Flatline flag (0/1)" );
-  add_var( "QC" , "CH,OXY,WIN" , "JUMP"      , "Jump artifact flag (0/1)" );
-  add_var( "QC" , "CH,OXY,WIN" , "MISSING"   , "Excessive missing/invalid data flag (0/1)" );
-  add_var( "QC" , "CH,OXY,WIN" , "FLAG_EPOCH" , "Window flagged as bad (0/1)" );
+  add_var( "QC" , "CH,OXY,WIN" , "RANGE"     , "Out-of-range flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,OXY,WIN" , "FLAT"      , "Flatline flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,OXY,WIN" , "JUMP"      , "Jump artifact flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,OXY,WIN" , "MISSING"   , "Excessive missing/invalid data flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,OXY,WIN" , "FLAG_EPOCH" , "Window flagged as bad (0/1)" , VT_BOOLEAN );
 
   // EEG per-channel summary
   add_table( "QC" , "CH,EEG" , "Per-channel EEG QC summary" );
-  add_var( "QC" , "CH,EEG" , "FLAGGED"      , "Channel flagged (0/1)" );
-  add_var( "QC" , "CH,EEG" , "N_FLAG_EPOCH" , "Number of bad epochs" );
-  add_var( "QC" , "CH,EEG" , "PROP_FLAG"    , "Proportion of bad epochs" );
-  add_var( "QC" , "CH,EEG" , "MAX_FLAG_RUN" , "Longest contiguous bad run (sec)" );
-  add_var( "QC" , "CH,EEG" , "P_FLAT"      , "Proportion of flatline epochs" );
-  add_var( "QC" , "CH,EEG" , "P_CLIP"      , "Proportion of clipped epochs" );
-  add_var( "QC" , "CH,EEG" , "P_AMP"       , "Proportion of extreme-amplitude epochs" );
-  add_var( "QC" , "CH,EEG" , "P_HF"        , "Proportion of high-frequency contamination epochs" );
-  add_var( "QC" , "CH,EEG" , "P_PEAK"      , "Proportion of epochs flagged by spectral peakedness (SPK or KURT)" );
-  add_var( "QC" , "CH,EEG" , "P_HJORTH"    , "Proportion of Hjorth outlier epochs" );
-  add_var( "QC" , "CH,EEG" , "P_LN"        , "Proportion of line-noise epochs (tracked separately; does not affect FLAGGED)" );
-  add_var( "QC" , "CH,EEG" , "MAX_LN_RUN"  , "Longest contiguous line-noise run (sec)" );
-  add_var( "QC" , "CH,EEG" , "LN_FLAG"      , "Channel flagged for excessive line noise (0/1)" );
+  add_var( "QC" , "CH,EEG" , "FLAGGED"      , "Channel flagged (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EEG" , "N_FLAG_EPOCH" , "Number of bad epochs" , VT_INTEGER );
+  add_var( "QC" , "CH,EEG" , "PROP_FLAG"    , "Proportion of bad epochs" , VT_REAL );
+  add_var( "QC" , "CH,EEG" , "MAX_FLAG_RUN" , "Longest contiguous bad run (sec)" , VT_REAL );
+  add_var( "QC" , "CH,EEG" , "P_FLAT"      , "Proportion of flatline epochs" , VT_REAL );
+  add_var( "QC" , "CH,EEG" , "P_CLIP"      , "Proportion of clipped epochs" , VT_REAL );
+  add_var( "QC" , "CH,EEG" , "P_AMP"       , "Proportion of extreme-amplitude epochs" , VT_REAL );
+  add_var( "QC" , "CH,EEG" , "P_HF"        , "Proportion of high-frequency contamination epochs" , VT_REAL );
+  add_var( "QC" , "CH,EEG" , "P_PEAK"      , "Proportion of epochs flagged by spectral peakedness (SPK or KURT)" , VT_REAL );
+  add_var( "QC" , "CH,EEG" , "P_HJORTH"    , "Proportion of Hjorth outlier epochs" , VT_REAL );
+  add_var( "QC" , "CH,EEG" , "P_LN"        , "Proportion of line-noise epochs (tracked separately; does not affect FLAGGED)" , VT_REAL );
+  add_var( "QC" , "CH,EEG" , "MAX_LN_RUN"  , "Longest contiguous line-noise run (sec)" , VT_REAL );
+  add_var( "QC" , "CH,EEG" , "LN_FLAG"      , "Channel flagged for excessive line noise (0/1)" , VT_BOOLEAN );
 
   // EEG per-window output [epoch]
   add_table( "QC" , "CH,EEG,WIN" , "Per-window EEG QC metrics [epoch]" );
-  add_var( "QC" , "CH,EEG,WIN" , "SD"        , "Epoch standard deviation (µV)" );
-  add_var( "QC" , "CH,EEG,WIN" , "DERIV"     , "Proportion of near-zero sample-to-sample derivatives" );
-  add_var( "QC" , "CH,EEG,WIN" , "HF_RATIO"  , "Ratio of HF band power to signal band power" );
-  add_var( "QC" , "CH,EEG,WIN" , "LN_RATIO"  , "Ratio of line-noise band power to broadband power" );
-  add_var( "QC" , "CH,EEG,WIN" , "SPK"       , "Spectral peakedness: total variation of detrended log-PSD residuals (2-28 Hz)" );
-  add_var( "QC" , "CH,EEG,WIN" , "KURT"      , "Spectral kurtosis: excess kurtosis of detrended log-PSD residuals (2-28 Hz)" );
-  add_var( "QC" , "CH,EEG,WIN" , "ACT"       , "Hjorth activity on bandpass-filtered signal" );
-  add_var( "QC" , "CH,EEG,WIN" , "CPLX"      , "Hjorth complexity on bandpass-filtered signal" );
-  add_var( "QC" , "CH,EEG,WIN" , "FLAT"      , "Flatline flag (0/1)" );
-  add_var( "QC" , "CH,EEG,WIN" , "CLIP"      , "Clipping flag (0/1)" );
-  add_var( "QC" , "CH,EEG,WIN" , "AMP"       , "Extreme amplitude flag (0/1)" );
-  add_var( "QC" , "CH,EEG,WIN" , "HF"        , "High-frequency contamination flag (0/1)" );
-  add_var( "QC" , "CH,EEG,WIN" , "LN"        , "Line noise flag (0/1; does not contribute to BAD_EPOCH)" );
-  add_var( "QC" , "CH,EEG,WIN" , "PEAK"      , "Spectral peakedness flag: SPK or KURT threshold exceeded (0/1)" );
-  add_var( "QC" , "CH,EEG,WIN" , "HJORTH"    , "Hjorth outlier flag (0/1)" );
-  add_var( "QC" , "CH,EEG,WIN" , "FLAG_EPOCH" , "Epoch flagged as bad (0/1); excludes LN" );
+  add_var( "QC" , "CH,EEG,WIN" , "SD"        , "Epoch standard deviation (µV)" , VT_REAL );
+  add_var( "QC" , "CH,EEG,WIN" , "DERIV"     , "Proportion of near-zero sample-to-sample derivatives" , VT_REAL );
+  add_var( "QC" , "CH,EEG,WIN" , "HF_RATIO"  , "Ratio of HF band power to signal band power" , VT_REAL );
+  add_var( "QC" , "CH,EEG,WIN" , "LN_RATIO"  , "Ratio of line-noise band power to broadband power" , VT_REAL );
+  add_var( "QC" , "CH,EEG,WIN" , "SPK"       , "Spectral peakedness: total variation of detrended log-PSD residuals (2-28 Hz)" , VT_REAL );
+  add_var( "QC" , "CH,EEG,WIN" , "KURT"      , "Spectral kurtosis: excess kurtosis of detrended log-PSD residuals (2-28 Hz)" , VT_REAL );
+  add_var( "QC" , "CH,EEG,WIN" , "ACT"       , "Hjorth activity on bandpass-filtered signal" , VT_REAL );
+  add_var( "QC" , "CH,EEG,WIN" , "CPLX"      , "Hjorth complexity on bandpass-filtered signal" , VT_REAL );
+  add_var( "QC" , "CH,EEG,WIN" , "FLAT"      , "Flatline flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EEG,WIN" , "CLIP"      , "Clipping flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EEG,WIN" , "AMP"       , "Extreme amplitude flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EEG,WIN" , "HF"        , "High-frequency contamination flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EEG,WIN" , "LN"        , "Line noise flag (0/1; does not contribute to BAD_EPOCH)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EEG,WIN" , "PEAK"      , "Spectral peakedness flag: SPK or KURT threshold exceeded (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EEG,WIN" , "HJORTH"    , "Hjorth outlier flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EEG,WIN" , "FLAG_EPOCH" , "Epoch flagged as bad (0/1); excludes LN" , VT_BOOLEAN );
 
   // EMG per-channel summary
   add_table( "QC" , "CH,EMG" , "Per-channel EMG QC summary" );
-  add_var( "QC" , "CH,EMG" , "FLAGGED"      , "Channel flagged (0/1)" );
-  add_var( "QC" , "CH,EMG" , "N_FLAG_EPOCH" , "Number of bad epochs" );
-  add_var( "QC" , "CH,EMG" , "PROP_FLAG"    , "Proportion of bad epochs" );
-  add_var( "QC" , "CH,EMG" , "MAX_FLAG_RUN" , "Longest contiguous bad run (sec)" );
-  add_var( "QC" , "CH,EMG" , "P_FLAT"      , "Proportion of flatline epochs" );
-  add_var( "QC" , "CH,EMG" , "P_CLIP"      , "Proportion of clipped epochs" );
-  add_var( "QC" , "CH,EMG" , "P_HI_RMS"   , "Proportion of high broadband RMS epochs" );
-  add_var( "QC" , "CH,EMG" , "P_IMP"       , "Proportion of impulse-artifact epochs" );
-  add_var( "QC" , "CH,EMG" , "P_LN"        , "Proportion of line-noise epochs (tracked separately; does not affect FLAGGED)" );
-  add_var( "QC" , "CH,EMG" , "MAX_LN_RUN"  , "Longest contiguous line-noise run (sec)" );
-  add_var( "QC" , "CH,EMG" , "LN_FLAG"      , "Channel flagged for excessive line noise (0/1)" );
+  add_var( "QC" , "CH,EMG" , "FLAGGED"      , "Channel flagged (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EMG" , "N_FLAG_EPOCH" , "Number of bad epochs" , VT_INTEGER );
+  add_var( "QC" , "CH,EMG" , "PROP_FLAG"    , "Proportion of bad epochs" , VT_REAL );
+  add_var( "QC" , "CH,EMG" , "MAX_FLAG_RUN" , "Longest contiguous bad run (sec)" , VT_REAL );
+  add_var( "QC" , "CH,EMG" , "P_FLAT"      , "Proportion of flatline epochs" , VT_REAL );
+  add_var( "QC" , "CH,EMG" , "P_CLIP"      , "Proportion of clipped epochs" , VT_REAL );
+  add_var( "QC" , "CH,EMG" , "P_HI_RMS"   , "Proportion of high broadband RMS epochs" , VT_REAL );
+  add_var( "QC" , "CH,EMG" , "P_IMP"       , "Proportion of impulse-artifact epochs" , VT_REAL );
+  add_var( "QC" , "CH,EMG" , "P_LN"        , "Proportion of line-noise epochs (tracked separately; does not affect FLAGGED)" , VT_REAL );
+  add_var( "QC" , "CH,EMG" , "MAX_LN_RUN"  , "Longest contiguous line-noise run (sec)" , VT_REAL );
+  add_var( "QC" , "CH,EMG" , "LN_FLAG"      , "Channel flagged for excessive line noise (0/1)" , VT_BOOLEAN );
 
   // EMG per-window output [epoch]
   add_table( "QC" , "CH,EMG,WIN" , "Per-window EMG QC metrics [epoch]" );
-  add_var( "QC" , "CH,EMG,WIN" , "SD"        , "Epoch standard deviation (µV)" );
-  add_var( "QC" , "CH,EMG,WIN" , "DERIV"     , "Proportion of near-zero sample-to-sample derivatives" );
-  add_var( "QC" , "CH,EMG,WIN" , "RMS"       , "Epoch broadband RMS (µV)" );
-  add_var( "QC" , "CH,EMG,WIN" , "LN_RATIO"  , "Ratio of line-noise band power to broadband power" );
-  add_var( "QC" , "CH,EMG,WIN" , "FLAT"      , "Flatline flag (0/1)" );
-  add_var( "QC" , "CH,EMG,WIN" , "CLIP"      , "Clipping flag (0/1)" );
-  add_var( "QC" , "CH,EMG,WIN" , "HI_RMS"    , "High broadband RMS flag (0/1)" );
-  add_var( "QC" , "CH,EMG,WIN" , "HI_LN"     , "Line noise flag (0/1; does not contribute to BAD_EPOCH)" );
-  add_var( "QC" , "CH,EMG,WIN" , "IMP"       , "Impulse artifact flag (0/1)" );
-  add_var( "QC" , "CH,EMG,WIN" , "FLAG_EPOCH" , "Epoch flagged as bad (0/1); excludes line noise" );
+  add_var( "QC" , "CH,EMG,WIN" , "SD"        , "Epoch standard deviation (µV)" , VT_REAL );
+  add_var( "QC" , "CH,EMG,WIN" , "DERIV"     , "Proportion of near-zero sample-to-sample derivatives" , VT_REAL );
+  add_var( "QC" , "CH,EMG,WIN" , "RMS"       , "Epoch broadband RMS (µV)" , VT_REAL );
+  add_var( "QC" , "CH,EMG,WIN" , "LN_RATIO"  , "Ratio of line-noise band power to broadband power" , VT_REAL );
+  add_var( "QC" , "CH,EMG,WIN" , "FLAT"      , "Flatline flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EMG,WIN" , "CLIP"      , "Clipping flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EMG,WIN" , "HI_RMS"    , "High broadband RMS flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EMG,WIN" , "HI_LN"     , "Line noise flag (0/1; does not contribute to BAD_EPOCH)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EMG,WIN" , "IMP"       , "Impulse artifact flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EMG,WIN" , "FLAG_EPOCH" , "Epoch flagged as bad (0/1); excludes line noise" , VT_BOOLEAN );
 
   // ECG per-channel summary
   add_table( "QC" , "CH,ECG" , "Per-channel ECG QC summary" );
-  add_var( "QC" , "CH,ECG" , "N_PEAKS"     , "Total R-peaks detected in the full signal" );
-  add_var( "QC" , "CH,ECG" , "FLAGGED"      , "Channel flagged (0/1)" );
-  add_var( "QC" , "CH,ECG" , "N_FLAG_EPOCH" , "Number of bad epochs" );
-  add_var( "QC" , "CH,ECG" , "PROP_FLAG"    , "Proportion of bad epochs" );
-  add_var( "QC" , "CH,ECG" , "MAX_FLAG_RUN" , "Longest contiguous bad run (sec)" );
-  add_var( "QC" , "CH,ECG" , "P_FLAT"      , "Proportion of flatline epochs" );
-  add_var( "QC" , "CH,ECG" , "P_CLIP"      , "Proportion of clipped epochs" );
-  add_var( "QC" , "CH,ECG" , "P_RR"        , "Proportion of epochs with RR/HR implausibility or insufficient beats" );
-  add_var( "QC" , "CH,ECG" , "P_LN"        , "Proportion of line-noise epochs (tracked separately; does not affect FLAGGED)" );
-  add_var( "QC" , "CH,ECG" , "MAX_LN_RUN"  , "Longest contiguous line-noise run (sec)" );
-  add_var( "QC" , "CH,ECG" , "LN_FLAG"      , "Channel flagged for excessive line noise (0/1)" );
+  add_var( "QC" , "CH,ECG" , "N_PEAKS"     , "Total R-peaks detected in the full signal" , VT_INTEGER );
+  add_var( "QC" , "CH,ECG" , "FLAGGED"      , "Channel flagged (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,ECG" , "N_FLAG_EPOCH" , "Number of bad epochs" , VT_INTEGER );
+  add_var( "QC" , "CH,ECG" , "PROP_FLAG"    , "Proportion of bad epochs" , VT_REAL );
+  add_var( "QC" , "CH,ECG" , "MAX_FLAG_RUN" , "Longest contiguous bad run (sec)" , VT_REAL );
+  add_var( "QC" , "CH,ECG" , "P_FLAT"      , "Proportion of flatline epochs" , VT_REAL );
+  add_var( "QC" , "CH,ECG" , "P_CLIP"      , "Proportion of clipped epochs" , VT_REAL );
+  add_var( "QC" , "CH,ECG" , "P_RR"        , "Proportion of epochs with RR/HR implausibility or insufficient beats" , VT_REAL );
+  add_var( "QC" , "CH,ECG" , "P_LN"        , "Proportion of line-noise epochs (tracked separately; does not affect FLAGGED)" , VT_REAL );
+  add_var( "QC" , "CH,ECG" , "MAX_LN_RUN"  , "Longest contiguous line-noise run (sec)" , VT_REAL );
+  add_var( "QC" , "CH,ECG" , "LN_FLAG"      , "Channel flagged for excessive line noise (0/1)" , VT_BOOLEAN );
 
   // ECG per-window output [epoch]
   add_table( "QC" , "CH,ECG,WIN" , "Per-window ECG QC metrics [epoch]" );
-  add_var( "QC" , "CH,ECG,WIN" , "NP"        , "Number of R-peaks in this epoch (from whole-signal detection)" );
-  add_var( "QC" , "CH,ECG,WIN" , "HR"        , "Mean heart rate estimated from clean (in-range) RR intervals (bpm)" );
-  add_var( "QC" , "CH,ECG,WIN" , "RR"        , "Mean RR interval across all beats in epoch (ms)" );
-  add_var( "QC" , "CH,ECG,WIN" , "P_RR"      , "Proportion of RR intervals outside plausible range [ecg-rr-min, ecg-rr-max]" );
-  add_var( "QC" , "CH,ECG,WIN" , "FLAT"      , "Flatline flag (0/1)" );
-  add_var( "QC" , "CH,ECG,WIN" , "CLIP"      , "Clipping flag (0/1)" );
-  add_var( "QC" , "CH,ECG,WIN" , "RR_FLAG"    , "RR/HR implausibility or insufficient beat count flag (0/1)" );
-  add_var( "QC" , "CH,ECG,WIN" , "LN"        , "Line noise flag (0/1; does not contribute to BAD_EPOCH)" );
-  add_var( "QC" , "CH,ECG,WIN" , "FLAG_EPOCH" , "Epoch flagged as bad (0/1); excludes line noise" );
+  add_var( "QC" , "CH,ECG,WIN" , "NP"        , "Number of R-peaks in this epoch (from whole-signal detection)" , VT_INTEGER );
+  add_var( "QC" , "CH,ECG,WIN" , "HR"        , "Mean heart rate estimated from clean (in-range) RR intervals (bpm)" , VT_REAL );
+  add_var( "QC" , "CH,ECG,WIN" , "RR"        , "Mean RR interval across all beats in epoch (ms)" , VT_REAL );
+  add_var( "QC" , "CH,ECG,WIN" , "P_RR"      , "Proportion of RR intervals outside plausible range [ecg-rr-min, ecg-rr-max]" , VT_REAL );
+  add_var( "QC" , "CH,ECG,WIN" , "FLAT"      , "Flatline flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,ECG,WIN" , "CLIP"      , "Clipping flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,ECG,WIN" , "RR_FLAG"    , "RR/HR implausibility or insufficient beat count flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,ECG,WIN" , "LN"        , "Line noise flag (0/1; does not contribute to BAD_EPOCH)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,ECG,WIN" , "FLAG_EPOCH" , "Epoch flagged as bad (0/1); excludes line noise" , VT_BOOLEAN );
 
   // EOG per-channel summary
   add_table( "QC" , "CH,EOG" , "Per-channel EOG QC summary" );
-  add_var( "QC" , "CH,EOG" , "FLAGGED"      , "Channel flagged (0/1)" );
-  add_var( "QC" , "CH,EOG" , "N_FLAG_EPOCH" , "Number of bad epochs" );
-  add_var( "QC" , "CH,EOG" , "PROP_FLAG"    , "Proportion of bad epochs" );
-  add_var( "QC" , "CH,EOG" , "MAX_FLAG_RUN" , "Longest contiguous bad run (sec)" );
-  add_var( "QC" , "CH,EOG" , "P_FLAT"      , "Proportion of flatline epochs" );
-  add_var( "QC" , "CH,EOG" , "P_CLIP"      , "Proportion of clipped epochs" );
-  add_var( "QC" , "CH,EOG" , "P_AMP"       , "Proportion of extreme-amplitude epochs" );
-  add_var( "QC" , "CH,EOG" , "P_HF"        , "Proportion of high-frequency contamination epochs" );
-  add_var( "QC" , "CH,EOG" , "P_HJORTH"    , "Proportion of Hjorth outlier epochs" );
-  add_var( "QC" , "CH,EOG" , "P_LN"        , "Proportion of line-noise epochs (tracked separately; does not affect FLAGGED)" );
-  add_var( "QC" , "CH,EOG" , "MAX_LN_RUN"  , "Longest contiguous line-noise run (sec)" );
-  add_var( "QC" , "CH,EOG" , "LN_FLAG"      , "Channel flagged for excessive line noise (0/1)" );
+  add_var( "QC" , "CH,EOG" , "FLAGGED"      , "Channel flagged (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EOG" , "N_FLAG_EPOCH" , "Number of bad epochs" , VT_INTEGER );
+  add_var( "QC" , "CH,EOG" , "PROP_FLAG"    , "Proportion of bad epochs" , VT_REAL );
+  add_var( "QC" , "CH,EOG" , "MAX_FLAG_RUN" , "Longest contiguous bad run (sec)" , VT_REAL );
+  add_var( "QC" , "CH,EOG" , "P_FLAT"      , "Proportion of flatline epochs" , VT_REAL );
+  add_var( "QC" , "CH,EOG" , "P_CLIP"      , "Proportion of clipped epochs" , VT_REAL );
+  add_var( "QC" , "CH,EOG" , "P_AMP"       , "Proportion of extreme-amplitude epochs" , VT_REAL );
+  add_var( "QC" , "CH,EOG" , "P_HF"        , "Proportion of high-frequency contamination epochs" , VT_REAL );
+  add_var( "QC" , "CH,EOG" , "P_HJORTH"    , "Proportion of Hjorth outlier epochs" , VT_REAL );
+  add_var( "QC" , "CH,EOG" , "P_LN"        , "Proportion of line-noise epochs (tracked separately; does not affect FLAGGED)" , VT_REAL );
+  add_var( "QC" , "CH,EOG" , "MAX_LN_RUN"  , "Longest contiguous line-noise run (sec)" , VT_REAL );
+  add_var( "QC" , "CH,EOG" , "LN_FLAG"      , "Channel flagged for excessive line noise (0/1)" , VT_BOOLEAN );
 
   // EOG per-window output [epoch]
   add_table( "QC" , "CH,EOG,WIN" , "Per-window EOG QC metrics [epoch]" );
-  add_var( "QC" , "CH,EOG,WIN" , "SD"        , "Epoch standard deviation (µV)" );
-  add_var( "QC" , "CH,EOG,WIN" , "DERIV"     , "Proportion of near-zero sample-to-sample derivatives" );
-  add_var( "QC" , "CH,EOG,WIN" , "HF_RATIO"  , "Ratio of HF band power to signal band power" );
-  add_var( "QC" , "CH,EOG,WIN" , "LN_RATIO"  , "Ratio of line-noise band power to broadband power" );
-  add_var( "QC" , "CH,EOG,WIN" , "ACT"       , "Hjorth activity on bandpass-filtered signal" );
-  add_var( "QC" , "CH,EOG,WIN" , "CPLX"      , "Hjorth complexity on bandpass-filtered signal" );
-  add_var( "QC" , "CH,EOG,WIN" , "FLAT"      , "Flatline flag (0/1)" );
-  add_var( "QC" , "CH,EOG,WIN" , "CLIP"      , "Clipping flag (0/1)" );
-  add_var( "QC" , "CH,EOG,WIN" , "AMP"       , "Extreme amplitude flag (0/1)" );
-  add_var( "QC" , "CH,EOG,WIN" , "HF"        , "High-frequency contamination flag (0/1)" );
-  add_var( "QC" , "CH,EOG,WIN" , "LN"        , "Line noise flag (0/1; does not contribute to BAD_EPOCH)" );
-  add_var( "QC" , "CH,EOG,WIN" , "HJORTH"    , "Hjorth outlier flag (0/1)" );
-  add_var( "QC" , "CH,EOG,WIN" , "FLAG_EPOCH" , "Epoch flagged as bad (0/1); excludes line noise" );
+  add_var( "QC" , "CH,EOG,WIN" , "SD"        , "Epoch standard deviation (µV)" , VT_REAL );
+  add_var( "QC" , "CH,EOG,WIN" , "DERIV"     , "Proportion of near-zero sample-to-sample derivatives" , VT_REAL );
+  add_var( "QC" , "CH,EOG,WIN" , "HF_RATIO"  , "Ratio of HF band power to signal band power" , VT_REAL );
+  add_var( "QC" , "CH,EOG,WIN" , "LN_RATIO"  , "Ratio of line-noise band power to broadband power" , VT_REAL );
+  add_var( "QC" , "CH,EOG,WIN" , "ACT"       , "Hjorth activity on bandpass-filtered signal" , VT_REAL );
+  add_var( "QC" , "CH,EOG,WIN" , "CPLX"      , "Hjorth complexity on bandpass-filtered signal" , VT_REAL );
+  add_var( "QC" , "CH,EOG,WIN" , "FLAT"      , "Flatline flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EOG,WIN" , "CLIP"      , "Clipping flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EOG,WIN" , "AMP"       , "Extreme amplitude flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EOG,WIN" , "HF"        , "High-frequency contamination flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EOG,WIN" , "LN"        , "Line noise flag (0/1; does not contribute to BAD_EPOCH)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EOG,WIN" , "HJORTH"    , "Hjorth outlier flag (0/1)" , VT_BOOLEAN );
+  add_var( "QC" , "CH,EOG,WIN" , "FLAG_EPOCH" , "Epoch flagged as bad (0/1); excludes line noise" , VT_BOOLEAN );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -3839,10 +3835,10 @@ void cmddefs_t::init()
   add_param( "STAGE" , "min" , "" , "Minimal stage output to stdout in .eannot style" );
 
   add_table( "STAGE" , "E" , "Stage annotations per-epoch" );
-  add_var( "STAGE" , "E" , "CLOCK_TIME" , "Clock time (hh:mm:ss)" );
-  add_var( "STAGE" , "E" , "MINS" , "Elapsed time from start of EDF (minutes)" );
-  add_var( "STAGE" , "E" , "STAGE" , "Sleep stage (text value)" );
-  add_var( "STAGE" , "E" , "STAGE_N" , "Numeric encoding of sleep stage" );
+  add_var( "STAGE" , "E" , "CLOCK_TIME" , "Clock time (hh:mm:ss)" , VT_TEXT );
+  add_var( "STAGE" , "E" , "MINS" , "Elapsed time from start of EDF (minutes)" , VT_REAL );
+  add_var( "STAGE" , "E" , "STAGE" , "Sleep stage (text value)" , VT_TEXT );
+  add_var( "STAGE" , "E" , "STAGE_N" , "Numeric encoding of sleep stage" , VT_INTEGER );
 
   //
   // HYPNO
@@ -3880,175 +3876,175 @@ void cmddefs_t::init()
 
 
   add_table( "HYPNO" , "" , "Individual-level output" );
-  add_var( "HYPNO" , "" , "TRT" , "Total recording time (minutes)" );
-  add_var( "HYPNO" , "" , "TIB" , "Time in bed (minutes)" );
-  add_var( "HYPNO" , "" , "TGT" , "Total gap time in discontinuous recordings (minutes)" );
-  add_var( "HYPNO" , "" , "TST" , "Total sleep time (minutes)" );
-  add_var( "HYPNO" , "" , "TST_PER" , "Persistent total sleep time (minutes)" );
-  add_var( "HYPNO" , "" , "TWT" , "Total wake time (minutes)" );
-  add_var( "HYPNO" , "" , "WASO" , "Wake after sleep onset (minutes)" );
-  add_var( "HYPNO" , "" , "FWT" , "Final wake time before lights on (minutes)" );
-  add_var( "HYPNO" , "" , "LOT" , "Lights-on stage duration (minutes)" );
-  add_var( "HYPNO" , "" , "LOST" , "Minutes of sleep relabeled as lights-on" );
-  add_var( "HYPNO" , "" , "SPT" , "Sleep period time excluding final wake (minutes)" );
-  add_var( "HYPNO" , "" , "SPT_PER" , "Persistent sleep period time (minutes)" );
-  add_var( "HYPNO" , "" , "PRE" , "Pre-sleep wake duration before first sleep epoch (minutes)" );
-  add_var( "HYPNO" , "" , "POST" , "Post-sleep wake duration after final wake (minutes)" );
-  add_var( "HYPNO" , "" , "OTHR" , "Unknown or other stage duration (minutes)" );
-  add_var( "HYPNO" , "" , "CONF" , "Number of epochs with conflicting stage assignments" );
-  add_var( "HYPNO" , "" , "SHORT" , "Indicator that the sleep period was constrained as too short" );
-  add_var( "HYPNO" , "" , "FIXED_SLEEP" , "Epochs fixed while enforcing persistent sleep rules" );
-  add_var( "HYPNO" , "" , "FIXED_WAKE" , "Epochs fixed due to excessive WASO" );
-  add_var( "HYPNO" , "" , "FIXED_LIGHTS" , "Epochs fixed due to lights-on handling" );
-  add_var( "HYPNO" , "" , "SINS" , "Indicator that the study starts in sleep" );
-  add_var( "HYPNO" , "" , "EINS" , "Indicator that the study ends in sleep" );
+  add_var( "HYPNO" , "" , "TRT" , "Total recording time (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "TIB" , "Time in bed (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "TGT" , "Total gap time in discontinuous recordings (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "TST" , "Total sleep time (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "TST_PER" , "Persistent total sleep time (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "TWT" , "Total wake time (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "WASO" , "Wake after sleep onset (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "FWT" , "Final wake time before lights on (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "LOT" , "Lights-on stage duration (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "LOST" , "Minutes of sleep relabeled as lights-on" , VT_REAL );
+  add_var( "HYPNO" , "" , "SPT" , "Sleep period time excluding final wake (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "SPT_PER" , "Persistent sleep period time (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "PRE" , "Pre-sleep wake duration before first sleep epoch (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "POST" , "Post-sleep wake duration after final wake (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "OTHR" , "Unknown or other stage duration (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "" , "CONF" , "Number of epochs with conflicting stage assignments" , VT_INTEGER );
+  add_var( "HYPNO" , "" , "SHORT" , "Indicator that the sleep period was constrained as too short" , VT_BOOLEAN );
+  add_var( "HYPNO" , "" , "FIXED_SLEEP" , "Epochs fixed while enforcing persistent sleep rules" , VT_INTEGER );
+  add_var( "HYPNO" , "" , "FIXED_WAKE" , "Epochs fixed due to excessive WASO" , VT_INTEGER );
+  add_var( "HYPNO" , "" , "FIXED_LIGHTS" , "Epochs fixed due to lights-on handling" , VT_INTEGER );
+  add_var( "HYPNO" , "" , "SINS" , "Indicator that the study starts in sleep" , VT_BOOLEAN );
+  add_var( "HYPNO" , "" , "EINS" , "Indicator that the study ends in sleep" , VT_BOOLEAN );
 
-  add_var( "HYPNO" , "" , "T0_START" , "Recording start, hrs since prior midnight " );
-  add_var( "HYPNO" , "" , "T1_LIGHTS_OFF" , "Lights off, hrs since prior midnight" );
-  add_var( "HYPNO" , "" , "T2_SLEEP_ONSET" , "Sleep onset, hrs since prior midnight" );
-  add_var( "HYPNO" , "" , "T3_SLEEP_MIDPOINT" , "Sleep midpoint, hrs since prior midnight" );
-  add_var( "HYPNO" , "" , "T4_FINAL_WAKE" , "Final wake, hrs since prior midnight" );
-  add_var( "HYPNO" , "" , "T5_LIGHTS_ON" , "Lights on, hrs since prior midnight" );
-  add_var( "HYPNO" , "" , "T6_STOP" , "Study stop, hrs since prior midnight" );
+  add_var( "HYPNO" , "" , "T0_START" , "Recording start, hrs since prior midnight " , VT_REAL );
+  add_var( "HYPNO" , "" , "T1_LIGHTS_OFF" , "Lights off, hrs since prior midnight" , VT_REAL );
+  add_var( "HYPNO" , "" , "T2_SLEEP_ONSET" , "Sleep onset, hrs since prior midnight" , VT_REAL );
+  add_var( "HYPNO" , "" , "T3_SLEEP_MIDPOINT" , "Sleep midpoint, hrs since prior midnight" , VT_REAL );
+  add_var( "HYPNO" , "" , "T4_FINAL_WAKE" , "Final wake, hrs since prior midnight" , VT_REAL );
+  add_var( "HYPNO" , "" , "T5_LIGHTS_ON" , "Lights on, hrs since prior midnight" , VT_REAL );
+  add_var( "HYPNO" , "" , "T6_STOP" , "Study stop, hrs since prior midnight" , VT_REAL );
 
-  add_var( "HYPNO" , "" , "E0_START" , "Recording start, elapsed time" );
-  add_var( "HYPNO" , "" , "E1_LIGHTS_OFF" , "Lights off, elapsed time" );
-  add_var( "HYPNO" , "" , "E2_SLEEP_ONSET" , "Sleep onset, elapsed time" );
-  add_var( "HYPNO" , "" , "E3_SLEEP_MIDPOINT" , "Sleep midpoint, elapsed time" );
-  add_var( "HYPNO" , "" , "E4_FINAL_WAKE" , "Final wake, elapsed time" );
-  add_var( "HYPNO" , "" , "E5_LIGHTS_ON" , "Lights on, elapsed time" );
-  add_var( "HYPNO" , "" , "E6_STOP" , "Study stop, elapsed time" );
+  add_var( "HYPNO" , "" , "E0_START" , "Recording start, elapsed time" , VT_REAL );
+  add_var( "HYPNO" , "" , "E1_LIGHTS_OFF" , "Lights off, elapsed time" , VT_REAL );
+  add_var( "HYPNO" , "" , "E2_SLEEP_ONSET" , "Sleep onset, elapsed time" , VT_REAL );  // TYPE? emitted as string via Helper::dbl2str(x,3)
+  add_var( "HYPNO" , "" , "E3_SLEEP_MIDPOINT" , "Sleep midpoint, elapsed time" , VT_REAL );  // TYPE? emitted as string via Helper::dbl2str(x,3)
+  add_var( "HYPNO" , "" , "E4_FINAL_WAKE" , "Final wake, elapsed time" , VT_REAL );  // TYPE? emitted as string via Helper::dbl2str(x,3)
+  add_var( "HYPNO" , "" , "E5_LIGHTS_ON" , "Lights on, elapsed time" , VT_REAL );  // TYPE? emitted as string via Helper::dbl2str(x,3)
+  add_var( "HYPNO" , "" , "E6_STOP" , "Study stop, elapsed time" , VT_REAL );  // TYPE? emitted as string via Helper::dbl2str(x,3)
 
 
-  add_var( "HYPNO" , "" , "HMS0_START" , "Recording start, clock time" );
-  add_var( "HYPNO" , "" , "HMS1_LIGHTS_OFF" , "Lights off, clock time" );
-  add_var( "HYPNO" , "" , "HMS2_SLEEP_ONSET" , "Sleep onset, clock time" );
-  add_var( "HYPNO" , "" , "HMS3_SLEEP_MIDPOINT" , "Sleep midpoint, clock time" );
-  add_var( "HYPNO" , "" , "HMS4_FINAL_WAKE" , "Final wake, clock time" );
-  add_var( "HYPNO" , "" , "HMS5_LIGHTS_ON" , "Lights on, clock time" );
-  add_var( "HYPNO" , "" , "HMS6_STOP" , "Study stop, clock time" );
+  add_var( "HYPNO" , "" , "HMS0_START" , "Recording start, clock time" , VT_TEXT );
+  add_var( "HYPNO" , "" , "HMS1_LIGHTS_OFF" , "Lights off, clock time" , VT_TEXT );
+  add_var( "HYPNO" , "" , "HMS2_SLEEP_ONSET" , "Sleep onset, clock time" , VT_TEXT );
+  add_var( "HYPNO" , "" , "HMS3_SLEEP_MIDPOINT" , "Sleep midpoint, clock time" , VT_TEXT );
+  add_var( "HYPNO" , "" , "HMS4_FINAL_WAKE" , "Final wake, clock time" , VT_TEXT );
+  add_var( "HYPNO" , "" , "HMS5_LIGHTS_ON" , "Lights on, clock time" , VT_TEXT );
+  add_var( "HYPNO" , "" , "HMS6_STOP" , "Study stop, clock time" , VT_TEXT );
   
   
-  add_var( "HYPNO" , "" , "SE" , "Sleep efficiency" );
-  add_var( "HYPNO" , "" , "SME" , "Sleep efficiency (alternate defn.)" );
-  add_var( "HYPNO" , "" , "SOL" , "Sleep latency (minutes from lights off)" );
-  add_var( "HYPNO" , "" , "SOL_PER" , "Persistent sleep latency (mins from lights off)" );
-  add_var( "HYPNO" , "" , "REM_LAT" , "REM latency (minutes from onset of sleep)" );
-  add_var( "HYPNO" , "" , "REM_LAT2" , "REM latency (excluding wake)" );
-  add_var( "HYPNO" , "" , "NREMC" , "Number of sleep cycles" );
-  add_var( "HYPNO" , "" , "NREMC_MINS" , "Mean duration of each sleep cycle" );
+  add_var( "HYPNO" , "" , "SE" , "Sleep efficiency" , VT_REAL );
+  add_var( "HYPNO" , "" , "SME" , "Sleep efficiency (alternate defn.)" , VT_REAL );
+  add_var( "HYPNO" , "" , "SOL" , "Sleep latency (minutes from lights off)" , VT_REAL );
+  add_var( "HYPNO" , "" , "SOL_PER" , "Persistent sleep latency (mins from lights off)" , VT_REAL );
+  add_var( "HYPNO" , "" , "REM_LAT" , "REM latency (minutes from onset of sleep)" , VT_REAL );
+  add_var( "HYPNO" , "" , "REM_LAT2" , "REM latency (excluding wake)" , VT_REAL );
+  add_var( "HYPNO" , "" , "NREMC" , "Number of sleep cycles" , VT_INTEGER );
+  add_var( "HYPNO" , "" , "NREMC_MINS" , "Mean duration of each sleep cycle" , VT_REAL );
 
-  add_var( "HYPNO" , "" , "SFI"  , "Sleep Fragmentation Index: transitions to W per minute TST" );
-  add_var( "HYPNO" , "" , "SFI1" , "Sleep Fragmentation Index (N1-inclusive): transitions to W or N1 per minute TST" );
-  add_var( "HYPNO" , "" , "HYPC_COMPATIBLE" , "HYPNO-PC model compatibility" );
-  add_var( "HYPNO" , "" , "HYPC_N_MISSING" , "Missing HYPNO-PC features" );
-  add_var( "HYPNO" , "" , "TI_S" , "Sleep Transition Index" );
-  add_var( "HYPNO" , "" , "TI_S3" , "Sleep Transition Index, 3-stage classification" );
-  add_var( "HYPNO" , "" , "TI_RNR" , "Sleep Transition Index: REM-NREM only" );
-  add_var( "HYPNO" , "" , "RUNS" , "Lempel-Ziv style run complexity metric on 5-stage scoring" );
-  add_var( "HYPNO" , "" , "RUNS3" , "Lempel-Ziv style run complexity metric on 3-stage scoring" );
-  add_var( "HYPNO" , "" , "LZW" , "Normalized LZW complexity on 5-stage scoring" );
-  add_var( "HYPNO" , "" , "LZW3" , "Normalized LZW complexity on 3-stage scoring" );
+  add_var( "HYPNO" , "" , "SFI"  , "Sleep Fragmentation Index: transitions to W per minute TST" , VT_REAL );
+  add_var( "HYPNO" , "" , "SFI1" , "Sleep Fragmentation Index (N1-inclusive): transitions to W or N1 per minute TST" , VT_REAL );
+  add_var( "HYPNO" , "" , "HYPC_COMPATIBLE" , "HYPNO-PC model compatibility" , VT_BOOLEAN );
+  add_var( "HYPNO" , "" , "HYPC_N_MISSING" , "Missing HYPNO-PC features" , VT_INTEGER );
+  add_var( "HYPNO" , "" , "TI_S" , "Sleep Transition Index" , VT_REAL );
+  add_var( "HYPNO" , "" , "TI_S3" , "Sleep Transition Index, 3-stage classification" , VT_REAL );
+  add_var( "HYPNO" , "" , "TI_RNR" , "Sleep Transition Index: REM-NREM only" , VT_REAL );
+  add_var( "HYPNO" , "" , "RUNS" , "Lempel-Ziv style run complexity metric on 5-stage scoring" , VT_REAL );
+  add_var( "HYPNO" , "" , "RUNS3" , "Lempel-Ziv style run complexity metric on 3-stage scoring" , VT_REAL );
+  add_var( "HYPNO" , "" , "LZW" , "Normalized LZW complexity on 5-stage scoring" , VT_REAL );
+  add_var( "HYPNO" , "" , "LZW3" , "Normalized LZW complexity on 3-stage scoring" , VT_REAL );
   
   add_table( "HYPNO" , "SS" , "Stage-stratified output" );
-  add_var( "HYPNO" , "SS" , "MINS" , "Stage duration (mins)" );
-  add_var( "HYPNO" , "SS" , "PCT" , "Stage duration (% of TST)" );
-  add_var( "HYPNO" , "SS" , "DENS" , "Stage duration as a proportion of sleep period time" );
-  add_var( "HYPNO" , "SS" , "BOUT_N" , "Number of bouts" );
-  add_var( "HYPNO" , "SS" , "BOUT_MX" , "Maximum bout duration (minutes)" );
-  add_var( "HYPNO" , "SS" , "BOUT_MN" , "Mean bout duration" );
-  add_var( "HYPNO" , "SS" , "BOUT_MD" , "Median bout duration" );
-  add_var( "HYPNO" , "SS" , "BOUT_05" , "Stage duration in bouts at least 5 minutes long" );
-  add_var( "HYPNO" , "SS" , "BOUT_10" , "Stage duration (only bouts 10+ mins)" );
-  add_var( "HYPNO" , "SS" , "TA" , "Median epoch timing (vs all from sleep onset-offset)");
-  add_var( "HYPNO" , "SS" , "TS" , "Median epoch timing (vs elapsed sleep from sleep onset-offset)");
+  add_var( "HYPNO" , "SS" , "MINS" , "Stage duration (mins)" , VT_REAL );
+  add_var( "HYPNO" , "SS" , "PCT" , "Stage duration (% of TST)" , VT_REAL );
+  add_var( "HYPNO" , "SS" , "DENS" , "Stage duration as a proportion of sleep period time" , VT_REAL );
+  add_var( "HYPNO" , "SS" , "BOUT_N" , "Number of bouts" , VT_INTEGER );
+  add_var( "HYPNO" , "SS" , "BOUT_MX" , "Maximum bout duration (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "SS" , "BOUT_MN" , "Mean bout duration" , VT_REAL );
+  add_var( "HYPNO" , "SS" , "BOUT_MD" , "Median bout duration" , VT_REAL );
+  add_var( "HYPNO" , "SS" , "BOUT_05" , "Stage duration in bouts at least 5 minutes long" , VT_REAL );
+  add_var( "HYPNO" , "SS" , "BOUT_10" , "Stage duration (only bouts 10+ mins)" , VT_REAL );
+  add_var( "HYPNO" , "SS" , "TA" , "Median epoch timing (vs all from sleep onset-offset)" , VT_REAL);
+  add_var( "HYPNO" , "SS" , "TS" , "Median epoch timing (vs elapsed sleep from sleep onset-offset)" , VT_REAL);
   
 
   add_table( "HYPNO" , "C" , "NREM cycle-level output" );
-  add_var( "HYPNO" , "C" , "NREMC_START" , "First epoch number of this NREM cycle" );
-  add_var( "HYPNO" , "C" , "NREMC_MINS" , "Total duration of this cycle (mins)" );
-  add_var( "HYPNO" , "C" , "NREMC_NREM_MINS" , "Duration of NREM in this cycle (mins)" );
-  add_var( "HYPNO" , "C" , "NREMC_REM_MINS" , "Duration of REM in this cycle (mins)" );
-  add_var( "HYPNO" , "C" , "NREMC_OTHER_MINS" , "Minutes of wake and unscored epochs" );
-  add_var( "HYPNO" , "C" , "NREMC_N" , "Total number of epochs in this cycle" );
+  add_var( "HYPNO" , "C" , "NREMC_START" , "First epoch number of this NREM cycle" , VT_INTEGER );
+  add_var( "HYPNO" , "C" , "NREMC_MINS" , "Total duration of this cycle (mins)" , VT_REAL );
+  add_var( "HYPNO" , "C" , "NREMC_NREM_MINS" , "Duration of NREM in this cycle (mins)" , VT_REAL );
+  add_var( "HYPNO" , "C" , "NREMC_REM_MINS" , "Duration of REM in this cycle (mins)" , VT_REAL );
+  add_var( "HYPNO" , "C" , "NREMC_OTHER_MINS" , "Minutes of wake and unscored epochs" , VT_REAL );
+  add_var( "HYPNO" , "C" , "NREMC_N" , "Total number of epochs in this cycle" , VT_INTEGER );
 
 
   add_table( "HYPNO", "N" , "Bouts" ); 
-  add_var( "HYPNO" , "N" , "STAGE" , "Stage label for this bout" );
-  add_var( "HYPNO" , "N" , "FIRST_EPOCH" , "First epoch" );
-  add_var( "HYPNO" , "N" , "LAST_EPOCH" , "Last epoch" );
-  add_var( "HYPNO" , "N" , "START" , "Start (clocktime)" );
-  add_var( "HYPNO" , "N" , "STOP" , "Stop (clocktime) [ end of last epoch ]" );
-  add_var( "HYPNO" , "N" , "MINS" , "Bout duration (minutes)" );
+  add_var( "HYPNO" , "N" , "STAGE" , "Stage label for this bout" , VT_TEXT );
+  add_var( "HYPNO" , "N" , "FIRST_EPOCH" , "First epoch" , VT_INTEGER );
+  add_var( "HYPNO" , "N" , "LAST_EPOCH" , "Last epoch" , VT_INTEGER );
+  add_var( "HYPNO" , "N" , "START" , "Start (clocktime)" , VT_TEXT );
+  add_var( "HYPNO" , "N" , "STOP" , "Stop (clocktime) [ end of last epoch ]" , VT_TEXT );
+  add_var( "HYPNO" , "N" , "MINS" , "Bout duration (minutes)" , VT_REAL );
   
 
   add_table( "HYPNO" , "E" , "Epoch-level output" );
-  add_var( "HYPNO" , "E" , "CLOCK_HOURS" , "Start time of epoch (hours since midnight)" );
-  add_var( "HYPNO" , "E" , "CLOCK_TIME" , "Start time of epoch (hh:mm:ss)" );
-  add_var( "HYPNO" , "E" , "MINS" , "Elapsed minutes" );
-  add_var( "HYPNO" , "E" , "AFTER_GAP" , "Indicator that this epoch immediately follows a discontinuity gap" );
-  add_var( "HYPNO" , "E" , "START_SEC" , "Start time (seconds since start of EDF)" );
-  add_var( "HYPNO" , "E" , "STAGE" , "Text description of sleep stage" );
-  add_var( "HYPNO" , "E" , "OSTAGE" , "Original stage label (pre any modifications)" );
-  add_var( "HYPNO" , "E" , "STAGE_N" , "Numeric encoding of sleep stage" );
-  add_var( "HYPNO" , "E" , "PERSISTENT_SLEEP" , "Flag to indicate persistent sleep" );
-  add_var( "HYPNO" , "E" , "SPT" , "Indicator that this epoch lies within the sleep period time window" );
-  add_var( "HYPNO" , "E" , "PRE" , "Indicator that this epoch is before sleep onset" );
-  add_var( "HYPNO" , "E" , "POST" , "Indicator that this epoch is after final wake" );
-  add_var( "HYPNO" , "E" , "WASO" , "Flag to indicate wake after sleep onset" );
-  add_var( "HYPNO" , "E" , "E_N1" , "Cumulative elapsed N1 sleep (minutes)" );
-  add_var( "HYPNO" , "E" , "E_N2" , "Cumulative elapsed N2 sleep (minutes)" );
-  add_var( "HYPNO" , "E" , "E_N3" , "Cumulative elapsed N3 sleep (minutes)" );
-  add_var( "HYPNO" , "E" , "E_REM" , "Cumulative elapsed REM (minutes)" );
-  add_var( "HYPNO" , "E" , "E_SLEEP" , "Cumulative elapsed sleep (minutes)" );
-  add_var( "HYPNO" , "E" , "E_WAKE" , "Cumulative elapsed wake (minutes)" );
-  add_var( "HYPNO" , "E" , "E_WASO" , "Cumulative elapsed WASO (minutes)" );
-  add_var( "HYPNO" , "E" , "PCT_E_N1" , "Cumulative elapsed N1 as proportion of total N1 sleep" );
-  add_var( "HYPNO" , "E" , "PCT_E_N2" , "Cumulative elapsed N2 as proportion of total N2 sleep" );
-  add_var( "HYPNO" , "E" , "PCT_E_N3" , "Cumulative elapsed N3 as proportion of total N3 sleep" );
-  add_var( "HYPNO" , "E" , "PCT_E_REM" , "Cumulative elapsed REM as proportion of total REM sleep" );
-  add_var( "HYPNO" , "E" , "PCT_E_SLEEP" , "Cumulative elapsed sleep as proportion of total sleep" );
-  add_var( "HYPNO" , "E" , "FLANKING" , "Minimum number of similarly staged epochs forward or backward" );
-  add_var( "HYPNO" , "E" , "FLANKING_ALL" , "Total number of similarly staged epochs in this contiguous run" );
+  add_var( "HYPNO" , "E" , "CLOCK_HOURS" , "Start time of epoch (hours since midnight)" , VT_REAL );  // TYPE? emitted as string via as_numeric_string() - dbl2str or NA if invalid
+  add_var( "HYPNO" , "E" , "CLOCK_TIME" , "Start time of epoch (hh:mm:ss)" , VT_TEXT );
+  add_var( "HYPNO" , "E" , "MINS" , "Elapsed minutes" , VT_REAL );
+  add_var( "HYPNO" , "E" , "AFTER_GAP" , "Indicator that this epoch immediately follows a discontinuity gap" , VT_BOOLEAN );
+  add_var( "HYPNO" , "E" , "START_SEC" , "Start time (seconds since start of EDF)" , VT_REAL );
+  add_var( "HYPNO" , "E" , "STAGE" , "Text description of sleep stage" , VT_TEXT );
+  add_var( "HYPNO" , "E" , "OSTAGE" , "Original stage label (pre any modifications)" , VT_TEXT );
+  add_var( "HYPNO" , "E" , "STAGE_N" , "Numeric encoding of sleep stage" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "PERSISTENT_SLEEP" , "Flag to indicate persistent sleep" , VT_BOOLEAN );
+  add_var( "HYPNO" , "E" , "SPT" , "Indicator that this epoch lies within the sleep period time window" , VT_BOOLEAN );
+  add_var( "HYPNO" , "E" , "PRE" , "Indicator that this epoch is before sleep onset" , VT_BOOLEAN );
+  add_var( "HYPNO" , "E" , "POST" , "Indicator that this epoch is after final wake" , VT_BOOLEAN );
+  add_var( "HYPNO" , "E" , "WASO" , "Flag to indicate wake after sleep onset" , VT_BOOLEAN );
+  add_var( "HYPNO" , "E" , "E_N1" , "Cumulative elapsed N1 sleep (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "E" , "E_N2" , "Cumulative elapsed N2 sleep (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "E" , "E_N3" , "Cumulative elapsed N3 sleep (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "E" , "E_REM" , "Cumulative elapsed REM (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "E" , "E_SLEEP" , "Cumulative elapsed sleep (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "E" , "E_WAKE" , "Cumulative elapsed wake (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "E" , "E_WASO" , "Cumulative elapsed WASO (minutes)" , VT_REAL );
+  add_var( "HYPNO" , "E" , "PCT_E_N1" , "Cumulative elapsed N1 as proportion of total N1 sleep" , VT_REAL );
+  add_var( "HYPNO" , "E" , "PCT_E_N2" , "Cumulative elapsed N2 as proportion of total N2 sleep" , VT_REAL );
+  add_var( "HYPNO" , "E" , "PCT_E_N3" , "Cumulative elapsed N3 as proportion of total N3 sleep" , VT_REAL );
+  add_var( "HYPNO" , "E" , "PCT_E_REM" , "Cumulative elapsed REM as proportion of total REM sleep" , VT_REAL );
+  add_var( "HYPNO" , "E" , "PCT_E_SLEEP" , "Cumulative elapsed sleep as proportion of total sleep" , VT_REAL );
+  add_var( "HYPNO" , "E" , "FLANKING" , "Minimum number of similarly staged epochs forward or backward" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "FLANKING_ALL" , "Total number of similarly staged epochs in this contiguous run" , VT_INTEGER );
 
-  add_var( "HYPNO" , "E" , "N2_WGT" , "Score to indicate ascending versus descending N2 sleep" );
-  add_var( "HYPNO" , "E" , "NEAREST_WAKE" , "Number of epochs (forward or backwards) since nearest wake epoch" );
+  add_var( "HYPNO" , "E" , "N2_WGT" , "Score to indicate ascending versus descending N2 sleep" , VT_REAL );
+  add_var( "HYPNO" , "E" , "NEAREST_WAKE" , "Number of epochs (forward or backwards) since nearest wake epoch" , VT_INTEGER );
 
 
-  add_var( "HYPNO" , "E" , "CYCLE" , "Cycle number, if this epoch is in a sleep cycle" );
-  add_var( "HYPNO" , "E" , "CYCLE_POS_ABS" , "Absolute position of this epoch in the current NREM cycle (mins)" );
-  add_var( "HYPNO" , "E" , "CYCLE_POS_REL" , "Relative position of this epoch in the current NREM cycle (0-1)" );
-  add_var( "HYPNO" , "E" , "PERIOD" , "Cycle period: NREMP or REMP, or missing if not in a cycle" );
+  add_var( "HYPNO" , "E" , "CYCLE" , "Cycle number, if this epoch is in a sleep cycle" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "CYCLE_POS_ABS" , "Absolute position of this epoch in the current NREM cycle (mins)" , VT_REAL );
+  add_var( "HYPNO" , "E" , "CYCLE_POS_REL" , "Relative position of this epoch in the current NREM cycle (0-1)" , VT_REAL );
+  add_var( "HYPNO" , "E" , "PERIOD" , "Cycle period: NREMP or REMP, or missing if not in a cycle" , VT_TEXT );
 
-  add_var( "HYPNO" , "E" , "TR_NR2R" , "Number of epochs from this NREM epoch to a REM transition" );
-  add_var( "HYPNO" , "E" , "TOT_NR2R" , "Total number of contiguous NREM epochs followed by REM" );
-  add_var( "HYPNO" , "E" , "TR_NR2W" , "Number of epochs from this NREM epoch to a wake transition" );
-  add_var( "HYPNO" , "E" , "TOT_NR2W" , "Total number of contiguous NREM epochs followed by wake" );
-  add_var( "HYPNO" , "E" , "TR_R2W" , "Number of epochs from this REM epoch to a wake transition" );
-  add_var( "HYPNO" , "E" , "TOT_R2W" , "Total number of contiguous REM epochs followed by wake" );
-  add_var( "HYPNO" , "E" , "TR_R2NR" , "Number of epochs from this REM epoch to a NREM transition" );
-  add_var( "HYPNO" , "E" , "TOT_R2NR" , "Total number of contiguous REM epochs followed by NREM" );
-  add_var( "HYPNO" , "E" , "TR_W2R" , "Number of epochs from this wake epoch to a REM transition" );
-  add_var( "HYPNO" , "E" , "TOT_W2R" , "Total number of contiguous wake epochs followed by REM" );
-  add_var( "HYPNO" , "E" , "TR_W2NR" , "Number of epochs from this wake epoch to a NREM transition" );
-  add_var( "HYPNO" , "E" , "TOT_W2NR" , "Total number of contiguous wake epochs followed by NREM" );
+  add_var( "HYPNO" , "E" , "TR_NR2R" , "Number of epochs from this NREM epoch to a REM transition" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "TOT_NR2R" , "Total number of contiguous NREM epochs followed by REM" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "TR_NR2W" , "Number of epochs from this NREM epoch to a wake transition" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "TOT_NR2W" , "Total number of contiguous NREM epochs followed by wake" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "TR_R2W" , "Number of epochs from this REM epoch to a wake transition" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "TOT_R2W" , "Total number of contiguous REM epochs followed by wake" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "TR_R2NR" , "Number of epochs from this REM epoch to a NREM transition" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "TOT_R2NR" , "Total number of contiguous REM epochs followed by NREM" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "TR_W2R" , "Number of epochs from this wake epoch to a REM transition" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "TOT_W2R" , "Total number of contiguous wake epochs followed by REM" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "TR_W2NR" , "Number of epochs from this wake epoch to a NREM transition" , VT_INTEGER );
+  add_var( "HYPNO" , "E" , "TOT_W2NR" , "Total number of contiguous wake epochs followed by NREM" , VT_INTEGER );
 
   
   add_table( "HYPNO" , "PRE,POST" , "Stage transitions" );
-  add_var( "HYPNO", "PRE,POST" , "N" , "Number of transitions" );
-  add_var( "HYPNO", "PRE,POST" , "N_PRE" , "Total transitions with this PRE stage" );
-  add_var( "HYPNO", "PRE,POST" , "N_POST" , "Total transitions with this POST stage" );
-  add_var( "HYPNO", "PRE,POST" , "P" , "Overall proportion of transitions in this cell" );
-  add_var( "HYPNO" , "PRE,POST" , "P_POST_COND_PRE" , "P( S+1 | S )" );
-  add_var( "HYPNO" , "PRE,POST" , "P_PRE_COND_POST" , "P( S | S+1 )" );
+  add_var( "HYPNO", "PRE,POST" , "N" , "Number of transitions" , VT_INTEGER );
+  add_var( "HYPNO", "PRE,POST" , "N_PRE" , "Total transitions with this PRE stage" , VT_INTEGER );
+  add_var( "HYPNO", "PRE,POST" , "N_POST" , "Total transitions with this POST stage" , VT_INTEGER );
+  add_var( "HYPNO", "PRE,POST" , "P" , "Overall proportion of transitions in this cell" , VT_REAL );
+  add_var( "HYPNO" , "PRE,POST" , "P_POST_COND_PRE" , "P( S+1 | S )" , VT_REAL );
+  add_var( "HYPNO" , "PRE,POST" , "P_PRE_COND_POST" , "P( S | S+1 )" , VT_REAL );
 
   add_table( "HYPNO" , "TRANS5,PRE,POST" , "Five-state stage transitions" );
-  add_var( "HYPNO", "TRANS5,PRE,POST" , "N" , "Number of transitions" );
-  add_var( "HYPNO", "TRANS5,PRE,POST" , "N_PRE" , "Total transitions with this PRE stage" );
-  add_var( "HYPNO", "TRANS5,PRE,POST" , "N_POST" , "Total transitions with this POST stage" );
-  add_var( "HYPNO", "TRANS5,PRE,POST" , "P" , "Overall proportion of transitions in this cell" );
-  add_var( "HYPNO" , "TRANS5,PRE,POST" , "P_POST_COND_PRE" , "P( S+1 | S )" );
-  add_var( "HYPNO" , "TRANS5,PRE,POST" , "P_PRE_COND_POST" , "P( S | S+1 )" );
+  add_var( "HYPNO", "TRANS5,PRE,POST" , "N" , "Number of transitions" , VT_INTEGER );
+  add_var( "HYPNO", "TRANS5,PRE,POST" , "N_PRE" , "Total transitions with this PRE stage" , VT_INTEGER );
+  add_var( "HYPNO", "TRANS5,PRE,POST" , "N_POST" , "Total transitions with this POST stage" , VT_INTEGER );
+  add_var( "HYPNO", "TRANS5,PRE,POST" , "P" , "Overall proportion of transitions in this cell" , VT_REAL );
+  add_var( "HYPNO" , "TRANS5,PRE,POST" , "P_POST_COND_PRE" , "P( S+1 | S )" , VT_REAL );
+  add_var( "HYPNO" , "TRANS5,PRE,POST" , "P_PRE_COND_POST" , "P( S | S+1 )" , VT_REAL );
 
   //
   // EPDYN
@@ -4110,46 +4106,46 @@ void cmddefs_t::init()
   add_table( "EVTDYN" , "DYN,ANNOT,CH" , "Event-level dynamics summaries" );
   add_table( "EVTDYN" , "DYN,ANNOT,CH,LAG" , "Per-bin consecutive-pair lag histogram" );
   add_table( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "Event-level property dynamics summaries" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N" , "Number of events in eligible background" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "MINS" , "Eligible background duration in minutes" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "DENS" , "Event density per minute of eligible background" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TB" , "Median event timing within eligible background (0=start, 1=end)" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TA" , "Median event timing versus all elapsed sleep-period time" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TS" , "Median event timing versus elapsed sleep time" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "EARLY_LATE_LR" , "Log2 ratio of early- versus late-night event counts" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "ISI_MD" , "Median within-background inter-event interval in seconds" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "REFR_OBS_EXP" , "Log2 observed/expected ratio in refractory window" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "EXCIT_OBS_EXP" , "Log2 observed/expected ratio in excitatory window" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "LAG_PEAK_T" , "Lag at peak bin of consecutive-pair lag histogram in seconds" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "LAG_PEAK_H" , "Log2 height of lag histogram peak versus flat-baseline expectation" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,LAG" , "LAG_N" , "Number of consecutive pairs in this lag bin" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,LAG" , "LAG_OE" , "Log2 observed/expected count in this lag bin versus flat baseline" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "CLST_FRAC" , "Proportion of events near another event (clustered)" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TRAIN_FRAC" , "Proportion of events occurring within a train" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TRAIN_LEN_MN" , "Mean number of events per train" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TRAIN_DENS" , "Event-train density per minute of eligible background" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "CYCLE_SLOPE" , "Linear slope of event density across NREM cycles" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "WCYC_TB" , "Median within-cycle relative position of events (0=cycle start, 1=cycle end; background-restricted)" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "WCYC_EARLY_LATE_LR" , "Log2 ratio of early- versus late-half-cycle event density (pooled across cycles)" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N2_N3_LR" , "Log2 ratio of N2 versus N3 event density" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N2_ASC_DSC_DIFF" , "Ascending minus descending N2 event-density difference" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N2_ASC_DSC_LR" , "Log2 ratio of ascending versus descending N2 event density" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "MEAN" , "Mean event-level property value" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "MEDIAN" , "Median event-level property value" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "SD" , "SD of event-level property values" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "TIME_CORR" , "Correlation between event timing and event-level property" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "TIME_BETA" , "Slope of event-level property regressed on event timing" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "EARLY_LATE_DIFF" , "Early- minus late-night mean property difference" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "N2_N3_DIFF" , "N2 minus N3 mean property difference" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "CYCLE_SLOPE" , "Linear slope of mean property across NREM cycles" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "WCYC_CORR" , "Correlation of property with within-cycle relative position (pooled across cycles)" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "WCYC_BETA" , "Slope of property regressed on within-cycle relative position (pooled across cycles)" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "WCYC_EARLY_LATE_DIFF" , "Early- minus late-half-cycle mean property difference (pooled across cycles)" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "CLST_SOL_DIFF" , "Clustered minus solitary mean property difference" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "N2_ASC_DSC_DIFF" , "Ascending minus descending N2 mean property difference" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N" , "Number of events in eligible background" , VT_INTEGER );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "MINS" , "Eligible background duration in minutes" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "DENS" , "Event density per minute of eligible background" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TB" , "Median event timing within eligible background (0=start, 1=end)" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TA" , "Median event timing versus all elapsed sleep-period time" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TS" , "Median event timing versus elapsed sleep time" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "EARLY_LATE_LR" , "Log2 ratio of early- versus late-night event counts" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "ISI_MD" , "Median within-background inter-event interval in seconds" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "REFR_OBS_EXP" , "Log2 observed/expected ratio in refractory window" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "EXCIT_OBS_EXP" , "Log2 observed/expected ratio in excitatory window" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "LAG_PEAK_T" , "Lag at peak bin of consecutive-pair lag histogram in seconds" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "LAG_PEAK_H" , "Log2 height of lag histogram peak versus flat-baseline expectation" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,LAG" , "LAG_N" , "Number of consecutive pairs in this lag bin" , VT_INTEGER );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,LAG" , "LAG_OE" , "Log2 observed/expected count in this lag bin versus flat baseline" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "CLST_FRAC" , "Proportion of events near another event (clustered)" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TRAIN_FRAC" , "Proportion of events occurring within a train" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TRAIN_LEN_MN" , "Mean number of events per train" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "TRAIN_DENS" , "Event-train density per minute of eligible background" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "CYCLE_SLOPE" , "Linear slope of event density across NREM cycles" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "WCYC_TB" , "Median within-cycle relative position of events (0=cycle start, 1=cycle end; background-restricted)" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "WCYC_EARLY_LATE_LR" , "Log2 ratio of early- versus late-half-cycle event density (pooled across cycles)" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N2_N3_LR" , "Log2 ratio of N2 versus N3 event density" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N2_ASC_DSC_DIFF" , "Ascending minus descending N2 event-density difference" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH" , "N2_ASC_DSC_LR" , "Log2 ratio of ascending versus descending N2 event density" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "MEAN" , "Mean event-level property value" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "MEDIAN" , "Median event-level property value" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "SD" , "SD of event-level property values" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "TIME_CORR" , "Correlation between event timing and event-level property" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "TIME_BETA" , "Slope of event-level property regressed on event timing" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "EARLY_LATE_DIFF" , "Early- minus late-night mean property difference" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "N2_N3_DIFF" , "N2 minus N3 mean property difference" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "CYCLE_SLOPE" , "Linear slope of mean property across NREM cycles" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "WCYC_CORR" , "Correlation of property with within-cycle relative position (pooled across cycles)" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "WCYC_BETA" , "Slope of property regressed on within-cycle relative position (pooled across cycles)" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "WCYC_EARLY_LATE_DIFF" , "Early- minus late-half-cycle mean property difference (pooled across cycles)" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "CLST_SOL_DIFF" , "Clustered minus solitary mean property difference" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR" , "N2_ASC_DSC_DIFF" , "Ascending minus descending N2 mean property difference" , VT_REAL );
   add_table( "EVTDYN" , "DYN,ANNOT,CH,VAR1,VAR2" , "Pairwise event-level property correlations (corr / corr1+corr2)" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR1,VAR2" , "CORR" , "Pearson correlation between two event-level properties (matched by event)" );
-  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR1,VAR2" , "N" , "Number of events with valid values for both properties" );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR1,VAR2" , "CORR" , "Pearson correlation between two event-level properties (matched by event)" , VT_REAL );
+  add_var( "EVTDYN" , "DYN,ANNOT,CH,VAR1,VAR2" , "N" , "Number of events with valid values for both properties" , VT_INTEGER );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -4207,58 +4203,60 @@ void cmddefs_t::init()
   add_param( "SOAP" , "left" , "6" , "Epochs to show before each transition" );
   add_param( "SOAP" , "right" , "6" , "Epochs to show after each transition" );
   
-  add_table( "SOAP" , "" , "Overall accuracies" );
-  add_var( "SOAP" , "" , "NSS" , "Number of distinct observed stages" );
-  add_var( "SOAP" , "" , "ACC" , "Accuracy" );
-  add_var( "SOAP" , "" , "ACC3" , "Accuracy, 3-class" );
-  add_var( "SOAP" , "" , "F1" , "F1 metric" );
-  add_var( "SOAP" , "" , "F13" , "F1 metric, 3-class" );
-  add_var( "SOAP" , "" , "F1_WGT" , "F1 metric, weighted" );
-  add_var( "SOAP" , "" , "K" , "Kappa" );
-  add_var( "SOAP" , "" , "K3" , "Kappa, 3-class" );
-  add_var( "SOAP" , "" , "MCC" , "Matthews correlation coef" );
-  add_var( "SOAP" , "" , "MCC3" , "Matthews correlation coef, 3-class" );
-  add_var( "SOAP" , "" , "PREC" , "Precision" );
-  add_var( "SOAP" , "" , "PREC3" , "Precision, 3-class" );  
-  add_var( "SOAP" , "" , "RECALL" , "Recall" );
-  add_var( "SOAP" , "" , "RECALL3" , "Recall, 3-class" );
-  add_var( "SOAP" , "" , "RECALL_WGT" , "Recall, weighted" );
+  add_table( "SOAP" , "CH" , "Overall accuracies" );
+  add_var( "SOAP" , "CH" , "NSS" , "Number of distinct observed stages" , VT_INTEGER );
+  add_var( "SOAP" , "CH" , "ACC" , "Accuracy" , VT_REAL );
+  add_var( "SOAP" , "CH" , "ACC3" , "Accuracy, 3-class" , VT_REAL );
+  add_var( "SOAP" , "CH" , "F1" , "F1 metric" , VT_REAL );
+  add_var( "SOAP" , "CH" , "F13" , "F1 metric, 3-class" , VT_REAL );
+  add_var( "SOAP" , "CH" , "F1_WGT" , "F1 metric, weighted" , VT_REAL );
+  add_var( "SOAP" , "CH" , "K" , "Kappa" , VT_REAL );
+  add_var( "SOAP" , "CH" , "K3" , "Kappa, 3-class" , VT_REAL );
+  add_var( "SOAP" , "CH" , "MCC" , "Matthews correlation coef" , VT_REAL );
+  add_var( "SOAP" , "CH" , "MCC3" , "Matthews correlation coef, 3-class" , VT_REAL );
+  add_var( "SOAP" , "CH" , "PREC" , "Precision" , VT_REAL );
+  add_var( "SOAP" , "CH" , "PREC3" , "Precision, 3-class" , VT_REAL );  
+  add_var( "SOAP" , "CH" , "RECALL" , "Recall" , VT_REAL );
+  add_var( "SOAP" , "CH" , "RECALL3" , "Recall, 3-class" , VT_REAL );
+  add_var( "SOAP" , "CH" , "RECALL_WGT" , "Recall, weighted" , VT_REAL );
+  add_var( "SOAP" , "CH" , "PREC_WGT" , "Precision, weighted" , VT_REAL );
   
-  add_table( "SOAP" , "E" , "Epoch-level output" );
-  add_var( "SOAP" , "E" , "DISC" , "Discordant epoch" );
-  add_var( "SOAP" , "E" , "DISC3" , "Discordant epoch, 3-class" );
-  add_var( "SOAP" , "E" , "INC" , "Epoch included" );
-  add_var( "SOAP" , "E" , "PP_N1" , "N1 posterior probability" );
-  add_var( "SOAP" , "E" , "PP_N2" , "N2 posterior probability" );
-  add_var( "SOAP" , "E" , "PP_N3" , "N3 posterior probability" );
-  add_var( "SOAP" , "E" , "PP_NR" , "NR posterior probability" );
-  add_var( "SOAP" , "E" , "PP_R" , "REM posterior probability" );
-  add_var( "SOAP" , "E" , "PP_W" , "Wake posterior probability" );
-  add_var( "SOAP" , "E" , "PRED" , "Predicted stage" );
-  add_var( "SOAP" , "E" , "PRIOR" , "Original stage" );
+  add_table( "SOAP" , "CH,E" , "Epoch-level output" );
+  add_var( "SOAP" , "CH,E" , "DISC" , "Discordant epoch" , VT_BOOLEAN );
+  add_var( "SOAP" , "CH,E" , "DISC3" , "Discordant epoch, 3-class" , VT_BOOLEAN );
+  add_var( "SOAP" , "CH,E" , "INC" , "Epoch included" , VT_BOOLEAN );
+  add_var( "SOAP" , "CH,E" , "PP_N1" , "N1 posterior probability" , VT_REAL );
+  add_var( "SOAP" , "CH,E" , "PP_N2" , "N2 posterior probability" , VT_REAL );
+  add_var( "SOAP" , "CH,E" , "PP_N3" , "N3 posterior probability" , VT_REAL );
+  add_var( "SOAP" , "CH,E" , "PP_NR" , "NR posterior probability" , VT_REAL );
+  add_var( "SOAP" , "CH,E" , "PP_R" , "REM posterior probability" , VT_REAL );
+  add_var( "SOAP" , "CH,E" , "PP_W" , "Wake posterior probability" , VT_REAL );
+  add_var( "SOAP" , "CH,E" , "PRED" , "Predicted stage" , VT_TEXT );
+  add_var( "SOAP" , "CH,E" , "PRIOR" , "Original stage" , VT_TEXT );
   
-  add_table( "SOAP" , "SS" , "Stage-level output" );
-  add_var( "SOAP" , "SS" , "DUR_OBS" , "Observed stage duration (for included epochs)" );
-  add_var( "SOAP" , "SS" , "DUR_PRD" , "Predicted stage duration (for included epochs)" );
-  add_var( "SOAP" , "SS" , "F1" , "Stage-specific F1" );
-  add_var( "SOAP" , "SS" , "PREC" , "Stage-specific precision" );
-  add_var( "SOAP" , "SS" , "RECALL" , "Stage-specific recall" );
+  add_table( "SOAP" , "CH,SS" , "Stage-level output" );
+  add_var( "SOAP" , "CH,SS" , "DUR_OBS" , "Observed stage duration (for included epochs)" , VT_REAL );
+  add_var( "SOAP" , "CH,SS" , "DUR_PRD" , "Predicted stage duration (for included epochs)" , VT_REAL );
+  add_var( "SOAP" , "CH,SS" , "F1" , "Stage-specific F1" , VT_REAL );
+  add_var( "SOAP" , "CH,SS" , "PREC" , "Stage-specific precision" , VT_REAL );
+  add_var( "SOAP" , "CH,SS" , "RECALL" , "Stage-specific recall" , VT_REAL );
 
-  add_table( "SOAP" , "VAR" , "PSC info" );
-  add_var( "SOAP" , "VAR" , "INC" , "Component included" );
-  add_var( "SOAP" , "VAR" , "PV" , "1-way ANOVA p-value for association w/ observed stage" );
+  add_table( "SOAP" , "CH,VAR" , "PSC info" );
+  add_var( "SOAP" , "CH,VAR" , "INC" , "Component included" , VT_BOOLEAN );
+  add_var( "SOAP" , "CH,VAR" , "PV" , "1-way ANOVA p-value for association w/ observed stage" , VT_REAL );
+  add_var( "SOAP" , "CH,VAR" , "WMAX" , "Between/within-stage variance ratio (max over stages) [with bw check]" , VT_REAL );
 
-  add_table( "SOAP" , "ETYPE" , "Epoch-type accuracy" );
-  add_var( "SOAP" , "ETYPE" , "ACC" , "Accuracy" );
-  add_var( "SOAP" , "ETYPE" , "N" , "Epoch count" );
+  add_table( "SOAP" , "CH,ETYPE" , "Epoch-type accuracy" );
+  add_var( "SOAP" , "CH,ETYPE" , "ACC" , "Accuracy" , VT_REAL );
+  add_var( "SOAP" , "CH,ETYPE" , "N" , "Epoch count" , VT_INTEGER );
 
-  add_table( "SOAP" , "ETYPE,SS" , "Stage-specific epoch-type accuracy" );
-  add_var( "SOAP" , "ETYPE,SS" , "ACC" , "Accuracy" );
-  add_var( "SOAP" , "ETYPE,SS" , "N" , "Epoch count" );
+  add_table( "SOAP" , "CH,ETYPE,SS" , "Stage-specific epoch-type accuracy" );
+  add_var( "SOAP" , "CH,ETYPE,SS" , "ACC" , "Accuracy" , VT_REAL );
+  add_var( "SOAP" , "CH,ETYPE,SS" , "N" , "Epoch count" , VT_INTEGER );
 
-  add_table( "SOAP" , "NSS,PRED,OBS" , "Confusion matrix" );
-  add_var( "SOAP" , "NSS,PRED,OBS" , "N" , "Number" );
-  add_var( "SOAP" , "NSS,PRED,OBS" , "P" , "Proportion" );
+  add_table( "SOAP" , "CH,NSS,PRED,OBS" , "Confusion matrix" );
+  add_var( "SOAP" , "CH,NSS,PRED,OBS" , "N" , "Number" , VT_INTEGER );
+  add_var( "SOAP" , "CH,NSS,PRED,OBS" , "P" , "Proportion" , VT_REAL );
 
   //
   // POPS
@@ -4368,156 +4366,156 @@ void cmddefs_t::init()
   add_param( "POPS" , "hold-outs" , "ids.txt" , "POPS / POPS-CODA: alias for validation= when specifying held-out subject IDs" );
 
   add_table( "POPS" , "" , "POPS metrics" );
-  add_var( "POPS", "" , "ACC" , "Accuracy" );
-  add_var( "POPS", "" , "ACC3" , "Accuracy for 3-class model" );
-  add_var( "POPS", "" , "K" , "Kappa statistic" );
-  add_var( "POPS", "" , "K3" , "Kappa for 3-class model" );
-  add_var( "POPS", "" , "F1" , "F1 statistic" );
-  add_var( "POPS", "" , "F13" , "F1 for 3-class model" );
-  add_var( "POPS", "" , "F1_WGT" , "F1 weighted" );
-  add_var( "POPS", "" , "CONF" , "Mean confidence (max. posterior)" );
-  add_var( "POPS", "" , "MCC" , "Matthews correlation coefficient" );
-  add_var( "POPS", "" , "MCC3" , "Matthews correlation coefficient, 3-class" );
-  add_var( "POPS", "" , "PREC" , "Precision" );
-  add_var( "POPS", "" , "PREC_WGT" , "Precision, weighted" );
-  add_var( "POPS", "" , "PREC3" , "Precision, 3-class" );
-  add_var( "POPS", "" , "RECALL" , "Recall" );
-  add_var( "POPS", "" , "RECALL3" , "Recall, 3-class" );
-  add_var( "POPS", "" , "RECALL_WGT" , "Recall,weighted" );
-  add_var( "POPS", "" , "SLP_LAT_OBS" , "Observed sleep latency" );
-  add_var( "POPS", "" , "SLP_LAT_PRD" , "Predicted sleep latency" );
-  add_var( "POPS", "" , "REM_LAT_OBS" , "Observed REM latency" );
-  add_var( "POPS", "" , "REM_LAT_PRD" , "Predicted REM latency" );
+  add_var( "POPS", "" , "ACC" , "Accuracy" , VT_REAL );
+  add_var( "POPS", "" , "ACC3" , "Accuracy for 3-class model" , VT_REAL );
+  add_var( "POPS", "" , "K" , "Kappa statistic" , VT_REAL );
+  add_var( "POPS", "" , "K3" , "Kappa for 3-class model" , VT_REAL );
+  add_var( "POPS", "" , "F1" , "F1 statistic" , VT_REAL );
+  add_var( "POPS", "" , "F13" , "F1 for 3-class model" , VT_REAL );
+  add_var( "POPS", "" , "F1_WGT" , "F1 weighted" , VT_REAL );
+  add_var( "POPS", "" , "CONF" , "Mean confidence (max. posterior)" , VT_REAL );
+  add_var( "POPS", "" , "MCC" , "Matthews correlation coefficient" , VT_REAL );
+  add_var( "POPS", "" , "MCC3" , "Matthews correlation coefficient, 3-class" , VT_REAL );
+  add_var( "POPS", "" , "PREC" , "Precision" , VT_REAL );
+  add_var( "POPS", "" , "PREC_WGT" , "Precision, weighted" , VT_REAL );
+  add_var( "POPS", "" , "PREC3" , "Precision, 3-class" , VT_REAL );
+  add_var( "POPS", "" , "RECALL" , "Recall" , VT_REAL );
+  add_var( "POPS", "" , "RECALL3" , "Recall, 3-class" , VT_REAL );
+  add_var( "POPS", "" , "RECALL_WGT" , "Recall,weighted" , VT_REAL );
+  add_var( "POPS", "" , "SLP_LAT_OBS" , "Observed sleep latency" , VT_REAL );
+  add_var( "POPS", "" , "SLP_LAT_PRD" , "Predicted sleep latency" , VT_REAL );
+  add_var( "POPS", "" , "REM_LAT_OBS" , "Observed REM latency" , VT_REAL );
+  add_var( "POPS", "" , "REM_LAT_PRD" , "Predicted REM latency" , VT_REAL );
   
   
  
   add_table( "POPS" , "E" , "POPS predictions" );
-  add_var( "POPS" , "E" , "FLAG" , "-1/0/1/2 excluded/match/disc5/disc3" );
-  add_var( "POPS" , "E" , "CONF" , "Confidence score" );
-  add_var( "POPS" , "E" , "PP_N1" , "Posterior probability of N1" );
-  add_var( "POPS" , "E" , "PP_N2" , "Posterior probability of N2" );
-  add_var( "POPS" , "E" , "PP_N3" , "Posterior probability of N3" );
-  add_var( "POPS" , "E" , "PP_R" , "Posterior probability of REM" );
-  add_var( "POPS" , "E" , "PP_W" , "Posterior probability of wake" );
-  add_var( "POPS" , "E" , "PRED", "Predicted stage" );
-  add_var( "POPS" , "E" , "PRIOR" , "Observed stage (if known)" );
-  add_var( "POPS" , "E" , "START" , "Start time (hh:mm:ss)" );
-  add_var( "POPS" , "E" , "STOP" , "Stop time (hh:mm:ss)");
+  add_var( "POPS" , "E" , "FLAG" , "-1/0/1/2 excluded/match/disc5/disc3" , VT_INTEGER );
+  add_var( "POPS" , "E" , "CONF" , "Confidence score" , VT_REAL );
+  add_var( "POPS" , "E" , "PP_N1" , "Posterior probability of N1" , VT_REAL );
+  add_var( "POPS" , "E" , "PP_N2" , "Posterior probability of N2" , VT_REAL );
+  add_var( "POPS" , "E" , "PP_N3" , "Posterior probability of N3" , VT_REAL );
+  add_var( "POPS" , "E" , "PP_R" , "Posterior probability of REM" , VT_REAL );
+  add_var( "POPS" , "E" , "PP_W" , "Posterior probability of wake" , VT_REAL );
+  add_var( "POPS" , "E" , "PRED", "Predicted stage" , VT_TEXT );
+  add_var( "POPS" , "E" , "PRIOR" , "Observed stage (if known)" , VT_TEXT );
+  add_var( "POPS" , "E" , "START" , "Start time (hh:mm:ss)" , VT_TEXT );
+  add_var( "POPS" , "E" , "STOP" , "Stop time (hh:mm:ss)" , VT_TEXT);
   
   add_table( "POPS" , "SS" , "Sleep-stage summaries" );
-  add_var( "POPS" , "SS" , "OBS" , "Observed stage duration (for included epochs)");
-  add_var( "POPS" , "SS" , "ORIG" , "Observed stage duration (all epochs)");
-  add_var( "POPS" , "SS" , "PRF" , "Predicted stage duration, weighted" );
-  add_var( "POPS" , "SS" , "PR1" , "Predicted stage duration, based on most likely" );
-  add_var( "POPS" , "SS" , "F1" , "F1 statistic" );
-  add_var( "POPS" , "SS" , "RECALL" , "Recall" );
-  add_var( "POPS" , "SS" , "PREC" , "Precision" );
+  add_var( "POPS" , "SS" , "OBS" , "Observed stage duration (for included epochs)" , VT_REAL);
+  add_var( "POPS" , "SS" , "ORIG" , "Observed stage duration (all epochs)" , VT_REAL);
+  add_var( "POPS" , "SS" , "PRF" , "Predicted stage duration, weighted" , VT_REAL );
+  add_var( "POPS" , "SS" , "PR1" , "Predicted stage duration, based on most likely" , VT_REAL );
+  add_var( "POPS" , "SS" , "F1" , "F1 statistic" , VT_REAL );
+  add_var( "POPS" , "SS" , "RECALL" , "Recall" , VT_REAL );
+  add_var( "POPS" , "SS" , "PREC" , "Precision" , VT_REAL );
 
   add_table( "POPS" , "SPEC" , "Feature definitions [verbose or output-features]" );
-  add_var( "POPS" , "SPEC" , "COL" , "One-based final model-input column, if included" );
-  add_var( "POPS" , "SPEC" , "FTR" , "Feature label (metadata; not a row key)" );
-  add_var( "POPS" , "SPEC" , "BLOCK" , "Block label" );
-  add_var( "POPS" , "SPEC" , "INC" , "Included?" );
-  add_var( "POPS" , "SPEC" , "LABEL_ORIG" , "Original feature label" );
-  add_var( "POPS" , "SPEC" , "LEVEL" , "Level (1/2)" );
-  add_var( "POPS" , "SPEC" , "ROOT" , "Root label" );
+  add_var( "POPS" , "SPEC" , "COL" , "One-based final model-input column, if included" , VT_INTEGER );
+  add_var( "POPS" , "SPEC" , "FTR" , "Feature label (metadata; not a row key)" , VT_TEXT );
+  add_var( "POPS" , "SPEC" , "BLOCK" , "Block label" , VT_TEXT );
+  add_var( "POPS" , "SPEC" , "INC" , "Included?" , VT_BOOLEAN );
+  add_var( "POPS" , "SPEC" , "LABEL_ORIG" , "Original feature label" , VT_TEXT );
+  add_var( "POPS" , "SPEC" , "LEVEL" , "Level (1/2)" , VT_INTEGER );
+  add_var( "POPS" , "SPEC" , "ROOT" , "Root label" , VT_TEXT );
 
   add_table( "POPS" , "ETYPE" , "Error type [verbose]" );
-  add_var( "POPS" , "ETYPE" , "ACC" , "Accuracy" );
-  add_var( "POPS" , "ETYPE" , "N" , "Count" );
+  add_var( "POPS" , "ETYPE" , "ACC" , "Accuracy" , VT_REAL );
+  add_var( "POPS" , "ETYPE" , "N" , "Count" , VT_INTEGER );
 
   add_table( "POPS" , "SS,ETYPE" , "Stage-specific error type [verbose]" );
-  add_var( "POPS" , "SS,ETYPE" , "ACC" , "Accuracy" );
-  add_var( "POPS" , "SS,ETYPE" , "N" , "Count" );
+  add_var( "POPS" , "SS,ETYPE" , "ACC" , "Accuracy" , VT_REAL );
+  add_var( "POPS" , "SS,ETYPE" , "N" , "Count" , VT_INTEGER );
 
   add_table( "POPS" , "CODA,SS,COL" , "Model SHAP values; CODA=0 stage-1 POPS, CODA=1 CODA" );
-  add_var( "POPS" , "CODA,SS,COL" , "FTR" , "Feature label (metadata; not a row key)" );
-  add_var( "POPS" , "CODA,SS,COL" , "SHAP" , "Mean absolute SHAP value" );
+  add_var( "POPS" , "CODA,SS,COL" , "FTR" , "Feature label (metadata; not a row key)" , VT_TEXT );
+  add_var( "POPS" , "CODA,SS,COL" , "SHAP" , "Mean absolute SHAP value" , VT_REAL );
 
   add_table( "POPS" , "CODA,COL" , "Intrinsic LightGBM feature importance; CODA=0 stage-1 POPS, CODA=1 CODA" );
-  add_var( "POPS" , "CODA,COL" , "FTR" , "Feature label (metadata; not a row key)" );
-  add_var( "POPS" , "CODA,COL" , "RANK" , "Rank by total gain (1 = highest)" );
-  add_var( "POPS" , "CODA,COL" , "GAIN" , "Total LightGBM split gain" );
-  add_var( "POPS" , "CODA,COL" , "GAIN_PCT" , "Percentage of the model's total LightGBM split gain" );
-  add_var( "POPS" , "CODA,COL" , "SPLIT" , "Number of LightGBM splits using the feature" );
+  add_var( "POPS" , "CODA,COL" , "FTR" , "Feature label (metadata; not a row key)" , VT_TEXT );
+  add_var( "POPS" , "CODA,COL" , "RANK" , "Rank by total gain (1 = highest)" , VT_INTEGER );
+  add_var( "POPS" , "CODA,COL" , "GAIN" , "Total LightGBM split gain" , VT_REAL );
+  add_var( "POPS" , "CODA,COL" , "GAIN_PCT" , "Percentage of the model's total LightGBM split gain" , VT_REAL );
+  add_var( "POPS" , "CODA,COL" , "SPLIT" , "Number of LightGBM splits using the feature" , VT_INTEGER );
 
   add_table( "POPS" , "CODA,E,SS,COL" , "Epoch-level model SHAP values" );
-  add_var( "POPS" , "CODA,E,SS,COL" , "FTR" , "Feature label (metadata; not a row key)" );
-  add_var( "POPS" , "CODA,E,SS,COL" , "SHAP" , "SHAP value" );
+  add_var( "POPS" , "CODA,E,SS,COL" , "FTR" , "Feature label (metadata; not a row key)" , VT_TEXT );
+  add_var( "POPS" , "CODA,E,SS,COL" , "SHAP" , "SHAP value" , VT_REAL );
   set_compressed( "POPS" , tfac_t( "CODA,E,SS,COL" ) );
 
   add_table( "POPS" , "CODA,E,COL" , "Raw model feature matrix [output-features]" );
-  add_var( "POPS" , "CODA,E,COL" , "FTR" , "Feature label (metadata; not a row key)" );
-  add_var( "POPS" , "CODA,E,COL" , "X" , "Feature value" );
+  add_var( "POPS" , "CODA,E,COL" , "FTR" , "Feature label (metadata; not a row key)" , VT_TEXT );
+  add_var( "POPS" , "CODA,E,COL" , "X" , "Feature value" , VT_REAL );
   set_compressed( "POPS" , tfac_t( "CODA,E,COL" ) );
   
   add_table( "POPS" , "PRED,OBS" , "Confusion matrix" );
-  add_var( "POPS" , "PRED,OBS" , "N" , "Count" );
-  add_var( "POPS" , "PRED,OBS" , "P" , "Proportion" );
+  add_var( "POPS" , "PRED,OBS" , "N" , "Count" , VT_INTEGER );
+  add_var( "POPS" , "PRED,OBS" , "P" , "Proportion" , VT_REAL );
 
 
   add_table( "POPS" , "CHEQ" , "Channel-equivalent stats" );
-  add_var( "POPS", "CHEQ" , "ACC" , "Accuracy" );
-  add_var( "POPS", "CHEQ" , "ACC3" , "Accuracy for 3-class model" );
-  add_var( "POPS", "CHEQ" , "K" , "Kappa statistic" );
-  add_var( "POPS", "CHEQ" , "K3" , "Kappa for 3-class model" );
-  add_var( "POPS", "CHEQ" , "F1" , "F1 statistic" );
-  add_var( "POPS", "CHEQ" , "F13" , "F1 for 3-class model" );
-  add_var( "POPS", "CHEQ" , "F1_WGT" , "F1 weighted" );
-  add_var( "POPS", "CHEQ" , "CONF" , "Mean confidence (max. posterior)" );
-  add_var( "POPS", "CHEQ" , "MCC" , "Matthews correlation coefficient" );
-  add_var( "POPS", "CHEQ" , "MCC3" , "Matthews correlation coefficient, 3-class" );
-  add_var( "POPS", "CHEQ" , "PREC" , "Precision" );
-  add_var( "POPS", "CHEQ" , "PREC_WGT" , "Precision, weighted" );
-  add_var( "POPS", "CHEQ" , "PREC3" , "Precision, 3-class" );
-  add_var( "POPS", "CHEQ" , "RECALL" , "Recall" );
-  add_var( "POPS", "CHEQ" , "RECALL3" , "Recall, 3-class" );
-  add_var( "POPS", "CHEQ" , "RECALL_WGT" , "Recall,weighted" );
-  add_var( "POPS", "CHEQ" , "REM_LAT_OBS" , "Observed REM latency" );
-  add_var( "POPS", "CHEQ" , "REM_LAT_PRD" , "Predicted REM latency" );
-  add_var( "POPS", "CHEQ" , "SLP_LAT_OBS" , "Observed sleep latency" );
-  add_var( "POPS", "CHEQ" , "SLP_LAT_PRD" , "Predicted sleep latency" );
+  add_var( "POPS", "CHEQ" , "ACC" , "Accuracy" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "ACC3" , "Accuracy for 3-class model" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "K" , "Kappa statistic" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "K3" , "Kappa for 3-class model" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "F1" , "F1 statistic" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "F13" , "F1 for 3-class model" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "F1_WGT" , "F1 weighted" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "CONF" , "Mean confidence (max. posterior)" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "MCC" , "Matthews correlation coefficient" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "MCC3" , "Matthews correlation coefficient, 3-class" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "PREC" , "Precision" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "PREC_WGT" , "Precision, weighted" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "PREC3" , "Precision, 3-class" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "RECALL" , "Recall" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "RECALL3" , "Recall, 3-class" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "RECALL_WGT" , "Recall,weighted" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "REM_LAT_OBS" , "Observed REM latency" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "REM_LAT_PRD" , "Predicted REM latency" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "SLP_LAT_OBS" , "Observed sleep latency" , VT_REAL );
+  add_var( "POPS", "CHEQ" , "SLP_LAT_PRD" , "Predicted sleep latency" , VT_REAL );
   
   add_table( "POPS" , "E,CHEQ" , "POPS predictions" );
-  add_var( "POPS" , "E,CHEQ" , "FLAG" , "-1/0/1/2 excluded/match/disc5/disc3" );
-  add_var( "POPS" , "E,CHEQ" , "CONF" , "Confidence score" );
-  add_var( "POPS" , "E,CHEQ" , "PP_N1" , "Posterior probability of N1" );
-  add_var( "POPS" , "E,CHEQ" , "PP_N2" , "Posterior probability of N2" );
-  add_var( "POPS" , "E,CHEQ" , "PP_N3" , "Posterior probability of N3" );
-  add_var( "POPS" , "E,CHEQ" , "PP_R" , "Posterior probability of REM" );
-  add_var( "POPS" , "E,CHEQ" , "PP_W" , "Posterior probability of wake" );
-  add_var( "POPS" , "E,CHEQ" , "PRED", "Predicted stage" );
-  add_var( "POPS" , "E,CHEQ" , "PRIOR" , "Observed stage (if known)" );
-  add_var( "POPS" , "E,CHEQ" , "START" , "Start time (hh:mm:ss)" );
-  add_var( "POPS" , "E,CHEQ" , "STOP" , "Stop time (hh:mm:ss)");
+  add_var( "POPS" , "E,CHEQ" , "FLAG" , "-1/0/1/2 excluded/match/disc5/disc3" , VT_INTEGER );
+  add_var( "POPS" , "E,CHEQ" , "CONF" , "Confidence score" , VT_REAL );
+  add_var( "POPS" , "E,CHEQ" , "PP_N1" , "Posterior probability of N1" , VT_REAL );
+  add_var( "POPS" , "E,CHEQ" , "PP_N2" , "Posterior probability of N2" , VT_REAL );
+  add_var( "POPS" , "E,CHEQ" , "PP_N3" , "Posterior probability of N3" , VT_REAL );
+  add_var( "POPS" , "E,CHEQ" , "PP_R" , "Posterior probability of REM" , VT_REAL );
+  add_var( "POPS" , "E,CHEQ" , "PP_W" , "Posterior probability of wake" , VT_REAL );
+  add_var( "POPS" , "E,CHEQ" , "PRED", "Predicted stage" , VT_TEXT );
+  add_var( "POPS" , "E,CHEQ" , "PRIOR" , "Observed stage (if known)" , VT_TEXT );
+  add_var( "POPS" , "E,CHEQ" , "START" , "Start time (hh:mm:ss)" , VT_TEXT );
+  add_var( "POPS" , "E,CHEQ" , "STOP" , "Stop time (hh:mm:ss)" , VT_TEXT);
   
   add_table( "POPS" , "SS,CHEQ" , "Sleep-stage summaries" );
-  add_var( "POPS" , "SS,CHEQ" , "OBS" , "Observed stage duration (for included epochs)");
-  add_var( "POPS" , "SS,CHEQ" , "ORIG" , "Observed stage duration (all epochs)");
-  add_var( "POPS" , "SS,CHEQ" , "PRF" , "Predicted stage duration, weighted" );
-  add_var( "POPS" , "SS,CHEQ" , "PR1" , "Predicted stage duration, based on most likely" );
-  add_var( "POPS" , "SS,CHEQ" , "F1" , "F1 statistic" );
-  add_var( "POPS" , "SS,CHEQ" , "RECALL" , "Recall" );
-  add_var( "POPS" , "SS,CHEQ" , "PREC" , "Precision" );
+  add_var( "POPS" , "SS,CHEQ" , "OBS" , "Observed stage duration (for included epochs)" , VT_REAL);
+  add_var( "POPS" , "SS,CHEQ" , "ORIG" , "Observed stage duration (all epochs)" , VT_REAL);
+  add_var( "POPS" , "SS,CHEQ" , "PRF" , "Predicted stage duration, weighted" , VT_REAL );
+  add_var( "POPS" , "SS,CHEQ" , "PR1" , "Predicted stage duration, based on most likely" , VT_REAL );
+  add_var( "POPS" , "SS,CHEQ" , "F1" , "F1 statistic" , VT_REAL );
+  add_var( "POPS" , "SS,CHEQ" , "RECALL" , "Recall" , VT_REAL );
+  add_var( "POPS" , "SS,CHEQ" , "PREC" , "Precision" , VT_REAL );
 
   add_table( "POPS" , "COL,CHEQ" , "Feature QC [verbose]" );
-  add_var( "POPS" , "COL,CHEQ" , "FTR" , "Feature label (metadata; not a row key)" );
-  add_var( "POPS" , "COL,CHEQ" , "BAD" , "Number of bad epochs" );
-  add_var( "POPS" , "COL,CHEQ" , "DROPPED" , "Feature completely dropped" );
-  add_var( "POPS" , "COL,CHEQ" , "PROP" , "Proportion of bad epochs" );
+  add_var( "POPS" , "COL,CHEQ" , "FTR" , "Feature label (metadata; not a row key)" , VT_TEXT );
+  add_var( "POPS" , "COL,CHEQ" , "BAD" , "Number of bad epochs" , VT_INTEGER );
+  add_var( "POPS" , "COL,CHEQ" , "DROPPED" , "Feature completely dropped" , VT_BOOLEAN );
+  add_var( "POPS" , "COL,CHEQ" , "PROP" , "Proportion of bad epochs" , VT_REAL );
 
 
   add_table( "POPS" , "ETYPE,CHEQ" , "Error type" );
-  add_var( "POPS" , "ETYPE,CHEQ" , "ACC" , "Accuracy" );
-  add_var( "POPS" , "ETYPE,CHEQ" , "N" , "Count" );
+  add_var( "POPS" , "ETYPE,CHEQ" , "ACC" , "Accuracy" , VT_REAL );
+  add_var( "POPS" , "ETYPE,CHEQ" , "N" , "Count" , VT_INTEGER );
 
   add_table( "POPS" , "ETYPE,CHEQ,SS" , "Error type" );
-  add_var( "POPS" , "ETYPE,CHEQ,SS" , "ACC" , "Accuracy" );
-  add_var( "POPS" , "ETYPE,CHEQ,SS" , "N" , "Count" );
+  add_var( "POPS" , "ETYPE,CHEQ,SS" , "ACC" , "Accuracy" , VT_REAL );
+  add_var( "POPS" , "ETYPE,CHEQ,SS" , "N" , "Count" , VT_INTEGER );
 
   add_table( "POPS" , "PRED,OBS,CHEQ" , "Confusion matrix" );
-  add_var( "POPS" , "PRED,OBS,CHEQ" , "N" , "Count" );
-  add_var( "POPS" , "PRED,OBS,CHEQ" , "P" , "Proportion" );
+  add_var( "POPS" , "PRED,OBS,CHEQ" , "N" , "Count" , VT_INTEGER );
+  add_var( "POPS" , "PRED,OBS,CHEQ" , "P" , "Proportion" , VT_REAL );
 
   //
   // REBASE
@@ -4538,8 +4536,8 @@ void cmddefs_t::init()
   add_param( "REBASE" , "segment-sec" , "4" , "Welch segment length (seconds)" );
   add_param( "REBASE" , "segment-overlap" , "2" , "Welch segment overlap (seconds)" );
   add_table( "REBASE" , "SS" , "Rebased stage summaries" );
-  add_var( "REBASE" , "SS" , "PRF" , "Predicted stage duration, weighted" );
-  add_var( "REBASE" , "SS" , "PR1" , "Predicted stage duration, hard calls" );
+  add_var( "REBASE" , "SS" , "PRF" , "Predicted stage duration, weighted" , VT_REAL );
+  add_var( "REBASE" , "SS" , "PR1" , "Predicted stage duration, hard calls" , VT_REAL );
 
   //
   // PLACE
@@ -4565,39 +4563,39 @@ void cmddefs_t::init()
   add_param( "PLACE" , "stg-overlap" , "0.5" , "Required minimum stage-file overlap fraction" );
   add_param( "PLACE" , "prefix" , "PLACED" , "Prefix for generated annotations" );
   add_table( "PLACE" , "" , "Best placement summary" );
-  add_var( "PLACE" , "" , "OFFSET" , "Best offset in epochs" );
-  add_var( "PLACE" , "" , "K" , "Best 5-stage kappa" );
-  add_var( "PLACE" , "" , "OLAP_N" , "Number of overlapping epochs" );
-  add_var( "PLACE" , "" , "OLAP_EDF" , "Fraction of EDF epochs overlapped" );
-  add_var( "PLACE" , "" , "OLAP_STG" , "Fraction of supplied stages overlapped" );
-  add_var( "PLACE" , "" , "START_EDF" , "First matched EDF epoch" );
-  add_var( "PLACE" , "" , "STOP_EDF" , "Last matched EDF epoch" );
-  add_var( "PLACE" , "" , "START_STG" , "First matched staged epoch" );
-  add_var( "PLACE" , "" , "STOP_STG" , "Last matched staged epoch" );
+  add_var( "PLACE" , "" , "OFFSET" , "Best offset in epochs" , VT_INTEGER );
+  add_var( "PLACE" , "" , "K" , "Best 5-stage kappa" , VT_REAL );
+  add_var( "PLACE" , "" , "OLAP_N" , "Number of overlapping epochs" , VT_INTEGER );
+  add_var( "PLACE" , "" , "OLAP_EDF" , "Fraction of EDF epochs overlapped" , VT_REAL );
+  add_var( "PLACE" , "" , "OLAP_STG" , "Fraction of supplied stages overlapped" , VT_REAL );
+  add_var( "PLACE" , "" , "START_EDF" , "First matched EDF epoch" , VT_INTEGER );
+  add_var( "PLACE" , "" , "STOP_EDF" , "Last matched EDF epoch" , VT_INTEGER );
+  add_var( "PLACE" , "" , "START_STG" , "First matched staged epoch" , VT_INTEGER );
+  add_var( "PLACE" , "" , "STOP_STG" , "Last matched staged epoch" , VT_INTEGER );
   add_table( "PLACE" , "OFFSET" , "Placement scan across offsets" );
-  add_var( "PLACE" , "OFFSET" , "FIT" , "Whether a valid fit was obtained" );
-  add_var( "PLACE" , "OFFSET" , "NS" , "Number of supplied staged epochs used" );
-  add_var( "PLACE" , "OFFSET" , "NE" , "Number of EDF epochs used" );
-  add_var( "PLACE" , "OFFSET" , "SS" , "Observed stage set at that offset" );
-  add_var( "PLACE" , "OFFSET" , "OLAP_N" , "Number of overlapping epochs" );
-  add_var( "PLACE" , "OFFSET" , "OLAP_EDF" , "Fraction of EDF epochs overlapped" );
-  add_var( "PLACE" , "OFFSET" , "OLAP_STG" , "Fraction of supplied stages overlapped" );
-  add_var( "PLACE" , "OFFSET" , "K" , "5-stage kappa at that offset" );
-  add_var( "PLACE" , "OFFSET" , "S" , "5-stage kappa scaled to the best fit" );
-  add_var( "PLACE" , "OFFSET" , "K3" , "3-stage kappa at that offset" );
-  add_var( "PLACE" , "OFFSET" , "S3" , "3-stage kappa scaled to the best fit" );
+  add_var( "PLACE" , "OFFSET" , "FIT" , "Whether a valid fit was obtained" , VT_BOOLEAN );
+  add_var( "PLACE" , "OFFSET" , "NS" , "Number of supplied staged epochs used" , VT_INTEGER );
+  add_var( "PLACE" , "OFFSET" , "NE" , "Number of EDF epochs used" , VT_INTEGER );
+  add_var( "PLACE" , "OFFSET" , "SS" , "Observed stage set at that offset" , VT_TEXT );
+  add_var( "PLACE" , "OFFSET" , "OLAP_N" , "Number of overlapping epochs" , VT_INTEGER );
+  add_var( "PLACE" , "OFFSET" , "OLAP_EDF" , "Fraction of EDF epochs overlapped" , VT_REAL );
+  add_var( "PLACE" , "OFFSET" , "OLAP_STG" , "Fraction of supplied stages overlapped" , VT_REAL );
+  add_var( "PLACE" , "OFFSET" , "K" , "5-stage kappa at that offset" , VT_REAL );
+  add_var( "PLACE" , "OFFSET" , "S" , "5-stage kappa scaled to the best fit" , VT_REAL );
+  add_var( "PLACE" , "OFFSET" , "K3" , "3-stage kappa at that offset" , VT_REAL );
+  add_var( "PLACE" , "OFFSET" , "S3" , "3-stage kappa scaled to the best fit" , VT_REAL );
   add_table( "PLACE" , "MS,OFFSET" , "Placement scan with micro-shifts" );
-  add_var( "PLACE" , "MS,OFFSET" , "FIT" , "Whether a valid fit was obtained" );
-  add_var( "PLACE" , "MS,OFFSET" , "NS" , "Number of supplied staged epochs used" );
-  add_var( "PLACE" , "MS,OFFSET" , "NE" , "Number of EDF epochs used" );
-  add_var( "PLACE" , "MS,OFFSET" , "SS" , "Observed stage set at that offset" );
-  add_var( "PLACE" , "MS,OFFSET" , "OLAP_N" , "Number of overlapping epochs" );
-  add_var( "PLACE" , "MS,OFFSET" , "OLAP_EDF" , "Fraction of EDF epochs overlapped" );
-  add_var( "PLACE" , "MS,OFFSET" , "OLAP_STG" , "Fraction of supplied stages overlapped" );
-  add_var( "PLACE" , "MS,OFFSET" , "K" , "5-stage kappa at that shift" );
-  add_var( "PLACE" , "MS,OFFSET" , "S" , "5-stage kappa scaled to the best fit" );
-  add_var( "PLACE" , "MS,OFFSET" , "K3" , "3-stage kappa at that shift" );
-  add_var( "PLACE" , "MS,OFFSET" , "S3" , "3-stage kappa scaled to the best fit" );
+  add_var( "PLACE" , "MS,OFFSET" , "FIT" , "Whether a valid fit was obtained" , VT_BOOLEAN );
+  add_var( "PLACE" , "MS,OFFSET" , "NS" , "Number of supplied staged epochs used" , VT_INTEGER );
+  add_var( "PLACE" , "MS,OFFSET" , "NE" , "Number of EDF epochs used" , VT_INTEGER );
+  add_var( "PLACE" , "MS,OFFSET" , "SS" , "Observed stage set at that offset" , VT_TEXT );
+  add_var( "PLACE" , "MS,OFFSET" , "OLAP_N" , "Number of overlapping epochs" , VT_INTEGER );
+  add_var( "PLACE" , "MS,OFFSET" , "OLAP_EDF" , "Fraction of EDF epochs overlapped" , VT_REAL );
+  add_var( "PLACE" , "MS,OFFSET" , "OLAP_STG" , "Fraction of supplied stages overlapped" , VT_REAL );
+  add_var( "PLACE" , "MS,OFFSET" , "K" , "5-stage kappa at that shift" , VT_REAL );
+  add_var( "PLACE" , "MS,OFFSET" , "S" , "5-stage kappa scaled to the best fit" , VT_REAL );
+  add_var( "PLACE" , "MS,OFFSET" , "K3" , "3-stage kappa at that shift" , VT_REAL );
+  add_var( "PLACE" , "MS,OFFSET" , "S3" , "3-stage kappa scaled to the best fit" , VT_REAL );
 
   //
   // RUN-POPS
@@ -4822,19 +4820,19 @@ void cmddefs_t::init()
   add_param( "--hypno-pc" , "corr-matrix" , "" , "Optional TSV Pearson correlation matrix across PCA features" );
 
   add_table( "HYPNO-PC" , "" , "HYPNO PCA model" );
-  add_var( "HYPNO-PC" , "" , "N" , "People used" );
-  add_var( "HYPNO-PC" , "" , "N_INPUT" , "Input people" );
-  add_var( "HYPNO-PC" , "" , "N_FEATURES" , "Features" );
-  add_var( "HYPNO-PC" , "" , "N_COMPONENTS" , "Components" );
+  add_var( "HYPNO-PC" , "" , "N" , "People used" , VT_INTEGER );
+  add_var( "HYPNO-PC" , "" , "N_INPUT" , "Input people" , VT_INTEGER );
+  add_var( "HYPNO-PC" , "" , "N_FEATURES" , "Features" , VT_INTEGER );
+  add_var( "HYPNO-PC" , "" , "N_COMPONENTS" , "Components" , VT_INTEGER );
   add_table( "HYPNO-PC" , "FTR" , "Feature scaling" );
-  add_var( "HYPNO-PC" , "FTR" , "MEAN" , "Reference mean" );
-  add_var( "HYPNO-PC" , "FTR" , "SD" , "Reference SD" );
+  add_var( "HYPNO-PC" , "FTR" , "MEAN" , "Reference mean" , VT_REAL );
+  add_var( "HYPNO-PC" , "FTR" , "SD" , "Reference SD" , VT_REAL );
   add_table( "HYPNO-PC" , "PC" , "Component summary" );
-  add_var( "HYPNO-PC" , "PC" , "W" , "Singular value" );
-  add_var( "HYPNO-PC" , "PC" , "VE" , "Variance explained" );
-  add_var( "HYPNO-PC" , "PC" , "CVE" , "Cumulative variance explained" );
+  add_var( "HYPNO-PC" , "PC" , "W" , "Singular value" , VT_REAL );
+  add_var( "HYPNO-PC" , "PC" , "VE" , "Variance explained" , VT_REAL );
+  add_var( "HYPNO-PC" , "PC" , "CVE" , "Cumulative variance explained" , VT_REAL );
   add_table( "HYPNO-PC" , "PC,FTR" , "Component loadings" );
-  add_var( "HYPNO-PC" , "PC,FTR" , "LOADING" , "Feature loading" );
+  add_var( "HYPNO-PC" , "PC,FTR" , "LOADING" , "Feature loading" , VT_REAL );
 
   // emit_state() — which carries every var below except HD_SPT-family, HD_MINS/
   // HD_PCT/HD_DENS, and the validity counts — always emits an NSS level (5, and
@@ -4888,71 +4886,72 @@ void cmddefs_t::init()
   };
   auto add_hdstats_var = [&]( const std::vector<std::string> & tables ,
 			      const std::string & var ,
-			      const std::string & desc )
+			      const std::string & desc ,
+			      const vtype_t type )
     {
       for ( int i = 0 ; i < (int)tables.size() ; i++ )
-	add_var( "HDSTATS" , tables[i] , var , desc );
+	add_var( "HDSTATS" , tables[i] , var , desc , type );
     };
 
   add_table( "HDSTATS" , ""                 , "Sleep timing (HD_*) and channel-validity summary, unstratified" );
   add_table( "HDSTATS" , "NSS"              , "Overall HDSTATS summary, by state representation (5/3)" );
   add_table( "HDSTATS" , "ANNOT,NSS"        , "Overall HDSTATS summary, by annotation level and state representation" );
-  add_var(   "HDSTATS" , ""                 , "HD_TRT"       , "Physical recording duration (minutes)" );
-  add_var(   "HDSTATS" , ""                 , "HD_WIN"       , "Analysis-window duration including flanks (minutes)" );
-  add_var(   "HDSTATS" , ""                 , "HD_SPT"       , "Sleep period time (minutes)" );
-  add_var(   "HDSTATS" , ""                 , "HD_SME"       , "Sleep maintenance efficiency (sleep mass / HD_SPT)" );
-  add_var(   "HDSTATS" , ""                 , "HD_WASO"      , "Wake after sleep onset (minutes)" );
-  add_var(   "HDSTATS" , ""                 , "HD_SOL"       , "Sleep latency from analysis-window start to official SPT onset (minutes)" );
-  add_var(   "HDSTATS" , ""                 , "HD_REM_LAT"   , "REM latency (minutes from sleep onset)" );
-  add_var(   "HDSTATS" , ""                 , "HD_REM_LAT2"  , "REM latency excluding wake (minutes)" );
-  add_var(   "HDSTATS" , ""                 , "HD_TWT"       , "Expected wake time (minutes)" );
-  add_var(   "HDSTATS" , ""                 , "HD_FIXED_AVAILABLE_HOURS", "Recording hours available after sustained sleep onset (fixed= only)" );
-  add_var(   "HDSTATS" , ""                 , "HD_FIXED_OK", "1 if the requested fixed analysis window is available, otherwise 0 (fixed= only)" );
+  add_var(   "HDSTATS" , ""                 , "HD_TRT"       , "Physical recording duration (minutes)" , VT_REAL );
+  add_var(   "HDSTATS" , ""                 , "HD_WIN"       , "Analysis-window duration including flanks (minutes)" , VT_REAL );
+  add_var(   "HDSTATS" , ""                 , "HD_SPT"       , "Sleep period time (minutes)" , VT_REAL );
+  add_var(   "HDSTATS" , ""                 , "HD_SME"       , "Sleep maintenance efficiency (sleep mass / HD_SPT)" , VT_REAL );
+  add_var(   "HDSTATS" , ""                 , "HD_WASO"      , "Wake after sleep onset (minutes)" , VT_REAL );
+  add_var(   "HDSTATS" , ""                 , "HD_SOL"       , "Sleep latency from analysis-window start to official SPT onset (minutes)" , VT_REAL );
+  add_var(   "HDSTATS" , ""                 , "HD_REM_LAT"   , "REM latency (minutes from sleep onset)" , VT_REAL );
+  add_var(   "HDSTATS" , ""                 , "HD_REM_LAT2"  , "REM latency excluding wake (minutes)" , VT_REAL );
+  add_var(   "HDSTATS" , ""                 , "HD_TWT"       , "Expected wake time (minutes)" , VT_REAL );
+  add_var(   "HDSTATS" , ""                 , "HD_FIXED_AVAILABLE_HOURS", "Recording hours available after sustained sleep onset (fixed= only)" , VT_REAL );
+  add_var(   "HDSTATS" , ""                 , "HD_FIXED_OK", "1 if the requested fixed analysis window is available, otherwise 0 (fixed= only)" , VT_BOOLEAN );
   add_table( "HDSTATS" , "PC" , "Named HDSTATS-PC scores and semantics" );
-  add_var( "HDSTATS" , "PC" , "SCORE" , "Semantically oriented component score (NA if unavailable)" );
+  add_var( "HDSTATS" , "PC" , "SCORE" , "Semantically oriented component score (NA if unavailable)" , VT_REAL );
   add_table( "HDSTATS" , "PC,FTR" , "Curated signed standardized feature contributions" );
-  add_var( "HDSTATS" , "PC,FTR" , "VAL" , "Oriented loading times standardized feature value (NA if score unavailable)" );
-  add_var( "HDSTATS", "PC,FTR", "RAW", "Raw metric value before model standardization" );
+  add_var( "HDSTATS" , "PC,FTR" , "VAL" , "Oriented loading times standardized feature value (NA if score unavailable)" , VT_REAL );
+  add_var( "HDSTATS", "PC,FTR", "RAW", "Raw metric value before model standardization" , VT_REAL );
 
   add_table( "HDSTATS-PC" , "" , "HDSTATS PCA model" );
-  add_var( "HDSTATS-PC" , "" , "N" , "People used" );
-  add_var( "HDSTATS-PC" , "" , "N_INPUT" , "Input people" );
-  add_var( "HDSTATS-PC" , "" , "N_FEATURES" , "Features" );
-  add_var( "HDSTATS-PC" , "" , "N_COMPONENTS" , "Components" );
-  add_var( "HDSTATS-PC" , "" , "N_PANELS" , "Fitted panels" );
+  add_var( "HDSTATS-PC" , "" , "N" , "People used" , VT_INTEGER );
+  add_var( "HDSTATS-PC" , "" , "N_INPUT" , "Input people" , VT_INTEGER );
+  add_var( "HDSTATS-PC" , "" , "N_FEATURES" , "Features" , VT_INTEGER );
+  add_var( "HDSTATS-PC" , "" , "N_COMPONENTS" , "Components" , VT_INTEGER );
+  add_var( "HDSTATS-PC" , "" , "N_PANELS" , "Fitted panels" , VT_INTEGER );
   add_table( "HDSTATS-PC" , "PANEL" , "Per-panel fit summary" );
-  add_var( "HDSTATS-PC" , "PANEL" , "N" , "People used for this panel" );
-  add_var( "HDSTATS-PC" , "PANEL" , "N_INPUT" , "Input people" );
-  add_var( "HDSTATS-PC" , "PANEL" , "N_DECLARED" , "Declared input slots" );
-  add_var( "HDSTATS-PC" , "PANEL" , "N_FEATURES" , "Varying fitted inputs" );
-  add_var( "HDSTATS-PC" , "PANEL" , "N_COMPONENTS" , "Retained components" );
+  add_var( "HDSTATS-PC" , "PANEL" , "N" , "People used for this panel" , VT_INTEGER );
+  add_var( "HDSTATS-PC" , "PANEL" , "N_INPUT" , "Input people" , VT_INTEGER );
+  add_var( "HDSTATS-PC" , "PANEL" , "N_DECLARED" , "Declared input slots" , VT_INTEGER );
+  add_var( "HDSTATS-PC" , "PANEL" , "N_FEATURES" , "Varying fitted inputs" , VT_INTEGER );
+  add_var( "HDSTATS-PC" , "PANEL" , "N_COMPONENTS" , "Retained components" , VT_INTEGER );
   add_table( "HDSTATS-PC" , "PANEL,FTR" , "Per-panel feature scaling" );
-  add_var( "HDSTATS-PC" , "PANEL,FTR" , "MEAN" , "Reference mean" );
-  add_var( "HDSTATS-PC" , "PANEL,FTR" , "SD" , "Reference SD" );
+  add_var( "HDSTATS-PC" , "PANEL,FTR" , "MEAN" , "Reference mean" , VT_REAL );
+  add_var( "HDSTATS-PC" , "PANEL,FTR" , "SD" , "Reference SD" , VT_REAL );
   add_table( "HDSTATS-PC" , "PANEL,PC" , "Per-panel component summary" );
-  add_var( "HDSTATS-PC" , "PANEL" , "ROTATED" , "Whether final components are group rotated" );
-  add_var( "HDSTATS-PC" , "PANEL,PC" , "SOURCE_PC" , "Original axis (unrotated models only)" );
-  add_var( "HDSTATS-PC" , "PANEL,PC" , "SCORE_SD" , "Training SD of the raw final score" );
-  add_var( "HDSTATS-PC" , "PANEL,PC" , "GROUP" , "Group with greatest squared-loading mass" );
-  add_var( "HDSTATS-PC" , "PANEL,PC" , "GROUP_MASS" , "Largest group squared-loading mass" );
+  add_var( "HDSTATS-PC" , "PANEL" , "ROTATED" , "Whether final components are group rotated" , VT_BOOLEAN );
+  add_var( "HDSTATS-PC" , "PANEL,PC" , "SOURCE_PC" , "Original axis (unrotated models only)" , VT_INTEGER );
+  add_var( "HDSTATS-PC" , "PANEL,PC" , "SCORE_SD" , "Training SD of the raw final score" , VT_REAL );
+  add_var( "HDSTATS-PC" , "PANEL,PC" , "GROUP" , "Group with greatest squared-loading mass" , VT_TEXT );
+  add_var( "HDSTATS-PC" , "PANEL,PC" , "GROUP_MASS" , "Largest group squared-loading mass" , VT_REAL );
   add_table( "HDSTATS-PC" , "PANEL,PC,GROUP" , "Rotated loading mass by spec group" );
-  add_var( "HDSTATS-PC" , "PANEL,PC,GROUP" , "MASS" , "Sum of squared loadings in the group" );
-  add_table( "HDSTATS-PC" , "PANEL,PC,BASIS_PC" , "Rotation from original PCA axes" );
-  add_var( "HDSTATS-PC" , "PANEL,PC,BASIS_PC" , "ROTATION" , "Coefficient mapping the original raw PCA score into this component" );
-  add_var( "HDSTATS-PC" , "PANEL,PC" , "W" , "Square root of component score sum of squares (singular value for ordinary PCA)" );
-  add_var( "HDSTATS-PC" , "PANEL,PC" , "VE" , "Variance explained" );
-  add_var( "HDSTATS-PC" , "PANEL,PC" , "CVE" , "Cumulative variance explained" );
+  add_var( "HDSTATS-PC" , "PANEL,PC,GROUP" , "MASS" , "Sum of squared loadings in the group" , VT_REAL );
+  add_table( "HDSTATS-PC" , "PANEL,PC,BASISPC" , "Rotation from original PCA axes" );
+  add_var( "HDSTATS-PC" , "PANEL,PC,BASISPC" , "ROTATION" , "Coefficient mapping the original raw PCA score into this component" , VT_REAL );
+  add_var( "HDSTATS-PC" , "PANEL,PC" , "W" , "Square root of component score sum of squares (singular value for ordinary PCA)" , VT_REAL );
+  add_var( "HDSTATS-PC" , "PANEL,PC" , "VE" , "Variance explained" , VT_REAL );
+  add_var( "HDSTATS-PC" , "PANEL,PC" , "CVE" , "Cumulative variance explained" , VT_REAL );
   add_table( "HDSTATS-PC" , "PANEL,PC,FTR" , "Per-panel loadings" );
-  add_var( "HDSTATS-PC" , "PANEL,PC,FTR" , "LOADING" , "Feature loading" );
+  add_var( "HDSTATS-PC" , "PANEL,PC,FTR" , "LOADING" , "Feature loading" , VT_REAL );
   add_table( "HDSTATS-PC" , "FTR" , "Feature scaling" );
-  add_var( "HDSTATS-PC" , "FTR" , "MEAN" , "Reference mean" );
-  add_var( "HDSTATS-PC" , "FTR" , "SD" , "Reference SD" );
+  add_var( "HDSTATS-PC" , "FTR" , "MEAN" , "Reference mean" , VT_REAL );
+  add_var( "HDSTATS-PC" , "FTR" , "SD" , "Reference SD" , VT_REAL );
   add_table( "HDSTATS-PC" , "PC" , "Component summary" );
-  add_var( "HDSTATS-PC" , "PC" , "W" , "Singular value" );
-  add_var( "HDSTATS-PC" , "PC" , "VE" , "Variance explained" );
-  add_var( "HDSTATS-PC" , "PC" , "CVE" , "Cumulative variance explained" );
+  add_var( "HDSTATS-PC" , "PC" , "W" , "Singular value" , VT_REAL );
+  add_var( "HDSTATS-PC" , "PC" , "VE" , "Variance explained" , VT_REAL );
+  add_var( "HDSTATS-PC" , "PC" , "CVE" , "Cumulative variance explained" , VT_REAL );
   add_table( "HDSTATS-PC" , "PC,FTR" , "Component loadings" );
-  add_var( "HDSTATS-PC" , "PC,FTR" , "LOADING" , "Loading" );
+  add_var( "HDSTATS-PC" , "PC,FTR" , "LOADING" , "Loading" , VT_REAL );
 
   add_table( "HDSTATS" , "NSS,LRLAG"       , "Long-range lags" );
   add_table( "HDSTATS" , "NSS,LRLAG,SS"    , "Long-range stage ACF" );
@@ -4969,67 +4968,81 @@ void cmddefs_t::init()
   add_table( "HDSTATS", "UVAR", "Joint time and ultradian phase fits" );
   for ( const std::string & metric : { "U_SLOPE", "U_MOD", "U_MOD_COS", "U_MOD_SIN",
                                       "U_PEAK", "U_R2", "U_PARTIAL_R2" } )
-    add_var( "HDSTATS", "UVAR", metric, "Ultradian fit coefficient or summary" );
+    add_var( "HDSTATS", "UVAR", metric, "Ultradian fit coefficient or summary" , VT_REAL );
   add_table( "HDSTATS", "UQ,UMETRIC", "Means within ultradian phase quarters" );
-  add_var( "HDSTATS", "UQ,UMETRIC", "U_MEAN", "Mean metric within phase quarter" );
+  add_var( "HDSTATS", "UQ,UMETRIC", "U_MEAN", "Mean metric within phase quarter" , VT_REAL );
   for ( const std::string & metric : { "U_MAG", "U_COVERAGE", "U_NCYC" } )
-    add_var( "HDSTATS", "", metric, "Ultradian organization summary" );
-  add_var( "HDSTATS", "", "NREM_ILR_N1_VS_N2N3", "NREM composition: sqrt(2/3) log(N1 / sqrt(N2 N3)), posterior-minute floor 1e-6" );
-  add_var( "HDSTATS", "", "NREM_ILR_N2_VS_N3", "NREM composition: sqrt(1/2) log(N2 / N3), posterior-minute floor 1e-6" );
-  add_var( "HDSTATS", "", "NREM_COM_N1_MINUS_N2", "Difference between normalized N1 and N2 posterior-mass centers" );
-  add_var( "HDSTATS", "", "NREM_COM_N2_MINUS_N3", "Difference between normalized N2 and N3 posterior-mass centers" );
+    add_var( "HDSTATS", "", metric, "Ultradian organization summary" , VT_REAL );
+  add_var( "HDSTATS", "", "NREM_ILR_N1_VS_N2N3", "NREM composition: sqrt(2/3) log(N1 / sqrt(N2 N3)), posterior-minute floor 1e-6" , VT_REAL );
+  add_var( "HDSTATS", "", "NREM_ILR_N2_VS_N3", "NREM composition: sqrt(1/2) log(N2 / N3), posterior-minute floor 1e-6" , VT_REAL );
+  add_var( "HDSTATS", "", "NREM_COM_N1_MINUS_N2", "Difference between normalized N1 and N2 posterior-mass centers" , VT_REAL );
+  add_var( "HDSTATS", "", "NREM_COM_N2_MINUS_N3", "Difference between normalized N2 and N3 posterior-mass centers" , VT_REAL );
   add_table( "HDSTATS" , "UVAR,QC" , "Ultradian fit QC" );
-  add_var(   "HDSTATS" , "UVAR,QC" , "U_DESIGN_COND", "Ultradian fit design condition number" );
-  add_var(   "HDSTATS" , "UVAR,QC" , "U_STATUS", "Ultradian fit status" );
+  add_var(   "HDSTATS" , "UVAR,QC" , "U_DESIGN_COND", "Ultradian fit design condition number" , VT_REAL );
+  add_var(   "HDSTATS" , "UVAR,QC" , "U_STATUS", "Ultradian fit status" , VT_TEXT );
   add_table( "HDSTATS" , "QC" , "Operational, long-range, and ultradian QC (qc=T only)" );
   for ( const auto & variable : std::vector<std::string>{
-          "N_VALID", "PCT_VALID", "N_INVALID_LEAD", "N_INVALID_TRAIL", "N_INVALID_MID",
-          "HD_ANALYSIS", "HD_ANALYSIS_START_SEC", "HD_ANALYSIS_STOP_SEC", "HD_ANALYSIS_SEC",
-          "HD_EXCLUDED_PRE_SEC", "HD_EXCLUDED_POST_SEC", "HD_ANALYSIS_INVALID_SEC", "HD_ANALYSIS_FALLBACK",
-          "HD_FIXED_SKIPPED",
-          "LR_CORE_SEC", "LR_POLICY", "LR_N_VALID_RUNS", "LR_VALID_SEC", "LR_INVALID_SEC",
-          "LR_LONGEST_INTERNAL_GAP_SEC", "LR_N_INTERNAL_GAPS", "U_CONDITION_WEIGHTED" } )
-    add_var( "HDSTATS", "QC", variable, "Operational diagnostic" );
+          "N_VALID", "N_INVALID_LEAD", "N_INVALID_TRAIL", "N_INVALID_MID",
+          "LR_N_VALID_RUNS", "LR_N_INTERNAL_GAPS" } )
+    add_var( "HDSTATS", "QC", variable, "Operational diagnostic" , VT_INTEGER );
   for ( const auto & variable : std::vector<std::string>{
-          "U_N_HALF_CYCLES", "U_STRICT_NCYC", "U_N_SUPPORTED", "U_N_PHASE",
+          "PCT_VALID", "HD_ANALYSIS_START_SEC", "HD_ANALYSIS_STOP_SEC", "HD_ANALYSIS_SEC",
+          "HD_EXCLUDED_PRE_SEC", "HD_EXCLUDED_POST_SEC", "HD_ANALYSIS_INVALID_SEC",
+          "LR_CORE_SEC", "LR_VALID_SEC", "LR_INVALID_SEC", "LR_LONGEST_INTERNAL_GAP_SEC" } )
+    add_var( "HDSTATS", "QC", variable, "Operational diagnostic" , VT_REAL );
+  for ( const auto & variable : std::vector<std::string>{
+          "HD_ANALYSIS", "LR_POLICY" } )
+    add_var( "HDSTATS", "QC", variable, "Operational diagnostic" , VT_TEXT );
+  for ( const auto & variable : std::vector<std::string>{
+          "HD_ANALYSIS_FALLBACK", "HD_FIXED_SKIPPED", "U_CONDITION_WEIGHTED" } )
+    add_var( "HDSTATS", "QC", variable, "Operational diagnostic" , VT_BOOLEAN );
+  for ( const auto & variable : std::vector<std::string>{
+          "U_N_HALF_CYCLES", "U_STRICT_NCYC", "U_N_SUPPORTED", "U_N_PHASE", "U_N_PHASE_RUNS" } )
+    add_var( "HDSTATS", "QC", variable, "Ultradian diagnostic" , VT_INTEGER );
+  for ( const auto & variable : std::vector<std::string>{
           "U_PCT_SUPPORTED", "U_PCT_PHASE", "U_VALID_SEC", "U_SLEEP_SEC",
-          "U_PHASE_SEC", "U_N_PHASE_RUNS", "U_MEAN_RAW" } )
-    add_var( "HDSTATS", "QC", variable, "Ultradian diagnostic" );
+          "U_PHASE_SEC", "U_MEAN_RAW" } )
+    add_var( "HDSTATS", "QC", variable, "Ultradian diagnostic" , VT_REAL );
   add_table( "HDSTATS" , "CORE_QC" , "Primary-island core-window and split-night diagnostics (core-mode=primary-island or core-qc=T only)" );
   for ( const auto & variable : std::vector<std::string>{
-          "PRIMARY_VALID", "FALLBACK_SPT", "N_ISLANDS", "PRIMARY_INDEX",
+          "PRIMARY_VALID", "FALLBACK_SPT", "SPLIT_NIGHT" } )
+    add_var( "HDSTATS", "CORE_QC", variable, "Primary-island core-window diagnostic" , VT_BOOLEAN );
+  for ( const auto & variable : std::vector<std::string>{
+          "N_ISLANDS", "PRIMARY_INDEX" } )
+    add_var( "HDSTATS", "CORE_QC", variable, "Primary-island core-window diagnostic" , VT_INTEGER );
+  for ( const auto & variable : std::vector<std::string>{
           "TOTAL_SLEEP_MIN", "PRIMARY_SLEEP_MIN", "PRIMARY_MASS_PCT",
           "PRIMARY_CORE_MIN", "SPT_CORE_MIN", "CORE_DELTA_MIN",
           "ONSET_DELTA_MIN", "FINAL_WAKE_DELTA_MIN", "OUTSIDE_SLEEP_MIN",
-          "INTERNAL_WAKE_MIN", "INTERNAL_WAKE_PCT", "MAX_WAKE_GAP_MIN", "SPLIT_NIGHT",
+          "INTERNAL_WAKE_MIN", "INTERNAL_WAKE_PCT", "MAX_WAKE_GAP_MIN",
           "PRIMARY_START_SEC", "PRIMARY_STOP_SEC" } )
-    add_var( "HDSTATS", "CORE_QC", variable, "Primary-island core-window diagnostic" );
-  add_var(   "HDSTATS" , "NSS,LRLAG"       , "PS",    "Probability shift" );
-  add_var(   "HDSTATS" , "NSS,LRLAG"       , "SIM",   "Posterior similarity" );
-  add_var(   "HDSTATS" , "NSS,LRLAG,SS"    , "ACF",   "Stage autocorrelation" );
-  add_var(   "HDSTATS" , "NSS,VAR"         , "SLOPE", "Overnight slope" );
-  add_var(   "HDSTATS" , "NSS,VAR"         , "COM", "Posterior-mass centre of mass relative to analysis start (0-1; >=2 minutes mass)" );
-  add_var(   "HDSTATS" , "NSS,VAR"         , "COM_M", "Posterior-mass centre of mass from analysis start (minutes; >=2 minutes mass)" );
-  add_var(   "HDSTATS" , "NSS,VAR"         , "T50", "Relative time by which 50% of posterior mass accrued (0-1; >=2 minutes mass)" );
-  add_var(   "HDSTATS" , "NSS,VAR"         , "T50_M", "Time from analysis start by which 50% of posterior mass accrued (minutes; >=2 minutes mass)" );
-  add_var(   "HDSTATS" , "NSS,LRWIN,VAR"   , "WITHIN_SD", "Within-window SD" );
-  add_var(   "HDSTATS" , "NSS,LRWIN,VAR"   , "BETWEEN_SD", "Between-window SD" );
+    add_var( "HDSTATS", "CORE_QC", variable, "Primary-island core-window diagnostic" , VT_REAL );
+  add_var(   "HDSTATS" , "NSS,LRLAG"       , "PS",    "Probability shift" , VT_REAL );
+  add_var(   "HDSTATS" , "NSS,LRLAG"       , "SIM",   "Posterior similarity" , VT_REAL );
+  add_var(   "HDSTATS" , "NSS,LRLAG,SS"    , "ACF",   "Stage autocorrelation" , VT_REAL );
+  add_var(   "HDSTATS" , "NSS,VAR"         , "SLOPE", "Overnight slope" , VT_REAL );
+  add_var(   "HDSTATS" , "NSS,VAR"         , "COM", "Posterior-mass centre of mass relative to analysis start (0-1; >=2 minutes mass)" , VT_REAL );
+  add_var(   "HDSTATS" , "NSS,VAR"         , "COM_M", "Posterior-mass centre of mass from analysis start (minutes; >=2 minutes mass)" , VT_REAL );
+  add_var(   "HDSTATS" , "NSS,VAR"         , "T50", "Relative time by which 50% of posterior mass accrued (0-1; >=2 minutes mass)" , VT_REAL );
+  add_var(   "HDSTATS" , "NSS,VAR"         , "T50_M", "Time from analysis start by which 50% of posterior mass accrued (minutes; >=2 minutes mass)" , VT_REAL );
+  add_var(   "HDSTATS" , "NSS,LRWIN,VAR"   , "WITHIN_SD", "Within-window SD" , VT_REAL );
+  add_var(   "HDSTATS" , "NSS,LRWIN,VAR"   , "BETWEEN_SD", "Between-window SD" , VT_REAL );
   for ( const auto & table : std::vector<std::string>{ "NSS,LRLAG,QC", "NSS,LRLAG,SS,QC" } )
     {
-      add_var( "HDSTATS", table, "NPAIR", "Retained pairs" );
-      add_var( "HDSTATS", table, "ESTIMABLE", "Estimable" );
-      add_var( "HDSTATS", table, "NA_REASON", "NA reason" );
+      add_var( "HDSTATS", table, "NPAIR", "Retained pairs" , VT_INTEGER );
+      add_var( "HDSTATS", table, "ESTIMABLE", "Estimable" , VT_BOOLEAN );
+      add_var( "HDSTATS", table, "NA_REASON", "NA reason" , VT_TEXT );
     }
-  for ( const auto & variable : std::vector<std::string>{
-          "TIMING_MASS_M", "TIMING_NVALID", "TIMING_ESTIMABLE", "TIMING_NA_REASON",
-          "ESTIMABLE", "NA_REASON" } )
-    add_var( "HDSTATS", "NSS,VAR,QC", variable,
-             variable == "ESTIMABLE" ? "Estimable" :
-             variable == "NA_REASON" ? "NA reason" : "Timing diagnostic" );
-  add_var( "HDSTATS", "NSS,LRWIN,VAR,QC", "NWIN", "Retained windows" );
-  add_var( "HDSTATS", "NSS,LRWIN,VAR,QC", "N_OFFSETS", "Contributing tiling offsets" );
-  add_var( "HDSTATS", "NSS,LRWIN,VAR,QC", "ESTIMABLE", "Estimable" );
-  add_var( "HDSTATS", "NSS,LRWIN,VAR,QC", "NA_REASON", "NA reason" );
+  add_var( "HDSTATS", "NSS,VAR,QC", "TIMING_MASS_M", "Timing diagnostic" , VT_REAL );
+  add_var( "HDSTATS", "NSS,VAR,QC", "TIMING_NVALID", "Timing diagnostic" , VT_INTEGER );
+  add_var( "HDSTATS", "NSS,VAR,QC", "TIMING_ESTIMABLE", "Timing diagnostic" , VT_BOOLEAN );
+  add_var( "HDSTATS", "NSS,VAR,QC", "TIMING_NA_REASON", "Timing diagnostic" , VT_TEXT );
+  add_var( "HDSTATS", "NSS,VAR,QC", "ESTIMABLE", "Estimable" , VT_BOOLEAN );
+  add_var( "HDSTATS", "NSS,VAR,QC", "NA_REASON", "NA reason" , VT_TEXT );
+  add_var( "HDSTATS", "NSS,LRWIN,VAR,QC", "NWIN", "Retained windows" , VT_REAL );
+  add_var( "HDSTATS", "NSS,LRWIN,VAR,QC", "N_OFFSETS", "Contributing tiling offsets" , VT_INTEGER );
+  add_var( "HDSTATS", "NSS,LRWIN,VAR,QC", "ESTIMABLE", "Estimable" , VT_BOOLEAN );
+  add_var( "HDSTATS", "NSS,LRWIN,VAR,QC", "NA_REASON", "NA reason" , VT_TEXT );
   const std::vector<std::string> hdstats_lr_quality_tables = {
     "NSS,LRLAG,METRIC,QC",
     "NSS,LRLAG,SS,METRIC,QC",
@@ -5038,19 +5051,19 @@ void cmddefs_t::init()
   };
   for ( const auto & table : hdstats_lr_quality_tables )
     {
-      add_var( "HDSTATS", table, "NPAIR", "Retained pairs" );
-      add_var( "HDSTATS", table, "NWIN", "Retained windows" );
-      add_var( "HDSTATS", table, "NVALID", "Valid observations" );
-      add_var( "HDSTATS", table, "ESTIMABLE", "Estimable" );
-      add_var( "HDSTATS", table, "NA_REASON", "NA reason" );
+      add_var( "HDSTATS", table, "NPAIR", "Retained pairs" , VT_INTEGER );
+      add_var( "HDSTATS", table, "NWIN", "Retained windows" , VT_REAL );  // TYPE? mean retained windows, but hd_write_lr_metric_quality() passes it as int (truncated)
+      add_var( "HDSTATS", table, "NVALID", "Valid observations" , VT_INTEGER );
+      add_var( "HDSTATS", table, "ESTIMABLE", "Estimable" , VT_BOOLEAN );
+      add_var( "HDSTATS", table, "NA_REASON", "NA reason" , VT_TEXT );
     }
 
   add_table( "HDSTATS" , "SS"               , "Sleep timing (HD_MINS/HD_PCT/HD_DENS) by stage, unstratified" );
   add_table( "HDSTATS" , "NSS,SS"           , "Mixedness/instability by stage, by state representation (5/3)" );
   add_table( "HDSTATS" , "ANNOT,NSS,SS"     , "Mixedness/instability by stage, by annotation level and state representation" );
-  add_hdstats_var( hdstats_ss_tables, "HD_MINS", "Expected stage duration from posterior mass (minutes)" );
-  add_hdstats_var( hdstats_ss_tables, "HD_PCT",  "Expected stage duration as % of sleep mass (W, S, WASO and, with pre-post-wake, WPRE/WPOST use analysis duration)" );
-  add_hdstats_var( hdstats_ss_tables, "HD_DENS", "Expected stage duration as a proportion of HD_WIN (physical analysis duration)" );
+  add_hdstats_var( hdstats_ss_tables, "HD_MINS", "Expected stage duration from posterior mass (minutes)" , VT_REAL );
+  add_hdstats_var( hdstats_ss_tables, "HD_PCT",  "Expected stage duration as % of sleep mass (W, S, WASO and, with pre-post-wake, WPRE/WPOST use analysis duration)" , VT_REAL );
+  add_hdstats_var( hdstats_ss_tables, "HD_DENS", "Expected stage duration as a proportion of HD_WIN (physical analysis duration)" , VT_REAL );
 
   add_table( "HDSTATS" , "STABLE,NSS",       "Mixedness and instability, by STABLE (1) / UNSTABLE (0) and state representation" );
   add_table( "HDSTATS" , "STABLE,ANNOT,NSS", "Mixedness and instability, by STABLE (1) / UNSTABLE (0), annotation level, and state representation" );
@@ -5060,96 +5073,96 @@ void cmddefs_t::init()
   // Core mixedness/instability vars: valid both bare (unstratified by STABLE,
   // e.g. the overall context or a per-stage SS row) and within a STABLE=1/0
   // bucket.
-  add_hdstats_var( hdstats_bare_tables,   "N",         "Number of samples" );
-  add_hdstats_var( hdstats_region_tables, "N",         "Number of samples in region" );
-  add_hdstats_var( hdstats_bare_tables,   "H",         "Mean entropy of the posterior across states" );
-  add_hdstats_var( hdstats_region_tables, "H",         "Mean entropy of the posterior across states" );
-  add_hdstats_var( hdstats_bare_tables,   "H_P90",     "90th percentile entropy" );
-  add_hdstats_var( hdstats_region_tables, "H_P90",     "90th percentile entropy" );
-  add_hdstats_var( hdstats_bare_tables,   "CONF",         "Mean confidence (max posterior probability)" );
-  add_hdstats_var( hdstats_region_tables, "CONF",         "Mean confidence (max posterior probability)" );
-  add_hdstats_var( hdstats_bare_tables,   "FRAC_LOW_CONF", "Fraction of samples with confidence below conf-th" );
-  add_hdstats_var( hdstats_region_tables, "FRAC_LOW_CONF", "Fraction of samples with confidence below conf-th" );
-  add_hdstats_var( hdstats_bare_tables,   "MG",        "Mean margin (top minus second posterior)" );
-  add_hdstats_var( hdstats_region_tables, "MG",        "Mean margin (top minus second posterior)" );
-  add_hdstats_var( hdstats_bare_tables,   "PS",        "Mean one-sample posterior shift" );
-  add_hdstats_var( hdstats_region_tables, "PS",        "Mean one-sample posterior shift" );
-  add_hdstats_var( hdstats_bare_tables,   "PS_P90",    "90th percentile PS" );
-  add_hdstats_var( hdstats_region_tables, "PS_P90",    "90th percentile PS" );
-  add_hdstats_var( hdstats_bare_tables,   "PS_LAG",    "Mean longer-lag posterior shift (default 30s lag)" );
-  add_hdstats_var( hdstats_region_tables, "PS_LAG",    "Mean longer-lag posterior shift (default 30s lag)" );
-  add_hdstats_var( hdstats_bare_tables,   "P_W",       "Mean wake posterior probability" );
-  add_hdstats_var( hdstats_region_tables, "P_W",       "Mean wake posterior probability" );
-  add_hdstats_var( hdstats_bare_tables,   "P_NR",      "Mean NREM posterior probability (3-state only)" );
-  add_hdstats_var( hdstats_region_tables, "P_NR",      "Mean NREM posterior probability (3-state only)" );
-  add_hdstats_var( hdstats_bare_tables,   "P_N1",      "Mean N1 posterior probability (5-state only)" );
-  add_hdstats_var( hdstats_region_tables, "P_N1",      "Mean N1 posterior probability (5-state only)" );
-  add_hdstats_var( hdstats_bare_tables,   "P_N2",      "Mean N2 posterior probability (5-state only)" );
-  add_hdstats_var( hdstats_region_tables, "P_N2",      "Mean N2 posterior probability (5-state only)" );
-  add_hdstats_var( hdstats_bare_tables,   "P_N3",      "Mean N3 posterior probability (5-state only)" );
-  add_hdstats_var( hdstats_region_tables, "P_N3",      "Mean N3 posterior probability (5-state only)" );
-  add_hdstats_var( hdstats_bare_tables,   "P_R",       "Mean REM posterior probability" );
-  add_hdstats_var( hdstats_region_tables, "P_R",       "Mean REM posterior probability" );
+  add_hdstats_var( hdstats_bare_tables,   "N",         "Number of samples" , VT_INTEGER );
+  add_hdstats_var( hdstats_region_tables, "N",         "Number of samples in region" , VT_INTEGER );
+  add_hdstats_var( hdstats_bare_tables,   "H",         "Mean entropy of the posterior across states" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "H",         "Mean entropy of the posterior across states" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "H_P90",     "90th percentile entropy" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "H_P90",     "90th percentile entropy" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "CONF",         "Mean confidence (max posterior probability)" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "CONF",         "Mean confidence (max posterior probability)" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "FRAC_LOW_CONF", "Fraction of samples with confidence below conf-th" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "FRAC_LOW_CONF", "Fraction of samples with confidence below conf-th" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "MG",        "Mean margin (top minus second posterior)" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "MG",        "Mean margin (top minus second posterior)" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "PS",        "Mean one-sample posterior shift" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "PS",        "Mean one-sample posterior shift" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "PS_P90",    "90th percentile PS" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "PS_P90",    "90th percentile PS" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "PS_LAG",    "Mean longer-lag posterior shift (default 30s lag)" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "PS_LAG",    "Mean longer-lag posterior shift (default 30s lag)" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "P_W",       "Mean wake posterior probability" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "P_W",       "Mean wake posterior probability" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "P_NR",      "Mean NREM posterior probability (3-state only)" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "P_NR",      "Mean NREM posterior probability (3-state only)" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "P_N1",      "Mean N1 posterior probability (5-state only)" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "P_N1",      "Mean N1 posterior probability (5-state only)" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "P_N2",      "Mean N2 posterior probability (5-state only)" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "P_N2",      "Mean N2 posterior probability (5-state only)" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "P_N3",      "Mean N3 posterior probability (5-state only)" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "P_N3",      "Mean N3 posterior probability (5-state only)" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,   "P_R",       "Mean REM posterior probability" , VT_REAL );
+  add_hdstats_var( hdstats_region_tables, "P_R",       "Mean REM posterior probability" , VT_REAL );
 
   // Bare-only: unstable/broken under range restriction (CORR_H_PS) or only
   // meaningful as a share of the whole context (PCT_STABLE).
-  add_hdstats_var( hdstats_bare_tables, "CORR_H_PS", "Pearson correlation between entropy and PS" );
-  add_hdstats_var( hdstats_bare_tables, "PCT_STABLE", "Percentage of context classified as stable" );
+  add_hdstats_var( hdstats_bare_tables, "CORR_H_PS", "Pearson correlation between entropy and PS" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables, "PCT_STABLE", "Percentage of context classified as stable" , VT_REAL );
 
-  add_hdstats_var( hdstats_bare_tables,  "H_RATIO_UN_ST",  "Entropy ratio: unstable / stable" );
-  add_hdstats_var( hdstats_bare_tables,  "CONF_DIFF_UN_ST","Confidence difference: unstable - stable" );
-  add_hdstats_var( hdstats_bare_tables,  "PS_RATIO_UN_ST", "PS ratio: unstable / stable" );
-  add_hdstats_var( hdstats_top_tables,   "TRANS_N",        "Number of transitions detected (event-based, see min-shift/shift-win)" );
-  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_N",   "Number of bout-to-bout transitions (block-based, see bout-min/bout-intrusion-max/bout-intrusion-frac)" );
-  add_hdstats_var( hdstats_top_tables,   "TRANS_DENS",     "TRANS_N density (per hour)" );
-  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_DENS","BOUT_TRANS_N density (per hour)" );
-  add_hdstats_var( hdstats_top_tables,   "TRANS_DUR",      "Mean transition duration (seconds)" );
-  add_hdstats_var( hdstats_top_tables,   "TRANS_PEAK_H",   "Mean peak entropy across each transition window" );
-  add_hdstats_var( hdstats_top_tables,   "TRANS_MIN_CONF", "Mean minimum confidence across each transition window" );
-  add_hdstats_var( hdstats_top_tables,   "TRANS_TOT_PS",   "Mean PS area under each transition curve (seconds)" );
-  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_DUR",      "Mean entropy-defined width around each bout-transition anchor (seconds)" );
-  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_PEAK_H",   "Mean peak entropy across each bout-transition window" );
-  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_MIN_CONF", "Mean minimum confidence across each bout-transition window" );
-  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_TOT_PS",   "Mean PS area under each bout-transition curve (seconds)" );
-  add_hdstats_var( hdstats_top_tables,   "TRANS_N_MATCHED",   "Number of TRANS events that also fall within a BOUT_TRANS gap" );
-  add_hdstats_var( hdstats_top_tables,   "TRANS_PCT_MATCHED", "TRANS_N_MATCHED as a percentage of TRANS_N; low values indicate fragmentation" );
+  add_hdstats_var( hdstats_bare_tables,  "H_RATIO_UN_ST",  "Entropy ratio: unstable / stable" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,  "CONF_DIFF_UN_ST","Confidence difference: unstable - stable" , VT_REAL );
+  add_hdstats_var( hdstats_bare_tables,  "PS_RATIO_UN_ST", "PS ratio: unstable / stable" , VT_REAL );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_N",        "Number of transitions detected (event-based, see min-shift/shift-win)" , VT_INTEGER );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_N",   "Number of bout-to-bout transitions (block-based, see bout-min/bout-intrusion-max/bout-intrusion-frac)" , VT_INTEGER );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_DENS",     "TRANS_N density (per hour)" , VT_REAL );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_DENS","BOUT_TRANS_N density (per hour)" , VT_REAL );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_DUR",      "Mean transition duration (seconds)" , VT_REAL );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_PEAK_H",   "Mean peak entropy across each transition window" , VT_REAL );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_MIN_CONF", "Mean minimum confidence across each transition window" , VT_REAL );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_TOT_PS",   "Mean PS area under each transition curve (seconds)" , VT_REAL );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_DUR",      "Mean entropy-defined width around each bout-transition anchor (seconds)" , VT_REAL );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_PEAK_H",   "Mean peak entropy across each bout-transition window" , VT_REAL );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_MIN_CONF", "Mean minimum confidence across each bout-transition window" , VT_REAL );
+  add_hdstats_var( hdstats_top_tables,   "BOUT_TRANS_TOT_PS",   "Mean PS area under each bout-transition curve (seconds)" , VT_REAL );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_N_MATCHED",   "Number of TRANS events that also fall within a BOUT_TRANS gap" , VT_INTEGER );
+  add_hdstats_var( hdstats_top_tables,   "TRANS_PCT_MATCHED", "TRANS_N_MATCHED as a percentage of TRANS_N; low values indicate fragmentation" , VT_REAL );
 
   add_table( "HDSTATS" , "NSS,TRANS"            , "Directional transition summary statistics, by state representation" );
   add_table( "HDSTATS" , "ANNOT,NSS,TRANS"      , "Directional transition summary statistics, by annotation level and state representation" );
-  add_hdstats_var( hdstats_trans_tables, "TRANS_N",        "Number of transitions detected" );
-  add_hdstats_var( hdstats_trans_tables, "TRANS_DENS",     "Transition density (per hour)" );
-  add_hdstats_var( hdstats_trans_tables, "TRANS_DUR",      "Mean transition duration (seconds)" );
-  add_hdstats_var( hdstats_trans_tables, "TRANS_PEAK_H",   "Mean peak entropy across each transition window" );
-  add_hdstats_var( hdstats_trans_tables, "TRANS_MIN_CONF", "Mean minimum confidence across each transition window" );
-  add_hdstats_var( hdstats_trans_tables, "TRANS_TOT_PS",   "Mean PS area under each transition curve (seconds)" );
-  add_hdstats_var( hdstats_trans_tables, "TRANS_N_MATCHED",   "Number of TRANS events (this pair) that also fall within a BOUT_TRANS gap" );
-  add_hdstats_var( hdstats_trans_tables, "TRANS_PCT_MATCHED", "TRANS_N_MATCHED as a percentage of TRANS_N (this pair)" );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_N",        "Number of transitions detected" , VT_INTEGER );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_DENS",     "Transition density (per hour)" , VT_REAL );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_DUR",      "Mean transition duration (seconds)" , VT_REAL );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_PEAK_H",   "Mean peak entropy across each transition window" , VT_REAL );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_MIN_CONF", "Mean minimum confidence across each transition window" , VT_REAL );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_TOT_PS",   "Mean PS area under each transition curve (seconds)" , VT_REAL );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_N_MATCHED",   "Number of TRANS events (this pair) that also fall within a BOUT_TRANS gap" , VT_INTEGER );
+  add_hdstats_var( hdstats_trans_tables, "TRANS_PCT_MATCHED", "TRANS_N_MATCHED as a percentage of TRANS_N (this pair)" , VT_REAL );
 
   add_table( "HDSTATS" , "NSS,BOUT_TRANS"       , "Settled bout-to-bout transition summary statistics, by state representation" );
   add_table( "HDSTATS" , "ANNOT,NSS,BOUT_TRANS" , "Settled bout-to-bout transition summary statistics, by annotation level and state representation" );
-  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_N",        "Number of settled bout-to-bout transitions" );
-  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_DENS",     "Settled bout-to-bout transition density (per hour)" );
-  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_DUR",      "Mean entropy-defined width around each bout-transition anchor (seconds)" );
-  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_PEAK_H",   "Mean peak entropy across each bout-transition window" );
-  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_MIN_CONF", "Mean minimum confidence across each bout-transition window" );
-  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_TOT_PS",   "Mean PS area under each bout-transition curve (seconds)" );
+  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_N",        "Number of settled bout-to-bout transitions" , VT_INTEGER );
+  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_DENS",     "Settled bout-to-bout transition density (per hour)" , VT_REAL );
+  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_DUR",      "Mean entropy-defined width around each bout-transition anchor (seconds)" , VT_REAL );
+  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_PEAK_H",   "Mean peak entropy across each bout-transition window" , VT_REAL );
+  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_MIN_CONF", "Mean minimum confidence across each bout-transition window" , VT_REAL );
+  add_hdstats_var( hdstats_bout_trans_tables, "BOUT_TRANS_TOT_PS",   "Mean PS area under each bout-transition curve (seconds)" , VT_REAL );
 
   add_table( "HDSTATS" , "NSS,BOUT"       , "Soft-called bout-duration statistics (HYPNO's BOUT_N/BOUT_MN/BOUT_MD/BOUT_MX/BOUT_05/BOUT_10 analogue), by dominant stage (plus WASO, and WPRE/WPOST with pre-post-wake) and state representation" );
   add_table( "HDSTATS" , "ANNOT,NSS,BOUT" , "Soft-called bout-duration statistics, by dominant stage, annotation level, and state representation" );
-  add_hdstats_var( hdstats_bout_tables, "BOUT_N",        "Number of qualifying bouts for this dominant stage" );
-  add_hdstats_var( hdstats_bout_tables, "BOUT_DENS",     "BOUT_N density (per hour)" );
-  add_hdstats_var( hdstats_bout_tables, "BOUT_PCT",      "Percentage covered by qualifying bouts: full bout duration / union of dominant-stage time and full qualifying bout spans (including absorbed deviations and invalid gaps; wake-zone bouts assigned whole)" );
-  add_hdstats_var( hdstats_bout_tables, "BOUT_DUR_MEAN", "Mean bout duration (seconds; run extent, not just the settled core)" );
-  add_hdstats_var( hdstats_bout_tables, "BOUT_DUR_MED",  "Median bout duration (seconds)" );
-  add_hdstats_var( hdstats_bout_tables, "BOUT_DUR_MAX",  "Maximum bout duration (seconds), e.g. the soft-called longest wake bout for BOUT=W (or within the SPT for BOUT=WASO)" );
-  add_hdstats_var( hdstats_bout_tables, "BOUT_DUR_P90",  "90th percentile bout duration (seconds)" );
-  add_hdstats_var( hdstats_bout_tables, "BOUT_05",       "Total minutes accounted for by bouts >= 5 minutes" );
-  add_hdstats_var( hdstats_bout_tables, "BOUT_10",       "Total minutes accounted for by bouts >= 10 minutes" );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_N",        "Number of qualifying bouts for this dominant stage" , VT_INTEGER );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_DENS",     "BOUT_N density (per hour)" , VT_REAL );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_PCT",      "Percentage covered by qualifying bouts: full bout duration / union of dominant-stage time and full qualifying bout spans (including absorbed deviations and invalid gaps; wake-zone bouts assigned whole)" , VT_REAL );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_DUR_MEAN", "Mean bout duration (seconds; run extent, not just the settled core)" , VT_REAL );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_DUR_MED",  "Median bout duration (seconds)" , VT_REAL );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_DUR_MAX",  "Maximum bout duration (seconds), e.g. the soft-called longest wake bout for BOUT=W (or within the SPT for BOUT=WASO)" , VT_REAL );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_DUR_P90",  "90th percentile bout duration (seconds)" , VT_REAL );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_05",       "Total minutes accounted for by bouts >= 5 minutes" , VT_REAL );
+  add_hdstats_var( hdstats_bout_tables, "BOUT_10",       "Total minutes accounted for by bouts >= 10 minutes" , VT_REAL );
 
   add_table( "HDSTATS" , "NSS,MIX"              , "State-set mixing, by combination of states and state representation" );
   add_table( "HDSTATS" , "ANNOT,NSS,MIX"        , "State-set mixing, by combination of states, annotation level, and state representation" );
-  add_hdstats_var( hdstats_mix_tables,      "HD_MINS", "Expected minutes jointly ambiguous across this state set" );
-  add_hdstats_var( hdstats_mix_bare_tables, "HD_DENS", "HD_MINS as a proportion of HD_WIN (physical analysis duration)" );
+  add_hdstats_var( hdstats_mix_tables,      "HD_MINS", "Expected minutes jointly ambiguous across this state set" , VT_REAL );
+  add_hdstats_var( hdstats_mix_bare_tables, "HD_DENS", "HD_MINS as a proportion of HD_WIN (physical analysis duration)" , VT_REAL );
 
   add_table( "HDSTATS" , "NSS,TRANS,SEC"       , "Transition-aligned profiles, by TRANS label (ALL or directional pair) and state representation" );
   add_table( "HDSTATS" , "ANNOT,NSS,TRANS,SEC" , "Transition-aligned profiles, by annotation level, TRANS label (ALL or directional pair), and state representation" );
@@ -5171,10 +5184,13 @@ void cmddefs_t::init()
     "Mean N3 posterior at offset (5-state only)",
     "Mean REM posterior at offset"
   };
+  const std::vector<vtype_t> hdstats_profile_types = {
+    VT_INTEGER, VT_REAL, VT_REAL, VT_REAL, VT_REAL, VT_REAL, VT_REAL, VT_REAL, VT_REAL, VT_REAL, VT_REAL
+  };
   for ( int i = 0; i < (int)hdstats_profile_vars.size(); i++ )
     {
-      add_hdstats_var( hdstats_trans_sec_tables, hdstats_profile_vars[i], hdstats_profile_desc[i] );
-      add_hdstats_var( hdstats_bout_sec_tables,  hdstats_profile_vars[i], hdstats_profile_desc[i] );
+      add_hdstats_var( hdstats_trans_sec_tables, hdstats_profile_vars[i], hdstats_profile_desc[i], hdstats_profile_types[i] );
+      add_hdstats_var( hdstats_bout_sec_tables,  hdstats_profile_vars[i], hdstats_profile_desc[i], hdstats_profile_types[i] );
     }
 
   // Aligned-profile tables are conditional on enough events being present.
@@ -5189,28 +5205,28 @@ void cmddefs_t::init()
   disable_hdstats_vars( hdstats_bout_sec_tables,  hdstats_profile_vars );
 
   add_table( "HDSTATS" , "TIME"             , "Per-sample time-series (verbose only)" );
-  add_var(   "HDSTATS" , "TIME"             , "H"           , "Entropy" );
-  add_var(   "HDSTATS" , "TIME"             , "CONF"        , "Confidence" );
-  add_var(   "HDSTATS" , "TIME"             , "MG"          , "Margin" );
-  add_var(   "HDSTATS" , "TIME"             , "PS"          , "One-sample posterior shift" );
-  add_var(   "HDSTATS" , "TIME"             , "PS_LAG"      , "Longer-lag posterior shift (default 30s lag)" );
-  add_var(   "HDSTATS" , "TIME"             , "ARGMAX"      , "Argmax state index (0=W 1=N1 2=N2 3=N3 4=R)" );
-  add_var(   "HDSTATS" , "TIME"             , "IS_TRANS"      , "1 if sample is within a detected TRANS event's window" );
-  add_var(   "HDSTATS" , "TIME"             , "IS_BOUT_TRANS" , "1 if sample is within a BOUT_TRANS transition's window" );
-  add_var(   "HDSTATS" , "TIME"             , "IS_STABLE"     , "1 if sample is in stable-core" );
-  add_var(   "HDSTATS" , "TIME"             , "U_DEPTH"       , "Sleep-conditional smoothed depth (when supported)" );
-  add_var(   "HDSTATS" , "TIME"             , "U_PHASE"       , "Ultradian phase in radians (when defined)" );
-  add_var(   "HDSTATS" , "TIME"             , "U_PHASE_VALID" , "1 if ultradian phase is defined" );
-  add_var(   "HDSTATS" , "TIME"             , "U_AMP"         , "Sleep-weighted ultradian depth excursion" );
-  add_var(   "HDSTATS" , "TIME"             , "U_AMP_RAW"     , "Unattenuated ultradian depth excursion" );
-  add_var(   "HDSTATS" , "TIME"             , "H3"          , "Entropy, 3-state representation" );
-  add_var(   "HDSTATS" , "TIME"             , "CONF3"       , "Confidence, 3-state representation" );
-  add_var(   "HDSTATS" , "TIME"             , "PS3"         , "Posterior shift, 3-state representation" );
-  add_var(   "HDSTATS" , "TIME"             , "PS3_LAG"     , "Longer-lag posterior shift, 3-state representation" );
-  add_var(   "HDSTATS" , "TIME"             , "ARGMAX3"     , "Argmax state index (0=W 1=NR 2=R)" );
-  add_var(   "HDSTATS" , "TIME"             , "IS_TRANS3"      , "1 if sample is within a detected TRANS event's window, 3-state" );
-  add_var(   "HDSTATS" , "TIME"             , "IS_BOUT_TRANS3" , "1 if sample is within a BOUT_TRANS transition's window, 3-state" );
-  add_var(   "HDSTATS" , "TIME"             , "IS_STABLE3"     , "1 if sample is in stable-core, 3-state" );
+  add_var(   "HDSTATS" , "TIME"             , "H"           , "Entropy" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "CONF"        , "Confidence" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "MG"          , "Margin" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "PS"          , "One-sample posterior shift" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "PS_LAG"      , "Longer-lag posterior shift (default 30s lag)" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "ARGMAX"      , "Argmax state index (0=W 1=N1 2=N2 3=N3 4=R)" , VT_INTEGER );
+  add_var(   "HDSTATS" , "TIME"             , "IS_TRANS"      , "1 if sample is within a detected TRANS event's window" , VT_BOOLEAN );
+  add_var(   "HDSTATS" , "TIME"             , "IS_BOUT_TRANS" , "1 if sample is within a BOUT_TRANS transition's window" , VT_BOOLEAN );
+  add_var(   "HDSTATS" , "TIME"             , "IS_STABLE"     , "1 if sample is in stable-core" , VT_BOOLEAN );
+  add_var(   "HDSTATS" , "TIME"             , "U_DEPTH"       , "Sleep-conditional smoothed depth (when supported)" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "U_PHASE"       , "Ultradian phase in radians (when defined)" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "U_PHASE_VALID" , "1 if ultradian phase is defined" , VT_BOOLEAN );
+  add_var(   "HDSTATS" , "TIME"             , "U_AMP"         , "Sleep-weighted ultradian depth excursion" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "U_AMP_RAW"     , "Unattenuated ultradian depth excursion" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "H3"          , "Entropy, 3-state representation" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "CONF3"       , "Confidence, 3-state representation" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "PS3"         , "Posterior shift, 3-state representation" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "PS3_LAG"     , "Longer-lag posterior shift, 3-state representation" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "ARGMAX3"     , "Argmax state index (0=W 1=NR 2=R)" , VT_REAL );
+  add_var(   "HDSTATS" , "TIME"             , "IS_TRANS3"      , "1 if sample is within a detected TRANS event's window, 3-state" , VT_BOOLEAN );
+  add_var(   "HDSTATS" , "TIME"             , "IS_BOUT_TRANS3" , "1 if sample is within a BOUT_TRANS transition's window, 3-state" , VT_BOOLEAN );
+  add_var(   "HDSTATS" , "TIME"             , "IS_STABLE3"     , "1 if sample is in stable-core, 3-state" , VT_BOOLEAN );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -5273,26 +5289,26 @@ void cmddefs_t::init()
   add_param( "SSA" , "no-new-channels" , "" , "Do not add reconstructed component channels back into the EDF" );
 
   add_table( "SSA" , "CH" , "Per-signal SSA summaries" );
-  add_var( "SSA" , "CH" , "N" , "Signal length in samples" );
-  add_var( "SSA" , "CH" , "L" , "SSA embedding window length" );
-  add_var( "SSA" , "CH" , "K" , "Number of columns in the trajectory matrix" );
-  add_var( "SSA" , "CH" , "D" , "Number of elementary components retained by the decomposition" );
+  add_var( "SSA" , "CH" , "N" , "Signal length in samples" , VT_INTEGER );
+  add_var( "SSA" , "CH" , "L" , "SSA embedding window length" , VT_INTEGER );
+  add_var( "SSA" , "CH" , "K" , "Number of columns in the trajectory matrix" , VT_INTEGER );
+  add_var( "SSA" , "CH" , "D" , "Number of elementary components retained by the decomposition" , VT_INTEGER );
 
   add_table( "SSA" , "CH,C" , "Per-component SSA summaries" );
-  add_var( "SSA" , "CH,C" , "SIGMA" , "Singular value of that elementary SSA component" );
-  add_var( "SSA" , "CH,C" , "LAMBDA" , "Component eigenvalue (SIGMA squared)" );
-  add_var( "SSA" , "CH,C" , "VE" , "Variance-explained fraction based on LAMBDA" );
-  add_var( "SSA" , "CH,C" , "CVE" , "Cumulative variance explained" );
-  add_var( "SSA" , "CH,C" , "RC_SD" , "Standard deviation of the reconstructed elementary component" );
-  add_var( "SSA" , "CH,C" , "INC" , "Whether the component falls in the requested nc set" );
+  add_var( "SSA" , "CH,C" , "SIGMA" , "Singular value of that elementary SSA component" , VT_REAL );
+  add_var( "SSA" , "CH,C" , "LAMBDA" , "Component eigenvalue (SIGMA squared)" , VT_REAL );
+  add_var( "SSA" , "CH,C" , "VE" , "Variance-explained fraction based on LAMBDA" , VT_REAL );
+  add_var( "SSA" , "CH,C" , "CVE" , "Cumulative variance explained" , VT_REAL );
+  add_var( "SSA" , "CH,C" , "RC_SD" , "Standard deviation of the reconstructed elementary component" , VT_REAL );
+  add_var( "SSA" , "CH,C" , "INC" , "Whether the component falls in the requested nc set" , VT_BOOLEAN );
 
   add_table( "SSA" , "CH,G" , "Grouped reconstruction summaries" );
-  add_var( "SSA" , "CH,G" , "NCOMP" , "Number of elementary components in that grouped reconstruction" );
-  add_var( "SSA" , "CH,G" , "LABEL" , "Added EDF channel label for that grouped reconstruction, if written" );
-  add_var( "SSA" , "CH,G" , "SD" , "Standard deviation of the grouped reconstruction when not written as a channel" );
+  add_var( "SSA" , "CH,G" , "NCOMP" , "Number of elementary components in that grouped reconstruction" , VT_INTEGER );
+  add_var( "SSA" , "CH,G" , "LABEL" , "Added EDF channel label for that grouped reconstruction, if written" , VT_TEXT );
+  add_var( "SSA" , "CH,G" , "SD" , "Standard deviation of the grouped reconstruction when not written as a channel" , VT_REAL );
 
   add_table( "SSA" , "CH,C1,C2" , "Weighted-correlation matrix between reconstructed SSA components" );
-  add_var( "SSA" , "CH,C1,C2" , "WCORR" , "Absolute weighted correlation between reconstructed components" );
+  add_var( "SSA" , "CH,C1,C2" , "WCORR" , "Absolute weighted correlation between reconstructed components" , VT_REAL );
 
   //
   // ACF
@@ -5308,8 +5324,8 @@ void cmddefs_t::init()
   add_param( "ACF" , "sig" , "C3,C4" , "Restrict analysis to these channels" );
   add_param( "ACF" , "lag" , "100" , "Maximum lag in samples" );
   add_table( "ACF" , "CH,LAG" , "Autocorrelation by channel and lag" );
-  add_var( "ACF" , "CH,LAG" , "ACF" , "Autocorrelation at this lag" );
-  add_var( "ACF" , "CH,LAG" , "SEC" , "Lag in seconds" );
+  add_var( "ACF" , "CH,LAG" , "ACF" , "Autocorrelation at this lag" , VT_REAL );
+  add_var( "ACF" , "CH,LAG" , "SEC" , "Lag in seconds" , VT_REAL );
 
   //
   // DFA
@@ -5341,20 +5357,20 @@ void cmddefs_t::init()
   add_param( "DFA" , "envelope" , "F" , "Use the filtered signal rather than the Hilbert envelope if set to F" );
 
   add_table( "DFA" , "CH,SEC" , "Whole-trace DFA results by time scale" );
-  add_var( "DFA" , "CH,SEC" , "FLUCT" , "Fluctuation magnitude at this time scale" );
-  add_var( "DFA" , "CH,SEC" , "SLOPE" , "Local DFA slope at this time scale" );
+  add_var( "DFA" , "CH,SEC" , "FLUCT" , "Fluctuation magnitude at this time scale" , VT_REAL );
+  add_var( "DFA" , "CH,SEC" , "SLOPE" , "Local DFA slope at this time scale" , VT_REAL );
 
   add_table( "DFA" , "CH" , "Whole-trace summary DFA fit" );
-  add_var( "DFA" , "CH" , "ALPHA" , "Summary log-log slope of fluctuation versus scale" );
-  add_var( "DFA" , "CH" , "R2" , "R-squared of the summary log-log fit" );
+  add_var( "DFA" , "CH" , "ALPHA" , "Summary log-log slope of fluctuation versus scale" , VT_REAL );
+  add_var( "DFA" , "CH" , "R2" , "R-squared of the summary log-log fit" , VT_REAL );
 
   add_table( "DFA" , "CH,E,SEC" , "Epoch-level DFA results by time scale" );
-  add_var( "DFA" , "CH,E,SEC" , "FLUCT" , "Fluctuation magnitude at this time scale" );
-  add_var( "DFA" , "CH,E,SEC" , "SLOPE" , "Local DFA slope at this time scale" );
+  add_var( "DFA" , "CH,E,SEC" , "FLUCT" , "Fluctuation magnitude at this time scale" , VT_REAL );
+  add_var( "DFA" , "CH,E,SEC" , "SLOPE" , "Local DFA slope at this time scale" , VT_REAL );
 
   add_table( "DFA" , "CH,E" , "Epoch-level summary DFA fit" );
-  add_var( "DFA" , "CH,E" , "ALPHA" , "Summary log-log slope of fluctuation versus scale" );
-  add_var( "DFA" , "CH,E" , "R2" , "R-squared of the summary log-log fit" );
+  add_var( "DFA" , "CH,E" , "ALPHA" , "Summary log-log slope of fluctuation versus scale" , VT_REAL );
+  add_var( "DFA" , "CH,E" , "R2" , "R-squared of the summary log-log fit" , VT_REAL );
 
   //
   // PSD
@@ -5398,104 +5414,104 @@ void cmddefs_t::init()
     
   
   add_table( "PSD" , "CH" , "Channel-level output" );
-  add_var( "PSD" , "CH" , "NE" , "Number of epochs" );
-  add_var( "PSD" , "CH" , "KURT" , "Peak (PSD kurtosis)" );
-  add_var( "PSD" , "CH" , "SPK" , "Sum PSD peakedness" );
-  add_var( "PSD" , "CH" , "SPEC_SLOPE" , "Spectral slope" );
-  add_var( "PSD" , "CH" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
-  add_var( "PSD" , "CH" , "SPEC_SLOPE_MD" , "Spectral slope (median)" );
-  add_var( "PSD" , "CH" , "SPEC_SLOPE_MN" , "Spectral slope (mean over epochs)" );
-  add_var( "PSD" , "CH" , "SPEC_SLOPE_SD" , "Spectral slope (SD over epochs)" );
+  add_var( "PSD" , "CH" , "NE" , "Number of epochs" , VT_INTEGER );
+  add_var( "PSD" , "CH" , "KURT" , "Peak (PSD kurtosis)" , VT_REAL );
+  add_var( "PSD" , "CH" , "SPK" , "Sum PSD peakedness" , VT_REAL );
+  add_var( "PSD" , "CH" , "SPEC_SLOPE" , "Spectral slope" , VT_REAL );
+  add_var( "PSD" , "CH" , "SPEC_SLOPE_N" , "Spectral slope number of points" , VT_INTEGER );
+  add_var( "PSD" , "CH" , "SPEC_SLOPE_MD" , "Spectral slope (median)" , VT_REAL );
+  add_var( "PSD" , "CH" , "SPEC_SLOPE_MN" , "Spectral slope (mean over epochs)" , VT_REAL );
+  add_var( "PSD" , "CH" , "SPEC_SLOPE_SD" , "Spectral slope (SD over epochs)" , VT_REAL );
 
   add_table( "PSD" , "CH,B" , "Whole-night, per-channel band power" );
-  add_var( "PSD" , "CH,B" , "PSD" , "Power" );
-  add_var( "PSD" , "CH,B" , "RELPSD" , "Relative power" );
-  add_var( "PSD" , "CH,B" , "KURT" , "Kurtosis" );
+  add_var( "PSD" , "CH,B" , "PSD" , "Power" , VT_REAL );
+  add_var( "PSD" , "CH,B" , "RELPSD" , "Relative power" , VT_REAL );
+  add_var( "PSD" , "CH,B" , "KURT" , "Kurtosis" , VT_REAL );
 
   add_table( "PSD" , "CH,B1,B2" , "Whole-night, per-channel band power ratios" );
-  add_var( "PSD" , "CH,B1,B2" , "RATIO" , "Band power ratios" );
+  add_var( "PSD" , "CH,B1,B2" , "RATIO" , "Band power ratios" , VT_REAL );
   
   add_table( "PSD" , "CH,F" , "Whole-night, per-channel power" );
-  add_var( "PSD" , "CH,F" , "PSD" , "Power (mean over epochs)" );
-  add_var( "PSD" , "CH,F" , "PSD_MD" , "Power (median over epochs)" );
-  add_var( "PSD" , "CH,F" , "PSD_SD" , "Power (SD over epochs)" );
-  add_var( "PSD" , "CH,F" , "PSD_CV" , "Power (CV over epochs)" );
-  add_var( "PSD" , "CH,F" , "SEGCV_MN" , "Segment CV (mean)" );
-  add_var( "PSD" , "CH,F" , "SEGCV_MD" , "Segment CV (median)" );
-  add_var( "PSD" , "CH,F" , "SEGCV_SD" , "Segment CV (SD)" );
+  add_var( "PSD" , "CH,F" , "PSD" , "Power (mean over epochs)" , VT_REAL );
+  add_var( "PSD" , "CH,F" , "PSD_MD" , "Power (median over epochs)" , VT_REAL );
+  add_var( "PSD" , "CH,F" , "PSD_SD" , "Power (SD over epochs)" , VT_REAL );
+  add_var( "PSD" , "CH,F" , "PSD_CV" , "Power (CV over epochs)" , VT_REAL );
+  add_var( "PSD" , "CH,F" , "SEGCV_MN" , "Segment CV (mean)" , VT_REAL );
+  add_var( "PSD" , "CH,F" , "SEGCV_MD" , "Segment CV (median)" , VT_REAL );
+  add_var( "PSD" , "CH,F" , "SEGCV_SD" , "Segment CV (SD)" , VT_REAL );
 
   add_table( "PSD" , "CH,B,E" , "Whole-night, per-channel per-epoch band power" );
-  add_var( "PSD" , "CH,B,E" , "PSD" , "Power" );
-  add_var( "PSD" , "CH,B,E" , "RELPSD" , "Relative power" );
+  add_var( "PSD" , "CH,B,E" , "PSD" , "Power" , VT_REAL );
+  add_var( "PSD" , "CH,B,E" , "RELPSD" , "Relative power" , VT_REAL );
 
   add_table( "PSD" , "CH,F,E" , "Whole-night, per-channel per-epoch power" );
-  add_var( "PSD" , "CH,F,E" , "PSD" , "Power" );
-  add_var( "PSD" , "CH,F,E" , "CV" , "CV" );
+  add_var( "PSD" , "CH,F,E" , "PSD" , "Power" , VT_REAL );
+  add_var( "PSD" , "CH,F,E" , "CV" , "CV" , VT_REAL );
   set_compressed( "PSD" , tfac_t( "CH,F,E" ) );
 
   add_table( "PSD" , "CH,E", "Epoch/channel level stats" );
-  add_var( "PSD" , "CH,E" , "KURT" , "Peak (PSD kurtosis)" );
-  add_var( "PSD" , "CH,E" , "SPK" , "Sum PSD peakedness" );
-  add_var( "PSD" , "CH,E" , "SPEC_SLOPE" , "Spectral slope" );
-  add_var( "PSD" , "CH,E" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
+  add_var( "PSD" , "CH,E" , "KURT" , "Peak (PSD kurtosis)" , VT_REAL );
+  add_var( "PSD" , "CH,E" , "SPK" , "Sum PSD peakedness" , VT_REAL );
+  add_var( "PSD" , "CH,E" , "SPEC_SLOPE" , "Spectral slope" , VT_REAL );
+  add_var( "PSD" , "CH,E" , "SPEC_SLOPE_N" , "Spectral slope number of points" , VT_INTEGER );
 
   for (const std::string & table : { std::string("CH"), std::string("CH,E") })
     {
-      add_var("PSD",table,"APER_VALID","Aperiodic fit valid (0/1)");
-      add_var("PSD",table,"APER_FALLBACK","Used initial robust fit after peak-rejection fit failed (0/1)");
-      add_var("PSD",table,"APER_OFFSET","Aperiodic log10 power density at the pivot frequency (aperiodic-pivot, default 1 Hz)");
-      add_var("PSD",table,"APER_EXP","Aperiodic exponent: PSD = 10^offset * (frequency/pivot)^(-exponent)");
-      add_var("PSD",table,"APER_RSQ","Aperiodic log-log R-squared on retained bins");
-      add_var("PSD",table,"APER_NTOTAL","Positive finite bins within the outer fitting envelope");
-      add_var("PSD",table,"APER_NINPUT","Eligible fitting bins before rejection");
-      add_var("PSD",table,"APER_NEXCLUDED","Positive finite envelope bins excluded by gaps");
-      add_var("PSD",table,"APER_NREJECT","Eligible bins rejected in the returned fit");
-      add_var("PSD",table,"APER_N","Number of retained positive frequency bins");
+      add_var("PSD",table,"APER_VALID","Aperiodic fit valid (0/1)" , VT_BOOLEAN);
+      add_var("PSD",table,"APER_FALLBACK","Used initial robust fit after peak-rejection fit failed (0/1)" , VT_BOOLEAN);
+      add_var("PSD",table,"APER_OFFSET","Aperiodic log10 power density at the pivot frequency (aperiodic-pivot, default 1 Hz)" , VT_REAL);
+      add_var("PSD",table,"APER_EXP","Aperiodic exponent: PSD = 10^offset * (frequency/pivot)^(-exponent)" , VT_REAL);
+      add_var("PSD",table,"APER_RSQ","Aperiodic log-log R-squared on retained bins" , VT_REAL);
+      add_var("PSD",table,"APER_NTOTAL","Positive finite bins within the outer fitting envelope" , VT_INTEGER);
+      add_var("PSD",table,"APER_NINPUT","Eligible fitting bins before rejection" , VT_INTEGER);
+      add_var("PSD",table,"APER_NEXCLUDED","Positive finite envelope bins excluded by gaps" , VT_INTEGER);
+      add_var("PSD",table,"APER_NREJECT","Eligible bins rejected in the returned fit" , VT_INTEGER);
+      add_var("PSD",table,"APER_N","Number of retained positive frequency bins" , VT_INTEGER);
     }
-  add_var("PSD","CH","APER_NWIN","Number of analyzed aperiodic windows");
-  add_var("PSD","CH","APER_NFAIL","Windows without usable aperiodic estimates after robust-fit fallback");
-  add_var("PSD","CH","APER_NFALLBACK","Windows rescued by the initial robust fit");
-  add_var("PSD","CH","APER_NFLAT","Failed windows with constant input samples");
-  add_var("PSD","CH","APER_MAXGAP","Longest consecutive run of failed windows");
-  add_var("PSD","CH","APER_NFILL","Failed windows filled in added component channels (excludes edge padding)");
+  add_var("PSD","CH","APER_NWIN","Number of analyzed aperiodic windows" , VT_INTEGER);
+  add_var("PSD","CH","APER_NFAIL","Windows without usable aperiodic estimates after robust-fit fallback" , VT_INTEGER);
+  add_var("PSD","CH","APER_NFALLBACK","Windows rescued by the initial robust fit" , VT_INTEGER);
+  add_var("PSD","CH","APER_NFLAT","Failed windows with constant input samples" , VT_INTEGER);
+  add_var("PSD","CH","APER_MAXGAP","Longest consecutive run of failed windows" , VT_INTEGER);
+  add_var("PSD","CH","APER_NFILL","Failed windows filled in added component channels (excludes edge padding)" , VT_INTEGER);
   for (const std::string & table : { std::string("CH,B"), std::string("CH,B,E"),
                                    std::string("CH,F"), std::string("CH,F,E") })
     {
-      add_var("PSD",table,"APER","Fitted aperiodic power (dB with dB)");
-      add_var("PSD",table,"APER_PSD","Original power used for decomposition (dB with dB); summary uses mean linear PSD");
-      add_var("PSD",table,"PER","Signed residual PSD minus APER, always linear");
-      add_var("PSD",table,"PER_DB","Residual power in dB, only for positive residuals with dB");
-      add_var("PSD",table,"PER_EXCESS_DB","10log10(original power / APER), always dB");
+      add_var("PSD",table,"APER","Fitted aperiodic power (dB with dB)" , VT_REAL);
+      add_var("PSD",table,"APER_PSD","Original power used for decomposition (dB with dB); summary uses mean linear PSD" , VT_REAL);
+      add_var("PSD",table,"PER","Signed residual PSD minus APER, always linear" , VT_REAL);
+      add_var("PSD",table,"PER_DB","Residual power in dB, only for positive residuals with dB" , VT_REAL);
+      add_var("PSD",table,"PER_EXCESS_DB","10log10(original power / APER), always dB" , VT_REAL);
     }
   
   // dynamics
   add_table( "PSD", "CH,F,VAR,QD" , "PSD spectra dynamics" );
-  add_var( "PSD" , "CH,F,VAR,QD" , "A_P2P" , "Peak-to-peak amplitude of the dynamics profile" );
-  add_var( "PSD" , "CH,F,VAR,QD" , "T_P2P" , "Epoch distance from trough to peak in the dynamics profile" );
-  add_var( "PSD" , "CH,F,VAR,QD" , "U" , "Linear trend correlation with epoch order" );
-  add_var( "PSD" , "CH,F,VAR,QD" , "U2" , "Quadratic trend coefficient with epoch order" );
-  add_var( "PSD" , "CH,F,VAR,QD" , "MEAN" , "Mean of the normalized smoothed dynamics profile" );
-  add_var( "PSD" , "CH,F,VAR,QD" , "OMEAN" , "Mean of the original smoothed dynamics profile" );
-  add_var( "PSD" , "CH,F,VAR,QD" , "SD" , "Standard deviation of the dynamics profile" );
-  add_var( "PSD" , "CH,F,VAR,QD" , "N" , "Number of epochs or sections contributing to the profile" );
+  add_var( "PSD" , "CH,F,VAR,QD" , "A_P2P" , "Peak-to-peak amplitude of the dynamics profile" , VT_REAL );
+  add_var( "PSD" , "CH,F,VAR,QD" , "T_P2P" , "Epoch distance from trough to peak in the dynamics profile" , VT_REAL );
+  add_var( "PSD" , "CH,F,VAR,QD" , "U" , "Linear trend correlation with epoch order" , VT_REAL );
+  add_var( "PSD" , "CH,F,VAR,QD" , "U2" , "Quadratic trend coefficient with epoch order" , VT_REAL );
+  add_var( "PSD" , "CH,F,VAR,QD" , "MEAN" , "Mean of the normalized smoothed dynamics profile" , VT_REAL );
+  add_var( "PSD" , "CH,F,VAR,QD" , "OMEAN" , "Mean of the original smoothed dynamics profile" , VT_REAL );
+  add_var( "PSD" , "CH,F,VAR,QD" , "SD" , "Standard deviation of the dynamics profile" , VT_REAL );
+  add_var( "PSD" , "CH,F,VAR,QD" , "N" , "Number of epochs or sections contributing to the profile" , VT_INTEGER );
 
   add_table( "PSD", "CH,B,VAR,QD" , "PSD band dynamics" );
-  add_var( "PSD" , "CH,B,VAR,QD" , "A_P2P" , "Peak-to-peak amplitude of the band dynamics profile" );
-  add_var( "PSD" , "CH,B,VAR,QD" , "T_P2P" , "Epoch distance from trough to peak in band dynamics" );
-  add_var( "PSD" , "CH,B,VAR,QD" , "U" , "Linear trend correlation with epoch order" );
-  add_var( "PSD" , "CH,B,VAR,QD" , "U2" , "Quadratic trend coefficient with epoch order" );
-  add_var( "PSD" , "CH,B,VAR,QD" , "MEAN" , "Mean of the normalized smoothed band-dynamics profile" );
-  add_var( "PSD" , "CH,B,VAR,QD" , "OMEAN" , "Mean of the original smoothed band-dynamics profile" );
-  add_var( "PSD" , "CH,B,VAR,QD" , "SD" , "Standard deviation of the band-dynamics profile" );
-  add_var( "PSD" , "CH,B,VAR,QD" , "N" , "Number of epochs or sections contributing to the profile" );
+  add_var( "PSD" , "CH,B,VAR,QD" , "A_P2P" , "Peak-to-peak amplitude of the band dynamics profile" , VT_REAL );
+  add_var( "PSD" , "CH,B,VAR,QD" , "T_P2P" , "Epoch distance from trough to peak in band dynamics" , VT_REAL );
+  add_var( "PSD" , "CH,B,VAR,QD" , "U" , "Linear trend correlation with epoch order" , VT_REAL );
+  add_var( "PSD" , "CH,B,VAR,QD" , "U2" , "Quadratic trend coefficient with epoch order" , VT_REAL );
+  add_var( "PSD" , "CH,B,VAR,QD" , "MEAN" , "Mean of the normalized smoothed band-dynamics profile" , VT_REAL );
+  add_var( "PSD" , "CH,B,VAR,QD" , "OMEAN" , "Mean of the original smoothed band-dynamics profile" , VT_REAL );
+  add_var( "PSD" , "CH,B,VAR,QD" , "SD" , "Standard deviation of the band-dynamics profile" , VT_REAL );
+  add_var( "PSD" , "CH,B,VAR,QD" , "N" , "Number of epochs or sections contributing to the profile" , VT_INTEGER );
 
   add_table( "PSD", "CH,F,VAR,QD,Q" , "PSD spectra dynamics quantiles" );
-  add_var( "PSD" , "CH,F,VAR,QD,Q" , "OS" , "Original smoothed dynamics value at this quantile" );
-  add_var( "PSD" , "CH,F,VAR,QD,Q" , "SS" , "Normalized smoothed dynamics value at this quantile" );
+  add_var( "PSD" , "CH,F,VAR,QD,Q" , "OS" , "Original smoothed dynamics value at this quantile" , VT_REAL );
+  add_var( "PSD" , "CH,F,VAR,QD,Q" , "SS" , "Normalized smoothed dynamics value at this quantile" , VT_REAL );
 
   add_table( "PSD", "CH,B,VAR,QD,Q" , "PSD band dynamics quantiles" );
-  add_var( "PSD" , "CH,B,VAR,QD,Q" , "OS" , "Original smoothed band-dynamics value at this quantile" );
-  add_var( "PSD" , "CH,B,VAR,QD,Q" , "SS" , "Normalized smoothed band-dynamics value at this quantile" );
+  add_var( "PSD" , "CH,B,VAR,QD,Q" , "OS" , "Original smoothed band-dynamics value at this quantile" , VT_REAL );
+  add_var( "PSD" , "CH,B,VAR,QD,Q" , "SS" , "Normalized smoothed band-dynamics value at this quantile" , VT_REAL );
 
   //
   // PCOUPL
@@ -5524,20 +5540,20 @@ void cmddefs_t::init()
   add_param( "PCOUPL" , "fixed-epoch-dur" , "20" , "If using generic epochs, set a fixed epoch size for permutation" );
   
   add_table( "PCOUPL" , "ANNOT,CH" , "Phase coupling statistics" );
-  add_var( "PCOUPL" , "ANNOT,CH" , "ANGLE" , "Mean phase angle (degrees)" );
-  add_var( "PCOUPL" , "ANNOT,CH" , "MAG", "Coupling magnitude (observed statistic)" );
-  add_var( "PCOUPL" , "ANNOT,CH" , "MAG_Z", "Permutation-based Z-score for coupling magnitude" );
-  add_var( "PCOUPL" , "ANNOT,CH" , "MAG_NULL", "Mean coupling statistic under the null" );
-  add_var( "PCOUPL" , "ANNOT,CH" , "MAG_EMP", "Empirical p-value" );
-  add_var( "PCOUPL" , "ANNOT,CH" , "PV", "Asymptotic p-value" );
-  add_var( "PCOUPL" , "ANNOT,CH" , "SIGPV_NULL", "Proportion of asymptotic p<0.05 under the null" );
-  add_var( "PCOUPL" , "ANNOT,CH" , "N" , "Number of events" );
+  add_var( "PCOUPL" , "ANNOT,CH" , "ANGLE" , "Mean phase angle (degrees)" , VT_REAL );
+  add_var( "PCOUPL" , "ANNOT,CH" , "MAG", "Coupling magnitude (observed statistic)" , VT_REAL );
+  add_var( "PCOUPL" , "ANNOT,CH" , "MAG_Z", "Permutation-based Z-score for coupling magnitude" , VT_REAL );
+  add_var( "PCOUPL" , "ANNOT,CH" , "MAG_NULL", "Mean coupling statistic under the null" , VT_REAL );
+  add_var( "PCOUPL" , "ANNOT,CH" , "MAG_EMP", "Empirical p-value" , VT_REAL );
+  add_var( "PCOUPL" , "ANNOT,CH" , "PV", "Asymptotic p-value" , VT_REAL );
+  add_var( "PCOUPL" , "ANNOT,CH" , "SIGPV_NULL", "Proportion of asymptotic p<0.05 under the null" , VT_REAL );
+  add_var( "PCOUPL" , "ANNOT,CH" , "N" , "Number of events" , VT_INTEGER );
 
   add_table( "PCOUPL" , "ANNOT,CH,PHASE" , "Phase-bin overlap statistics" );
-  add_var( "PCOUPL" , "ANNOT,CH,PHASE" , "OVERLAP", "Observed count of event anchors per signal phase bin" );
-  add_var( "PCOUPL" , "ANNOT,CH,PHASE" , "OVERLAP_EXP", "Expected count based on permutations" );
-  add_var( "PCOUPL" , "ANNOT,CH,PHASE" , "OVERLAP_EMP", "Empirical p-value based on permutations" );
-  add_var( "PCOUPL" , "ANNOT,CH,PHASE" , "OVERLAP_Z", "Z-score based on permutations" );
+  add_var( "PCOUPL" , "ANNOT,CH,PHASE" , "OVERLAP", "Observed count of event anchors per signal phase bin" , VT_INTEGER );
+  add_var( "PCOUPL" , "ANNOT,CH,PHASE" , "OVERLAP_EXP", "Expected count based on permutations" , VT_REAL );
+  add_var( "PCOUPL" , "ANNOT,CH,PHASE" , "OVERLAP_EMP", "Empirical p-value based on permutations" , VT_REAL );
+  add_var( "PCOUPL" , "ANNOT,CH,PHASE" , "OVERLAP_Z", "Z-score based on permutations" , VT_REAL );
 
   //
   // ASYMM
@@ -5561,101 +5577,101 @@ void cmddefs_t::init()
   add_param( "ASYMM" , "trans" , "" , "Transition-centric output" );
   
   add_table( "ASYMM" , "B,CHS" , "Band-based primary asymmetry stats" );
-  add_var( "ASYMM", "B,CHS" , "L_SLEEP" , "Left power during sleep" );
-  add_var( "ASYMM", "B,CHS" , "R_SLEEP" , "Right power during sleep" );
-  add_var( "ASYMM", "B,CHS" , "LR_SLEEP" , "log2(L/R) during sleep" );
-  add_var( "ASYMM", "B,CHS" , "LR_WAKE" , "log2(L/R) during wake" );
-  add_var( "ASYMM", "B,CHS" , "LR_NREM" , "log2(L/R) during NREM" );
-  add_var( "ASYMM", "B,CHS" , "LR_REM" , "log2(L/R) during REM" );
-  add_var( "ASYMM", "B,CHS" , "Z_REM" , "NREM-normalized REM log2(L/R)");
-  add_var( "ASYMM", "B,CHS" , "LOGP" , "NREM-normalized REM log2(L/R) -log10(p)");
-  add_var( "ASYMM", "B,CHS" , "ABS_Z_REM" , "Absolute NREM-normalized REM log2(L/R)");
-  add_var( "ASYMM", "B,CHS" , "ABS_LOGP" , "Absolute NREM-normalized REM log2(L/R) -log10(p)");
-  add_var( "ASYMM", "B,CHS" , "NC" , "Number of included NREM cycles" );
-  add_var( "ASYMM", "B,CHS" , "TR_NR2R_N" , "Number of NR-to-R transitions" );
-  add_var( "ASYMM", "B,CHS" , "TR_R2NR_N" , "Number of R-to-NR transitions" );
+  add_var( "ASYMM", "B,CHS" , "L_SLEEP" , "Left power during sleep" , VT_REAL );
+  add_var( "ASYMM", "B,CHS" , "R_SLEEP" , "Right power during sleep" , VT_REAL );
+  add_var( "ASYMM", "B,CHS" , "LR_SLEEP" , "log2(L/R) during sleep" , VT_REAL );
+  add_var( "ASYMM", "B,CHS" , "LR_WAKE" , "log2(L/R) during wake" , VT_REAL );
+  add_var( "ASYMM", "B,CHS" , "LR_NREM" , "log2(L/R) during NREM" , VT_REAL );
+  add_var( "ASYMM", "B,CHS" , "LR_REM" , "log2(L/R) during REM" , VT_REAL );
+  add_var( "ASYMM", "B,CHS" , "Z_REM" , "NREM-normalized REM log2(L/R)" , VT_REAL);
+  add_var( "ASYMM", "B,CHS" , "LOGP" , "NREM-normalized REM log2(L/R) -log10(p)" , VT_REAL);
+  add_var( "ASYMM", "B,CHS" , "ABS_Z_REM" , "Absolute NREM-normalized REM log2(L/R)" , VT_REAL);
+  add_var( "ASYMM", "B,CHS" , "ABS_LOGP" , "Absolute NREM-normalized REM log2(L/R) -log10(p)" , VT_REAL);
+  add_var( "ASYMM", "B,CHS" , "NC" , "Number of included NREM cycles" , VT_INTEGER );
+  add_var( "ASYMM", "B,CHS" , "TR_NR2R_N" , "Number of NR-to-R transitions" , VT_INTEGER );
+  add_var( "ASYMM", "B,CHS" , "TR_R2NR_N" , "Number of R-to-NR transitions" , VT_INTEGER );
 
   add_table( "ASYMM" , "F,CHS" , "Frequency-bin-based primary asymmetry stats" );
-  add_var( "ASYMM", "F,CHS" , "L_SLEEP" , "Left power during sleep" );
-  add_var( "ASYMM", "F,CHS" , "R_SLEEP" , "Right power during sleep" );
-  add_var( "ASYMM", "F,CHS" , "LR_SLEEP" , "log2(L/R) during sleep" );
-  add_var( "ASYMM", "F,CHS" , "LR_WAKE" , "log2(L/R) during wake" );
-  add_var( "ASYMM", "F,CHS" , "LR_NREM" , "log2(L/R) during NREM" );
-  add_var( "ASYMM", "F,CHS" , "LR_REM" , "log2(L/R) during REM" );
-  add_var( "ASYMM", "F,CHS" , "Z_REM" , "NREM-normalized REM log2(L/R)");
-  add_var( "ASYMM", "F,CHS" , "LOGP" , "NREM-normalized REM log2(L/R) -log10(p)");
-  add_var( "ASYMM", "F,CHS" , "ABS_Z_REM" , "Absolute NREM-normalized REM log2(L/R)");
-  add_var( "ASYMM", "F,CHS" , "ABS_LOGP" , "Absolute NREM-normalized REM log2(L/R) -log10(p)");
-  add_var( "ASYMM", "F,CHS" , "NC" , "Number of included NREM cycles" );
-  add_var( "ASYMM", "F,CHS" , "TR_NR2R_N" , "Number of NR-to-R transitions" );
-  add_var( "ASYMM", "F,CHS" , "TR_R2NR_N" , "Number of R-to-NR transitions" );
+  add_var( "ASYMM", "F,CHS" , "L_SLEEP" , "Left power during sleep" , VT_REAL );
+  add_var( "ASYMM", "F,CHS" , "R_SLEEP" , "Right power during sleep" , VT_REAL );
+  add_var( "ASYMM", "F,CHS" , "LR_SLEEP" , "log2(L/R) during sleep" , VT_REAL );
+  add_var( "ASYMM", "F,CHS" , "LR_WAKE" , "log2(L/R) during wake" , VT_REAL );
+  add_var( "ASYMM", "F,CHS" , "LR_NREM" , "log2(L/R) during NREM" , VT_REAL );
+  add_var( "ASYMM", "F,CHS" , "LR_REM" , "log2(L/R) during REM" , VT_REAL );
+  add_var( "ASYMM", "F,CHS" , "Z_REM" , "NREM-normalized REM log2(L/R)" , VT_REAL);
+  add_var( "ASYMM", "F,CHS" , "LOGP" , "NREM-normalized REM log2(L/R) -log10(p)" , VT_REAL);
+  add_var( "ASYMM", "F,CHS" , "ABS_Z_REM" , "Absolute NREM-normalized REM log2(L/R)" , VT_REAL);
+  add_var( "ASYMM", "F,CHS" , "ABS_LOGP" , "Absolute NREM-normalized REM log2(L/R) -log10(p)" , VT_REAL);
+  add_var( "ASYMM", "F,CHS" , "NC" , "Number of included NREM cycles" , VT_INTEGER );
+  add_var( "ASYMM", "F,CHS" , "TR_NR2R_N" , "Number of NR-to-R transitions" , VT_INTEGER );
+  add_var( "ASYMM", "F,CHS" , "TR_R2NR_N" , "Number of R-to-NR transitions" , VT_INTEGER );
 
   add_table( "ASYMM" , "E,B,CHS" , "Epoch-level frequency-band output" );
-  add_var( "ASYMM", "E,B,CHS" , "C" , "NREM cycle number" );
-  add_var( "ASYMM", "E,B,CHS" , "INC" , "Included in analysis, 1=Y");
-  add_var( "ASYMM", "E,B,CHS" , "CONSIDER" , "Considered this epoch" );
-  add_var( "ASYMM", "E,B,CHS" , "L" , "Left power" );
-  add_var( "ASYMM", "E,B,CHS" , "R" , "Right power" );
-  add_var( "ASYMM", "E,B,CHS" , "LR" , "log2(L/R)" );
-  add_var( "ASYMM", "E,B,CHS" , "OUT" , "Flagged as outlier, 1=Y" );
-  add_var( "ASYMM", "E,B,CHS" , "SS" , "Sleep stage (W/R/NR)" );
+  add_var( "ASYMM", "E,B,CHS" , "C" , "NREM cycle number" , VT_INTEGER );
+  add_var( "ASYMM", "E,B,CHS" , "INC" , "Included in analysis, 1=Y" , VT_TEXT);  // TYPE? emits text REM_Cn/NREM_Cn/. although description says 1=Y
+  add_var( "ASYMM", "E,B,CHS" , "CONSIDER" , "Considered this epoch" , VT_TEXT );
+  add_var( "ASYMM", "E,B,CHS" , "L" , "Left power" , VT_REAL );
+  add_var( "ASYMM", "E,B,CHS" , "R" , "Right power" , VT_REAL );
+  add_var( "ASYMM", "E,B,CHS" , "LR" , "log2(L/R)" , VT_REAL );
+  add_var( "ASYMM", "E,B,CHS" , "OUT" , "Flagged as outlier, 1=Y" , VT_BOOLEAN );
+  add_var( "ASYMM", "E,B,CHS" , "SS" , "Sleep stage (W/R/NR)" , VT_TEXT );
 
   add_table( "ASYMM" , "E,F,CHS" , "Epoch-level frequency-bin output" );
-  add_var( "ASYMM", "E,F,CHS" , "C" , "NREM cycle number" );
-  add_var( "ASYMM", "E,F,CHS" , "INC" , "Included in analysis, 1=Y");
-  add_var( "ASYMM", "E,F,CHS" , "CONSIDER" , "Considered this epoch" );
-  add_var( "ASYMM", "E,F,CHS" , "L" , "Left power" );
-  add_var( "ASYMM", "E,F,CHS" , "R" , "Right power" );
-  add_var( "ASYMM", "E,F,CHS" , "LR" , "log2(L/R)" );
-  add_var( "ASYMM", "E,F,CHS" , "OUT" , "Flagged as outlier, 1=Y" );
-  add_var( "ASYMM", "E,F,CHS" , "SS" , "Sleep stage (W/R/NR)" );
+  add_var( "ASYMM", "E,F,CHS" , "C" , "NREM cycle number" , VT_INTEGER );
+  add_var( "ASYMM", "E,F,CHS" , "INC" , "Included in analysis, 1=Y" , VT_TEXT);  // TYPE? emits text REM_Cn/NREM_Cn/. although description says 1=Y
+  add_var( "ASYMM", "E,F,CHS" , "CONSIDER" , "Considered this epoch" , VT_TEXT );
+  add_var( "ASYMM", "E,F,CHS" , "L" , "Left power" , VT_REAL );
+  add_var( "ASYMM", "E,F,CHS" , "R" , "Right power" , VT_REAL );
+  add_var( "ASYMM", "E,F,CHS" , "LR" , "log2(L/R)" , VT_REAL );
+  add_var( "ASYMM", "E,F,CHS" , "OUT" , "Flagged as outlier, 1=Y" , VT_BOOLEAN );
+  add_var( "ASYMM", "E,F,CHS" , "SS" , "Sleep stage (W/R/NR)" , VT_TEXT );
 
   add_table( "ASYMM" , "C,B,CHS" , "Cycle-level frequency-band output" );
-  add_var( "ASYMM", "C,B,CHS" , "LR_REM" , "log2(L/R) in REM" );
-  add_var( "ASYMM", "C,B,CHS" , "LR_NREM" , "log2(L/R) in NREM" );
-  add_var( "ASYMM", "C,B,CHS" , "LR_LEADING_NREM" , "log2(L/R) in leading NREM" );
-  add_var( "ASYMM", "C,B,CHS" , "LR_TRAILING_NREM" , "log2(L/R) in trailing NREM" );
-  add_var( "ASYMM", "C,B,CHS" , "Z_REM" , "Normalized REM log2(L/R)" );
-  add_var( "ASYMM", "C,B,CHS" , "P" , "REM-vs-NREM p-value" );
-  add_var( "ASYMM", "C,B,CHS" , "P_NREM" , "Leading-vs-trailing NREM p-value" );
-  add_var( "ASYMM", "C,B,CHS" , "LOGP" , "REM-vs-NREM p-value, log-scaled" );
-  add_var( "ASYMM", "C,B,CHS" , "LOGP_NREM" , "Leading-vs-trailing NREM p-value, log-scaled" );
-  add_var( "ASYMM", "C,B,CHS" , "N_NREM" , "Number of NREM epochs" );
-  add_var( "ASYMM", "C,B,CHS" , "N_REM" , "Number of REM epochs" );
-  add_var( "ASYMM", "C,B,CHS" , "INC" , "Includede this cycle" );
+  add_var( "ASYMM", "C,B,CHS" , "LR_REM" , "log2(L/R) in REM" , VT_REAL );
+  add_var( "ASYMM", "C,B,CHS" , "LR_NREM" , "log2(L/R) in NREM" , VT_REAL );
+  add_var( "ASYMM", "C,B,CHS" , "LR_LEADING_NREM" , "log2(L/R) in leading NREM" , VT_REAL );
+  add_var( "ASYMM", "C,B,CHS" , "LR_TRAILING_NREM" , "log2(L/R) in trailing NREM" , VT_REAL );
+  add_var( "ASYMM", "C,B,CHS" , "Z_REM" , "Normalized REM log2(L/R)" , VT_REAL );
+  add_var( "ASYMM", "C,B,CHS" , "P" , "REM-vs-NREM p-value" , VT_REAL );
+  add_var( "ASYMM", "C,B,CHS" , "P_NREM" , "Leading-vs-trailing NREM p-value" , VT_REAL );
+  add_var( "ASYMM", "C,B,CHS" , "LOGP" , "REM-vs-NREM p-value, log-scaled" , VT_REAL );
+  add_var( "ASYMM", "C,B,CHS" , "LOGP_NREM" , "Leading-vs-trailing NREM p-value, log-scaled" , VT_REAL );
+  add_var( "ASYMM", "C,B,CHS" , "N_NREM" , "Number of NREM epochs" , VT_INTEGER );
+  add_var( "ASYMM", "C,B,CHS" , "N_REM" , "Number of REM epochs" , VT_INTEGER );
+  add_var( "ASYMM", "C,B,CHS" , "INC" , "Includede this cycle" , VT_BOOLEAN );
   
   add_table( "ASYMM" , "C,F,CHS" , "Cycle-level frequency-bin output" );
-  add_var( "ASYMM", "C,F,CHS" , "LR_REM" , "log2(L/R) in REM" );
-  add_var( "ASYMM", "C,F,CHS" , "LR_NREM" , "log2(L/R) in NREM" );
-  add_var( "ASYMM", "C,F,CHS" , "LR_LEADING_NREM" , "log2(L/R) in leading NREM" );
-  add_var( "ASYMM", "C,F,CHS" , "LR_TRAILING_NREM" , "log2(L/R) in trailing NREM" );
-  add_var( "ASYMM", "C,F,CHS" , "Z_REM" , "Normalized REM log2(L/R)" );
-  add_var( "ASYMM", "C,F,CHS" , "P" , "REM-vs-NREM p-value" );
-  add_var( "ASYMM", "C,F,CHS" , "P_NREM" , "Leading-vs-trailing NREM p-value" );
-  add_var( "ASYMM", "C,F,CHS" , "LOGP" , "REM-vs-NREM p-value, log-scaled" );
-  add_var( "ASYMM", "C,F,CHS" , "LOGP_NREM" , "Leading-vs-trailing NREM p-value, log-scaled" );
-  add_var( "ASYMM", "C,F,CHS" , "N_NREM" , "Number of NREM epochs" );
-  add_var( "ASYMM", "C,F,CHS" , "N_REM" , "Number of REM epochs" );
-  add_var( "ASYMM", "C,F,CHS" , "INC" , "Includede this cycle" );
+  add_var( "ASYMM", "C,F,CHS" , "LR_REM" , "log2(L/R) in REM" , VT_REAL );
+  add_var( "ASYMM", "C,F,CHS" , "LR_NREM" , "log2(L/R) in NREM" , VT_REAL );
+  add_var( "ASYMM", "C,F,CHS" , "LR_LEADING_NREM" , "log2(L/R) in leading NREM" , VT_REAL );
+  add_var( "ASYMM", "C,F,CHS" , "LR_TRAILING_NREM" , "log2(L/R) in trailing NREM" , VT_REAL );
+  add_var( "ASYMM", "C,F,CHS" , "Z_REM" , "Normalized REM log2(L/R)" , VT_REAL );
+  add_var( "ASYMM", "C,F,CHS" , "P" , "REM-vs-NREM p-value" , VT_REAL );
+  add_var( "ASYMM", "C,F,CHS" , "P_NREM" , "Leading-vs-trailing NREM p-value" , VT_REAL );
+  add_var( "ASYMM", "C,F,CHS" , "LOGP" , "REM-vs-NREM p-value, log-scaled" , VT_REAL );
+  add_var( "ASYMM", "C,F,CHS" , "LOGP_NREM" , "Leading-vs-trailing NREM p-value, log-scaled" , VT_REAL );
+  add_var( "ASYMM", "C,F,CHS" , "N_NREM" , "Number of NREM epochs" , VT_INTEGER );
+  add_var( "ASYMM", "C,F,CHS" , "N_REM" , "Number of REM epochs" , VT_INTEGER );
+  add_var( "ASYMM", "C,F,CHS" , "INC" , "Includede this cycle" , VT_BOOLEAN );
 
   add_table( "ASYMM" , "B,CHS,TR" , "Transition-based frequency-bin output" );
-  add_var( "ASYMM", "B,CHS,TR" , "NR2R" , "NREM-to-REM transition means" );
-  add_var( "ASYMM", "B,CHS,TR" , "R2NR" , "REM-to-NREM transition means" );
-  add_var( "ASYMM", "B,CHS,TR" , "NR2R_Z" , "NREM-to-REM transition means, Z-score" );
-  add_var( "ASYMM", "B,CHS,TR" , "R2NR_Z" , "REM-to-NREM transition means, Z-score" );
+  add_var( "ASYMM", "B,CHS,TR" , "NR2R" , "NREM-to-REM transition means" , VT_REAL );
+  add_var( "ASYMM", "B,CHS,TR" , "R2NR" , "REM-to-NREM transition means" , VT_REAL );
+  add_var( "ASYMM", "B,CHS,TR" , "NR2R_Z" , "NREM-to-REM transition means, Z-score" , VT_REAL );
+  add_var( "ASYMM", "B,CHS,TR" , "R2NR_Z" , "REM-to-NREM transition means, Z-score" , VT_REAL );
   
   add_table( "ASYMM" , "F,CHS,TR" , "Transition-based frequency-bin output" );
-  add_var( "ASYMM", "F,CHS,TR" , "NR2R" , "NREM-to-REM transition means" );
-  add_var( "ASYMM", "F,CHS,TR" , "R2NR" , "REM-to-NREM transition means" );
-  add_var( "ASYMM", "F,CHS,TR" , "NR2R_EMP" , "NREM-to-REM transition means, null empirical expectation" );
-  add_var( "ASYMM", "F,CHS,TR" , "R2NR_EMP" , "REM-to-NREM transition means, null empirical expectation" );
+  add_var( "ASYMM", "F,CHS,TR" , "NR2R" , "NREM-to-REM transition means" , VT_REAL );
+  add_var( "ASYMM", "F,CHS,TR" , "R2NR" , "REM-to-NREM transition means" , VT_REAL );
+  add_var( "ASYMM", "F,CHS,TR" , "NR2R_EMP" , "NREM-to-REM transition means, null empirical expectation" , VT_REAL );
+  add_var( "ASYMM", "F,CHS,TR" , "R2NR_EMP" , "REM-to-NREM transition means, null empirical expectation" , VT_REAL );
 
   add_table( "ASYMM" , "E" , "Epoch-level hypnogram statistic" );
-  add_var( "ASYMM", "E" , "STAGE" , "Sleep stage" );
-  add_var( "ASYMM", "E" , "STAGE" , "Sleep stage (numeric encoding)" );
-  add_var( "ASYMM", "E" , "STAGE" , "Original sleep stage" );
-  add_var( "ASYMM", "E" , "STAGE" , "Elapsed minutes" );
-  add_var( "ASYMM", "E" , "CLOCK_TIME" , "Clock time hh:mm:ss" );
+  add_var( "ASYMM", "E" , "STAGE" , "Sleep stage" , VT_TEXT );  // TYPE? STAGE defined 4x in ASYMM E table with different descs (stage/numeric/original/elapsed mins) - only last survives
+  add_var( "ASYMM", "E" , "STAGE" , "Sleep stage (numeric encoding)" , VT_TEXT );  // TYPE? STAGE defined 4x in ASYMM E table with different descs (stage/numeric/original/elapsed mins) - only last survives
+  add_var( "ASYMM", "E" , "STAGE" , "Original sleep stage" , VT_TEXT );  // TYPE? STAGE defined 4x in ASYMM E table with different descs (stage/numeric/original/elapsed mins) - only last survives
+  add_var( "ASYMM", "E" , "STAGE" , "Elapsed minutes" , VT_TEXT );  // TYPE? STAGE defined 4x in ASYMM E table with different descs (stage/numeric/original/elapsed mins) - only last survives
+  add_var( "ASYMM", "E" , "CLOCK_TIME" , "Clock time hh:mm:ss" , VT_TEXT );
 
   //
   // FIP
@@ -5693,8 +5709,8 @@ void cmddefs_t::init()
   add_param( "FIP" , "norm" , "" , "Set CWT cycles" );
 
   add_table( "FIP" , "CH,TBIN,F" , "F/I plot" );
-  add_var( "FIP", "CH,TBIN,F" , "FIP" , " FIP value" );
-  add_var( "FIP", "CH,TBIN,F" , "ZIP" , " ZIP value" );
+  add_var( "FIP", "CH,TBIN,F" , "FIP" , " FIP value" , VT_REAL );
+  add_var( "FIP", "CH,TBIN,F" , "ZIP" , " ZIP value" , VT_REAL );
 
   //
   // FFT
@@ -5713,12 +5729,12 @@ void cmddefs_t::init()
   add_param( "FFT" , "verbose" , "" , "Additional output variables" );
 
   add_table( "FFT" , "CH,F", "Channel-wise power spectra" );
-  add_var( "FFT" , "CH,F" , "PSD" , "Power spectral density" );
-  add_var( "FFT" , "CH,F" , "DB" , "10log10(PSD)" );
-  add_var( "FFT" , "CH,F" , "RE" , "Real value of transform" );
-  add_var( "FFT" , "CH,F" , "IM" , "Imaginary value of transform" );
-  add_var( "FFT" , "CH,F" , "UNNORM_AMP" , "Unnormalized amplitude" );
-  add_var( "FFT" , "CH,F" , "NORM_AMP" , "Normalized amplitude" );
+  add_var( "FFT" , "CH,F" , "PSD" , "Power spectral density" , VT_REAL );
+  add_var( "FFT" , "CH,F" , "DB" , "10log10(PSD)" , VT_REAL );
+  add_var( "FFT" , "CH,F" , "RE" , "Real value of transform" , VT_REAL );
+  add_var( "FFT" , "CH,F" , "IM" , "Imaginary value of transform" , VT_REAL );
+  add_var( "FFT" , "CH,F" , "UNNORM_AMP" , "Unnormalized amplitude" , VT_REAL );
+  add_var( "FFT" , "CH,F" , "NORM_AMP" , "Normalized amplitude" , VT_REAL );
 
   //
   // MTM
@@ -5743,67 +5759,67 @@ void cmddefs_t::init()
   add_param( "MTM" , "epoch" , "" , "Report per-epoch statistics" );
   
   add_table( "MTM" , "CH" , "Whole-night, per-channel stats" );
-  add_var( "MTM" , "CH" , "SPEC_SLOPE" , "Spectral slope" );
-  add_var( "MTM" , "CH" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
-  add_var( "MTM" , "CH" , "SPEC_SLOPE_MD" , "Spectral slope (median)" );
-  add_var( "MTM" , "CH" , "SPEC_SLOPE_MN" , "Spectral slope (mean over epochs)" );
-  add_var( "MTM" , "CH" , "SPEC_SLOPE_SD" , "Spectral slope (SD over epochs)" );
-  add_var( "MTM" , "CH" , "WREL_PK_FREQ" , "WREL peak (frequency)" );
-  add_var( "MTM" , "CH" , "WREL_PK_AMPL" , "WREL peak (amplitude)" );
-  add_var( "MTM" , "CH" , "WMTM_PK_FREQ" , "WMTM peak (frequency)" );
-  add_var( "MTM" , "CH" , "WMTM_PK_AMPL" , "WMTM peak (amplitude)" );
-  add_var( "MTM" , "CH" , "MTM_PK_FREQ" , "MTM peak (frequency)" );
-  add_var( "MTM" , "CH" , "MTM_PK_AMPL" , "MTM peak (amplitude)" );
+  add_var( "MTM" , "CH" , "SPEC_SLOPE" , "Spectral slope" , VT_REAL );
+  add_var( "MTM" , "CH" , "SPEC_SLOPE_N" , "Spectral slope number of points" , VT_INTEGER );
+  add_var( "MTM" , "CH" , "SPEC_SLOPE_MD" , "Spectral slope (median)" , VT_REAL );
+  add_var( "MTM" , "CH" , "SPEC_SLOPE_MN" , "Spectral slope (mean over epochs)" , VT_REAL );
+  add_var( "MTM" , "CH" , "SPEC_SLOPE_SD" , "Spectral slope (SD over epochs)" , VT_REAL );
+  add_var( "MTM" , "CH" , "WREL_PK_FREQ" , "WREL peak (frequency)" , VT_REAL );
+  add_var( "MTM" , "CH" , "WREL_PK_AMPL" , "WREL peak (amplitude)" , VT_REAL );
+  add_var( "MTM" , "CH" , "WMTM_PK_FREQ" , "WMTM peak (frequency)" , VT_REAL );
+  add_var( "MTM" , "CH" , "WMTM_PK_AMPL" , "WMTM peak (amplitude)" , VT_REAL );
+  add_var( "MTM" , "CH" , "MTM_PK_FREQ" , "MTM peak (frequency)" , VT_REAL );
+  add_var( "MTM" , "CH" , "MTM_PK_AMPL" , "MTM peak (amplitude)" , VT_REAL );
 
 
   add_table( "MTM", "CH,SEG", "Segment timing details" );
-  add_var( "MTM" , "CH,SEG" , "START" , "Start time (seconds)" );
-  add_var( "MTM" , "CH,SEG" , "STOP" , "Stop time (seconds)");
-  add_var( "MTM" , "CH,SEG" , "DISC" , "Spans a discontinuity (0/1=N/Y)");
+  add_var( "MTM" , "CH,SEG" , "START" , "Start time (seconds)" , VT_REAL );
+  add_var( "MTM" , "CH,SEG" , "STOP" , "Stop time (seconds)" , VT_REAL);
+  add_var( "MTM" , "CH,SEG" , "DISC" , "Spans a discontinuity (0/1=N/Y)" , VT_BOOLEAN);
   
   add_table( "MTM" , "CH,F" , "Whole-night, per-channel power" );
-  add_var( "MTM" , "CH,F" , "MTM" , "Power" );
-  add_var( "MTM" , "CH,F" , "MTM_MD" , "Median power" );
-  add_var( "MTM" , "CH,F" , "MTM_SD" , "Power SD" );
-  add_var( "MTM" , "CH,F" , "WMTM" , "Weighted power (variable epoch size)" );
-  add_var( "MTM" , "CH,F" , "WREL" , "Weighted relative power (variable epoch size)" );
+  add_var( "MTM" , "CH,F" , "MTM" , "Power" , VT_REAL );
+  add_var( "MTM" , "CH,F" , "MTM_MD" , "Median power" , VT_REAL );
+  add_var( "MTM" , "CH,F" , "MTM_SD" , "Power SD" , VT_REAL );
+  add_var( "MTM" , "CH,F" , "WMTM" , "Weighted power (variable epoch size)" , VT_REAL );
+  add_var( "MTM" , "CH,F" , "WREL" , "Weighted relative power (variable epoch size)" , VT_REAL );
 
 
   add_table( "MTM" , "CH,B1,B2" , "Whole-night, per-channel bandpower ratios" );
-  add_var( "MTM" , "CH,B1,B2" , "RATIO" , "Band power ratio" );
-  add_var( "MTM" , "CH,B1,B2" , "RATIO_MD" , "Median band power ratio" );
-  add_var( "MTM" , "CH,B1,B2" , "RATIO_SD" , "Band power ratio SD" );
+  add_var( "MTM" , "CH,B1,B2" , "RATIO" , "Band power ratio" , VT_REAL );
+  add_var( "MTM" , "CH,B1,B2" , "RATIO_MD" , "Median band power ratio" , VT_REAL );
+  add_var( "MTM" , "CH,B1,B2" , "RATIO_SD" , "Band power ratio SD" , VT_REAL );
 
   add_table( "MTM" , "CH,B" , "Whole-night, per-channel bandpower" );
-  add_var( "MTM" , "CH,B" , "MTM" , "Band power" ); 
-  add_var( "MTM" , "CH,B" , "MTM_MD" , "Median band power" ); 
-  add_var( "MTM" , "CH,B" , "MTM_SD" , "Band power SD" ); 
-  add_var( "MTM" , "CH,B" , "REL" , "Relative band power" ); 
-  add_var( "MTM" , "CH,B" , "REL_MD" , "Median relative band power" ); 
-  add_var( "MTM" , "CH,B" , "REL_SD" , "Relative band power SD" ); 
-  add_var( "MTM" , "CH,B" , "SPECCV" , "Spectral CV" );
-  add_var( "MTM" , "CH,B" , "SPECCV_MD" , "Median spectral CV" );
-  add_var( "MTM" , "CH,B" , "SPECKURT" , "Spectral kurtosis" );
-  add_var( "MTM" , "CH,B" , "SPECKURT_MD" , "Median spectral kurtosis" );
-  add_var( "MTM" , "CH,B" , "SPECSKEW" , "Spectral skewness" );
-  add_var( "MTM" , "CH,B" , "SPECSKEW_MD" , "Median spectral skewness" );
+  add_var( "MTM" , "CH,B" , "MTM" , "Band power" , VT_REAL ); 
+  add_var( "MTM" , "CH,B" , "MTM_MD" , "Median band power" , VT_REAL ); 
+  add_var( "MTM" , "CH,B" , "MTM_SD" , "Band power SD" , VT_REAL ); 
+  add_var( "MTM" , "CH,B" , "REL" , "Relative band power" , VT_REAL ); 
+  add_var( "MTM" , "CH,B" , "REL_MD" , "Median relative band power" , VT_REAL ); 
+  add_var( "MTM" , "CH,B" , "REL_SD" , "Relative band power SD" , VT_REAL ); 
+  add_var( "MTM" , "CH,B" , "SPECCV" , "Spectral CV" , VT_REAL );
+  add_var( "MTM" , "CH,B" , "SPECCV_MD" , "Median spectral CV" , VT_REAL );
+  add_var( "MTM" , "CH,B" , "SPECKURT" , "Spectral kurtosis" , VT_REAL );
+  add_var( "MTM" , "CH,B" , "SPECKURT_MD" , "Median spectral kurtosis" , VT_REAL );
+  add_var( "MTM" , "CH,B" , "SPECSKEW" , "Spectral skewness" , VT_REAL );
+  add_var( "MTM" , "CH,B" , "SPECSKEW_MD" , "Median spectral skewness" , VT_REAL );
 
   add_table( "MTM" , "B" , "Whole-night, misc channel-averaged band metrics" );
-  add_var( "MTM" , "B" , "SPECCV" , "Spectral CV" );
-  add_var( "MTM" , "B" , "SPECCV_MD" , "Median spectral CV" );
-  add_var( "MTM" , "B" , "SPECKURT" , "Spectral kurtosis" );
-  add_var( "MTM" , "B" , "SPECKURT_MD" , "Median spectral kurtosis" );
-  add_var( "MTM" , "B" , "SPECSKEW" , "Spectral skewness" );
-  add_var( "MTM" , "B" , "SPECSKEW_MD" , "Median spectral skewness" );
+  add_var( "MTM" , "B" , "SPECCV" , "Spectral CV" , VT_REAL );
+  add_var( "MTM" , "B" , "SPECCV_MD" , "Median spectral CV" , VT_REAL );
+  add_var( "MTM" , "B" , "SPECKURT" , "Spectral kurtosis" , VT_REAL );
+  add_var( "MTM" , "B" , "SPECKURT_MD" , "Median spectral kurtosis" , VT_REAL );
+  add_var( "MTM" , "B" , "SPECSKEW" , "Spectral skewness" , VT_REAL );
+  add_var( "MTM" , "B" , "SPECSKEW_MD" , "Median spectral skewness" , VT_REAL );
 
   add_table( "MTM" , "CH,SP,TAPER" , "Taper coefficients" );
-  add_var( "MTM" , "CH,SP,TAPER" , "W" , "Weight" );
+  add_var( "MTM" , "CH,SP,TAPER" , "W" , "Weight" , VT_REAL );
 
   add_table( "MTM" , "CH,TAPER" , "Taper lambdas" );
-  add_var( "MTM" , "CH,TAPER" , "LAMBDA" , "Lambda" );
+  add_var( "MTM" , "CH,TAPER" , "LAMBDA" , "Lambda" , VT_REAL );
 
   add_table( "MTM" , "CH,F,SEG" , "Whole-night, per-channel per-epoch power" );
-  add_var( "MTM" , "CH,F,SEG" , "MTM" , "Power" );
+  add_var( "MTM" , "CH,F,SEG" , "MTM" , "Power" , VT_REAL );
   set_compressed( "MTM" , tfac_t( "CH,F,SEG" ) );
 
   //
@@ -5850,42 +5866,42 @@ void cmddefs_t::init()
   add_param( "IRASA" , "epoch" , "" , "Report per-epoch spectral statistics" );
   
   add_table( "IRASA" , "CH" , "Whole-night, per-channel stats" );
-  add_var( "IRASA" , "CH" , "SPEC_SLOPE" , "Spectral slope" );
-  add_var( "IRASA" , "CH" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
-  add_var( "IRASA" , "CH" , "SPEC_SLOPE_RSQ" , "Spectral slope R-sq" );
+  add_var( "IRASA" , "CH" , "SPEC_SLOPE" , "Spectral slope" , VT_REAL );
+  add_var( "IRASA" , "CH" , "SPEC_SLOPE_N" , "Spectral slope number of points" , VT_INTEGER );
+  add_var( "IRASA" , "CH" , "SPEC_SLOPE_RSQ" , "Spectral slope R-sq" , VT_REAL );
 
   add_table( "IRASA" , "CH,E" , "Per-epoch, per-channel stats" );
-  add_var( "IRASA" , "CH,E" , "SPEC_SLOPE" , "Spectral slope" );
-  add_var( "IRASA" , "CH,E" , "SPEC_SLOPE_N" , "Spectral slope number of points" );
-  add_var( "IRASA" , "CH,E" , "SPEC_SLOPE_RSQ" , "Spectral slope R-sq" );
+  add_var( "IRASA" , "CH,E" , "SPEC_SLOPE" , "Spectral slope" , VT_REAL );
+  add_var( "IRASA" , "CH,E" , "SPEC_SLOPE_N" , "Spectral slope number of points" , VT_INTEGER );
+  add_var( "IRASA" , "CH,E" , "SPEC_SLOPE_RSQ" , "Spectral slope R-sq" , VT_REAL );
 
   add_table( "IRASA" , "CH,B" , "Whole-night, per-channel IRASA band power" );
-  add_var( "IRASA" , "CH,B" , "PSD" , "Original PSD band power" );
-  add_var( "IRASA" , "CH,B" , "APER" , "Aperiodic component band power" );
-  add_var( "IRASA" , "CH,B" , "PER" , "Signed periodic residual band power, PSD minus APER (linear output)" );
-  add_var( "IRASA" , "CH,B" , "PER_DB" , "Periodic residual band power in dB (dB output; only when positive)" );
-  add_var( "IRASA" , "CH,B" , "PER_EXCESS_DB" , "Band-level periodic excess: 10log10(PSD / APER) (dB output)" );
+  add_var( "IRASA" , "CH,B" , "PSD" , "Original PSD band power" , VT_REAL );
+  add_var( "IRASA" , "CH,B" , "APER" , "Aperiodic component band power" , VT_REAL );
+  add_var( "IRASA" , "CH,B" , "PER" , "Signed periodic residual band power, PSD minus APER (linear output)" , VT_REAL );
+  add_var( "IRASA" , "CH,B" , "PER_DB" , "Periodic residual band power in dB (dB output; only when positive)" , VT_REAL );
+  add_var( "IRASA" , "CH,B" , "PER_EXCESS_DB" , "Band-level periodic excess: 10log10(PSD / APER) (dB output)" , VT_REAL );
 
   add_table( "IRASA" , "CH,B,E" , "Epoch-level, per-channel IRASA band power" );
-  add_var( "IRASA" , "CH,B,E" , "PSD" , "Original PSD band power" );
-  add_var( "IRASA" , "CH,B,E" , "APER" , "Aperiodic component band power" );
-  add_var( "IRASA" , "CH,B,E" , "PER" , "Signed periodic residual band power, PSD minus APER (linear output)" );
-  add_var( "IRASA" , "CH,B,E" , "PER_DB" , "Periodic residual band power in dB (dB output; only when positive)" );
-  add_var( "IRASA" , "CH,B,E" , "PER_EXCESS_DB" , "Band-level periodic excess: 10log10(PSD / APER) (dB output)" );
+  add_var( "IRASA" , "CH,B,E" , "PSD" , "Original PSD band power" , VT_REAL );
+  add_var( "IRASA" , "CH,B,E" , "APER" , "Aperiodic component band power" , VT_REAL );
+  add_var( "IRASA" , "CH,B,E" , "PER" , "Signed periodic residual band power, PSD minus APER (linear output)" , VT_REAL );
+  add_var( "IRASA" , "CH,B,E" , "PER_DB" , "Periodic residual band power in dB (dB output; only when positive)" , VT_REAL );
+  add_var( "IRASA" , "CH,B,E" , "PER_EXCESS_DB" , "Band-level periodic excess: 10log10(PSD / APER) (dB output)" , VT_REAL );
 
   add_table( "IRASA" , "CH,F" , "Whole-night, per-channel spectral components" );
-  add_var( "IRASA" , "CH,F" , "APER" , "Aperiodic PSD component (dB with dB)" );
-  add_var( "IRASA" , "CH,F" , "PER" , "Periodic residual PSD component, PSD minus APER (linear output)" );
-  add_var( "IRASA" , "CH,F" , "PER_DB" , "Periodic residual PSD component in dB (dB output; only when positive)" );
-  add_var( "IRASA" , "CH,F" , "PER_EXCESS_DB" , "Periodic excess relative to APER: 10log10(PSD / APER) (dB output)" );
-  add_var( "IRASA" , "CH,F" , "LOGF" , "Natural-log frequency (dB output)" );
+  add_var( "IRASA" , "CH,F" , "APER" , "Aperiodic PSD component (dB with dB)" , VT_REAL );
+  add_var( "IRASA" , "CH,F" , "PER" , "Periodic residual PSD component, PSD minus APER (linear output)" , VT_REAL );
+  add_var( "IRASA" , "CH,F" , "PER_DB" , "Periodic residual PSD component in dB (dB output; only when positive)" , VT_REAL );
+  add_var( "IRASA" , "CH,F" , "PER_EXCESS_DB" , "Periodic excess relative to APER: 10log10(PSD / APER) (dB output)" , VT_REAL );
+  add_var( "IRASA" , "CH,F" , "LOGF" , "Natural-log frequency (dB output)" , VT_REAL );
 
   add_table( "IRASA" , "CH,E,F" , "Epoch-level, per-channel spectral components" );
-  add_var( "IRASA" , "CH,E,F" , "APER" , "Aperiodic PSD component (dB with dB)" );
-  add_var( "IRASA" , "CH,E,F" , "PER" , "Periodic residual PSD component, PSD minus APER (linear output)" );
-  add_var( "IRASA" , "CH,E,F" , "PER_DB" , "Periodic residual PSD component in dB (dB output; only when positive)" );
-  add_var( "IRASA" , "CH,E,F" , "PER_EXCESS_DB" , "Periodic excess relative to APER: 10log10(PSD / APER) (dB output)" );
-  add_var( "IRASA" , "CH,E,F" , "LOGF" , "Natural-log frequency (dB output)" );
+  add_var( "IRASA" , "CH,E,F" , "APER" , "Aperiodic PSD component (dB with dB)" , VT_REAL );
+  add_var( "IRASA" , "CH,E,F" , "PER" , "Periodic residual PSD component, PSD minus APER (linear output)" , VT_REAL );
+  add_var( "IRASA" , "CH,E,F" , "PER_DB" , "Periodic residual PSD component in dB (dB output; only when positive)" , VT_REAL );
+  add_var( "IRASA" , "CH,E,F" , "PER_EXCESS_DB" , "Periodic excess relative to APER: 10log10(PSD / APER) (dB output)" , VT_REAL );
+  add_var( "IRASA" , "CH,E,F" , "LOGF" , "Natural-log frequency (dB output)" , VT_REAL );
   set_compressed( "IRASA" , tfac_t( "CH,E,F" ) );
 
   //
@@ -5909,10 +5925,10 @@ void cmddefs_t::init()
   add_param( "MSE" , "verbose" , "" , "Emit epoch-level MSE statistics" );
   
   add_table( "MSE" , "CH,SCALE" , "MSE per channel and scale" );
-  add_var( "MSE" , "CH,SCALE" , "MSE" , "Multi-scale entropy" );
+  add_var( "MSE" , "CH,SCALE" , "MSE" , "Multi-scale entropy" , VT_REAL );
 
   add_table( "MSE" , "CH,E,SCALE" , "MSE per epoch, channel and scale" );
-  add_var( "MSE" , "CH,E,SCALE" , "MSE" , "Multi-scale entropy" );
+  add_var( "MSE" , "CH,E,SCALE" , "MSE" , "Multi-scale entropy" , VT_REAL );
 
   //
   // LZW
@@ -5933,10 +5949,10 @@ void cmddefs_t::init()
   add_param( "LZW" , "epoch" , "" , "Emit epoch-level LZW statistics" );
 
   add_table( "LZW" , "CH" , "LZW per channel" );
-  add_var( "LZW" , "CH" , "LZW" , "Compression index" );
+  add_var( "LZW" , "CH" , "LZW" , "Compression index" , VT_REAL );
 
   add_table( "LZW" , "CH,E" , "LZW per channel, per epoch" );
-  add_var( "LZW" , "CH,E" , "LZW" , "Compression index" );
+  add_var( "LZW" , "CH,E" , "LZW" , "Compression index" , VT_REAL );
 
   //
   // HILBERT
@@ -5998,17 +6014,17 @@ void cmddefs_t::init()
   add_param( "CWT-DESIGN" , "len" , "20" , "Wavelet length in seconds for fwhm mode" );
 
   add_table( "CWT-DESIGN" , "PARAM" , "Wavelet summary statistics" );
-  add_var( "CWT-DESIGN" , "PARAM" , "FWHM" , "Empirical time-domain full-width at half maximum [fwhm]" );
-  add_var( "CWT-DESIGN" , "PARAM" , "FWHM_F" , "Frequency-domain full-width at half maximum" );
-  add_var( "CWT-DESIGN" , "PARAM" , "FWHM_LWR" , "Lower half-maximum frequency" );
-  add_var( "CWT-DESIGN" , "PARAM" , "FWHM_UPR" , "Upper half-maximum frequency" );
+  add_var( "CWT-DESIGN" , "PARAM" , "FWHM" , "Empirical time-domain full-width at half maximum [fwhm]" , VT_REAL );
+  add_var( "CWT-DESIGN" , "PARAM" , "FWHM_F" , "Frequency-domain full-width at half maximum" , VT_REAL );
+  add_var( "CWT-DESIGN" , "PARAM" , "FWHM_LWR" , "Lower half-maximum frequency" , VT_REAL );
+  add_var( "CWT-DESIGN" , "PARAM" , "FWHM_UPR" , "Upper half-maximum frequency" , VT_REAL );
 
   add_table( "CWT-DESIGN" , "PARAM,F" , "Frequency response for wavelet" );
-  add_var( "CWT-DESIGN" , "PARAM,F" , "MAG" , "Magnitude of response (arbitrary units)" );
+  add_var( "CWT-DESIGN" , "PARAM,F" , "MAG" , "Magnitude of response (arbitrary units)" , VT_REAL );
 
   add_table( "CWT-DESIGN" , "PARAM,SEC" , "Wavelet coefficients" );
-  add_var( "CWT-DESIGN" , "PARAM,SEC" , "REAL" , "Real part of wavelet" );
-  add_var( "CWT-DESIGN" , "PARAM,SEC" , "IMAG" , "Imaginary part of wavelet" );
+  add_var( "CWT-DESIGN" , "PARAM,SEC" , "REAL" , "Real part of wavelet" , VT_REAL );
+  add_var( "CWT-DESIGN" , "PARAM,SEC" , "IMAG" , "Imaginary part of wavelet" , VT_REAL );
 
   //
   // 1FNORM
@@ -6144,154 +6160,158 @@ void cmddefs_t::init()
   // output
 
   add_table( "SPINDLES" , "CH,F" , "Individual-level output" );
-  add_var( "SPINDLES" , "CH,F" , "DENS" , "Spindle density (count per minute)" );
-  add_var( "SPINDLES" , "CH,F" , "CDENS" , "Coupled spindle density (count per minute)" );
-  add_var( "SPINDLES" , "CH,F" , "UDENS" , "Uncoupled spindle density (count per minute)" );
-  add_var( "SPINDLES" , "CH,F" , "AMP" , "Mean spindle amplitude (uV or mV units)" );
-  add_var( "SPINDLES" , "CH,F" , "ACT_MX" , "Mean max spindle activity (normed CWT)" );
-  add_var( "SPINDLES" , "CH,F" , "ACT_MN" , "Mean average spindle activity (normed CWT)" );
-  add_var( "SPINDLES" , "CH,F" , "DUR" , "Mean spindle duration (core+flanking region)" );
-  add_var( "SPINDLES" , "CH,F" , "NOSC" , "Mean number of oscillations per spindle" );
-  add_var( "SPINDLES" , "CH,F" , "FWHM" , "Mean spindle FWHM (full width at half maximum)" );
-  add_var( "SPINDLES" , "CH,F" , "ISA_S" , "Mean integrated spindle activity (ISA) per spindle" );
-  add_var( "SPINDLES" , "CH,F" , "ISA_M" , "Mean integrated spindle activity (ISA) per minute" );
-  add_var( "SPINDLES" , "CH,F" , "ISA_T" , "Total integrated spindle activity (ISA)" );
-  add_var( "SPINDLES" , "CH,F" , "FRQ" , "Mean spindle frequency (from counting zero-crossings)" );
-  add_var( "SPINDLES" , "CH,F" , "FFT" , "Mean spindle frequency (from FFT)" );
-  add_var( "SPINDLES" , "CH,F" , "CHIRP" , "Mean chirp metric per spindle" );
-  add_var( "SPINDLES" , "CH,F" , "SYMM" , "Mean spindle symmetry metric" );
-  add_var( "SPINDLES" , "CH,F" , "SYMM2" , "Mean spindle folded-symmetry metric" );
-  add_var( "SPINDLES" , "CH,F" , "Q" , "Mean spindle quality metric" );
-  add_var( "SPINDLES" , "CH,F" , "DISPERSION" , "Mean dispersion index of epoch spindle count" );
-  add_var( "SPINDLES" , "CH,F" , "DISPERSION_P" , "P-value for test of over-dispersion" );
-  add_var( "SPINDLES" , "CH,F" , "MINS" , "Total duration of signal entered into the analysis (minutes)" );
-  add_var( "SPINDLES" , "CH,F" , "NE" , "Number of epochs" );
-  add_var( "SPINDLES" , "CH,F" , "N01" , "Number of spindles prior to merging" );
-  add_var( "SPINDLES" , "CH,F" , "N02" , "Number of spindles post merging, prior to QC" );
+  add_var( "SPINDLES" , "CH,F" , "DENS" , "Spindle density (count per minute)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "CDENS" , "Coupled spindle density (count per minute)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "UDENS" , "Uncoupled spindle density (count per minute)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "AMP" , "Mean spindle amplitude (uV or mV units)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "ACT_MX" , "Mean max spindle activity (normed CWT)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "ACT_MN" , "Mean average spindle activity (normed CWT)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "DUR" , "Mean spindle duration (core+flanking region)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "NOSC" , "Mean number of oscillations per spindle" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "FWHM" , "Mean spindle FWHM (full width at half maximum)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "ISA_S" , "Mean integrated spindle activity (ISA) per spindle" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "ISA_M" , "Mean integrated spindle activity (ISA) per minute" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "ISA_T" , "Total integrated spindle activity (ISA)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "FRQ" , "Mean spindle frequency (from counting zero-crossings)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "FFT" , "Mean spindle frequency (from FFT)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "CHIRP" , "Mean chirp metric per spindle" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "SYMM" , "Mean spindle symmetry metric" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "SYMM2" , "Mean spindle folded-symmetry metric" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "Q" , "Mean spindle quality metric" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "DISPERSION" , "Mean dispersion index of epoch spindle count" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "DISPERSION_P" , "P-value for test of over-dispersion" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "MINS" , "Total duration of signal entered into the analysis (minutes)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "NE" , "Number of epochs" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,F" , "N01" , "Number of spindles prior to merging" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,F" , "N02" , "Number of spindles post merging, prior to QC" , VT_INTEGER );
 
-  add_var( "SPINDLES" , "CH,F" , "EMPTH" , "Empirically-determined threshold" );
-  add_var( "SPINDLES" , "CH,F" , "EMPF" , "Relative frequency of above-thresholds points based on EMPTH" );
-  add_var( "SPINDLES" , "CH,F" , "MEAN_OVER_MEDIAN" , "Ratio of mean to median, to index skewness of the wavelet coefficients" );
+  add_var( "SPINDLES" , "CH,F" , "EMPTH" , "Empirically-determined threshold" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "EMPF" , "Relative frequency of above-thresholds points based on EMPTH" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "MEAN_OVER_MEDIAN" , "Ratio of mean to median, to index skewness of the wavelet coefficients" , VT_REAL );
 
-  add_var( "SPINDLES" , "CH,F" , "CWT_TH" , "CWT threshold" );
-  add_var( "SPINDLES" , "CH,F" , "FRNG2" , "Range of spindle frequencies" );
-  add_var( "SPINDLES" , "CH,F" , "FRQ1" , "Frequency in spindle first half" );
-  add_var( "SPINDLES" , "CH,F" , "FRQ2" , "Frequency in spindle second half" );
-  add_var( "SPINDLES" , "CH,F" , "FVAR2" , "Variation in spindle frequency" );
-  add_var( "SPINDLES" , "CH,F" , "N" , "Number of spindles" );
-  add_var( "SPINDLES" , "CH,F" , "P01" , "Pre-QC" );
-  add_var( "SPINDLES" , "CH,F" , "P02" , "Mid-QC" );
-  add_var( "SPINDLES" , "CH,F" , "SEC_AMP" , "Midpoint based on CWT" );
-  add_var( "SPINDLES" , "CH,F" , "SEC_P2P" , "Midpoint based on peak-to-peak" );
-  add_var( "SPINDLES" , "CH,F" , "SEC_TROUGH" , "Midpoint based on trough" );
-  add_var( "SPINDLES" , "CH,F" , "SYMM_AMP" , "Mean spindle symmetry metric (based on CWT)" );
-  add_var( "SPINDLES" , "CH,F" , "SYMM_TROUGH" , "Mean spindle symmetry metric (based on trough)" );
+  add_var( "SPINDLES" , "CH,F" , "CWT_TH" , "CWT threshold" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "FRNG2" , "Range of spindle frequencies" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "FRQ1" , "Frequency in spindle first half" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "FRQ2" , "Frequency in spindle second half" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "FVAR2" , "Variation in spindle frequency" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "N" , "Number of spindles" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,F" , "P01" , "Pre-QC" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "P02" , "Mid-QC" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "SEC_AMP" , "Midpoint based on CWT" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "SEC_P2P" , "Midpoint based on peak-to-peak" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "SEC_TROUGH" , "Midpoint based on trough" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "SYMM_AMP" , "Mean spindle symmetry metric (based on CWT)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "SYMM_TROUGH" , "Mean spindle symmetry metric (based on trough)" , VT_REAL );
   
   
   add_table( "SPINDLES" , "CH,F,TH" , "Between-class variance over range of thresholds" );
-  add_var( "SPINDLES" , "CH,F,TH" , "SIGMAB" , "Between-class variance for given threshold" );
+  add_var( "SPINDLES" , "CH,F,TH" , "SIGMAB" , "Between-class variance for given threshold" , VT_REAL );
 
   add_table( "SPINDLES" , "CH,E,F" , "Epoch-level output [epoch]" ); 
-  add_var( "SPINDLES" , "CH,E,F" , "N" , "Number of spindles observed in that epoch (for that target frequency/channel)" );
+  add_var( "SPINDLES" , "CH,E,F" , "N" , "Number of spindles observed in that epoch (for that target frequency/channel)" , VT_INTEGER );
 
   add_table( "SPINDLES" , "CH,F,SPINDLE" , "Spindle-level output [per-spindle]" ); 
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "AMP" , "Spindle amplitude (uV or mV units)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "ACT_MX" , "Max spindle activity (normed CWT)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "ACT_MN" , "Average spindle activity (normed CWT)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "CHIRP" , "Spindle chirp (-1 to +1)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "DUR" , "Spindle duration (seconds)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "FWHM" , "Spindle FWHM (seconds)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "NOSC" , "Number of oscillations" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "FRQ" , "Spindle frequency based on counting zero-crossings in bandpass filtered signal" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "FFT" , "Spindle frequency based on FFT" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "ISA" , "Integrated spindle activity" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "MAXSTAT" , "Maximum wavelet statistic" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "MEANSTAT" , "Mean wavelet statistic" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "Q" , "Quality metric" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "PASS" , "Flag (0/1) for whether this spindle passes the quality metric criterion" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "START" , "Start position of the spindle (seconds elapsed since start of EDF)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "PEAK" , "Peak/mid position of the spindle (seconds elapsed since start of EDF)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "STOP" , "Stop position of the spindle (seconds elapsed since start of EDF)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "START_SP" , "Start position of the spindle (in sample-units relative to current in-memory EDF)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "PEAK_SP" , "Peak/mid position of the spindle (in sample-units relative to the current in-memory EDF)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "STOP_SP" , "Stop position of the spindle (in sample-units relative to the current in-memory EDF)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SYMM" , "Symmetry index (relative position of peak)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SYMM2" , "Folded symmetry index (0=symmetrical, 1=asymmetrical)" );
-  hidden_var( "SPINDLES" , "CH,F,SPINDLE" , "IF" , "Mean frequency per spindle over duration [if]" );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "AMP" , "Spindle amplitude (uV or mV units)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "ACT_MX" , "Max spindle activity (normed CWT)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "ACT_MN" , "Average spindle activity (normed CWT)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "CHIRP" , "Spindle chirp (-1 to +1)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "DUR" , "Spindle duration (seconds)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "FWHM" , "Spindle FWHM (seconds)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "NOSC" , "Number of oscillations" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "FRQ" , "Spindle frequency based on counting zero-crossings in bandpass filtered signal" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "FRQ1" , "Frequency in spindle first half" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "FRQ2" , "Frequency in spindle second half" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "FFT" , "Spindle frequency based on FFT" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "ISA" , "Integrated spindle activity" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "MAXSTAT" , "Maximum wavelet statistic" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "MEANSTAT" , "Mean wavelet statistic" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "Q" , "Quality metric" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "PASS" , "Flag (0/1) for whether this spindle passes the quality metric criterion" , VT_BOOLEAN );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "START" , "Start position of the spindle (seconds elapsed since start of EDF)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "PEAK" , "Peak/mid position of the spindle (seconds elapsed since start of EDF)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "TROUGH" , "Position of the largest trough of the spindle (seconds elapsed since start of EDF)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "STOP" , "Stop position of the spindle (seconds elapsed since start of EDF)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "START_SP" , "Start position of the spindle (in sample-units relative to current in-memory EDF)" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "PEAK_SP" , "Peak/mid position of the spindle (in sample-units relative to the current in-memory EDF)" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "TROUGH_SP" , "Position of the largest trough of the spindle (in sample-units relative to the current in-memory EDF)" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "STOP_SP" , "Stop position of the spindle (in sample-units relative to the current in-memory EDF)" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SYMM" , "Symmetry index (relative position of peak)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SYMM2" , "Folded symmetry index (0=symmetrical, 1=asymmetrical)" , VT_REAL );
+  hidden_var( "SPINDLES" , "CH,F,SPINDLE" , "IF" , "Mean frequency per spindle over duration [if]" , VT_REAL );
 
   add_table( "SPINDLES" , "CH,F,B,SPINDLE" , "Band enrichment (per-spindle)" );
-  add_var( "SPINDLES" , "CH,F,B,SPINDLE" , "ENRICH" , "Spindle enrichment" );
+  add_var( "SPINDLES" , "CH,F,B,SPINDLE" , "ENRICH" , "Spindle enrichment" , VT_REAL );
   
   hidden_table( "SPINDLES" , "CH,F,RELLOC" , "Mean IF stratified by relative location in spindle [if]" );
-  hidden_var( "SPINDLES" , "CH,F,RELLOC" , "IF" , "Mean frequency of all spindles, per relative position within the spindle (five bins)" );
+  hidden_var( "SPINDLES" , "CH,F,RELLOC" , "IF" , "Mean frequency of all spindles, per relative position within the spindle (five bins)" , VT_REAL );
   
   hidden_table( "SPINDLES", "F,CH,PHASE,RELLOC" , "Mean IF stratified by phase and relative location in spindle [if]" );
-  hidden_var( "SPINDLES" , "F,CH,PHASE,RELLOC" , "SOPL_CHIRP" , "Spindle chirp" );
+  hidden_var( "SPINDLES" , "F,CH,PHASE,RELLOC" , "SOPL_CHIRP" , "Spindle chirp" , VT_REAL );
   
   add_table( "SPINDLES" , "" , "Individual-level summaries of m-spindles [collate]" );
-  add_var( "SPINDLES" , "" , "MSP_DENS" , "m-spindle density" );
-  add_var( "SPINDLES" , "" , "MSP_N" , "m-spindle count" );
-  add_var( "SPINDLES" , "" , "MSP_MINS" , "Denominator for density, i.e. minutes of signal analyzed" );
+  add_var( "SPINDLES" , "" , "MSP_DENS" , "m-spindle density" , VT_REAL );
+  add_var( "SPINDLES" , "" , "MSP_N" , "m-spindle count" , VT_INTEGER );
+  add_var( "SPINDLES" , "" , "MSP_MINS" , "Denominator for density, i.e. minutes of signal analyzed" , VT_REAL );
 
   add_table( "SPINDLES" , "F" , "m-spindle density stratified by m-spindle frequency [collate]" );
-  add_var( "SPINDLES" , "F" , "MSP_DENS" , "m-spindle density conditional on m-spindle frequency" );
+  add_var( "SPINDLES" , "F" , "MSP_DENS" , "m-spindle density conditional on m-spindle frequency" , VT_REAL );
   
 
   add_table( "SPINDLES" , "F,SEED" , "Spindle propagation seed summaries" );
-  add_var( "SPINDLES" , "F,SEED" , "R" , "Relative SEED position among overlapping CHs" );
-  add_var( "SPINDLES" , "F,SEED" , "T" , "Relative SEED time among overlapping CHs" );
+  add_var( "SPINDLES" , "F,SEED" , "R" , "Relative SEED position among overlapping CHs" , VT_REAL );
+  add_var( "SPINDLES" , "F,SEED" , "T" , "Relative SEED time among overlapping CHs" , VT_REAL );
 
   add_table( "SPINDLES" , "F,CH,SEED" , "Spindle propagation seed-channel stats" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "A" , "Channel amplitude relative to SEED" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "A_PRESEED" , "Channel amplitude relative to SEED (CH<SEED)" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "A_POSTSEED" , "Channel amplitude relative to SEED (SEED<CH)" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "N" , "Count above threshold CH-peaks" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "N_PRESEED" , "Count above threshold pre-SEED CH-peaks" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "N_POSTSEED" , "Count above threshold post-SEED CH-peaks" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "T" , "CH-peak time relative to SEED" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "T_PRESEED" , "CH-peak time relative to SEED (CH<SEED)" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "T_POSTSEED" , "CH-peak time relative to SEED (SEED<CH)" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "P" , "Proportion above threshold CH-peaks" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "P_PRESEED" , "Proportion above threshold pre-SEED CH-peaks" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "P_POSTSEED" , "Proportion above threshold post-SEED CH-peaks" );
-  add_var( "SPINDLES" , "F,CH,SEED" , "PP" , "CH-SEED pre/post metric" );
+  add_var( "SPINDLES" , "F,CH,SEED" , "A" , "Channel amplitude relative to SEED" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,SEED" , "A_PRESEED" , "Channel amplitude relative to SEED (CH<SEED)" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,SEED" , "A_POSTSEED" , "Channel amplitude relative to SEED (SEED<CH)" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,SEED" , "N" , "Count above threshold CH-peaks" , VT_INTEGER );
+  add_var( "SPINDLES" , "F,CH,SEED" , "N_PRESEED" , "Count above threshold pre-SEED CH-peaks" , VT_INTEGER );
+  add_var( "SPINDLES" , "F,CH,SEED" , "N_POSTSEED" , "Count above threshold post-SEED CH-peaks" , VT_INTEGER );
+  add_var( "SPINDLES" , "F,CH,SEED" , "T" , "CH-peak time relative to SEED" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,SEED" , "T_PRESEED" , "CH-peak time relative to SEED (CH<SEED)" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,SEED" , "T_POSTSEED" , "CH-peak time relative to SEED (SEED<CH)" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,SEED" , "P" , "Proportion above threshold CH-peaks" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,SEED" , "P_PRESEED" , "Proportion above threshold pre-SEED CH-peaks" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,SEED" , "P_POSTSEED" , "Proportion above threshold post-SEED CH-peaks" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,SEED" , "PP" , "CH-SEED pre/post metric" , VT_REAL );
 
   
   add_table( "SPINDLES" , "SPINDLE,F,CH,SEED" , "Spindle propagation seed-channel stats" );
-  add_var( "SPINDLES" , "SPINDLE,F,CH,SEED" , "REL" , "Relative position" );
-  add_var( "SPINDLES" , "SPINDLE,F,CH,SEED" , "T" , "Time" );
+  add_var( "SPINDLES" , "SPINDLE,F,CH,SEED" , "REL" , "Relative position" , VT_REAL );
+  add_var( "SPINDLES" , "SPINDLE,F,CH,SEED" , "T" , "Time" , VT_REAL );
 
 
   add_table( "SPINDLES" , "MSPINDLE" , "Merged-spindle output [collate]" );
-  add_var( "SPINDLES" , "MSPINDLE" , "MSP_DUR","Duration of this m-spindle" );
-  add_var( "SPINDLES" , "MSPINDLE" , "MSP_F","Estimated frequency of this m-spindle" );
-  add_var( "SPINDLES" , "MSPINDLE" , "MSP_FL","Lower frequency of this m-spindle" );
-  add_var( "SPINDLES" , "MSPINDLE" , "MSP_FU","Upper frequency of this m-spindle" );
-  add_var( "SPINDLES" , "MSPINDLE" , "MSP_SIZE","Number of spindles in this m-spindle" );
-  add_var( "SPINDLES" , "MSPINDLE" , "MSP_STAT","Statistic for m-spindle" );
-  add_var( "SPINDLES" , "MSPINDLE" , "MSP_START","Start time (seconds elapsed from EDF start) of m-spindle" );
-  add_var( "SPINDLES" , "MSPINDLE" , "MSP_STOP","Stop time (seconds elapsed from EDF start) of m-spindle" );
-  add_var( "SPINDLES" , "MSPINDLE" , "MSP_START_HMS" , "Merged spindle start clock-time (if 'hms')" );
-  add_var( "SPINDLES" , "MSPINDLE" , "MSP_STOP_HMS" , "Merged spindle stop clock-time (if 'hms')" );
+  add_var( "SPINDLES" , "MSPINDLE" , "MSP_DUR","Duration of this m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "MSPINDLE" , "MSP_F","Estimated frequency of this m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "MSPINDLE" , "MSP_FL","Lower frequency of this m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "MSPINDLE" , "MSP_FU","Upper frequency of this m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "MSPINDLE" , "MSP_SIZE","Number of spindles in this m-spindle" , VT_INTEGER );
+  add_var( "SPINDLES" , "MSPINDLE" , "MSP_STAT","Statistic for m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "MSPINDLE" , "MSP_START","Start time (seconds elapsed from EDF start) of m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "MSPINDLE" , "MSP_STOP","Stop time (seconds elapsed from EDF start) of m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "MSPINDLE" , "MSP_START_HMS" , "Merged spindle start clock-time (if 'hms')" , VT_TEXT );
+  add_var( "SPINDLES" , "MSPINDLE" , "MSP_STOP_HMS" , "Merged spindle stop clock-time (if 'hms')" , VT_TEXT );
   
   add_table( "SPINDLES" , "CH,MSPINDLE" , "Within-channel merged-spindle output [collate]" );
-  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_DUR","Duration of this m-spindle" );
-  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_F","Estimated frequency of this m-spindle" );
-  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_FL","Lower frequency of this m-spindle" );
-  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_FU","Upper frequency of this m-spindle" );
-  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_SIZE","Number of spindles in this m-spindle" );
-  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_STAT","Statistic for m-spindle" );
-  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_START","Start time (seconds elapsed from EDF start) of m-spindle" );
-  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_STOP","Stop time (seconds elapsed from EDF start) of m-spindle" );
-  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_START_HMS" , "Merged spindle start clock-time (if 'hms')" );
-  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_STOP_HMS" , "Merged spindle stop clock-time (if 'hms')" );
+  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_DUR","Duration of this m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_F","Estimated frequency of this m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_FL","Lower frequency of this m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_FU","Upper frequency of this m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_SIZE","Number of spindles in this m-spindle" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_STAT","Statistic for m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_START","Start time (seconds elapsed from EDF start) of m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_STOP","Stop time (seconds elapsed from EDF start) of m-spindle" , VT_REAL );
+  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_START_HMS" , "Merged spindle start clock-time (if 'hms')" , VT_TEXT );
+  add_var( "SPINDLES" , "CH,MSPINDLE" , "MSP_STOP_HMS" , "Merged spindle stop clock-time (if 'hms')" , VT_TEXT );
  
   
   add_table( "SPINDLES" , "SPINDLE,MSPINDLE" , "Spindle to m-spindle mappings (from 'list-all-spindles') [collate]" );
-  add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "SCH", "Spindle label (channel:target frequency)" );
-  add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "FFT", "Spindle estimated frequency (via FFT)" );
-  add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "START" , "Spindle start time (elapsed seconds from EDF start)" );
-  add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "STOP" , "Spindle stop time (elapsed seconds from EDF start)" );
+  add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "SCH", "Spindle label (channel:target frequency)" , VT_TEXT );
+  add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "FFT", "Spindle estimated frequency (via FFT)" , VT_REAL );
+  add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "START" , "Spindle start time (elapsed seconds from EDF start)" , VT_REAL );
+  add_var( "SPINDLES" , "SPINDLE,MSPINDLE" , "STOP" , "Spindle stop time (elapsed seconds from EDF start)" , VT_REAL );
   
   // experimental
   hidden_param( "SPINDLES" , "if" , "" , "Estimate instantaneous frequency of spindles" );
@@ -6303,16 +6323,16 @@ void cmddefs_t::init()
   // show-coef verbose output
 
   add_table( "SPINDLES" , "F,CH,T" , "Verbose threshold/coefficient output [show-coeff]" );
-  add_var( "SPINDLES" , "F,CH,T" , "SEC" , "Time (sec)" );
-  add_var( "SPINDLES" , "F,CH,T" , "RAWCWT" , "Raw CWT coefficient" );
-  add_var( "SPINDLES" , "F,CH,T" ,"CWT" , "CWT coefficient" );
-  add_var( "SPINDLES" , "F,CH,T" ,"AVG" , "Averaged CWT coefficient" );
-  add_var( "SPINDLES" , "F,CH,T" ,"AVG_CORR" , "Averaged baseline-corrected CWT coefficient" );
-  add_var( "SPINDLES" , "F,CH,T" ,"CWT_TH" , "CWT primary threshold" );
-  add_var( "SPINDLES" , "F,CH,T" ,"CWT_TH2" , "CWT secondary threshold" );
-  add_var( "SPINDLES" , "F,CH,T" ,"CWT_THMAX" , "CWT maximum threshold" );
-  add_var( "SPINDLES" , "F,CH,T" ,"PUTATIVE" , "Pre-QC spindle" );
-  add_var( "SPINDLES" , "F,CH,T" ,"SPINDLE" , "Post-QC spindle" );
+  add_var( "SPINDLES" , "F,CH,T" , "SEC" , "Time (sec)" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,T" , "RAWCWT" , "Raw CWT coefficient" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,T" ,"CWT" , "CWT coefficient" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,T" ,"AVG" , "Averaged CWT coefficient" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,T" ,"AVG_CORR" , "Averaged baseline-corrected CWT coefficient" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,T" ,"CWT_TH" , "CWT primary threshold" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,T" ,"CWT_TH2" , "CWT secondary threshold" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,T" ,"CWT_THMAX" , "CWT maximum threshold" , VT_REAL );
+  add_var( "SPINDLES" , "F,CH,T" ,"PUTATIVE" , "Pre-QC spindle" , VT_BOOLEAN );
+  add_var( "SPINDLES" , "F,CH,T" ,"SPINDLE" , "Post-QC spindle" , VT_BOOLEAN );
   
 
   //
@@ -6342,70 +6362,78 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "stats-median" , "" , "SO, use median (not mean) when reporting stats over SOs" );  
  
   add_table( "SPINDLES" , "CH" , "SO channel-level statistics" );
-  add_var( "SPINDLES" , "CH" , "SO" , "Number of SO detected" );
-  add_var( "SPINDLES" , "CH" , "SO_RATE" , "SO per minute" );
-  add_var( "SPINDLES" , "CH" , "SO_AMP_NEG" , "SO amplitude (negative peak)" );
-  add_var( "SPINDLES" , "CH" , "SO_AMP_POS" , "SO amplitude (positive peak)" );
-  add_var( "SPINDLES" , "CH" , "SO_AMP_P2P" , "SO peak-to-peak amplitude" );
-  add_var( "SPINDLES" , "CH" , "SO_DUR" , "SO duration (secs)" );
-  add_var( "SPINDLES" , "CH" , "SO_DUR_NEG" , "Negative peak SO duration (secs)" );
-  add_var( "SPINDLES" , "CH" , "SO_DUR_POS", "Positive peak SO duration (secs)" );
-  add_var( "SPINDLES" , "CH" , "SO_TRANS" , "SO transition (secs)" );
-  add_var( "SPINDLES" , "CH" , "SO_TRANS_FREQ" , "SO transition freq (Hz)" );
-  add_var( "SPINDLES" , "CH" , "SO_SLOPE_POS1" , "Positive peak rising slope" );
-  add_var( "SPINDLES" , "CH" , "SO_SLOPE_POS2" , "Positive peak falling slope" );
-  add_var( "SPINDLES" , "CH" , "SO_SLOPE_NEG1" , "Negative peak falling slope" );
-  add_var( "SPINDLES" , "CH" , "SO_SLOPE_NEG2" , "Negative peak rising slope" );
-  add_var( "SPINDLES" , "CH" , "SO_SLOPE" , "Negative peak rising slope" );
-  add_var( "SPINDLES" , "CH" , "SO_TH_NEG" , "Negative peak threshold [mag]" );
-  add_var( "SPINDLES" , "CH" , "SO_TH_P2P" , "Peak-to-peak threshold [mag]" );
+  add_var( "SPINDLES" , "CH" , "SO" , "Number of SO detected" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH" , "SO_RATE" , "SO per minute" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_AMP_NEG" , "SO amplitude (negative peak)" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_AMP_POS" , "SO amplitude (positive peak)" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_AMP_P2P" , "SO peak-to-peak amplitude" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_DUR" , "SO duration (secs)" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_DUR_NEG" , "Negative peak SO duration (secs)" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_DUR_POS", "Positive peak SO duration (secs)" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_TRANS" , "SO transition (secs)" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_TRANS_FREQ" , "SO transition freq (Hz)" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE_POS1" , "Positive peak rising slope" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE_POS2" , "Positive peak falling slope" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE_NEG1" , "Negative peak falling slope" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE_NEG2" , "Negative peak rising slope" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_SLOPE" , "Negative peak rising slope" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_TH_NEG" , "Negative peak threshold [mag]" , VT_REAL );
+  add_var( "SPINDLES" , "CH" , "SO_TH_P2P" , "Peak-to-peak threshold [mag]" , VT_REAL );
 
   add_table( "SPINDLES" , "CH,E" , "Epoch-level SO statistics" );
-  add_var( "SPINDLES" , "CH,E" , "N" , "Number of SO detected" );
-  add_var( "SPINDLES" , "CH,E" , "DOWN_AMP" , "Number of SO detected" );
-  add_var( "SPINDLES" , "CH,E" , "UP_AMP" , "Number of SO detected" );
-  add_var( "SPINDLES" , "CH,E" , "P2P_AMP" , "Number of SO detected" );
-  add_var( "SPINDLES" , "CH,E" , "SLOPE_NEG1" , "Negative peak falling slope" );
-  add_var( "SPINDLES" , "CH,E" , "SLOPE_NEG2" , "Negative peak rising slope" );
-  add_var( "SPINDLES" , "CH,E" , "SLOPE_POS1" , "Positive peak rising slope" );
-  add_var( "SPINDLES" , "CH,E" , "SLOPE_POS2" , "Positive peak falling slope" );
+  add_var( "SPINDLES" , "CH,E" , "N" , "Number of SO detected" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,E" , "DOWN_AMP" , "Number of SO detected" , VT_REAL );  // TYPE? defined names DOWN_AMP/UP_AMP/P2P_AMP but slow-waves.cpp emits AMP_NEG/AMP_POS/AMP_P2P here - desc says Number of SO
+  add_var( "SPINDLES" , "CH,E" , "UP_AMP" , "Number of SO detected" , VT_REAL );  // TYPE? defined names DOWN_AMP/UP_AMP/P2P_AMP but slow-waves.cpp emits AMP_NEG/AMP_POS/AMP_P2P here - desc says Number of SO
+  add_var( "SPINDLES" , "CH,E" , "P2P_AMP" , "Number of SO detected" , VT_REAL );  // TYPE? defined names DOWN_AMP/UP_AMP/P2P_AMP but slow-waves.cpp emits AMP_NEG/AMP_POS/AMP_P2P here - desc says Number of SO
+  add_var( "SPINDLES" , "CH,E" , "SLOPE_NEG1" , "Negative peak falling slope" , VT_REAL );
+  add_var( "SPINDLES" , "CH,E" , "SLOPE_NEG2" , "Negative peak rising slope" , VT_REAL );
+  add_var( "SPINDLES" , "CH,E" , "SLOPE_POS1" , "Positive peak rising slope" , VT_REAL );
+  add_var( "SPINDLES" , "CH,E" , "SLOPE_POS2" , "Positive peak falling slope" , VT_REAL );
   
   add_table( "SPINDLES" , "CH,N" , "per-SO statistics" );
-  add_var( "SPINDLES" , "CH,N" , "DOWN_AMP" , "Negative peak SO amplitude" );
-  add_var( "SPINDLES" , "CH,N" , "DOWN_IDX" , "Negative peak sample index" ); 
-  add_var( "SPINDLES" , "CH,N" , "UP_AMP" , "Positive peak SO ampltiude" ); 
-  add_var( "SPINDLES" , "CH,N" , "UP_IDX" , "Positive peak sample index" ); 
-  add_var( "SPINDLES" , "CH,N" , "START" , "Start of SO (in seconds elapsed from start of EDF)" ); 
-  add_var( "SPINDLES" , "CH,N" , "START_IDX" , "Start of SO (in sample-point units)" ); 
-  add_var( "SPINDLES" , "CH,N" , "STOP" , "Stop of SO (in seconds elapsed from start of EDF)" ); 
-  add_var( "SPINDLES" , "CH,N" , "STOP_IDX" , "Stop of SO (in sample-point units)" ); 
-  add_var( "SPINDLES" , "CH,N" , "DUR" , "SO duration (sec)" ); 
-  add_var( "SPINDLES" , "CH,N" , "DUR1" , "SO HW1 duration (sec)" ); 
-  add_var( "SPINDLES" , "CH,N" , "DUR2" , "SO HW2 duration (sec)" ); 
-  add_var( "SPINDLES" , "CH,N" , "TRANS" , "SO transition (sec)" );
+  add_var( "SPINDLES" , "CH,N" , "DOWN_AMP" , "Negative peak SO amplitude" , VT_REAL );
+  add_var( "SPINDLES" , "CH,N" , "DOWN_IDX" , "Negative peak sample index" , VT_INTEGER ); 
+  add_var( "SPINDLES" , "CH,N" , "UP_AMP" , "Positive peak SO ampltiude" , VT_REAL ); 
+  add_var( "SPINDLES" , "CH,N" , "UP_IDX" , "Positive peak sample index" , VT_INTEGER ); 
+  add_var( "SPINDLES" , "CH,N" , "START" , "Start of SO (in seconds elapsed from start of EDF)" , VT_REAL ); 
+  add_var( "SPINDLES" , "CH,N" , "START_IDX" , "Start of SO (in sample-point units)" , VT_INTEGER ); 
+  add_var( "SPINDLES" , "CH,N" , "STOP" , "Stop of SO (in seconds elapsed from start of EDF)" , VT_REAL ); 
+  add_var( "SPINDLES" , "CH,N" , "STOP_IDX" , "Stop of SO (in sample-point units)" , VT_INTEGER ); 
+  add_var( "SPINDLES" , "CH,N" , "DUR" , "SO duration (sec)" , VT_REAL ); 
+  add_var( "SPINDLES" , "CH,N" , "DUR1" , "SO HW1 duration (sec)" , VT_REAL ); 
+  add_var( "SPINDLES" , "CH,N" , "DUR2" , "SO HW2 duration (sec)" , VT_REAL ); 
+  add_var( "SPINDLES" , "CH,N" , "TRANS" , "SO transition (sec)" , VT_REAL );
  
-  add_var( "SPINDLES" , "CH,N" , "P2P_AMP" , "SO peak-to-peak amplitude" ); 
-  add_var( "SPINDLES" , "CH,N" , "SLOPE_POS1" , "Positive peak rising slope" ); 
-  add_var( "SPINDLES" , "CH,N" , "SLOPE_POS2" , "Positive peak falling slope" ); 
-  add_var( "SPINDLES" , "CH,N" , "SLOPE_NEG1" , "Negative peak falling slope" );
-  add_var( "SPINDLES" , "CH,N" , "SLOPE_NEG2" , "Negative peak rising slope" );
+  add_var( "SPINDLES" , "CH,N" , "P2P_AMP" , "SO peak-to-peak amplitude" , VT_REAL ); 
+  add_var( "SPINDLES" , "CH,N" , "SLOPE_POS1" , "Positive peak rising slope" , VT_REAL ); 
+  add_var( "SPINDLES" , "CH,N" , "SLOPE_POS2" , "Positive peak falling slope" , VT_REAL ); 
+  add_var( "SPINDLES" , "CH,N" , "SLOPE_NEG1" , "Negative peak falling slope" , VT_REAL );
+  add_var( "SPINDLES" , "CH,N" , "SLOPE_NEG2" , "Negative peak rising slope" , VT_REAL );
   
   //
   // SP/SO coupling (w/out ANCHOR)
   //
 
   add_table( "SPINDLES" , "CH,F" , "SP/SO coupling stats" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG" , "SO/SP coupling: magnitude (original statistic)" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_NULL" , "SO/SP coupling: meanmagnitude under null" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_Z" , "SO/SP coupling: magnitude (empirical Z)" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_EMP" , "SO/SP coupling: magnitude (empirical P)" );  
-  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP" , "SO/SP coupling: overlap (original statistic)" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_NULL" , "SO/SP coupling: mean overlap under null" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_Z" , "SO/SP coupling: overlap (empirical Z)" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (empirical P)" );  
-  add_var( "SPINDLES" , "CH,F" , "COUPL_ANGLE" , "SO/SP coupling: mean SO phase angle at spindle peak" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_PV" , "SO/SP coupling: asymptotic ITPC p-value" );
-  add_var( "SPINDLES" , "CH,F" , "COUPL_SIGPV_NULL" , "SO/SP coupling: null rate of asymptotic ITPC p-value < 0.05" );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG" , "SO/SP coupling: magnitude (original statistic)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_NULL" , "SO/SP coupling: meanmagnitude under null" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_Z" , "SO/SP coupling: magnitude (empirical Z)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_MAG_EMP" , "SO/SP coupling: magnitude (empirical P)" , VT_REAL );  
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP" , "SO/SP coupling: overlap (original statistic)" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_NULL" , "SO/SP coupling: mean overlap under null" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_Z" , "SO/SP coupling: overlap (empirical Z)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (empirical P)" , VT_REAL );  
+  add_var( "SPINDLES" , "CH,F" , "COUPL_ANGLE" , "SO/SP coupling: mean SO phase angle at spindle peak" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_PV" , "SO/SP coupling: asymptotic ITPC p-value" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_SIGPV_NULL" , "SO/SP coupling: null rate of asymptotic ITPC p-value < 0.05" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_ANCHOR" , "SO/SP coupling: number of spindles with a valid anchor (included in coupling analysis)" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_ALL_MAG" , "SO/SP coupling, all spindles (not only SO-overlapping): magnitude (original statistic)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_ALL_MAG_NULL" , "SO/SP coupling, all spindles: mean magnitude under null" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_ALL_MAG_Z" , "SO/SP coupling, all spindles: magnitude (empirical Z)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_ALL_MAG_EMP" , "SO/SP coupling, all spindles: magnitude (empirical P)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_ALL_ANGLE" , "SO/SP coupling, all spindles: mean SO phase angle at spindle peak" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_ALL_PV" , "SO/SP coupling, all spindles: asymptotic ITPC p-value" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F" , "COUPL_ALL_SIGPV_NULL" , "SO/SP coupling, all spindles: null rate of asymptotic ITPC p-value < 0.05" , VT_REAL );
 
 
   //
@@ -6419,42 +6447,52 @@ void cmddefs_t::init()
   add_param( "SPINDLES" , "stratify-by-phase" , "" , "SO/SP coupling: Overlap statistics per SO phase bin" );
 
   add_table( "SPINDLES" , "ANCHOR,CH,F" , "SP/SO coupling stats" );
-  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_MAG" , "SO/SP coupling: magnitude (original statistic)" );
-  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_MAG_NULL" , "SO/SP coupling: meanmagnitude under null" );
-  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_MAG_Z" , "SO/SP coupling: magnitude (empirical Z)" );
-  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_MAG_EMP" , "SO/SP coupling: magnitude (empirical P)" );  
-  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_OVERLAP" , "SO/SP coupling: overlap (original statistic)" );
-  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_OVERLAP_NULL" , "SO/SP coupling: mean overlap under null" );
-  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_OVERLAP_Z" , "SO/SP coupling: overlap (empirical Z)" );
-  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (empirical P)" );  
-  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_ANGLE" , "SO/SP coupling: mean SO phase angle at spindle peak" );
-  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_PV" , "SO/SP coupling: asymptotic ITPC p-value" );
-  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_SIGPV_NULL" , "SO/SP coupling: null rate of asymptotic ITPC p-value < 0.05" );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_MAG" , "SO/SP coupling: magnitude (original statistic)" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_MAG_NULL" , "SO/SP coupling: meanmagnitude under null" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_MAG_Z" , "SO/SP coupling: magnitude (empirical Z)" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_MAG_EMP" , "SO/SP coupling: magnitude (empirical P)" , VT_REAL );  
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_OVERLAP" , "SO/SP coupling: overlap (original statistic)" , VT_INTEGER );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_OVERLAP_NULL" , "SO/SP coupling: mean overlap under null" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_OVERLAP_Z" , "SO/SP coupling: overlap (empirical Z)" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (empirical P)" , VT_REAL );  
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_ANGLE" , "SO/SP coupling: mean SO phase angle at spindle peak" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_PV" , "SO/SP coupling: asymptotic ITPC p-value" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_SIGPV_NULL" , "SO/SP coupling: null rate of asymptotic ITPC p-value < 0.05" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_ANCHOR" , "SO/SP coupling: number of spindles with a valid anchor (included in coupling analysis)" , VT_INTEGER );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_ALL_MAG" , "SO/SP coupling, all spindles (not only SO-overlapping): magnitude (original statistic)" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_ALL_MAG_NULL" , "SO/SP coupling, all spindles: mean magnitude under null" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_ALL_MAG_Z" , "SO/SP coupling, all spindles: magnitude (empirical Z)" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_ALL_MAG_EMP" , "SO/SP coupling, all spindles: magnitude (empirical P)" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_ALL_ANGLE" , "SO/SP coupling, all spindles: mean SO phase angle at spindle peak" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_ALL_PV" , "SO/SP coupling, all spindles: asymptotic ITPC p-value" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "COUPL_ALL_SIGPV_NULL" , "SO/SP coupling, all spindles: null rate of asymptotic ITPC p-value < 0.05" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "CDENS" , "Coupled spindle density (count per minute)" , VT_REAL );
+  add_var( "SPINDLES" , "ANCHOR,CH,F" , "UDENS" , "Uncoupled spindle density (count per minute)" , VT_REAL );
 
   add_table( "SPINDLES" , "CH,F,PHASE" , "SO-phase stratified spindle overlap" );
-  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP" , "SO/SP coupling: overlap (original statistic)" );
-  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (empirical P)" );
-  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_Z" , "SO/SP coupling: overlap (Z statistic)" );
-  add_var( "SPINDLES" , "CH,F,PHASE" , "SOPL_CHIRP" , "Spindle frequency | SO phase" );
+  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP" , "SO/SP coupling: overlap (original statistic)" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_EMP" , "SO/SP coupling: overlap (empirical P)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,PHASE" , "COUPL_OVERLAP_Z" , "SO/SP coupling: overlap (Z statistic)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,PHASE" , "SOPL_CHIRP" , "Spindle frequency | SO phase" , VT_REAL );
    
   // spindle-level SO-coupling output
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "PEAK" , "Spindle peak (seconds)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SO_NEAREST" , "SO/SP coupling: time to nearest SO (0 if in one)" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SO_NEAREST_NUM" , "SO/SP coupling: number of nearest SO" );
-  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SO_PHASE_PEAK" , "SO/SP coupling: SO phase at spindle peak, if in SO" );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "PEAK" , "Spindle peak (seconds)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SO_NEAREST" , "SO/SP coupling: time to nearest SO (0 if in one)" , VT_REAL );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SO_NEAREST_NUM" , "SO/SP coupling: number of nearest SO" , VT_INTEGER );
+  add_var( "SPINDLES" , "CH,F,SPINDLE" , "SO_PHASE_PEAK" , "SO/SP coupling: SO phase at spindle peak, if in SO" , VT_REAL );
 
 
   add_table( "SPINDLES", "CH,PHASE" , "Raw EEG by SO phase" );
-  add_var( "SPINDLES" , "CH,PHASE", "SOPL_EEG" , "Average EEG" );
+  add_var( "SPINDLES" , "CH,PHASE", "SOPL_EEG" , "Average EEG" , VT_REAL );
   
   add_table( "SPINDLES", "CH,SP" , "Raw EEG by time from SO negative peak" );
-  add_var( "SPINDLES" , "CH,SP", "SOTL_EEG" , "Average EEG" );
+  add_var( "SPINDLES" , "CH,SP", "SOTL_EEG" , "Average EEG" , VT_REAL );
 
   add_table( "SPINDLES", "CH,F,PHASE" , "Spindle CWT by SO phase" );
-  add_var( "SPINDLES" , "CH,F,PHASE", "SOPL_CWT" , "Spindle CWT" );
+  add_var( "SPINDLES" , "CH,F,PHASE", "SOPL_CWT" , "Spindle CWT" , VT_REAL );
 
   add_table( "SPINDLES", "CH,F,SP" , "Spindle CWT by time from SO negative peak" );
-  add_var( "SPINDLES" , "CH,F,SP", "SOTL_CWT" , "Spindle CWT" );
+  add_var( "SPINDLES" , "CH,F,SP", "SOTL_CWT" , "Spindle CWT" , VT_REAL );
 
   //
   // SO
@@ -6523,64 +6561,64 @@ void cmddefs_t::init()
   add_param( "SO" , "window" , "2" , "Specify window size (seconds) for tl option" );
   
   add_table( "SO" , "CH" , "Channel-level statistics" );
-  add_var( "SO" , "CH" , "SO" , "Number of SO detected" );
-  add_var( "SO" , "CH" , "SO_RATE" , "SO per minute" );
-  add_var( "SO" , "CH" , "SO_AMP_NEG" , "SO amplitude (negative peak)" );
-  add_var( "SO" , "CH" , "SO_AMP_POS" , "SO amplitude (positive peak)" );
-  add_var( "SO" , "CH" , "SO_AMP_P2P" , "SO peak-to-peak amplitude" );
-  add_var( "SO" , "CH" , "SO_DUR" , "SO duration (secs)" );      
-  add_var( "SO" , "CH" , "SO_DUR_NEG" , "Negative peak duration (secs)" );
-  add_var( "SO" , "CH" , "SO_DUR_POS", "Positive peak duration (secs)" );
-  add_var( "SO" , "CH" , "SO_DUR_POL_DIFF" , "Mean difference in negative minus positive SO half-wave duration (secs) [pol]" );
-  add_var( "SO" , "CH" , "SO_DUR_POL_P" , "Paired t-test p-value for negative versus positive SO half-wave duration [pol]" );
-  add_var( "SO" , "CH" , "SO_TRANS" , "SO transition (secs)" );      
-  add_var( "SO" , "CH" , "SO_TRANS_FREQ" , "SO transition freq (Hz)" );      
-  add_var( "SO" , "CH" , "SO_SLOPE_POS1" , "Positive peak rising slope" );
-  add_var( "SO" , "CH" , "SO_SLOPE_POS2" , "Positive peak falling slope" );
-  add_var( "SO" , "CH" , "SO_SLOPE_NEG1" , "Negative peak falling slope" );
-  add_var( "SO" , "CH" , "SO_SLOPE_NEG2" , "Negative peak rising slope" );
-  add_var( "SO" , "CH" , "SO_SLOPE"      , "Negative peak rising slope" );
-  add_var( "SO" , "CH" , "SO_TH_NEG" , "Negative peak threshold [mag]" );
-  add_var( "SO" , "CH" , "SO_TH_P2P" , "Peak-to-peak threshold [mag]" );
+  add_var( "SO" , "CH" , "SO" , "Number of SO detected" , VT_INTEGER );
+  add_var( "SO" , "CH" , "SO_RATE" , "SO per minute" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_AMP_NEG" , "SO amplitude (negative peak)" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_AMP_POS" , "SO amplitude (positive peak)" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_AMP_P2P" , "SO peak-to-peak amplitude" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_DUR" , "SO duration (secs)" , VT_REAL );      
+  add_var( "SO" , "CH" , "SO_DUR_NEG" , "Negative peak duration (secs)" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_DUR_POS", "Positive peak duration (secs)" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_DUR_POL_DIFF" , "Mean difference in negative minus positive SO half-wave duration (secs) [pol]" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_DUR_POL_P" , "Paired t-test p-value for negative versus positive SO half-wave duration [pol]" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_TRANS" , "SO transition (secs)" , VT_REAL );      
+  add_var( "SO" , "CH" , "SO_TRANS_FREQ" , "SO transition freq (Hz)" , VT_REAL );      
+  add_var( "SO" , "CH" , "SO_SLOPE_POS1" , "Positive peak rising slope" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_SLOPE_POS2" , "Positive peak falling slope" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_SLOPE_NEG1" , "Negative peak falling slope" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_SLOPE_NEG2" , "Negative peak rising slope" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_SLOPE"      , "Negative peak rising slope" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_TH_NEG" , "Negative peak threshold [mag]" , VT_REAL );
+  add_var( "SO" , "CH" , "SO_TH_P2P" , "Peak-to-peak threshold [mag]" , VT_REAL );
 
   add_table( "SO" , "CH,E" , "Epoch-level statistics" );
-  add_var( "SO" , "CH,E" , "N" , "Number of SO detected" );
-  add_var( "SO" , "CH,E" , "AMP_NEG" , "Mean negative peak amplitude" );
-  add_var( "SO" , "CH,E" , "AMP_POS" , "Mean positive peak amplitude" );
-  add_var( "SO" , "CH,E" , "AMP_P2P" , "Mean peak-to-peak SO amplitude" );
-  add_var( "SO" , "CH,E" , "DUR" , "Mean SO duration" );
-  add_var( "SO" , "CH,E" , "DUR_POS" , "Mean positive HW duration" );
-  add_var( "SO" , "CH,E" , "DUR_NEG" , "Mean negative HW duration" );
-  add_var( "SO" , "CH,E" , "TRANS" , "Mean SO transition time (sec)" );
-  add_var( "SO" , "CH,E" , "TRANS_FREQ" , "Mean SO transition freq (Hz)" );
-  add_var( "SO" , "CH,E" , "SLOPE_NEG1" , "Negative peak falling slope" );
-  add_var( "SO" , "CH,E" , "SLOPE_NEG2" , "Negative peak rising slope" );
-  add_var( "SO" , "CH,E" , "SLOPE_POS1" , "Positive peak rising slope" );
-  add_var( "SO" , "CH,E" , "SLOPE_POS2" , "Positive peak falling slope" );
-  add_var( "SO" , "CH,E" , "SLOPE" , "Negative peak rising slope" );
+  add_var( "SO" , "CH,E" , "N" , "Number of SO detected" , VT_INTEGER );
+  add_var( "SO" , "CH,E" , "AMP_NEG" , "Mean negative peak amplitude" , VT_REAL );
+  add_var( "SO" , "CH,E" , "AMP_POS" , "Mean positive peak amplitude" , VT_REAL );
+  add_var( "SO" , "CH,E" , "AMP_P2P" , "Mean peak-to-peak SO amplitude" , VT_REAL );
+  add_var( "SO" , "CH,E" , "DUR" , "Mean SO duration" , VT_REAL );
+  add_var( "SO" , "CH,E" , "DUR_POS" , "Mean positive HW duration" , VT_REAL );
+  add_var( "SO" , "CH,E" , "DUR_NEG" , "Mean negative HW duration" , VT_REAL );
+  add_var( "SO" , "CH,E" , "TRANS" , "Mean SO transition time (sec)" , VT_REAL );
+  add_var( "SO" , "CH,E" , "TRANS_FREQ" , "Mean SO transition freq (Hz)" , VT_REAL );
+  add_var( "SO" , "CH,E" , "SLOPE_NEG1" , "Negative peak falling slope" , VT_REAL );
+  add_var( "SO" , "CH,E" , "SLOPE_NEG2" , "Negative peak rising slope" , VT_REAL );
+  add_var( "SO" , "CH,E" , "SLOPE_POS1" , "Positive peak rising slope" , VT_REAL );
+  add_var( "SO" , "CH,E" , "SLOPE_POS2" , "Positive peak falling slope" , VT_REAL );
+  add_var( "SO" , "CH,E" , "SLOPE" , "Negative peak rising slope" , VT_REAL );
   
   add_table( "SO" , "CH,N" , "Per-SO statistics" );
-  add_var( "SO" , "CH,N" , "AMP_NEG" , "Negative peak amplitude" );  
-  add_var( "SO" , "CH,N" , "AMP_POS" , "Positive peak ampltiude" );
-  add_var( "SO" , "CH,N" , "AMP_P2P" , "Peak-to-peak ampltiude" ); 
-  add_var( "SO" , "CH,N" , "DUR" , "SO duration" ); 
-  add_var( "SO" , "CH,N" , "DUR_NEG" , "SO HW1 duration" ); 
-  add_var( "SO" , "CH,N" , "DUR_POS" , "SO HW2 duration" ); 
-  add_var( "SO" , "CH,N" , "TRANS" , "SO transition (sec)" );
-  add_var( "SO" , "CH,N" , "SLOPE_POS1" , "Positive peak rising slope" ); 
-  add_var( "SO" , "CH,N" , "SLOPE_POS2" , "Positive peak falling slope" ); 
-  add_var( "SO" , "CH,N" , "SLOPE_NEG1" , "Negative peak falling slope" );
-  add_var( "SO" , "CH,N" , "SLOPE_NEG2" , "Negative peak rising slope" );
-  add_var( "SO" , "CH,N" , "SLOPE" , "Negative peak rising slope" );
-  add_var( "SO" , "CH,N" , "IDX_NEG" , "Negative peak sample index" );
-  add_var( "SO" , "CH,N" , "IDX_POS" , "Positive peak sample index" ); 
-  add_var( "SO" , "CH,N" , "START" , "Start of SO (in seconds elapsed from start of EDF)" ); 
-  add_var( "SO" , "CH,N" , "START_IDX" , "Start of SO (in sample-point units)" ); 
-  add_var( "SO" , "CH,N" , "STOP" , "Stop of SO (in seconds elapsed from start of EDF)" ); 
-  add_var( "SO" , "CH,N" , "STOP_IDX" , "Stop of SO (in sample-point units)" ); 
+  add_var( "SO" , "CH,N" , "AMP_NEG" , "Negative peak amplitude" , VT_REAL );  
+  add_var( "SO" , "CH,N" , "AMP_POS" , "Positive peak ampltiude" , VT_REAL );
+  add_var( "SO" , "CH,N" , "AMP_P2P" , "Peak-to-peak ampltiude" , VT_REAL ); 
+  add_var( "SO" , "CH,N" , "DUR" , "SO duration" , VT_REAL ); 
+  add_var( "SO" , "CH,N" , "DUR_NEG" , "SO HW1 duration" , VT_REAL ); 
+  add_var( "SO" , "CH,N" , "DUR_POS" , "SO HW2 duration" , VT_REAL ); 
+  add_var( "SO" , "CH,N" , "TRANS" , "SO transition (sec)" , VT_REAL );
+  add_var( "SO" , "CH,N" , "SLOPE_POS1" , "Positive peak rising slope" , VT_REAL ); 
+  add_var( "SO" , "CH,N" , "SLOPE_POS2" , "Positive peak falling slope" , VT_REAL ); 
+  add_var( "SO" , "CH,N" , "SLOPE_NEG1" , "Negative peak falling slope" , VT_REAL );
+  add_var( "SO" , "CH,N" , "SLOPE_NEG2" , "Negative peak rising slope" , VT_REAL );
+  add_var( "SO" , "CH,N" , "SLOPE" , "Negative peak rising slope" , VT_REAL );
+  add_var( "SO" , "CH,N" , "IDX_NEG" , "Negative peak sample index" , VT_INTEGER );
+  add_var( "SO" , "CH,N" , "IDX_POS" , "Positive peak sample index" , VT_INTEGER ); 
+  add_var( "SO" , "CH,N" , "START" , "Start of SO (in seconds elapsed from start of EDF)" , VT_REAL ); 
+  add_var( "SO" , "CH,N" , "START_IDX" , "Start of SO (in sample-point units)" , VT_INTEGER ); 
+  add_var( "SO" , "CH,N" , "STOP" , "Stop of SO (in seconds elapsed from start of EDF)" , VT_REAL ); 
+  add_var( "SO" , "CH,N" , "STOP_IDX" , "Stop of SO (in sample-point units)" , VT_INTEGER ); 
   
   add_table( "SO" , "CH,CH2,SP" , "SO time-locked signal averaging [tl]" );
-  add_var( "SO" , "CH,CH2,SP" , "SOTL" , "SO time-locked signal average" );
+  add_var( "SO" , "CH,CH2,SP" , "SOTL" , "SO time-locked signal average" , VT_REAL );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -6614,26 +6652,26 @@ void cmddefs_t::init()
   add_param( "COH" , "epoch-spectrum" , "" , "Show per-epoch full coherence spectra" );
 
   add_table( "COH" , "B,CH1,CH2" , "Coherence for power bands" );
-  add_var( "COH" , "B,CH1,CH2" , "COH" , "Magnitude-squared coherence" );
-  add_var( "COH" , "B,CH1,CH2" , "ICOH" , "Imaginary coherence" );
-  add_var( "COH" , "B,CH1,CH2" , "LCOH" , "Lagged coherence" );
+  add_var( "COH" , "B,CH1,CH2" , "COH" , "Magnitude-squared coherence" , VT_REAL );
+  add_var( "COH" , "B,CH1,CH2" , "ICOH" , "Imaginary coherence" , VT_REAL );
+  add_var( "COH" , "B,CH1,CH2" , "LCOH" , "Lagged coherence" , VT_REAL );
   
   add_table( "COH" , "F,CH1,CH2" , "Full cross-spectra coherence [spectrum]" );
-  add_var( "COH" , "F,CH1,CH2" , "COH" , "Magnitude-squared coherence" );
-  add_var( "COH" , "F,CH1,CH2" , "ICOH" , "Imaginary coherence" );
-  add_var( "COH" , "F,CH1,CH2" , "LCOH" , "Lagged coherence" );
-  add_var( "COH" , "F,CH1,CH2" , "CSPEC" , "Cross-spectrum in dB" );
+  add_var( "COH" , "F,CH1,CH2" , "COH" , "Magnitude-squared coherence" , VT_REAL );
+  add_var( "COH" , "F,CH1,CH2" , "ICOH" , "Imaginary coherence" , VT_REAL );
+  add_var( "COH" , "F,CH1,CH2" , "LCOH" , "Lagged coherence" , VT_REAL );
+  add_var( "COH" , "F,CH1,CH2" , "CSPEC" , "Cross-spectrum in dB" , VT_REAL );
 
   add_table( "COH" , "B,CH1,CH2,E" , "Epoch-level band coherence" );
-  add_var( "COH" , "B,CH1,CH2,E" , "COH" , "Magnitude-squared coherence" );
-  add_var( "COH" , "B,CH1,CH2,E" , "ICOH" , "Imaginary coherence" );
-  add_var( "COH" , "B,CH1,CH2,E" , "LCOH" , "Lagged coherence" );
+  add_var( "COH" , "B,CH1,CH2,E" , "COH" , "Magnitude-squared coherence" , VT_REAL );
+  add_var( "COH" , "B,CH1,CH2,E" , "ICOH" , "Imaginary coherence" , VT_REAL );
+  add_var( "COH" , "B,CH1,CH2,E" , "LCOH" , "Lagged coherence" , VT_REAL );
   
   add_table( "COH" , "CH1,CH2,E,F" , "Epoch-level coherence" );
-  add_var( "COH" , "CH1,CH2,E,F" , "COH" , "Magnitude-squared coherence" );
-  add_var( "COH" , "CH1,CH2,E,F" , "ICOH" , "Imaginary coherence" );
-  add_var( "COH" , "CH1,CH2,E,F" , "LCOH" , "Lagged coherence" );
-  add_var( "COH" , "CH1,CH2,E,F" , "CSPEC" , "Cross-spectrum in dB" );
+  add_var( "COH" , "CH1,CH2,E,F" , "COH" , "Magnitude-squared coherence" , VT_REAL );
+  add_var( "COH" , "CH1,CH2,E,F" , "ICOH" , "Imaginary coherence" , VT_REAL );
+  add_var( "COH" , "CH1,CH2,E,F" , "LCOH" , "Lagged coherence" , VT_REAL );
+  add_var( "COH" , "CH1,CH2,E,F" , "CSPEC" , "Cross-spectrum in dB" , VT_REAL );
 
   // as these files can get large...
   set_compressed( "COH" , tfac_t( "CH1,CH2,B,E" ) );
@@ -6663,32 +6701,32 @@ void cmddefs_t::init()
   add_param( "PSI" , "r" , "1" , "Window increment (Hz)" );
 
   add_table( "PSI" , "F" , "Phase-slope index parameters" );
-  add_var( "PSI" , "F" , "F1" , "Lower frequency bound" );
-  add_var( "PSI" , "F" , "F2" , "Upper frequency bound" );
-  add_var( "PSI" , "F" , "NF" , "NUmber of frequency bins" );
+  add_var( "PSI" , "F" , "F1" , "Lower frequency bound" , VT_REAL );
+  add_var( "PSI" , "F" , "F2" , "Upper frequency bound" , VT_REAL );
+  add_var( "PSI" , "F" , "NF" , "NUmber of frequency bins" , VT_INTEGER );
 
   add_table( "PSI" , "F,CH" , "Net (single-channel) Phase-slope index parameters" );
-  add_var( "PSI" , "F,CH" , "PSI" , "Net Phase-slope index, normalized" );
-  add_var( "PSI" , "F,CH" , "PSI_RAW" , "Net Phase-slope index, raw" );
-  add_var( "PSI" , "F,CH" , "STD" , "Net Phase-slope index, SD" );
-  add_var( "PSI" , "F,CH" , "APSI" , "Absolute net phase-slope index, normalized" );
-  add_var( "PSI" , "F,CH" , "APSI_RAW" , "Absolute net phase-slope index, raw" );
-  add_var( "PSI" , "F,CH" , "ASTD" , "Absolute net phase-slope index, SD" );
+  add_var( "PSI" , "F,CH" , "PSI" , "Net Phase-slope index, normalized" , VT_REAL );
+  add_var( "PSI" , "F,CH" , "PSI_RAW" , "Net Phase-slope index, raw" , VT_REAL );
+  add_var( "PSI" , "F,CH" , "STD" , "Net Phase-slope index, SD" , VT_REAL );
+  add_var( "PSI" , "F,CH" , "APSI" , "Absolute net phase-slope index, normalized" , VT_REAL );
+  add_var( "PSI" , "F,CH" , "APSI_RAW" , "Absolute net phase-slope index, raw" , VT_REAL );
+  add_var( "PSI" , "F,CH" , "ASTD" , "Absolute net phase-slope index, SD" , VT_REAL );
 
   add_table( "PSI" , "F,CH1,CH2" , "Pairwise Phase-slope index parameters" );
-  add_var( "PSI" , "F,CH1,CH2" , "PSI" , "Phase-slope index, normalized" );
-  add_var( "PSI" , "F,CH1,CH2" , "PSI_RAW" , "Phase-slope index, raw" );
-  add_var( "PSI" , "F,CH1,CH2" , "STD" , "Phase-slope index, SD" );
+  add_var( "PSI" , "F,CH1,CH2" , "PSI" , "Phase-slope index, normalized" , VT_REAL );
+  add_var( "PSI" , "F,CH1,CH2" , "PSI_RAW" , "Phase-slope index, raw" , VT_REAL );
+  add_var( "PSI" , "F,CH1,CH2" , "STD" , "Phase-slope index, SD" , VT_REAL );
 
   add_table( "PSI" , "E,F,CH" , "Epoch-level net (single-channel) Phase-slope index parameters" );
-  add_var( "PSI" , "E,F,CH" , "PSI" , "Net Phase-slope index, normalized" );
-  add_var( "PSI" , "E,F,CH" , "PSI_RAW" , "Net Phase-slope index, raw" );
-  add_var( "PSI" , "E,F,CH" , "STD" , "Net Phase-slope index, SD" );
+  add_var( "PSI" , "E,F,CH" , "PSI" , "Net Phase-slope index, normalized" , VT_REAL );
+  add_var( "PSI" , "E,F,CH" , "PSI_RAW" , "Net Phase-slope index, raw" , VT_REAL );
+  add_var( "PSI" , "E,F,CH" , "STD" , "Net Phase-slope index, SD" , VT_REAL );
 
   add_table( "PSI" , "E,F,CH1,CH2" , "Epoch-level pairwise Phase-slope index parameters" );
-  add_var( "PSI" , "E,F,CH1,CH2" , "PSI" , "Phase-slope index, normalized" );
-  add_var( "PSI" , "E,F,CH1,CH2" , "PSI_RAW" , "Phase-slope index, raw" );
-  add_var( "PSI" , "E,F,CH1,CH2" , "STD" , "Phase-slope index, SD" );
+  add_var( "PSI" , "E,F,CH1,CH2" , "PSI" , "Phase-slope index, normalized" , VT_REAL );
+  add_var( "PSI" , "E,F,CH1,CH2" , "PSI_RAW" , "Phase-slope index, raw" , VT_REAL );
+  add_var( "PSI" , "E,F,CH1,CH2" , "STD" , "Phase-slope index, SD" , VT_REAL );
 
   set_compressed( "PSI" , tfac_t( "E,F,CH" ) );
   set_compressed( "PSI" , tfac_t( "E,F,CH1,CH2" ) );
@@ -6726,7 +6764,7 @@ void cmddefs_t::init()
   add_param( "SYNC" , "no-new-channels" , "" , "Do not add KOP channels back into the EDF" );
 
   add_table( "SYNC" , "E,F" , "Epoch-wise analysis" );
-  add_var( "SYNC" , "E,F" , "KOP" , "Kuramoto order parameter for that epoch and frequency/frequency-band" );
+  add_var( "SYNC" , "E,F" , "KOP" , "Kuramoto order parameter for that epoch and frequency/frequency-band" , VT_REAL );
   set_compressed( "SYNC" , tfac_t( "E,F" ) );
 
   //
@@ -6749,19 +6787,19 @@ void cmddefs_t::init()
   add_param( "XCORR" , "epoch" , "10" , "Epoch-level outputs" );
 
   add_table( "XCORR" , "CH1,CH2" , "Pairwise outputs" );
-  add_var( "XCORR" , "CH1,CH2" , "D" , "Delay in seconds (+ve means CH1 lags CH2)" );
-  add_var( "XCORR" , "CH1,CH2" , "S" , "Delay in samples" );
-  add_var( "XCORR" , "CH1,CH2" , "D_MN" , "Delay in seconds, mean over epochs" );
-  add_var( "XCORR" , "CH1,CH2" , "S_MN" , "Delay in samples, mean over epochs" );
-  add_var( "XCORR" , "CH1,CH2" , "D_MD" , "Delay in seconds, median over epochs" );
-  add_var( "XCORR" , "CH1,CH2" , "S_MD" , "Delay in samples, median over epochs" );
+  add_var( "XCORR" , "CH1,CH2" , "D" , "Delay in seconds (+ve means CH1 lags CH2)" , VT_REAL );
+  add_var( "XCORR" , "CH1,CH2" , "S" , "Delay in samples" , VT_INTEGER );
+  add_var( "XCORR" , "CH1,CH2" , "D_MN" , "Delay in seconds, mean over epochs" , VT_REAL );
+  add_var( "XCORR" , "CH1,CH2" , "S_MN" , "Delay in samples, mean over epochs" , VT_REAL );
+  add_var( "XCORR" , "CH1,CH2" , "D_MD" , "Delay in seconds, median over epochs" , VT_REAL );
+  add_var( "XCORR" , "CH1,CH2" , "S_MD" , "Delay in samples, median over epochs" , VT_REAL );
   
   add_table( "XCORR" , "CH1,CH2,D" , "Lag-wise x-corrs" );
-  add_var( "XCORR" , "CH1,CH2,D" , "T" , "Lag time (seconds)" );
-  add_var( "XCORR" , "CH1,CH2,D" , "XCORR" , "Cross correlation" );
+  add_var( "XCORR" , "CH1,CH2,D" , "T" , "Lag time (seconds)" , VT_REAL );
+  add_var( "XCORR" , "CH1,CH2,D" , "XCORR" , "Cross correlation" , VT_REAL );
 
   add_table( "XCORR" , "CH1,CH2,E" , "Epoch-wise outputs" );
-  add_var( "XCORR" , "CH1,CH2,E" , "D" , "Delay in seconds" );
+  add_var( "XCORR" , "CH1,CH2,E" , "D" , "Delay in seconds" , VT_REAL );
 
   //
   // TSYNC
@@ -6783,7 +6821,7 @@ void cmddefs_t::init()
   add_param( "TSYNC" , "verbose" , "" , "Emit full delay profiles" );
   add_param( "TSYNC" , "ht" , "" , "Use associated _ht_ph and _ht_mag signals (recommended mode)" );
   add_table( "TSYNC" , "CH1,CH2,D" , "Lag-wise synchrony profiles" );
-  add_var( "TSYNC" , "CH1,CH2,D" , "PHL" , "Average phase-locking value at this lag" );
+  add_var( "TSYNC" , "CH1,CH2,D" , "PHL" , "Average phase-locking value at this lag" , VT_REAL );
 
   //
   // GP
@@ -6806,18 +6844,18 @@ void cmddefs_t::init()
   add_param( "GP" , "f" , "1,25,20" , "Linear frequency grid: lower,upper,count" );
   add_param( "GP" , "f-log" , "1,25,20" , "Log-spaced frequency grid: lower,upper,count" );
   add_table( "GP" , "CH1,CH2" , "Time-domain Granger summaries" );
-  add_var( "GP" , "CH1,CH2" , "Y2X" , "Directed predictability from CH2 to CH1" );
-  add_var( "GP" , "CH1,CH2" , "X2Y" , "Directed predictability from CH1 to CH2" );
+  add_var( "GP" , "CH1,CH2" , "Y2X" , "Directed predictability from CH2 to CH1" , VT_REAL );
+  add_var( "GP" , "CH1,CH2" , "X2Y" , "Directed predictability from CH1 to CH2" , VT_REAL );
   add_table( "GP" , "CH1,CH2,F" , "Frequency-resolved Granger summaries" );
-  add_var( "GP" , "CH1,CH2,F" , "Y2X" , "Frequency-domain predictability from CH2 to CH1" );
-  add_var( "GP" , "CH1,CH2,F" , "X2Y" , "Frequency-domain predictability from CH1 to CH2" );
+  add_var( "GP" , "CH1,CH2,F" , "Y2X" , "Frequency-domain predictability from CH2 to CH1" , VT_REAL );
+  add_var( "GP" , "CH1,CH2,F" , "X2Y" , "Frequency-domain predictability from CH1 to CH2" , VT_REAL );
   add_table( "GP" , "CH1,CH2,E" , "Epoch-level Granger summaries" );
-  add_var( "GP" , "CH1,CH2,E" , "Y2X" , "Directed predictability from CH2 to CH1" );
-  add_var( "GP" , "CH1,CH2,E" , "X2Y" , "Directed predictability from CH1 to CH2" );
-  add_var( "GP" , "CH1,CH2,E" , "BIC" , "Best BIC score [bic]" );
+  add_var( "GP" , "CH1,CH2,E" , "Y2X" , "Directed predictability from CH2 to CH1" , VT_REAL );
+  add_var( "GP" , "CH1,CH2,E" , "X2Y" , "Directed predictability from CH1 to CH2" , VT_REAL );
+  add_var( "GP" , "CH1,CH2,E" , "BIC" , "Best BIC score [bic]" , VT_REAL );
   add_table( "GP" , "CH1,CH2,E,F" , "Epoch-level frequency-resolved Granger summaries" );
-  add_var( "GP" , "CH1,CH2,E,F" , "Y2X" , "Frequency-domain predictability from CH2 to CH1" );
-  add_var( "GP" , "CH1,CH2,E,F" , "X2Y" , "Frequency-domain predictability from CH1 to CH2" );
+  add_var( "GP" , "CH1,CH2,E,F" , "Y2X" , "Frequency-domain predictability from CH2 to CH1" , VT_REAL );
+  add_var( "GP" , "CH1,CH2,E,F" , "X2Y" , "Frequency-domain predictability from CH1 to CH2" , VT_REAL );
 
   //
   // CORREL
@@ -6844,30 +6882,30 @@ void cmddefs_t::init()
   add_param( "CORREL" , "ch-high" , "0.98" , "Number of correlations above threshold for this channel" );
   
   add_table( "CORREL" , "CH1,CH2" , "Whole-signal correlations for pairs of channels" );
-  add_var( "CORREL" , "CH1,CH2" , "R", "Pearson product moment correlation" );
-  add_var( "CORREL" , "CH1,CH2" , "R_MEAN", "(If epoch is specified) the mean of epoch-level correlations" );
-  add_var( "CORREL" , "CH1,CH2" , "R_MEDIAN" ,  "(If epoch is specified) the median of epoch-level correlations" );
+  add_var( "CORREL" , "CH1,CH2" , "R", "Pearson product moment correlation" , VT_REAL );
+  add_var( "CORREL" , "CH1,CH2" , "R_MEAN", "(If epoch is specified) the mean of epoch-level correlations" , VT_REAL );
+  add_var( "CORREL" , "CH1,CH2" , "R_MEDIAN" ,  "(If epoch is specified) the median of epoch-level correlations" , VT_REAL );
 
   add_table( "CORREL" , "CH" , "Channel-level summaries of correlations" );
-  add_var( "CORREL" , "CH" , "SUMM_LOW", "Number of correlations below ch-low threshold" );
-  add_var( "CORREL" , "CH" , "SUMM_HIGH", "Number of correlations above ch-high threshold" );
+  add_var( "CORREL" , "CH" , "SUMM_LOW", "Number of correlations below ch-low threshold" , VT_INTEGER );
+  add_var( "CORREL" , "CH" , "SUMM_HIGH", "Number of correlations above ch-high threshold" , VT_INTEGER );
   
-  add_var( "CORREL" , "CH" , "SUMM_MEAN", "Mean correlation for this channel" );
-  add_var( "CORREL" , "CH" , "SUMM_N", "Number of channel pairs contributing to summaries" );
-  add_var( "CORREL" , "CH" , "SUMM_MIN", "Min correlation for this channel" );
-  add_var( "CORREL" , "CH" , "SUMM_MAX", "Max correlation for this channel" );
+  add_var( "CORREL" , "CH" , "SUMM_MEAN", "Mean correlation for this channel" , VT_REAL );
+  add_var( "CORREL" , "CH" , "SUMM_N", "Number of channel pairs contributing to summaries" , VT_INTEGER );
+  add_var( "CORREL" , "CH" , "SUMM_MIN", "Min correlation for this channel" , VT_REAL );
+  add_var( "CORREL" , "CH" , "SUMM_MAX", "Max correlation for this channel" , VT_REAL );
 
   add_table( "CORREL" , "CHS" , "Sets of highly correlated channels" );
-  add_var( "CORREL" , "CHS" , "SET", "Comma-delimited channel set" );
-  add_var( "CORREL" , "CHS" , "N", "Number of channels in this set" );
+  add_var( "CORREL" , "CHS" , "SET", "Comma-delimited channel set" , VT_TEXT );
+  add_var( "CORREL" , "CHS" , "N", "Number of channels in this set" , VT_INTEGER );
   
   add_table( "CORREL" , "CH1,CH2,E" , "Whole-signal correlations for pairs of channels" );
-  add_var( "CORREL" , "CH1,CH2,E" , "R", "Pearson product moment correlation" );
+  add_var( "CORREL" , "CH1,CH2,E" , "R", "Pearson product moment correlation" , VT_REAL );
   set_compressed( "CORREL" , tfac_t( "CH1,CH2,E" ) );
 
   add_table( "CORREL" , "" , "Whole-record correlation summaries" );
-  add_var( "CORREL" , "" , "SUMM_HIGH_N", "Number of channels with correlations above ch-high" );
-  add_var( "CORREL" , "" , "SUMM_HIGH_CHS", "Comma-delimited channels exceeding ch-high" );
+  add_var( "CORREL" , "" , "SUMM_HIGH_N", "Number of channels with correlations above ch-high" , VT_INTEGER );
+  add_var( "CORREL" , "" , "SUMM_HIGH_CHS", "Comma-delimited channels exceeding ch-high" , VT_TEXT );
 
   //
   // MI
@@ -6890,23 +6928,23 @@ void cmddefs_t::init()
   add_param( "MI" , "permute" , "1000" , "Estimate empirical significance via permutation, with N replicates" );
 
   add_table( "MI" , "CH1,CH2" , "Output for the whole signal pairs" );
-  add_var( "MI" , "CH1,CH2" , "MI" , "Mutual information" );
-  add_var( "MI" , "CH1,CH2" , "TOTCORR" , "Total correlation" );
-  add_var( "MI" , "CH1,CH2" , "DTOTCORR" , "Dual total correlation" );
-  add_var( "MI" , "CH1,CH2" , "JINF" , "Joint entropy" );
-  add_var( "MI" , "CH1,CH2" , "INFA" , "Marginal entropy of first signal" );
-  add_var( "MI" , "CH1,CH2" , "INFB" , "Marginal entropy of second signal" );
-  add_var( "MI" , "CH1,CH2" , "NBINS" , "Number of bins" );
-  add_var( "MI" , "CH1,CH2" , "EMP" , "Empirical significance [permute]" );
-  add_var( "MI" , "CH1,CH2" , "Z" , "Z statistic [permute]" );
+  add_var( "MI" , "CH1,CH2" , "MI" , "Mutual information" , VT_REAL );
+  add_var( "MI" , "CH1,CH2" , "TOTCORR" , "Total correlation" , VT_REAL );
+  add_var( "MI" , "CH1,CH2" , "DTOTCORR" , "Dual total correlation" , VT_REAL );
+  add_var( "MI" , "CH1,CH2" , "JINF" , "Joint entropy" , VT_REAL );
+  add_var( "MI" , "CH1,CH2" , "INFA" , "Marginal entropy of first signal" , VT_REAL );
+  add_var( "MI" , "CH1,CH2" , "INFB" , "Marginal entropy of second signal" , VT_REAL );
+  add_var( "MI" , "CH1,CH2" , "NBINS" , "Number of bins" , VT_INTEGER );
+  add_var( "MI" , "CH1,CH2" , "EMP" , "Empirical significance [permute]" , VT_REAL );
+  add_var( "MI" , "CH1,CH2" , "Z" , "Z statistic [permute]" , VT_REAL );
 
   add_table( "MI" , "CH1,CH2,E" , "Output per epoch" );
-  add_var( "MI" , "CH1,CH2,E" , "MI" , "Mutual information" );
-  add_var( "MI" , "CH1,CH2,E" , "TOTCORR" , "Total correlation" );
-  add_var( "MI" , "CH1,CH2,E" , "DTOTCORR" , "Dual total correlation" );
-  add_var( "MI" , "CH1,CH2,E" , "JINF" , "Joint entropy" );
-  add_var( "MI" , "CH1,CH2,E" , "INFA" , "Marginal entropy of first signal" );
-  add_var( "MI" , "CH1,CH2,E" , "INFB" , "Marginal entropy of second signal" );
+  add_var( "MI" , "CH1,CH2,E" , "MI" , "Mutual information" , VT_REAL );
+  add_var( "MI" , "CH1,CH2,E" , "TOTCORR" , "Total correlation" , VT_REAL );
+  add_var( "MI" , "CH1,CH2,E" , "DTOTCORR" , "Dual total correlation" , VT_REAL );
+  add_var( "MI" , "CH1,CH2,E" , "JINF" , "Joint entropy" , VT_REAL );
+  add_var( "MI" , "CH1,CH2,E" , "INFA" , "Marginal entropy of first signal" , VT_REAL );
+  add_var( "MI" , "CH1,CH2,E" , "INFB" , "Marginal entropy of second signal" , VT_REAL );
   set_compressed( "MI" , tfac_t( "CH1,CH2,E" ) );
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -6950,11 +6988,11 @@ void cmddefs_t::init()
   add_param( "TLOCK" , "win" , "4" , "Winsorize interval outliers beyond this SD threshold before averaging" );
 
   add_table( "TLOCK" , "CH" , "Time-locked summary counts" );
-  add_var( "TLOCK" , "CH" , "N" , "Number of accepted aligned intervals" );
+  add_var( "TLOCK" , "CH" , "N" , "Number of accepted aligned intervals" , VT_INTEGER );
   add_table( "TLOCK" , "CH,SEC" , "Time-locked signal summaries by offset" );
-  add_var( "TLOCK" , "CH,SEC" , "M" , "Mean aligned signal value" );
-  add_var( "TLOCK" , "CH,SEC" , "SD" , "SD of aligned signal values" );
-  add_var( "TLOCK" , "CH,SEC" , "MD" , "Median aligned signal value" );
+  add_var( "TLOCK" , "CH,SEC" , "M" , "Mean aligned signal value" , VT_REAL );
+  add_var( "TLOCK" , "CH,SEC" , "SD" , "SD of aligned signal values" , VT_REAL );
+  add_var( "TLOCK" , "CH,SEC" , "MD" , "Median aligned signal value" , VT_REAL );
 
   //
   // WAVEFORMS
@@ -6993,24 +7031,24 @@ void cmddefs_t::init()
   add_param( "WAVEFORMS" , "basic-stats" , "" , "Also store basic waveform metrics (duration, range, mean, SD) for each stored channel waveform" );
 
   add_table( "WAVEFORMS" , "FILE" , "Per-file waveform dump summary" );
-  add_var( "WAVEFORMS" , "FILE" , "EDF_ID" , "EDF/individual ID stored in the shard" );
-  add_var( "WAVEFORMS" , "FILE" , "EDF" , "Source EDF filename" );
-  add_var( "WAVEFORMS" , "FILE" , "TAG" , "User-defined tag stored in the .lwf file" );
-  add_var( "WAVEFORMS" , "FILE" , "ALIGN" , "Stored anchor mode" );
-  add_var( "WAVEFORMS" , "FILE" , "START_DATE" , "EDF start date" );
-  add_var( "WAVEFORMS" , "FILE" , "START_TIME" , "EDF start time" );
-  add_var( "WAVEFORMS" , "FILE" , "N_ANNOTS" , "Number of defining annotation classes stored in the file header" );
-  add_var( "WAVEFORMS" , "FILE" , "ANNOTS" , "Comma-delimited defining annotation classes" );
-  add_var( "WAVEFORMS" , "FILE" , "N_WAVES" , "Number of waveform events dumped" );
-  add_var( "WAVEFORMS" , "FILE" , "N_CH" , "Number of dumped channels" );
-  add_var( "WAVEFORMS" , "FILE" , "N_FEATURES" , "Number of precomputed waveform features stored per channel block" );
-  add_var( "WAVEFORMS" , "FILE" , "FEATURES" , "Comma-delimited waveform feature names stored in the .lwf file" );
+  add_var( "WAVEFORMS" , "FILE" , "EDF_ID" , "EDF/individual ID stored in the shard" , VT_TEXT );
+  add_var( "WAVEFORMS" , "FILE" , "EDF" , "Source EDF filename" , VT_TEXT );
+  add_var( "WAVEFORMS" , "FILE" , "TAG" , "User-defined tag stored in the .lwf file" , VT_TEXT );
+  add_var( "WAVEFORMS" , "FILE" , "ALIGN" , "Stored anchor mode" , VT_TEXT );
+  add_var( "WAVEFORMS" , "FILE" , "START_DATE" , "EDF start date" , VT_TEXT );
+  add_var( "WAVEFORMS" , "FILE" , "START_TIME" , "EDF start time" , VT_TEXT );
+  add_var( "WAVEFORMS" , "FILE" , "N_ANNOTS" , "Number of defining annotation classes stored in the file header" , VT_INTEGER );
+  add_var( "WAVEFORMS" , "FILE" , "ANNOTS" , "Comma-delimited defining annotation classes" , VT_TEXT );
+  add_var( "WAVEFORMS" , "FILE" , "N_WAVES" , "Number of waveform events dumped" , VT_INTEGER );
+  add_var( "WAVEFORMS" , "FILE" , "N_CH" , "Number of dumped channels" , VT_INTEGER );
+  add_var( "WAVEFORMS" , "FILE" , "N_FEATURES" , "Number of precomputed waveform features stored per channel block" , VT_INTEGER );
+  add_var( "WAVEFORMS" , "FILE" , "FEATURES" , "Comma-delimited waveform feature names stored in the .lwf file" , VT_TEXT );
 
   add_table( "WAVEFORMS" , "FILE,CH" , "Per-file channel summary for dumped waveforms" );
-  add_var( "WAVEFORMS" , "FILE,CH" , "SR" , "Channel sample rate" );
-  add_var( "WAVEFORMS" , "FILE,CH" , "UNIT" , "Physical units from the EDF header" );
-  add_var( "WAVEFORMS" , "FILE,CH" , "MIN_SAMPLES" , "Minimum samples per waveform for this channel" );
-  add_var( "WAVEFORMS" , "FILE,CH" , "MAX_SAMPLES" , "Maximum samples per waveform for this channel" );
+  add_var( "WAVEFORMS" , "FILE,CH" , "SR" , "Channel sample rate" , VT_REAL );
+  add_var( "WAVEFORMS" , "FILE,CH" , "UNIT" , "Physical units from the EDF header" , VT_TEXT );
+  add_var( "WAVEFORMS" , "FILE,CH" , "MIN_SAMPLES" , "Minimum samples per waveform for this channel" , VT_INTEGER );
+  add_var( "WAVEFORMS" , "FILE,CH" , "MAX_SAMPLES" , "Maximum samples per waveform for this channel" , VT_INTEGER );
 
   //
   // PEAKS
@@ -7128,51 +7166,51 @@ void cmddefs_t::init()
   add_param( "OVERLAP" , "keep-metadata" , "" , "Retain original annotation meta-data when merging multi-sample input" );
 
   add_table( "OVERLAP" , "SEEDS" , "Seed-group pileup summaries" );
-  add_var( "OVERLAP" , "SEEDS" , "OBS" , "Observed pileup count for this seed combination" );
-  add_var( "OVERLAP" , "SEEDS" , "EXP" , "Expected pileup count under permutation" );
-  add_var( "OVERLAP" , "SEEDS" , "P" , "Empirical p-value for pileup enrichment" );
-  add_var( "OVERLAP" , "SEEDS" , "Z" , "Z-score for pileup enrichment" );
+  add_var( "OVERLAP" , "SEEDS" , "OBS" , "Observed pileup count for this seed combination" , VT_INTEGER );
+  add_var( "OVERLAP" , "SEEDS" , "EXP" , "Expected pileup count under permutation" , VT_REAL );
+  add_var( "OVERLAP" , "SEEDS" , "P" , "Empirical p-value for pileup enrichment" , VT_REAL );
+  add_var( "OVERLAP" , "SEEDS" , "Z" , "Z-score for pileup enrichment" , VT_REAL );
 
   add_table( "OVERLAP" , "SEED" , "Seed-level overlap summaries" );
-  add_var( "OVERLAP" , "SEED" , "PROP" , "Observed proportion of seed time overlapped by any other event" );
-  add_var( "OVERLAP" , "SEED" , "PROP_EXP" , "Expected proportion of seed time overlapped under permutation" );
-  add_var( "OVERLAP" , "SEED" , "PROP_P" , "Empirical p-value for proportional overlap" );
-  add_var( "OVERLAP" , "SEED" , "PROP_Z" , "Z-score for proportional overlap" );
+  add_var( "OVERLAP" , "SEED" , "PROP" , "Observed proportion of seed time overlapped by any other event" , VT_REAL );
+  add_var( "OVERLAP" , "SEED" , "PROP_EXP" , "Expected proportion of seed time overlapped under permutation" , VT_REAL );
+  add_var( "OVERLAP" , "SEED" , "PROP_P" , "Empirical p-value for proportional overlap" , VT_REAL );
+  add_var( "OVERLAP" , "SEED" , "PROP_Z" , "Z-score for proportional overlap" , VT_REAL );
 
   add_table( "OVERLAP" , "SEED,OTHERS" , "Seed versus pooled-other overlap counts" );
-  add_var( "OVERLAP" , "SEED,OTHERS" , "N_OBS" , "Observed count of pooled-other overlaps" );
-  add_var( "OVERLAP" , "SEED,OTHERS" , "N_EXP" , "Expected count of pooled-other overlaps under permutation" );
-  add_var( "OVERLAP" , "SEED,OTHERS" , "N_Z" , "Z-score for pooled-other overlap count" );
+  add_var( "OVERLAP" , "SEED,OTHERS" , "N_OBS" , "Observed count of pooled-other overlaps" , VT_INTEGER );
+  add_var( "OVERLAP" , "SEED,OTHERS" , "N_EXP" , "Expected count of pooled-other overlaps under permutation" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHERS" , "N_Z" , "Z-score for pooled-other overlap count" , VT_REAL );
 
   add_table( "OVERLAP" , "SEED,OTHER" , "Seed-other pairwise overlap and distance summaries" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "SEED_ANNOT" , "Seed annotation class label" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "SEED_CH" , "Seed annotation channel label" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "OTHER_ANNOT" , "Other annotation class label" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "OTHER_CH" , "Other annotation channel label" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "N_OBS" , "Observed number of overlapping events" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "N_EXP" , "Expected number of overlapping events under permutation" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "N_P" , "Empirical p-value for overlap count" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "N_Z" , "Z-score for overlap count" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D1_OBS" , "Observed mean absolute nearest distance" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D1_EXP" , "Expected mean absolute nearest distance" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D1_P" , "Empirical p-value for absolute nearest distance" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D1_Z" , "Z-score for absolute nearest distance" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D_N" , "Number of seed events contributing to nearest-distance summaries" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D_N_EXP" , "Expected number of seed events contributing to nearest-distance summaries" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_OBS" , "Observed signed distance summary (positive: other follows seed)" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_SEC" , "Observed mean signed nearest distance in seconds (positive: other follows seed)" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_LEAD" , "Proportion of eligible non-overlapping matches with other before seed (negative distance)" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_LAG" , "Proportion of eligible non-overlapping matches with other after seed (positive distance)" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_EXP" , "Expected signed distance summary under permutation (positive: other follows seed)" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_P" , "Empirical p-value for the signed distance summary" );
-  add_var( "OVERLAP" , "SEED,OTHER" , "D2_Z" , "Z-score for the signed distance summary" );
+  add_var( "OVERLAP" , "SEED,OTHER" , "SEED_ANNOT" , "Seed annotation class label" , VT_TEXT );
+  add_var( "OVERLAP" , "SEED,OTHER" , "SEED_CH" , "Seed annotation channel label" , VT_TEXT );
+  add_var( "OVERLAP" , "SEED,OTHER" , "OTHER_ANNOT" , "Other annotation class label" , VT_TEXT );
+  add_var( "OVERLAP" , "SEED,OTHER" , "OTHER_CH" , "Other annotation channel label" , VT_TEXT );
+  add_var( "OVERLAP" , "SEED,OTHER" , "N_OBS" , "Observed number of overlapping events" , VT_INTEGER );
+  add_var( "OVERLAP" , "SEED,OTHER" , "N_EXP" , "Expected number of overlapping events under permutation" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "N_P" , "Empirical p-value for overlap count" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "N_Z" , "Z-score for overlap count" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D1_OBS" , "Observed mean absolute nearest distance" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D1_EXP" , "Expected mean absolute nearest distance" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D1_P" , "Empirical p-value for absolute nearest distance" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D1_Z" , "Z-score for absolute nearest distance" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D_N" , "Number of seed events contributing to nearest-distance summaries" , VT_INTEGER );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D_N_EXP" , "Expected number of seed events contributing to nearest-distance summaries" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_OBS" , "Observed signed distance summary (positive: other follows seed)" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_SEC" , "Observed mean signed nearest distance in seconds (positive: other follows seed)" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_LEAD" , "Proportion of eligible non-overlapping matches with other before seed (negative distance)" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_LAG" , "Proportion of eligible non-overlapping matches with other after seed (positive distance)" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_EXP" , "Expected signed distance summary under permutation (positive: other follows seed)" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_P" , "Empirical p-value for the signed distance summary" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER" , "D2_Z" , "Z-score for the signed distance summary" , VT_REAL );
 
   add_table( "OVERLAP" , "SEED,OTHER,OFFSET" , "Offset-window overlap enrichment profiles" );
-  add_var( "OVERLAP" , "SEED,OTHER,OFFSET" , "INT" , "Human-readable description of the offset window" );
-  add_var( "OVERLAP" , "SEED,OTHER,OFFSET" , "N_OBS" , "Observed overlap count in this offset window" );
-  add_var( "OVERLAP" , "SEED,OTHER,OFFSET" , "N_EXP" , "Expected overlap count in this offset window" );
-  add_var( "OVERLAP" , "SEED,OTHER,OFFSET" , "N_P" , "Empirical p-value for offset-window overlap" );
-  add_var( "OVERLAP" , "SEED,OTHER,OFFSET" , "N_Z" , "Z-score for offset-window overlap" );
+  add_var( "OVERLAP" , "SEED,OTHER,OFFSET" , "INT" , "Human-readable description of the offset window" , VT_TEXT );
+  add_var( "OVERLAP" , "SEED,OTHER,OFFSET" , "N_OBS" , "Observed overlap count in this offset window" , VT_INTEGER );
+  add_var( "OVERLAP" , "SEED,OTHER,OFFSET" , "N_EXP" , "Expected overlap count in this offset window" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER,OFFSET" , "N_P" , "Empirical p-value for offset-window overlap" , VT_REAL );
+  add_var( "OVERLAP" , "SEED,OTHER,OFFSET" , "N_Z" , "Z-score for offset-window overlap" , VT_REAL );
 
   //
   // MEANS
@@ -7194,17 +7232,17 @@ void cmddefs_t::init()
   add_param( "MEANS" , "by-instance" , "" , "Output means by annotation instance as well as by class" );
  
   add_table( "MEANS" , "CH,ANNOT" , "Annotation class means, by channel" );
-  add_var( "MEANS" , "CH,ANNOT" , "M" , "Mean signal value across all instances of that annotation" );
-  add_var( "MEANS" , "CH,ANNOT" , "S" , "Total annotation span in seconds" );
-  add_var( "MEANS" , "CH,ANNOT" , "L" , "Left-flanking mean (if 'w' set)" );
-  add_var( "MEANS" , "CH,ANNOT" , "R" , "Right-flanking mean (if 'w' set)" );
+  add_var( "MEANS" , "CH,ANNOT" , "M" , "Mean signal value across all instances of that annotation" , VT_REAL );
+  add_var( "MEANS" , "CH,ANNOT" , "S" , "Total annotation span in seconds" , VT_REAL );
+  add_var( "MEANS" , "CH,ANNOT" , "L" , "Left-flanking mean (if 'w' set)" , VT_REAL );
+  add_var( "MEANS" , "CH,ANNOT" , "R" , "Right-flanking mean (if 'w' set)" , VT_REAL );
 
   add_table( "MEANS" , "CH,ANNOT,INST" , "Annotation class/instance means, by channel" );
-  add_var( "MEANS" , "CH,ANNOT,INST" , "M" , "Mean signal value for that annotation instance" );  
-  add_var( "MEANS" , "CH,ANNOT,INST" , "S" , "Annotation span in seconds" );
-  add_var( "MEANS" , "CH,ANNOT,INST" , "L" , "Left-flanking mean (if 'w' set)" );
-  add_var( "MEANS" , "CH,ANNOT,INST" , "R" , "Right-flanking mean (if 'w' set)" );
-  add_var( "MEANS" , "CH,ANNOT,INST" , "M1" , "Within-class 0-1 normalized mean" );  
+  add_var( "MEANS" , "CH,ANNOT,INST" , "M" , "Mean signal value for that annotation instance" , VT_REAL );  
+  add_var( "MEANS" , "CH,ANNOT,INST" , "S" , "Annotation span in seconds" , VT_REAL );
+  add_var( "MEANS" , "CH,ANNOT,INST" , "L" , "Left-flanking mean (if 'w' set)" , VT_REAL );
+  add_var( "MEANS" , "CH,ANNOT,INST" , "R" , "Right-flanking mean (if 'w' set)" , VT_REAL );
+  add_var( "MEANS" , "CH,ANNOT,INST" , "M1" , "Within-class 0-1 normalized mean" , VT_REAL );  
 
   //
   // SIGDYN
@@ -7235,67 +7273,67 @@ void cmddefs_t::init()
   add_param( "SIGDYN" , "norm-night" , "T" , "Emit a normalized HYPNO-night template (C0_PRE_W, per-cycle NREM quintiles/REM, pooled C4+, CE_POST_W) when HYPNO annotations are present (default T; use F to disable)" );
 
   add_table( "SIGDYN" , "CH" , "Overall (all epochs) descriptive statistics of the per-epoch signal mean" );
-  add_var( "SIGDYN" , "CH" , "N" , "Number of epochs" );
-  add_var( "SIGDYN" , "CH" , "MEAN" , "Mean of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH" , "SD" , "SD of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH" , "MIN" , "Min of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH" , "MAX" , "Max of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH" , "RANGE" , "Max minus min of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH" , "N" , "Number of epochs" , VT_INTEGER );
+  add_var( "SIGDYN" , "CH" , "MEAN" , "Mean of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH" , "SD" , "SD of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH" , "MIN" , "Min of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH" , "MAX" , "Max of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH" , "RANGE" , "Max minus min of per-epoch signal means" , VT_REAL );
 
   add_table( "SIGDYN" , "CH,SS" , "Descriptive statistics of the per-epoch signal mean, by sleep stage" );
-  add_var( "SIGDYN" , "CH,SS" , "N" , "Number of epochs" );
-  add_var( "SIGDYN" , "CH,SS" , "MEAN" , "Mean of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS" , "SD" , "SD of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS" , "MIN" , "Min of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS" , "MAX" , "Max of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS" , "RANGE" , "Max minus min of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS" , "N" , "Number of epochs" , VT_INTEGER );
+  add_var( "SIGDYN" , "CH,SS" , "MEAN" , "Mean of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,SS" , "SD" , "SD of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,SS" , "MIN" , "Min of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,SS" , "MAX" , "Max of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,SS" , "RANGE" , "Max minus min of per-epoch signal means" , VT_REAL );
 
   add_table( "SIGDYN" , "CH,SS,STABLE" , "Descriptive statistics of the per-epoch signal mean, by sleep stage and local stability (STABLE)" );
-  add_var( "SIGDYN" , "CH,SS,STABLE" , "N" , "Number of epochs" );
-  add_var( "SIGDYN" , "CH,SS,STABLE" , "MEAN" , "Mean of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS,STABLE" , "SD" , "SD of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS,STABLE" , "MIN" , "Min of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS,STABLE" , "MAX" , "Max of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS,STABLE" , "RANGE" , "Max minus min of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,STABLE" , "N" , "Number of epochs" , VT_INTEGER );
+  add_var( "SIGDYN" , "CH,SS,STABLE" , "MEAN" , "Mean of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,SS,STABLE" , "SD" , "SD of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,SS,STABLE" , "MIN" , "Min of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,SS,STABLE" , "MAX" , "Max of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,SS,STABLE" , "RANGE" , "Max minus min of per-epoch signal means" , VT_REAL );
 
   add_table( "SIGDYN" , "CH,C" , "Descriptive statistics of the per-epoch signal mean, by NREM cycle (only if cycles present)" );
-  add_var( "SIGDYN" , "CH,C" , "N" , "Number of epochs" );
-  add_var( "SIGDYN" , "CH,C" , "MEAN" , "Mean of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,C" , "SD" , "SD of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,C" , "MIN" , "Min of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,C" , "MAX" , "Max of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,C" , "RANGE" , "Max minus min of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,C" , "N" , "Number of epochs" , VT_INTEGER );
+  add_var( "SIGDYN" , "CH,C" , "MEAN" , "Mean of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,C" , "SD" , "SD of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,C" , "MIN" , "Min of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,C" , "MAX" , "Max of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,C" , "RANGE" , "Max minus min of per-epoch signal means" , VT_REAL );
 
   add_table( "SIGDYN" , "CH,SS,C" , "Descriptive statistics of the per-epoch signal mean, by sleep stage and NREM cycle (only if cycles present)" );
-  add_var( "SIGDYN" , "CH,SS,C" , "N" , "Number of epochs" );
-  add_var( "SIGDYN" , "CH,SS,C" , "MEAN" , "Mean of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS,C" , "SD" , "SD of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS,C" , "MIN" , "Min of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS,C" , "MAX" , "Max of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,SS,C" , "RANGE" , "Max minus min of per-epoch signal means" );
+  add_var( "SIGDYN" , "CH,SS,C" , "N" , "Number of epochs" , VT_INTEGER );
+  add_var( "SIGDYN" , "CH,SS,C" , "MEAN" , "Mean of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,SS,C" , "SD" , "SD of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,SS,C" , "MIN" , "Min of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,SS,C" , "MAX" , "Max of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,SS,C" , "RANGE" , "Max minus min of per-epoch signal means" , VT_REAL );
 
   add_table( "SIGDYN" , "CH,ANNOT" , "Peri-event summary (overall/flanking means), by anchor annotation" );
-  add_var( "SIGDYN" , "CH,ANNOT" , "N" , "Number of distinct contributing instances" );
-  add_var( "SIGDYN" , "CH,ANNOT" , "M" , "Mean of per-offset/bin means across the whole window" );
-  add_var( "SIGDYN" , "CH,ANNOT" , "S" , "Total span of the anchor annotation's instances, in seconds" );
-  add_var( "SIGDYN" , "CH,ANNOT" , "L" , "Mean of per-offset/bin means over negative (pre-anchor) offsets" );
-  add_var( "SIGDYN" , "CH,ANNOT" , "R" , "Mean of per-offset/bin means over positive (post-anchor) offsets" );
+  add_var( "SIGDYN" , "CH,ANNOT" , "N" , "Number of distinct contributing instances" , VT_INTEGER );
+  add_var( "SIGDYN" , "CH,ANNOT" , "M" , "Mean of per-offset/bin means across the whole window" , VT_REAL );
+  add_var( "SIGDYN" , "CH,ANNOT" , "S" , "Total span of the anchor annotation's instances, in seconds" , VT_REAL );
+  add_var( "SIGDYN" , "CH,ANNOT" , "L" , "Mean of per-offset/bin means over negative (pre-anchor) offsets" , VT_REAL );
+  add_var( "SIGDYN" , "CH,ANNOT" , "R" , "Mean of per-offset/bin means over positive (post-anchor) offsets" , VT_REAL );
 
   add_table( "SIGDYN" , "CH,ANNOT,SEC" , "Peri-event signal summaries by offset/bin" );
-  add_var( "SIGDYN" , "CH,ANNOT,SEC" , "N" , "Number of distinct contributing instances at this offset/bin" );
-  add_var( "SIGDYN" , "CH,ANNOT,SEC" , "M" , "Mean aligned signal value" );
-  add_var( "SIGDYN" , "CH,ANNOT,SEC" , "SD" , "SD of aligned signal values" );
-  add_var( "SIGDYN" , "CH,ANNOT,SEC" , "MD" , "Median aligned signal value" );
+  add_var( "SIGDYN" , "CH,ANNOT,SEC" , "N" , "Number of distinct contributing instances at this offset/bin" , VT_INTEGER );
+  add_var( "SIGDYN" , "CH,ANNOT,SEC" , "M" , "Mean aligned signal value" , VT_REAL );
+  add_var( "SIGDYN" , "CH,ANNOT,SEC" , "SD" , "SD of aligned signal values" , VT_REAL );
+  add_var( "SIGDYN" , "CH,ANNOT,SEC" , "MD" , "Median aligned signal value" , VT_REAL );
 
   add_table( "SIGDYN" , "CH,NH" , "Signal summaries on the normalized HYPNO-night template (optional norm-night=T)" );
-  add_var( "SIGDYN" , "CH,NH" , "C" , "Canonical cycle group (0, 1, 2, 3, or 4 for C4+)" );
-  add_var( "SIGDYN" , "CH,NH" , "PHASE" , "Canonical phase (PRE_W, NREM, or REM)" );
-  add_var( "SIGDYN" , "CH,NH" , "Q" , "NREM quintile (1-5; zero for PRE_W/REM)" );
-  add_var( "SIGDYN" , "CH,NH" , "DUR" , "Duration of contributing epochs in seconds" );
-  add_var( "SIGDYN" , "CH,NH" , "MEAN" , "Mean of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,NH" , "SD" , "SD of per-epoch signal means" );
-  add_var( "SIGDYN" , "CH,NH" , "MIN" , "Minimum per-epoch signal mean" );
-  add_var( "SIGDYN" , "CH,NH" , "MAX" , "Maximum per-epoch signal mean" );
+  add_var( "SIGDYN" , "CH,NH" , "C" , "Canonical cycle group (0, 1, 2, 3, or 4 for C4+)" , VT_INTEGER );
+  add_var( "SIGDYN" , "CH,NH" , "PHASE" , "Canonical phase (PRE_W, NREM, or REM)" , VT_TEXT );
+  add_var( "SIGDYN" , "CH,NH" , "Q" , "NREM quintile (1-5; zero for PRE_W/REM)" , VT_INTEGER );
+  add_var( "SIGDYN" , "CH,NH" , "DUR" , "Duration of contributing epochs in seconds" , VT_REAL );
+  add_var( "SIGDYN" , "CH,NH" , "MEAN" , "Mean of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,NH" , "SD" , "SD of per-epoch signal means" , VT_REAL );
+  add_var( "SIGDYN" , "CH,NH" , "MIN" , "Minimum per-epoch signal mean" , VT_REAL );
+  add_var( "SIGDYN" , "CH,NH" , "MAX" , "Maximum per-epoch signal mean" , VT_REAL );
 
   //
   // DPP
@@ -7401,7 +7439,7 @@ void cmddefs_t::init()
   add_param( "DPP" , "early-stopping-rounds" , "20" , "--dpp-fit: early-stopping patience; classic pooled/stage fits use it during folds= CV (default 20 with folds=), while two-level uses deterministic subject-disjoint internal validation (default disabled unless explicitly set); 0 disables stopping" );
 
   add_table( "DPP" , "SEC,VAR" , "Feature value(s) at each output time" );
-  add_var( "DPP" , "SEC,VAR" , "V" , "Feature value (or V1..Vk for multi-column features, e.g. PSD's 5 log-power bands)" );
+  add_var( "DPP" , "SEC,VAR" , "V" , "Feature value (or V1..Vk for multi-column features, e.g. PSD's 5 log-power bands)" , VT_REAL );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -7462,32 +7500,32 @@ void cmddefs_t::init()
   add_param( "IPC" , "prefix" , "" , "Label for new channels, defaults to IPC_" );
   
   add_table( "IPC" , "CH1,CH2" , "Primary IPC output" );
-  add_var( "IPC" , "CH1,CH2" , "N_TOT" , "Total number of sample points considered" );
-  add_var( "IPC" , "CH1,CH2" , "N_USED" , "Number of valid sample points used" );
-  add_var( "IPC" , "CH1,CH2" , "IPC" , "Mean signed instantaneous phase coherence" );
-  add_var( "IPC" , "CH1,CH2" , "WIPC" , "Weighted mean instantaneous phase coherence" );
-  add_var( "IPC" , "CH1,CH2" , "PLV" , "Phase-locking value" );
-  add_var( "IPC" , "CH1,CH2" , "PHASE" , "Circular mean phase difference" );
-  add_var( "IPC" , "CH1,CH2" , "P_INPHASE" , "Fraction of used samples with absolute phase difference < 30 degrees" );
+  add_var( "IPC" , "CH1,CH2" , "N_TOT" , "Total number of sample points considered" , VT_INTEGER );
+  add_var( "IPC" , "CH1,CH2" , "N_USED" , "Number of valid sample points used" , VT_INTEGER );
+  add_var( "IPC" , "CH1,CH2" , "IPC" , "Mean signed instantaneous phase coherence" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2" , "WIPC" , "Weighted mean instantaneous phase coherence" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2" , "PLV" , "Phase-locking value" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2" , "PHASE" , "Circular mean phase difference" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2" , "P_INPHASE" , "Fraction of used samples with absolute phase difference < 30 degrees" , VT_REAL );
 
   add_table( "IPC" , "CH1,CH2,E" , "Per-epoch IPC output" );
-  add_var( "IPC" , "CH1,CH2,E" , "N_TOT" , "Total number of sample points considered in this epoch" );
-  add_var( "IPC" , "CH1,CH2,E" , "N_USED" , "Number of valid sample points used in this epoch" );
-  add_var( "IPC" , "CH1,CH2,E" , "IPC" , "Mean signed instantaneous phase coherence in this epoch" );
-  add_var( "IPC" , "CH1,CH2,E" , "WIPC" , "Weighted mean instantaneous phase coherence in this epoch" );
-  add_var( "IPC" , "CH1,CH2,E" , "PLV" , "Phase-locking value in this epoch" );
-  add_var( "IPC" , "CH1,CH2,E" , "PHASE" , "Circular mean phase difference in this epoch" );
-  add_var( "IPC" , "CH1,CH2,E" , "P_INPHASE" , "Fraction of used samples within +/-30 degrees in this epoch (strict bounds)" );
+  add_var( "IPC" , "CH1,CH2,E" , "N_TOT" , "Total number of sample points considered in this epoch" , VT_INTEGER );
+  add_var( "IPC" , "CH1,CH2,E" , "N_USED" , "Number of valid sample points used in this epoch" , VT_INTEGER );
+  add_var( "IPC" , "CH1,CH2,E" , "IPC" , "Mean signed instantaneous phase coherence in this epoch" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2,E" , "WIPC" , "Weighted mean instantaneous phase coherence in this epoch" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2,E" , "PLV" , "Phase-locking value in this epoch" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2,E" , "PHASE" , "Circular mean phase difference in this epoch" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2,E" , "P_INPHASE" , "Fraction of used samples within +/-30 degrees in this epoch (strict bounds)" , VT_REAL );
 
   add_table( "IPC" , "CH1,CH2,D" , "Lag-resolved IPC output" );
-  add_var( "IPC" , "CH1,CH2,D" , "T" , "Lag time (seconds)" );
-  add_var( "IPC" , "CH1,CH2,D" , "N_TOT" , "Total number of sample points considered at this lag" );
-  add_var( "IPC" , "CH1,CH2,D" , "N_USED" , "Number of valid sample points used at this lag" );
-  add_var( "IPC" , "CH1,CH2,D" , "IPC" , "Mean signed instantaneous phase coherence at this lag" );
-  add_var( "IPC" , "CH1,CH2,D" , "WIPC" , "Weighted mean instantaneous phase coherence at this lag" );
-  add_var( "IPC" , "CH1,CH2,D" , "PLV" , "Phase-locking value at this lag" );
-  add_var( "IPC" , "CH1,CH2,D" , "PHASE" , "Circular mean phase difference at this lag" );
-  add_var( "IPC" , "CH1,CH2,D" , "P_INPHASE" , "Fraction of used samples within +/-30 degrees at this lag (strict bounds)" );
+  add_var( "IPC" , "CH1,CH2,D" , "T" , "Lag time (seconds)" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2,D" , "N_TOT" , "Total number of sample points considered at this lag" , VT_INTEGER );
+  add_var( "IPC" , "CH1,CH2,D" , "N_USED" , "Number of valid sample points used at this lag" , VT_INTEGER );
+  add_var( "IPC" , "CH1,CH2,D" , "IPC" , "Mean signed instantaneous phase coherence at this lag" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2,D" , "WIPC" , "Weighted mean instantaneous phase coherence at this lag" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2,D" , "PLV" , "Phase-locking value at this lag" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2,D" , "PHASE" , "Circular mean phase difference at this lag" , VT_REAL );
+  add_var( "IPC" , "CH1,CH2,D" , "P_INPHASE" , "Fraction of used samples within +/-30 degrees at this lag (strict bounds)" , VT_REAL );
 
   //
   // CC
@@ -7521,20 +7559,20 @@ void cmddefs_t::init()
   add_param( "CC" , "no-epoch-output" , "" , "Do not output epoch-level results" );
 
   add_table( "CC" , "CH1,CH2,F1,F2" , "Primary CC output" );
-  add_var( "CC" , "CH1,CH2,F1,F2" , "CFC" , "Cross-frequency coupling 0/1" );
-  add_var( "CC" , "CH1,CH2,F1,F2" , "XCH" , "Cross-channel coupling 0/1" );
-  add_var( "CC" , "CH1,CH2,F1,F2" , "wPLI" , "Weighted phase lag index" );
-  add_var( "CC" , "CH1,CH2,F1,F2" , "wPLI_Z" , "Z-normalized weighted phase lag index" );
-  add_var( "CC" , "CH1,CH2,F1,F2" , "dPAC" , "dPAC metric" );
-  add_var( "CC" , "CH1,CH2,F1,F2" , "dPAC_Z" , "Z-normalized dPAC metric" );
+  add_var( "CC" , "CH1,CH2,F1,F2" , "CFC" , "Cross-frequency coupling 0/1" , VT_BOOLEAN );
+  add_var( "CC" , "CH1,CH2,F1,F2" , "XCH" , "Cross-channel coupling 0/1" , VT_BOOLEAN );
+  add_var( "CC" , "CH1,CH2,F1,F2" , "wPLI" , "Weighted phase lag index" , VT_REAL );
+  add_var( "CC" , "CH1,CH2,F1,F2" , "wPLI_Z" , "Z-normalized weighted phase lag index" , VT_REAL );
+  add_var( "CC" , "CH1,CH2,F1,F2" , "dPAC" , "dPAC metric" , VT_REAL );
+  add_var( "CC" , "CH1,CH2,F1,F2" , "dPAC_Z" , "Z-normalized dPAC metric" , VT_REAL );
 
   add_table( "CC" , "E,CH1,CH2,F1,F2" , "Epoch-level CC output" );
-  add_var( "CC" , "E,CH1,CH2,F1,F2" , "CFC" , "Cross-frequency coupling 0/1" );
-  add_var( "CC" , "E,CH1,CH2,F1,F2" , "XCH" , "Cross-channel coupling 0/1" );
-  add_var( "CC" , "E,CH1,CH2,F1,F2" , "wPLI" , "Weighted phase lag index" );
-  add_var( "CC" , "E,CH1,CH2,F1,F2" , "wPLI_Z" , "Z-normalized weighted phase lag index" );
-  add_var( "CC" , "E,CH1,CH2,F1,F2" , "dPAC" , "dPAC metric" );
-  add_var( "CC" , "E,CH1,CH2,F1,F2" , "dPAC_Z" , "Z-normalized dPAC metric" );
+  add_var( "CC" , "E,CH1,CH2,F1,F2" , "CFC" , "Cross-frequency coupling 0/1" , VT_BOOLEAN );
+  add_var( "CC" , "E,CH1,CH2,F1,F2" , "XCH" , "Cross-channel coupling 0/1" , VT_BOOLEAN );
+  add_var( "CC" , "E,CH1,CH2,F1,F2" , "wPLI" , "Weighted phase lag index" , VT_REAL );
+  add_var( "CC" , "E,CH1,CH2,F1,F2" , "wPLI_Z" , "Z-normalized weighted phase lag index" , VT_REAL );
+  add_var( "CC" , "E,CH1,CH2,F1,F2" , "dPAC" , "dPAC metric" , VT_REAL );
+  add_var( "CC" , "E,CH1,CH2,F1,F2" , "dPAC_Z" , "Z-normalized dPAC metric" , VT_REAL );
   set_compressed( "CC" , tfac_t( "E,CH1,CH2,F1,F2" ) );
 
   /////////////////////////////////////////////////////////////////////////////////
@@ -7582,18 +7620,18 @@ void cmddefs_t::init()
   add_param( "--psc" , "th", "5,3" , "Iterative SD thresholds for outlier removal" );
 
   add_table( "--psc" , "I" , "Component-level PSC model summaries" );
-  add_var( "--psc" , "I" , "W" , "Singular value for that component" );
-  add_var( "--psc" , "I" , "VE" , "Variance explained by that component" );
-  add_var( "--psc" , "I" , "CVE" , "Cumulative variance explained" );
-  add_var( "--psc" , "I" , "INC" , "Whether that component was retained in the requested model" );
+  add_var( "--psc" , "I" , "W" , "Singular value for that component" , VT_REAL );
+  add_var( "--psc" , "I" , "VE" , "Variance explained by that component" , VT_REAL );
+  add_var( "--psc" , "I" , "CVE" , "Cumulative variance explained" , VT_REAL );
+  add_var( "--psc" , "I" , "INC" , "Whether that component was retained in the requested model" , VT_BOOLEAN );
 
   add_table( "--psc" , "J" , "Feature metadata for PSC model variables" );
-  add_var( "--psc" , "J" , "CH" , "Channel label for that feature" );
-  add_var( "--psc" , "J" , "F" , "Frequency for that feature" );
-  add_var( "--psc" , "J" , "VAR" , "Base variable name for that feature" );
+  add_var( "--psc" , "J" , "CH" , "Channel label for that feature" , VT_TEXT );
+  add_var( "--psc" , "J" , "F" , "Frequency for that feature" , VT_REAL );
+  add_var( "--psc" , "J" , "VAR" , "Base variable name for that feature" , VT_TEXT );
   
   add_table( "--psc" , "I,J" , "PSC loading matrix" );
-  add_var( "--psc" , "I,J" , "V" , "Loading of feature J on component I" );
+  add_var( "--psc" , "I,J" , "V" , "Loading of feature J on component I" , VT_REAL );
 
   //
   // PSC
@@ -7631,7 +7669,7 @@ void cmddefs_t::init()
   add_param( "PSC" , "clear" , "" , "Clear any attached projection before loading a new one" );
 
   add_table( "PSC" , "PSC" , "Projected principal spectral component scores" );
-  add_var( "PSC" , "PSC" , "U" , "Projected PSC score for this observation" );
+  add_var( "PSC" , "PSC" , "U" , "Projected PSC score for this observation" , VT_REAL );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -7705,14 +7743,14 @@ void cmddefs_t::init()
   add_param( "INTERPOLATE" , "req-chs-prop" , "0.5" , "Require at least this proportion of channels to be good" );
 
   add_table( "INTERPOLATE" , "" , "Whole-run interpolation summary" );
-  add_var( "INTERPOLATE" , "" , "NE_MASKED" , "Number of epochs masked because too few good channels were available" );
-  add_var( "INTERPOLATE" , "" , "NE_NONE" , "Number of epochs with no bad channels requiring interpolation" );
-  add_var( "INTERPOLATE" , "" , "NE_INTERPOLATED" , "Number of epochs in which at least one channel was interpolated" );
-  add_var( "INTERPOLATE" , "" , "NCHEP_INTERPOLATED" , "Total number of bad channel-epoch pairs interpolated" );
+  add_var( "INTERPOLATE" , "" , "NE_MASKED" , "Number of epochs masked because too few good channels were available" , VT_INTEGER );
+  add_var( "INTERPOLATE" , "" , "NE_NONE" , "Number of epochs with no bad channels requiring interpolation" , VT_INTEGER );
+  add_var( "INTERPOLATE" , "" , "NE_INTERPOLATED" , "Number of epochs in which at least one channel was interpolated" , VT_INTEGER );
+  add_var( "INTERPOLATE" , "" , "NCHEP_INTERPOLATED" , "Total number of bad channel-epoch pairs interpolated" , VT_INTEGER );
 
   add_table( "INTERPOLATE" , "CH" , "Channel-level interpolation counts" );
-  add_var( "INTERPOLATE" , "CH" , "NE_INTERPOLATED" , "Number of epochs in which that channel was interpolated" );
-  add_var( "INTERPOLATE" , "CH" , "PCT_INTERPOLATED" , "Proportion of analyzed epochs in which that channel was interpolated" );
+  add_var( "INTERPOLATE" , "CH" , "NE_INTERPOLATED" , "Number of epochs in which that channel was interpolated" , VT_INTEGER );
+  add_var( "INTERPOLATE" , "CH" , "PCT_INTERPOLATED" , "Proportion of analyzed epochs in which that channel was interpolated" , VT_REAL );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -7746,13 +7784,13 @@ void cmddefs_t::init()
   add_param( "ICA" , "no-new-channels" , "" , "Do not add recovered IC time courses as new EDF channels" );
 
   add_table( "ICA" , "IC1,IC2" , "ICA unmixing matrix" );
-  add_var( "ICA" , "IC1,IC2" , "W" , "Unmixing matrix element" );
+  add_var( "ICA" , "IC1,IC2" , "W" , "Unmixing matrix element" , VT_REAL );
 
   add_table( "ICA" , "IC,CH" , "ICA mixing matrix" );
-  add_var( "ICA" , "IC,CH" , "A" , "Mixing weight of a channel on that independent component" );
+  add_var( "ICA" , "IC,CH" , "A" , "Mixing weight of a channel on that independent component" , VT_REAL );
 
   add_table( "ICA" , "KCH,KIC" , "ICA whitening matrix" );
-  add_var( "ICA" , "KCH,KIC" , "K" , "Whitening-matrix element" );
+  add_var( "ICA" , "KCH,KIC" , "K" , "Whitening-matrix element" , VT_REAL );
 
   //
   // ADJUST
@@ -7782,7 +7820,7 @@ void cmddefs_t::init()
   add_param( "ADJUST" , "corr-th" , "0.3,0.4" , "Absolute correlation thresholds paired with corr-sig" );
 
   add_table( "ADJUST" , "CH" , "Per-signal adjustment summaries" );
-  add_var( "ADJUST" , "CH" , "R" , "Correlation between the original and adjusted signal" );
+  add_var( "ADJUST" , "CH" , "R" , "Correlation between the original and adjusted signal" , VT_REAL );
 
   //
   // Fixed numerical projection
@@ -7802,35 +7840,35 @@ void cmddefs_t::init()
   add_param( "PROJECT" , "input-unit" , "uV" , "Explicit recording input voltage unit override" );
   add_param( "PROJECT" , "output-unit" , "nAm" , "Supported output unit conversion; A m defaults to nAm" );
   add_table( "PROJECT" , "" , "Projection summary" );
-  add_var( "PROJECT" , "" , "BUNDLE" , "Bundle" );
-  add_var( "PROJECT" , "" , "MODEL" , "Model" );
-  add_var( "PROJECT" , "" , "N_INPUT" , "N input" );
-  add_var( "PROJECT" , "" , "N_OUTPUT" , "N output" );
-  add_var( "PROJECT" , "" , "SR" , "Sr" );
-  add_var( "PROJECT" , "" , "N_RECORD" , "N record" );
-  add_var( "PROJECT" , "" , "N_SAMPLE" , "N sample" );
-  add_var( "PROJECT" , "" , "REFERENCE" , "Reference" );
-  add_var( "PROJECT" , "" , "EMBEDDED" , "Embedded" );
-  add_var( "PROJECT" , "" , "CHECK" , "Check" );
+  add_var( "PROJECT" , "" , "BUNDLE" , "Bundle" , VT_TEXT );
+  add_var( "PROJECT" , "" , "MODEL" , "Model" , VT_TEXT );
+  add_var( "PROJECT" , "" , "N_INPUT" , "N input" , VT_INTEGER );
+  add_var( "PROJECT" , "" , "N_OUTPUT" , "N output" , VT_INTEGER );
+  add_var( "PROJECT" , "" , "SR" , "Sr" , VT_REAL );
+  add_var( "PROJECT" , "" , "N_RECORD" , "N record" , VT_INTEGER );
+  add_var( "PROJECT" , "" , "N_SAMPLE" , "N sample" , VT_INTEGER );
+  add_var( "PROJECT" , "" , "REFERENCE" , "Reference" , VT_TEXT );
+  add_var( "PROJECT" , "" , "EMBEDDED" , "Embedded" , VT_BOOLEAN );
+  add_var( "PROJECT" , "" , "CHECK" , "Check" , VT_BOOLEAN );
   add_table( "PROJECT" , "FILE" , "Consumed resource hashes" );
-  add_var( "PROJECT" , "FILE" , "SHA256" , "SHA-256 of the actual consumed file" );
-  add_var( "PROJECT" , "FILE" , "PATH" , "Path of the actual consumed file" );
+  add_var( "PROJECT" , "FILE" , "SHA256" , "SHA-256 of the actual consumed file" , VT_TEXT );
+  add_var( "PROJECT" , "FILE" , "PATH" , "Path of the actual consumed file" , VT_TEXT );
   add_table( "PROJECT" , "INPUT" , "Input column mapping" );
-  add_var( "PROJECT" , "INPUT" , "REQUIRED" , "Required" );
-  add_var( "PROJECT" , "INPUT" , "INDEX" , "Index" );
-  add_var( "PROJECT" , "INPUT" , "LABEL" , "Label" );
-  add_var( "PROJECT" , "INPUT" , "HEADER_UNIT" , "Header unit" );
-  add_var( "PROJECT" , "INPUT" , "TO_V" , "To v" );
-  add_var( "PROJECT" , "INPUT" , "UNIT_OVERRIDE" , "Unit override" );
+  add_var( "PROJECT" , "INPUT" , "REQUIRED" , "Required" , VT_TEXT );
+  add_var( "PROJECT" , "INPUT" , "INDEX" , "Index" , VT_INTEGER );
+  add_var( "PROJECT" , "INPUT" , "LABEL" , "Label" , VT_TEXT );
+  add_var( "PROJECT" , "INPUT" , "HEADER_UNIT" , "Header unit" , VT_TEXT );
+  add_var( "PROJECT" , "INPUT" , "TO_V" , "To v" , VT_REAL );
+  add_var( "PROJECT" , "INPUT" , "UNIT_OVERRIDE" , "Unit override" , VT_TEXT );
   add_table( "PROJECT" , "OUTPUT" , "Output rows and storage" );
-  add_var( "PROJECT" , "OUTPUT" , "PARCEL_ID" , "Parcel id" );
-  add_var( "PROJECT" , "OUTPUT" , "LABEL" , "Label" );
-  add_var( "PROJECT" , "OUTPUT" , "NATIVE_UNIT" , "Native unit" );
-  add_var( "PROJECT" , "OUTPUT" , "STORED_UNIT" , "Stored unit" );
-  add_var( "PROJECT" , "OUTPUT" , "SCALE" , "Scale" );
-  add_var( "PROJECT" , "OUTPUT" , "PMIN" , "Pmin" );
-  add_var( "PROJECT" , "OUTPUT" , "PMAX" , "Pmax" );
-  add_var( "PROJECT" , "OUTPUT" , "STEP" , "Step" );
+  add_var( "PROJECT" , "OUTPUT" , "PARCEL_ID" , "Parcel id" , VT_TEXT );
+  add_var( "PROJECT" , "OUTPUT" , "LABEL" , "Label" , VT_TEXT );
+  add_var( "PROJECT" , "OUTPUT" , "NATIVE_UNIT" , "Native unit" , VT_TEXT );
+  add_var( "PROJECT" , "OUTPUT" , "STORED_UNIT" , "Stored unit" , VT_TEXT );
+  add_var( "PROJECT" , "OUTPUT" , "SCALE" , "Scale" , VT_REAL );
+  add_var( "PROJECT" , "OUTPUT" , "PMIN" , "Pmin" , VT_REAL );
+  add_var( "PROJECT" , "OUTPUT" , "PMAX" , "Pmax" , VT_REAL );
+  add_var( "PROJECT" , "OUTPUT" , "STEP" , "Step" , VT_REAL );
 
   add_cmd( "multi" , "SVD" , "Singular value decomposition" );
   add_url( "SVD" , "multi/#svd" );
@@ -7852,13 +7890,13 @@ void cmddefs_t::init()
   add_param( "SVD" , "no-new-channels" , "" , "Do not add component time courses as new EDF channels" );
 
   add_table( "SVD" , "C" , "Component-level SVD summaries" );
-  add_var( "SVD" , "C" , "W" , "Singular value" );
-  add_var( "SVD" , "C" , "VE" , "Variance explained by that component" );
-  add_var( "SVD" , "C" , "CVE" , "Cumulative variance explained" );
-  add_var( "SVD" , "C" , "INC" , "Whether that component was retained in the requested set" );
+  add_var( "SVD" , "C" , "W" , "Singular value" , VT_REAL );
+  add_var( "SVD" , "C" , "VE" , "Variance explained by that component" , VT_REAL );
+  add_var( "SVD" , "C" , "CVE" , "Cumulative variance explained" , VT_REAL );
+  add_var( "SVD" , "C" , "INC" , "Whether that component was retained in the requested set" , VT_BOOLEAN );
 
   add_table( "SVD" , "FTR,C" , "Channel loadings on SVD components" );
-  add_var( "SVD" , "FTR,C" , "V" , "Loading of that channel on that component" );
+  add_var( "SVD" , "FTR,C" , "V" , "Loading of that channel on that component" , VT_REAL );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -7916,66 +7954,66 @@ void cmddefs_t::init()
   add_param( "MS" , "verbose" , "" , "Emit detailed peak-level output" );
 
   add_table( "MS" , "" , "Whole-run microstate summaries" );
-  add_var( "MS" , "" , "GFP_MEAN" , "Mean GFP over candidate GFP peaks before thresholding" );
-  add_var( "MS" , "" , "GFP_SD" , "SD of GFP over candidate GFP peaks before thresholding" );
-  add_var( "MS" , "" , "NP0" , "Initial number of GFP peaks before threshold-based exclusions" );
-  add_var( "MS" , "" , "NP" , "Final number of GFP peaks retained" );
-  add_var( "MS" , "" , "OPT_K" , "Selected optimal number of microstate classes" );
-  add_var( "MS" , "" , "AMBIG" , "Proportion of samples marked ambiguous" );
-  add_var( "MS" , "" , "LZW" , "Lempel-Ziv complexity of the final state sequence" );
-  add_var( "MS" , "" , "GEV" , "Total global explained variance of the final solution" );
+  add_var( "MS" , "" , "GFP_MEAN" , "Mean GFP over candidate GFP peaks before thresholding" , VT_REAL );
+  add_var( "MS" , "" , "GFP_SD" , "SD of GFP over candidate GFP peaks before thresholding" , VT_REAL );
+  add_var( "MS" , "" , "NP0" , "Initial number of GFP peaks before threshold-based exclusions" , VT_INTEGER );
+  add_var( "MS" , "" , "NP" , "Final number of GFP peaks retained" , VT_INTEGER );
+  add_var( "MS" , "" , "OPT_K" , "Selected optimal number of microstate classes" , VT_INTEGER );
+  add_var( "MS" , "" , "AMBIG" , "Proportion of samples marked ambiguous" , VT_REAL );
+  add_var( "MS" , "" , "LZW" , "Lempel-Ziv complexity of the final state sequence" , VT_REAL );
+  add_var( "MS" , "" , "GEV" , "Total global explained variance of the final solution" , VT_REAL );
 
   add_table( "MS" , "SP" , "Verbose GFP peak output" );
-  add_var( "MS" , "SP" , "GFP" , "GFP at that retained peak sample" );
+  add_var( "MS" , "SP" , "GFP" , "GFP at that retained peak sample" , VT_REAL );
 
   add_table( "MS" , "CH,K" , "Optimal prototype maps" );
-  add_var( "MS" , "CH,K" , "A" , "Prototype map weight for that channel and state" );
+  add_var( "MS" , "CH,K" , "A" , "Prototype map weight for that channel and state" , VT_REAL );
 
   add_table( "MS" , "K1,K2" , "Spatial correlations between optimal prototype maps" );
-  add_var( "MS" , "K1,K2" , "SPC" , "Spatial correlation between two prototype maps" );
+  add_var( "MS" , "K1,K2" , "SPC" , "Spatial correlation between two prototype maps" , VT_REAL );
 
   add_table( "MS" , "KN,CH,K" , "Prototype maps for all tested K values" );
-  add_var( "MS" , "KN,CH,K" , "A" , "Prototype map weight for that tested K solution" );
+  add_var( "MS" , "KN,CH,K" , "A" , "Prototype map weight for that tested K solution" , VT_REAL );
 
   add_table( "MS" , "NK" , "Fit summaries for all tested K values" );
-  add_var( "MS" , "NK" , "R2" , "Explained variance for that K solution" );
-  add_var( "MS" , "NK" , "MSE" , "Reconstruction MSE for that K solution" );
-  add_var( "MS" , "NK" , "SIG2" , "Residual variance estimate for that K solution" );
-  add_var( "MS" , "NK" , "SIG2_MCV" , "Modified cross-validation residual variance for that K solution" );
+  add_var( "MS" , "NK" , "R2" , "Explained variance for that K solution" , VT_REAL );
+  add_var( "MS" , "NK" , "MSE" , "Reconstruction MSE for that K solution" , VT_REAL );
+  add_var( "MS" , "NK" , "SIG2" , "Residual variance estimate for that K solution" , VT_REAL );
+  add_var( "MS" , "NK" , "SIG2_MCV" , "Modified cross-validation residual variance for that K solution" , VT_REAL );
 
   add_table( "MS" , "K" , "Per-state microstate summaries" );
-  add_var( "MS" , "K" , "GFP" , "Mean GFP for samples assigned to that state" );
-  add_var( "MS" , "K" , "COV" , "Coverage of that state over all samples" );
-  add_var( "MS" , "K" , "COV2" , "Coverage of that state over unambiguous samples" );
-  add_var( "MS" , "K" , "OCC" , "Occurrence rate of that state over all samples" );
-  add_var( "MS" , "K" , "OCC2" , "Occurrence rate of that state over unambiguous samples" );
-  add_var( "MS" , "K" , "DUR" , "Mean duration of that state's contiguous runs" );
-  add_var( "MS" , "K" , "WGT" , "Mean probabilistic coverage of that state across all samples" );
-  add_var( "MS" , "K" , "SPC" , "Mean spatial correlation for samples assigned to that state" );
-  add_var( "MS" , "K" , "GEV" , "Global explained variance attributable to that state" );
-  add_var( "MS" , "K" , "N" , "Number of runs of that state" );
+  add_var( "MS" , "K" , "GFP" , "Mean GFP for samples assigned to that state" , VT_REAL );
+  add_var( "MS" , "K" , "COV" , "Coverage of that state over all samples" , VT_REAL );
+  add_var( "MS" , "K" , "COV2" , "Coverage of that state over unambiguous samples" , VT_REAL );
+  add_var( "MS" , "K" , "OCC" , "Occurrence rate of that state over all samples" , VT_REAL );
+  add_var( "MS" , "K" , "OCC2" , "Occurrence rate of that state over unambiguous samples" , VT_REAL );
+  add_var( "MS" , "K" , "DUR" , "Mean duration of that state's contiguous runs" , VT_REAL );
+  add_var( "MS" , "K" , "WGT" , "Mean probabilistic coverage of that state across all samples" , VT_REAL );
+  add_var( "MS" , "K" , "SPC" , "Mean spatial correlation for samples assigned to that state" , VT_REAL );
+  add_var( "MS" , "K" , "GEV" , "Global explained variance attributable to that state" , VT_REAL );
+  add_var( "MS" , "K" , "N" , "Number of runs of that state" , VT_INTEGER );
 
   add_table( "MS" , "PRE,POST" , "State transition probabilities" );
-  add_var( "MS" , "PRE,POST" , "P" , "Probability of transitioning from PRE to POST" );
+  add_var( "MS" , "PRE,POST" , "P" , "Probability of transitioning from PRE to POST" , VT_REAL );
 
   add_table( "MS" , "L,S" , "Observed-sequence k-mer enrichment" );
-  add_var( "MS" , "L,S" , "NG" , "Number of equivalent sequence-group members" );
-  add_var( "MS" , "L,S" , "SG" , "Equivalent sequence-group label" );
-  add_var( "MS" , "L,S" , "OBS" , "Observed count of that sequence" );
-  add_var( "MS" , "L,S" , "EXP" , "Expected count of that sequence under permutation" );
-  add_var( "MS" , "L,S" , "P" , "Empirical p-value for that sequence" );
-  add_var( "MS" , "L,S" , "Z" , "Z-score for that sequence" );
-  add_var( "MS" , "L,S" , "W_OBS" , "Observed count pooled over equivalent sequences" );
-  add_var( "MS" , "L,S" , "W_EXP" , "Expected count pooled over equivalent sequences" );
-  add_var( "MS" , "L,S" , "W_P" , "Empirical p-value pooled over equivalent sequences" );
-  add_var( "MS" , "L,S" , "W_Z" , "Z-score pooled over equivalent sequences" );
+  add_var( "MS" , "L,S" , "NG" , "Number of equivalent sequence-group members" , VT_INTEGER );
+  add_var( "MS" , "L,S" , "SG" , "Equivalent sequence-group label" , VT_TEXT );
+  add_var( "MS" , "L,S" , "OBS" , "Observed count of that sequence" , VT_INTEGER );
+  add_var( "MS" , "L,S" , "EXP" , "Expected count of that sequence under permutation" , VT_REAL );
+  add_var( "MS" , "L,S" , "P" , "Empirical p-value for that sequence" , VT_REAL );
+  add_var( "MS" , "L,S" , "Z" , "Z-score for that sequence" , VT_REAL );
+  add_var( "MS" , "L,S" , "W_OBS" , "Observed count pooled over equivalent sequences" , VT_INTEGER );
+  add_var( "MS" , "L,S" , "W_EXP" , "Expected count pooled over equivalent sequences" , VT_REAL );
+  add_var( "MS" , "L,S" , "W_P" , "Empirical p-value pooled over equivalent sequences" , VT_REAL );
+  add_var( "MS" , "L,S" , "W_Z" , "Z-score pooled over equivalent sequences" , VT_REAL );
 
   add_table( "MS" , "L,SG" , "Equivalent-group k-mer enrichment" );
-  add_var( "MS" , "L,SG" , "NG" , "Number of sequences in that equivalent group" );
-  add_var( "MS" , "L,SG" , "OBS" , "Observed count of that equivalent group" );
-  add_var( "MS" , "L,SG" , "EXP" , "Expected count of that equivalent group" );
-  add_var( "MS" , "L,SG" , "P" , "Empirical p-value for that equivalent group" );
-  add_var( "MS" , "L,SG" , "Z" , "Z-score for that equivalent group" );
+  add_var( "MS" , "L,SG" , "NG" , "Number of sequences in that equivalent group" , VT_INTEGER );
+  add_var( "MS" , "L,SG" , "OBS" , "Observed count of that equivalent group" , VT_INTEGER );
+  add_var( "MS" , "L,SG" , "EXP" , "Expected count of that equivalent group" , VT_REAL );
+  add_var( "MS" , "L,SG" , "P" , "Empirical p-value for that equivalent group" , VT_REAL );
+  add_var( "MS" , "L,SG" , "Z" , "Z-score for that equivalent group" , VT_REAL );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -8020,22 +8058,22 @@ void cmddefs_t::init()
   add_param( "EXE" , "mx" , "20" , "Maximum allowed cluster size for the final clustering solution" );
     
   add_table( "EXE" , "E" , "Epoch-level outputs for pooled multichannel mode" );
-  add_var( "EXE" , "E" , "CL" , "Assigned cluster label for that epoch [cluster]" );
-  add_var( "EXE" , "E" , "K" , "Representative split label for that epoch [representative]" );
-  add_var( "EXE" , "E" , "KE" , "Representative exemplar epoch for that epoch's split [representative]" );
+  add_var( "EXE" , "E" , "CL" , "Assigned cluster label for that epoch [cluster]" , VT_TEXT );  // TYPE? numeric-looking cluster/split label emitted as int
+  add_var( "EXE" , "E" , "K" , "Representative split label for that epoch [representative]" , VT_TEXT );  // TYPE? numeric-looking cluster/split label emitted as int
+  add_var( "EXE" , "E" , "KE" , "Representative exemplar epoch for that epoch's split [representative]" , VT_INTEGER );
 
   add_table( "EXE" , "CH,E" , "Channel-stratified outputs for uni or cat modes" );
-  add_var( "EXE" , "CH,E" , "CL" , "Assigned cluster label for that channel/epoch observation [cluster]" );
-  add_var( "EXE" , "CH,E" , "K" , "Representative split label for that channel/epoch observation [representative]" );
-  add_var( "EXE" , "CH,E" , "KE" , "Representative exemplar epoch for that observation's split [representative]" );
+  add_var( "EXE" , "CH,E" , "CL" , "Assigned cluster label for that channel/epoch observation [cluster]" , VT_TEXT );  // TYPE? numeric-looking cluster/split label emitted as int
+  add_var( "EXE" , "CH,E" , "K" , "Representative split label for that channel/epoch observation [representative]" , VT_TEXT );  // TYPE? numeric-looking cluster/split label emitted as int
+  add_var( "EXE" , "CH,E" , "KE" , "Representative exemplar epoch for that observation's split [representative]" , VT_INTEGER );
 
   add_table( "EXE" , "K" , "Representative split summaries in pooled multichannel mode" );
-  add_var( "EXE" , "K" , "E" , "Representative exemplar epoch for split K" );
-  add_var( "EXE" , "K" , "N" , "Number of epochs assigned to split K" );
+  add_var( "EXE" , "K" , "E" , "Representative exemplar epoch for split K" , VT_INTEGER );
+  add_var( "EXE" , "K" , "N" , "Number of epochs assigned to split K" , VT_INTEGER );
 
   add_table( "EXE" , "CH,K" , "Channel-stratified representative split summaries" );
-  add_var( "EXE" , "CH,K" , "E" , "Representative exemplar epoch for split K" );
-  add_var( "EXE" , "CH,K" , "N" , "Number of epochs assigned to split K" );
+  add_var( "EXE" , "CH,K" , "E" , "Representative exemplar epoch for split K" , VT_INTEGER );
+  add_var( "EXE" , "CH,K" , "N" , "Number of epochs assigned to split K" , VT_INTEGER );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -8130,42 +8168,42 @@ void cmddefs_t::init()
   add_param( "GPA" , "comp-verbose" , "" , "Dump the null comparison statistics for each X variable" );
     
   add_table( "GPA" , "X,Y" , "Association results per predictor (X) and outcome (Y)" );
-  add_var( "GPA" , "X,Y" , "B" , "Regression coefficient" );
-  add_var( "GPA" , "X,Y" , "T" , "t-statistic" );
-  add_var( "GPA" , "X,Y" , "N" , "Number of observations" );
-  add_var( "GPA" , "X,Y" , "P" , "Asymptotic p-value" );
-  add_var( "GPA" , "X,Y" , "P_FDR" , "FDR(B&H)-adjusted p-value" );
-  add_var( "GPA" , "X,Y" , "P_FDR_BY" , "FDR(B&Y)-adjusted p-value" );
-  add_var( "GPA" , "X,Y" , "P_HOLM" , "Holm-adjusted p-value" );
-  add_var( "GPA" , "X,Y" , "P_BONF" , "Bonferroni-adjusted p-value" );
-  add_var( "GPA" , "X,Y" , "EMP" , "Empirical p-value" );
-  add_var( "GPA" , "X,Y" , "EMPADJ" , "Adjusted empirical p-value" );
-  add_var( "GPA" , "X,Y" , "GROUP" , "Dependent-variable group from the manifest" );
-  add_var( "GPA" , "X,Y" , "BASE" , "Dependent-variable base name from the manifest" );
-  add_var( "GPA" , "X,Y" , "STRAT" , "Dependent-variable factor-level string" );
-  add_var( "GPA" , "X,Y" , "XGROUP" , "Predictor-variable group from the manifest [X-factors]" );
-  add_var( "GPA" , "X,Y" , "XBASE" , "Predictor-variable base name from the manifest [X-factors]" );
-  add_var( "GPA" , "X,Y" , "XSTRAT" , "Predictor-variable factor-level string [X-factors]" );
+  add_var( "GPA" , "X,Y" , "B" , "Regression coefficient" , VT_REAL );
+  add_var( "GPA" , "X,Y" , "T" , "t-statistic" , VT_REAL );
+  add_var( "GPA" , "X,Y" , "N" , "Number of observations" , VT_INTEGER );
+  add_var( "GPA" , "X,Y" , "P" , "Asymptotic p-value" , VT_REAL );
+  add_var( "GPA" , "X,Y" , "P_FDR" , "FDR(B&H)-adjusted p-value" , VT_REAL );
+  add_var( "GPA" , "X,Y" , "P_FDR_BY" , "FDR(B&Y)-adjusted p-value" , VT_REAL );
+  add_var( "GPA" , "X,Y" , "P_HOLM" , "Holm-adjusted p-value" , VT_REAL );
+  add_var( "GPA" , "X,Y" , "P_BONF" , "Bonferroni-adjusted p-value" , VT_REAL );
+  add_var( "GPA" , "X,Y" , "EMP" , "Empirical p-value" , VT_REAL );
+  add_var( "GPA" , "X,Y" , "EMPADJ" , "Adjusted empirical p-value" , VT_REAL );
+  add_var( "GPA" , "X,Y" , "GROUP" , "Dependent-variable group from the manifest" , VT_TEXT );
+  add_var( "GPA" , "X,Y" , "BASE" , "Dependent-variable base name from the manifest" , VT_TEXT );
+  add_var( "GPA" , "X,Y" , "STRAT" , "Dependent-variable factor-level string" , VT_TEXT );
+  add_var( "GPA" , "X,Y" , "XGROUP" , "Predictor-variable group from the manifest [X-factors]" , VT_TEXT );
+  add_var( "GPA" , "X,Y" , "XBASE" , "Predictor-variable base name from the manifest [X-factors]" , VT_TEXT );
+  add_var( "GPA" , "X,Y" , "XSTRAT" , "Predictor-variable factor-level string [X-factors]" , VT_TEXT );
 
   add_table( "GPA" , "X" , "Comparison-test outputs per predictor [comp]" );
-  add_var( "GPA" , "X" , "MATCH_OBS" , "Observed comparison statistic" );
-  add_var( "GPA" , "X" , "MATCH_EXP" , "Expected comparison statistic under the null" );
-  add_var( "GPA" , "X" , "Z" , "Standardized comparison statistic" );
-  add_var( "GPA" , "X" , "P" , "One-sided empirical p-value for the comparison test" );
-  add_var( "GPA" , "X" , "P2" , "Two-sided empirical p-value for the comparison test" );
+  add_var( "GPA" , "X" , "MATCH_OBS" , "Observed comparison statistic" , VT_REAL );
+  add_var( "GPA" , "X" , "MATCH_EXP" , "Expected comparison statistic under the null" , VT_REAL );
+  add_var( "GPA" , "X" , "Z" , "Standardized comparison statistic" , VT_REAL );
+  add_var( "GPA" , "X" , "P" , "One-sided empirical p-value for the comparison test" , VT_REAL );
+  add_var( "GPA" , "X" , "P2" , "Two-sided empirical p-value for the comparison test" , VT_REAL );
 
   add_table( "GPA" , "X,N" , "Null comparison statistics per predictor [comp-verbose]" );
-  add_var( "GPA" , "X,N" , "S" , "Null comparison statistic for permutation N" );
+  add_var( "GPA" , "X,N" , "S" , "Null comparison statistic for permutation N" , VT_REAL );
 
   add_table( "GPA" , "VAR" , "Descriptive statistics per variable [stats]" );
-  add_var( "GPA" , "VAR" , "NOBS" , "Number of non-missing observations" );
-  add_var( "GPA" , "VAR" , "MEAN" , "Sample mean" );
-  add_var( "GPA" , "VAR" , "SD" , "Sample standard deviation" );
+  add_var( "GPA" , "VAR" , "NOBS" , "Number of non-missing observations" , VT_INTEGER );
+  add_var( "GPA" , "VAR" , "MEAN" , "Sample mean" , VT_REAL );
+  add_var( "GPA" , "VAR" , "SD" , "Sample standard deviation" , VT_REAL );
 
   add_table( "GPA" , "VAR,STRATUM" , "Stratified descriptive statistics per variable [stats,strata]" );
-  add_var( "GPA" , "VAR,STRATUM" , "NOBS" , "Number of non-missing observations in that stratum" );
-  add_var( "GPA" , "VAR,STRATUM" , "MEAN" , "Sample mean in that stratum" );
-  add_var( "GPA" , "VAR,STRATUM" , "SD" , "Sample standard deviation in that stratum" );
+  add_var( "GPA" , "VAR,STRATUM" , "NOBS" , "Number of non-missing observations in that stratum" , VT_INTEGER );
+  add_var( "GPA" , "VAR,STRATUM" , "MEAN" , "Sample mean in that stratum" , VT_REAL );
+  add_var( "GPA" , "VAR,STRATUM" , "SD" , "Sample standard deviation in that stratum" , VT_REAL );
 
   //
   // CPT
@@ -8220,24 +8258,24 @@ void cmddefs_t::init()
   add_param( "CPT" , "verbose", "", "Verbose output" );
   
   add_table( "CPT" , "VAR" , "Variable-level association output" );
-  add_var( "CPT" , "VAR", "CH" , "Channel name" );
-  add_var( "CPT" , "VAR", "CH1" , "First channel for variables stratified by channel pairs" );
-  add_var( "CPT" , "VAR", "CH2" , "Second channel for variables stratified by channel pairs" );  
-  add_var( "CPT" , "VAR", "F" , "Frequency (Hz) for variables stratified by frequency" );
-  add_var( "CPT" , "VAR", "T" , "Time for variables stratified by time" );    
-  add_var( "CPT" , "VAR", "B" , "Regression coefficient" );
-  add_var( "CPT" , "VAR", "STAT" , "t-statistic" );
-  add_var( "CPT" , "VAR", "PU" , "Uncorrected empirical p-value" );
-  add_var( "CPT" , "VAR", "PC" , "Family-wise corrected empirical p-value" );
-  add_var( "CPT" , "VAR", "CLST" , "Cluster number K for clustered variables, else 0" );
+  add_var( "CPT" , "VAR", "CH" , "Channel name" , VT_TEXT );
+  add_var( "CPT" , "VAR", "CH1" , "First channel for variables stratified by channel pairs" , VT_TEXT );
+  add_var( "CPT" , "VAR", "CH2" , "Second channel for variables stratified by channel pairs" , VT_TEXT );  
+  add_var( "CPT" , "VAR", "F" , "Frequency (Hz) for variables stratified by frequency" , VT_REAL );
+  add_var( "CPT" , "VAR", "T" , "Time for variables stratified by time" , VT_REAL );    
+  add_var( "CPT" , "VAR", "B" , "Regression coefficient" , VT_REAL );
+  add_var( "CPT" , "VAR", "STAT" , "t-statistic" , VT_REAL );
+  add_var( "CPT" , "VAR", "PU" , "Uncorrected empirical p-value" , VT_REAL );
+  add_var( "CPT" , "VAR", "PC" , "Family-wise corrected empirical p-value" , VT_REAL );
+  add_var( "CPT" , "VAR", "CLST" , "Cluster number K for clustered variables, else 0" , VT_INTEGER );
 
   add_table( "CPT" , "K" , "Cluster-level permutation results" );
-  add_var( "CPT" , "K" , "N" , "Number of variables in this cluster" );
-  add_var( "CPT" , "K" , "P" , "Empirical significance value for this cluster" );
-  add_var( "CPT" , "K" , "SEED" , "Seed variable for this cluster" );
+  add_var( "CPT" , "K" , "N" , "Number of variables in this cluster" , VT_INTEGER );
+  add_var( "CPT" , "K" , "P" , "Empirical significance value for this cluster" , VT_REAL );
+  add_var( "CPT" , "K" , "SEED" , "Seed variable for this cluster" , VT_TEXT );
   
   add_table( "CPT" , "K,M" , "Cluster membership output" );
-  add_var( "CPT", "K,M" , "VAR" , "Variable name, i.e. member M of cluster K" );
+  add_var( "CPT", "K,M" , "VAR" , "Variable name, i.e. member M of cluster K" , VT_TEXT );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -8260,17 +8298,17 @@ void cmddefs_t::init()
   add_param( "ORT" , "no-output" , "" , "Do not emit embedding values to the ORT output database" );
   add_param( "ORT" , "threads" , "1" , "ONNX Runtime intra-op threads" );
   add_table( "ORT" , "WIN,OUT" , "ONNX Runtime output values" );
-  add_var( "ORT" , "WIN" , "START" , "Window start time in seconds" );
-  add_var( "ORT" , "WIN" , "END" , "Window end time in seconds" );
-  add_var( "ORT" , "WIN" , "MODEL" , "ONNX model file" );
-  add_var( "ORT" , "WIN" , "MODALITY" , "Validated SleepFM modality" );
-  add_var( "ORT" , "WIN" , "CHANNELS" , "Number of supplied channels" );
-  add_var( "ORT" , "WIN" , "CHANNEL_LIST" , "Validated input channel labels" );
-  add_var( "ORT" , "WIN" , "SR" , "Validated input sample rate" );
-  add_var( "ORT" , "WIN" , "OUTPUT" , "Selected embedding output" );
-  add_var( "ORT" , "WIN" , "N" , "Number of values in the selected output" );
-  add_var( "ORT" , "OUT" , "TIME" , "Embedding timestamp in seconds" );
-  add_var( "ORT" , "OUT" , "VALUE" , "Output tensor value" );
+  add_var( "ORT" , "WIN" , "START" , "Window start time in seconds" , VT_REAL );
+  add_var( "ORT" , "WIN" , "END" , "Window end time in seconds" , VT_REAL );
+  add_var( "ORT" , "WIN" , "MODEL" , "ONNX model file" , VT_TEXT );
+  add_var( "ORT" , "WIN" , "MODALITY" , "Validated SleepFM modality" , VT_TEXT );
+  add_var( "ORT" , "WIN" , "CHANNELS" , "Number of supplied channels" , VT_INTEGER );
+  add_var( "ORT" , "WIN" , "CHANNEL_LIST" , "Validated input channel labels" , VT_TEXT );
+  add_var( "ORT" , "WIN" , "SR" , "Validated input sample rate" , VT_REAL );
+  add_var( "ORT" , "WIN" , "OUTPUT" , "Selected embedding output" , VT_TEXT );
+  add_var( "ORT" , "WIN" , "N" , "Number of values in the selected output" , VT_INTEGER );
+  add_var( "ORT" , "OUT" , "TIME" , "Embedding timestamp in seconds" , VT_REAL );
+  add_var( "ORT" , "OUT" , "VALUE" , "Output tensor value" , VT_REAL );
 
   //
   // PREDICT
@@ -8302,23 +8340,23 @@ void cmddefs_t::init()
   add_param( "PREDICT" , "drop" , "FTR1,FTR2" , "Force these model terms to be treated as missing" );
 
   add_table( "PREDICT" , "" , "Overall prediction summary" );
-  add_var( "PREDICT" , "" , "NF" , "Total number of model features" );
-  add_var( "PREDICT" , "" , "NF_OBS" , "Number of non-missing features observed before imputation" );
-  add_var( "PREDICT" , "" , "OKAY" , "1 if the prediction could be made, else 0" );
-  add_var( "PREDICT" , "" , "Y" , "Predicted value" );
-  add_var( "PREDICT" , "" , "Y1" , "Bias-corrected predicted value, if defined by the model" );
-  add_var( "PREDICT" , "" , "YOBS" , "Observed value, if supplied by the model" );
-  add_var( "PREDICT" , "" , "DIFF" , "Predicted minus observed difference" );
+  add_var( "PREDICT" , "" , "NF" , "Total number of model features" , VT_INTEGER );
+  add_var( "PREDICT" , "" , "NF_OBS" , "Number of non-missing features observed before imputation" , VT_INTEGER );
+  add_var( "PREDICT" , "" , "OKAY" , "1 if the prediction could be made, else 0" , VT_BOOLEAN );
+  add_var( "PREDICT" , "" , "Y" , "Predicted value" , VT_REAL );
+  add_var( "PREDICT" , "" , "Y1" , "Bias-corrected predicted value, if defined by the model" , VT_REAL );
+  add_var( "PREDICT" , "" , "YOBS" , "Observed value, if supplied by the model" , VT_REAL );
+  add_var( "PREDICT" , "" , "DIFF" , "Predicted minus observed difference" , VT_REAL );
 
   add_table( "PREDICT" , "FTR" , "Per-feature prediction diagnostics" );
-  add_var( "PREDICT" , "FTR" , "X" , "Observed raw feature value, if present" );
-  add_var( "PREDICT" , "FTR" , "Z" , "Normalized feature value after any imputation" );
-  add_var( "PREDICT" , "FTR" , "D" , "kNN distance for this feature [kNN]" );
-  add_var( "PREDICT" , "FTR" , "IMP" , "1 if this feature was initially imputed [kNN]" );
-  add_var( "PREDICT" , "FTR" , "REIMP" , "1 if this feature was re-imputed for atypicality [kNN]" );
-  add_var( "PREDICT" , "FTR" , "M" , "Model mean used for normalization" );
-  add_var( "PREDICT" , "FTR" , "SD" , "Model standard deviation used for normalization" );
-  add_var( "PREDICT" , "FTR" , "B" , "Model coefficient for this feature" );
+  add_var( "PREDICT" , "FTR" , "X" , "Observed raw feature value, if present" , VT_REAL );
+  add_var( "PREDICT" , "FTR" , "Z" , "Normalized feature value after any imputation" , VT_REAL );
+  add_var( "PREDICT" , "FTR" , "D" , "kNN distance for this feature [kNN]" , VT_REAL );
+  add_var( "PREDICT" , "FTR" , "IMP" , "1 if this feature was initially imputed [kNN]" , VT_BOOLEAN );
+  add_var( "PREDICT" , "FTR" , "REIMP" , "1 if this feature was re-imputed for atypicality [kNN]" , VT_BOOLEAN );
+  add_var( "PREDICT" , "FTR" , "M" , "Model mean used for normalization" , VT_REAL );
+  add_var( "PREDICT" , "FTR" , "SD" , "Model standard deviation used for normalization" , VT_REAL );
+  add_var( "PREDICT" , "FTR" , "B" , "Model coefficient for this feature" , VT_REAL );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -8364,16 +8402,16 @@ void cmddefs_t::init()
   add_param( "SIMUL" , "fft" , "" , "Use FFT reseeding mode based on an existing signal" );
 
   add_table( "SIMUL" , "F" , "Spectrum used for direct simulation [verbose]" );
-  add_var( "SIMUL" , "F" , "LF" , "Natural log of frequency" );
-  add_var( "SIMUL" , "F" , "P" , "Power spectral density at this frequency" );
-  add_var( "SIMUL" , "F" , "LP" , "Natural log of power spectral density" );
-  add_var( "SIMUL" , "F" , "DB" , "Power spectral density in dB" );
+  add_var( "SIMUL" , "F" , "LF" , "Natural log of frequency" , VT_REAL );
+  add_var( "SIMUL" , "F" , "P" , "Power spectral density at this frequency" , VT_REAL );
+  add_var( "SIMUL" , "F" , "LP" , "Natural log of power spectral density" , VT_REAL );
+  add_var( "SIMUL" , "F" , "DB" , "Power spectral density in dB" , VT_REAL );
 
   add_table( "SIMUL" , "CH,E,F" , "Epoch-specific spectra used in cache mode [verbose]" );
-  add_var( "SIMUL" , "CH,E,F" , "LF" , "Natural log of frequency" );
-  add_var( "SIMUL" , "CH,E,F" , "P" , "Power spectral density at this frequency" );
-  add_var( "SIMUL" , "CH,E,F" , "LP" , "Natural log of power spectral density" );
-  add_var( "SIMUL" , "CH,E,F" , "DB" , "Power spectral density in dB" );
+  add_var( "SIMUL" , "CH,E,F" , "LF" , "Natural log of frequency" , VT_REAL );
+  add_var( "SIMUL" , "CH,E,F" , "P" , "Power spectral density at this frequency" , VT_REAL );
+  add_var( "SIMUL" , "CH,E,F" , "LP" , "Natural log of power spectral density" , VT_REAL );
+  add_var( "SIMUL" , "CH,E,F" , "DB" , "Power spectral density in dB" , VT_REAL );
 
   //
   // SIGGEN
@@ -8453,8 +8491,8 @@ void cmddefs_t::init()
   add_param( "--validate" , "annot-exclude-list" , "bad-annot.lst" , "Write annotation-level exclusions to this file" );
 
   add_table( "--validate" , "" , "Primary VALIDATE output" );
-  add_var( "--validate" , "" , "EDF" , "Valid/invalid EDF (1=valid)" );
-  add_var( "--validate" , "" , "ANNOTS" , "Valid/invalid annotations (1=valid)" );
+  add_var( "--validate" , "" , "EDF" , "Valid/invalid EDF (1=valid)" , VT_BOOLEAN );
+  add_var( "--validate" , "" , "ANNOTS" , "Valid/invalid annotations (1=valid)" , VT_BOOLEAN );
 
   //
   // --waveforms
@@ -8474,25 +8512,25 @@ void cmddefs_t::init()
   add_param( "--waveforms" , "recur" , "" , "Recursively scan the specified folder(s) for .lwf files" );
 
   add_table( "--waveforms" , "FILE" , "Per-file waveform shard summary" );
-  add_var( "--waveforms" , "FILE" , "EDF_ID" , "EDF/individual ID stored in the shard" );
-  add_var( "--waveforms" , "FILE" , "EDF" , "Source EDF filename stored in the shard" );
-  add_var( "--waveforms" , "FILE" , "TAG" , "User-defined tag stored in the shard" );
-  add_var( "--waveforms" , "FILE" , "ALIGN" , "Stored anchor mode" );
-  add_var( "--waveforms" , "FILE" , "START_DATE" , "EDF start date" );
-  add_var( "--waveforms" , "FILE" , "START_TIME" , "EDF start time" );
-  add_var( "--waveforms" , "FILE" , "N_ANNOTS" , "Number of defining annotation classes stored in the file header" );
-  add_var( "--waveforms" , "FILE" , "ANNOTS" , "Comma-delimited defining annotation classes" );
-  add_var( "--waveforms" , "FILE" , "N_WAVES" , "Number of waveform events in the shard" );
-  add_var( "--waveforms" , "FILE" , "N_CH" , "Number of stored channels" );
+  add_var( "--waveforms" , "FILE" , "EDF_ID" , "EDF/individual ID stored in the shard" , VT_TEXT );
+  add_var( "--waveforms" , "FILE" , "EDF" , "Source EDF filename stored in the shard" , VT_TEXT );
+  add_var( "--waveforms" , "FILE" , "TAG" , "User-defined tag stored in the shard" , VT_TEXT );
+  add_var( "--waveforms" , "FILE" , "ALIGN" , "Stored anchor mode" , VT_TEXT );
+  add_var( "--waveforms" , "FILE" , "START_DATE" , "EDF start date" , VT_TEXT );
+  add_var( "--waveforms" , "FILE" , "START_TIME" , "EDF start time" , VT_TEXT );
+  add_var( "--waveforms" , "FILE" , "N_ANNOTS" , "Number of defining annotation classes stored in the file header" , VT_INTEGER );
+  add_var( "--waveforms" , "FILE" , "ANNOTS" , "Comma-delimited defining annotation classes" , VT_TEXT );
+  add_var( "--waveforms" , "FILE" , "N_WAVES" , "Number of waveform events in the shard" , VT_INTEGER );
+  add_var( "--waveforms" , "FILE" , "N_CH" , "Number of stored channels" , VT_INTEGER );
 
   add_table( "--waveforms" , "FILE,CH" , "Per-file channel summary for waveform shards" );
-  add_var( "--waveforms" , "FILE,CH" , "SR" , "Channel sample rate" );
-  add_var( "--waveforms" , "FILE,CH" , "UNIT" , "Physical units from the EDF header" );
-  add_var( "--waveforms" , "FILE,CH" , "MIN_SAMPLES" , "Minimum samples per waveform for this channel" );
-  add_var( "--waveforms" , "FILE,CH" , "MAX_SAMPLES" , "Maximum samples per waveform for this channel" );
+  add_var( "--waveforms" , "FILE,CH" , "SR" , "Channel sample rate" , VT_REAL );
+  add_var( "--waveforms" , "FILE,CH" , "UNIT" , "Physical units from the EDF header" , VT_TEXT );
+  add_var( "--waveforms" , "FILE,CH" , "MIN_SAMPLES" , "Minimum samples per waveform for this channel" , VT_INTEGER );
+  add_var( "--waveforms" , "FILE,CH" , "MAX_SAMPLES" , "Maximum samples per waveform for this channel" , VT_INTEGER );
 
-  add_table( "--waveforms" , "ANNOT,CH,LWF_ID,TAG" , "Aggregated waveform event counts across scanned shards" );
-  add_var( "--waveforms" , "ANNOT,CH,LWF_ID,TAG" , "N" , "Number of waveform events for this annotation/channel/ID/tag combination" );
+  add_table( "--waveforms" , "ANNOT,CH,LWFID,TAG" , "Aggregated waveform event counts across scanned shards" );
+  add_var( "--waveforms" , "ANNOT,CH,LWFID,TAG" , "N" , "Number of waveform events for this annotation/channel/ID/tag combination" , VT_INTEGER );
 
   //
   // --repath
@@ -8608,65 +8646,65 @@ void cmddefs_t::init()
   add_param( "HRV" , "rp-w" , "0.02" , "Median-filter window for the R-peak detector" );
 
   add_table( "HRV" , "CH" , "Whole-trace or epoch-summarized HRV metrics" );
-  add_var( "HRV" , "CH" , "IMPUTED" , "Number of imputed RR intervals" );
-  add_var( "HRV" , "CH" , "P_INV" , "Estimated probability that the ECG is inverted" );
-  add_var( "HRV" , "CH" , "INV" , "0/1 flag indicating ECG inversion" );
-  add_var( "HRV" , "CH" , "NP" , "Number of retained R-peaks" );
-  add_var( "HRV" , "CH" , "NP_TOT" , "Total number of R-peaks before exclusions or summarization" );
-  add_var( "HRV" , "CH" , "RR" , "Mean RR interval" );
-  add_var( "HRV" , "CH" , "HR" , "Mean heart rate" );
-  add_var( "HRV" , "CH" , "SDNN" , "Standard deviation of NN intervals" );
-  add_var( "HRV" , "CH" , "SDNN_R" , "Robust SDNN" );
-  add_var( "HRV" , "CH" , "RMSSD" , "Root mean square successive RR difference" );
-  add_var( "HRV" , "CH" , "RMSSD_R" , "Robust RMSSD" );
-  add_var( "HRV" , "CH" , "pNN50" , "Proportion of successive RR differences exceeding 50 ms" );
-  add_var( "HRV" , "CH" , "LF" , "Low-frequency HRV power" );
-  add_var( "HRV" , "CH" , "HF" , "High-frequency HRV power" );
-  add_var( "HRV" , "CH" , "LF_N" , "Normalized low-frequency power" );
-  add_var( "HRV" , "CH" , "HF_N" , "Normalized high-frequency power" );
-  add_var( "HRV" , "CH" , "LF_PK" , "Peak low-frequency HRV frequency" );
-  add_var( "HRV" , "CH" , "HF_PK" , "Peak high-frequency HRV frequency" );
-  add_var( "HRV" , "CH" , "LF2HF" , "Low-to-high frequency power ratio" );
+  add_var( "HRV" , "CH" , "IMPUTED" , "Number of imputed RR intervals" , VT_INTEGER );
+  add_var( "HRV" , "CH" , "P_INV" , "Estimated probability that the ECG is inverted" , VT_REAL );
+  add_var( "HRV" , "CH" , "INV" , "0/1 flag indicating ECG inversion" , VT_BOOLEAN );
+  add_var( "HRV" , "CH" , "NP" , "Number of retained R-peaks" , VT_INTEGER );
+  add_var( "HRV" , "CH" , "NP_TOT" , "Total number of R-peaks before exclusions or summarization" , VT_INTEGER );
+  add_var( "HRV" , "CH" , "RR" , "Mean RR interval" , VT_REAL );
+  add_var( "HRV" , "CH" , "HR" , "Mean heart rate" , VT_REAL );
+  add_var( "HRV" , "CH" , "SDNN" , "Standard deviation of NN intervals" , VT_REAL );
+  add_var( "HRV" , "CH" , "SDNN_R" , "Robust SDNN" , VT_REAL );
+  add_var( "HRV" , "CH" , "RMSSD" , "Root mean square successive RR difference" , VT_REAL );
+  add_var( "HRV" , "CH" , "RMSSD_R" , "Robust RMSSD" , VT_REAL );
+  add_var( "HRV" , "CH" , "pNN50" , "Proportion of successive RR differences exceeding 50 ms" , VT_REAL );
+  add_var( "HRV" , "CH" , "LF" , "Low-frequency HRV power" , VT_REAL );
+  add_var( "HRV" , "CH" , "HF" , "High-frequency HRV power" , VT_REAL );
+  add_var( "HRV" , "CH" , "LF_N" , "Normalized low-frequency power" , VT_REAL );
+  add_var( "HRV" , "CH" , "HF_N" , "Normalized high-frequency power" , VT_REAL );
+  add_var( "HRV" , "CH" , "LF_PK" , "Peak low-frequency HRV frequency" , VT_REAL );
+  add_var( "HRV" , "CH" , "HF_PK" , "Peak high-frequency HRV frequency" , VT_REAL );
+  add_var( "HRV" , "CH" , "LF2HF" , "Low-to-high frequency power ratio" , VT_REAL );
 
   add_table( "HRV" , "CH,E" , "Epoch-level HRV metrics [epoch]" );
-  add_var( "HRV" , "CH,E" , "IMPUTED" , "Number of imputed RR intervals" );
-  add_var( "HRV" , "CH,E" , "P_INV" , "Estimated probability that the ECG is inverted" );
-  add_var( "HRV" , "CH,E" , "INV" , "0/1 flag indicating ECG inversion" );
-  add_var( "HRV" , "CH,E" , "NP" , "Number of retained R-peaks" );
-  add_var( "HRV" , "CH,E" , "RR" , "Mean RR interval" );
-  add_var( "HRV" , "CH,E" , "HR" , "Mean heart rate" );
-  add_var( "HRV" , "CH,E" , "SDNN" , "Standard deviation of NN intervals" );
-  add_var( "HRV" , "CH,E" , "SDNN_R" , "Robust SDNN" );
-  add_var( "HRV" , "CH,E" , "RMSSD" , "Root mean square successive RR difference" );
-  add_var( "HRV" , "CH,E" , "RMSSD_R" , "Robust RMSSD" );
-  add_var( "HRV" , "CH,E" , "pNN50" , "Proportion of successive RR differences exceeding 50 ms" );
-  add_var( "HRV" , "CH,E" , "LF" , "Low-frequency HRV power" );
-  add_var( "HRV" , "CH,E" , "HF" , "High-frequency HRV power" );
-  add_var( "HRV" , "CH,E" , "LF_N" , "Normalized low-frequency power" );
-  add_var( "HRV" , "CH,E" , "HF_N" , "Normalized high-frequency power" );
-  add_var( "HRV" , "CH,E" , "LF_PK" , "Peak low-frequency HRV frequency" );
-  add_var( "HRV" , "CH,E" , "HF_PK" , "Peak high-frequency HRV frequency" );
-  add_var( "HRV" , "CH,E" , "LF2HF" , "Low-to-high frequency power ratio" );
+  add_var( "HRV" , "CH,E" , "IMPUTED" , "Number of imputed RR intervals" , VT_INTEGER );
+  add_var( "HRV" , "CH,E" , "P_INV" , "Estimated probability that the ECG is inverted" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "INV" , "0/1 flag indicating ECG inversion" , VT_BOOLEAN );
+  add_var( "HRV" , "CH,E" , "NP" , "Number of retained R-peaks" , VT_INTEGER );
+  add_var( "HRV" , "CH,E" , "RR" , "Mean RR interval" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "HR" , "Mean heart rate" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "SDNN" , "Standard deviation of NN intervals" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "SDNN_R" , "Robust SDNN" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "RMSSD" , "Root mean square successive RR difference" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "RMSSD_R" , "Robust RMSSD" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "pNN50" , "Proportion of successive RR differences exceeding 50 ms" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "LF" , "Low-frequency HRV power" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "HF" , "High-frequency HRV power" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "LF_N" , "Normalized low-frequency power" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "HF_N" , "Normalized high-frequency power" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "LF_PK" , "Peak low-frequency HRV frequency" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "HF_PK" , "Peak high-frequency HRV frequency" , VT_REAL );
+  add_var( "HRV" , "CH,E" , "LF2HF" , "Low-to-high frequency power ratio" , VT_REAL );
 
   add_table( "HRV" , "CH,ANNOT" , "Annotation-stratified HRV metrics [annot]" );
-  add_var( "HRV" , "CH,ANNOT" , "NP" , "Number of retained R-peaks" );
-  add_var( "HRV" , "CH,ANNOT" , "RR" , "Mean RR interval" );
-  add_var( "HRV" , "CH,ANNOT" , "HR" , "Mean heart rate" );
-  add_var( "HRV" , "CH,ANNOT" , "SDNN" , "Standard deviation of NN intervals" );
-  add_var( "HRV" , "CH,ANNOT" , "SDNN_R" , "Robust SDNN" );
-  add_var( "HRV" , "CH,ANNOT" , "RMSSD" , "Root mean square successive RR difference" );
-  add_var( "HRV" , "CH,ANNOT" , "RMSSD_R" , "Robust RMSSD" );
-  add_var( "HRV" , "CH,ANNOT" , "pNN50" , "Proportion of successive RR differences exceeding 50 ms" );
+  add_var( "HRV" , "CH,ANNOT" , "NP" , "Number of retained R-peaks" , VT_INTEGER );
+  add_var( "HRV" , "CH,ANNOT" , "RR" , "Mean RR interval" , VT_REAL );
+  add_var( "HRV" , "CH,ANNOT" , "HR" , "Mean heart rate" , VT_REAL );
+  add_var( "HRV" , "CH,ANNOT" , "SDNN" , "Standard deviation of NN intervals" , VT_REAL );
+  add_var( "HRV" , "CH,ANNOT" , "SDNN_R" , "Robust SDNN" , VT_REAL );
+  add_var( "HRV" , "CH,ANNOT" , "RMSSD" , "Root mean square successive RR difference" , VT_REAL );
+  add_var( "HRV" , "CH,ANNOT" , "RMSSD_R" , "Robust RMSSD" , VT_REAL );
+  add_var( "HRV" , "CH,ANNOT" , "pNN50" , "Proportion of successive RR differences exceeding 50 ms" , VT_REAL );
 
   add_table( "HRV" , "CH,ANNOT,INST" , "Annotation-instance-stratified HRV metrics [by-instance]" );
-  add_var( "HRV" , "CH,ANNOT,INST" , "NP" , "Number of retained R-peaks" );
-  add_var( "HRV" , "CH,ANNOT,INST" , "RR" , "Mean RR interval" );
-  add_var( "HRV" , "CH,ANNOT,INST" , "HR" , "Mean heart rate" );
-  add_var( "HRV" , "CH,ANNOT,INST" , "SDNN" , "Standard deviation of NN intervals" );
-  add_var( "HRV" , "CH,ANNOT,INST" , "SDNN_R" , "Robust SDNN" );
-  add_var( "HRV" , "CH,ANNOT,INST" , "RMSSD" , "Root mean square successive RR difference" );
-  add_var( "HRV" , "CH,ANNOT,INST" , "RMSSD_R" , "Robust RMSSD" );
-  add_var( "HRV" , "CH,ANNOT,INST" , "pNN50" , "Proportion of successive RR differences exceeding 50 ms" );
+  add_var( "HRV" , "CH,ANNOT,INST" , "NP" , "Number of retained R-peaks" , VT_INTEGER );
+  add_var( "HRV" , "CH,ANNOT,INST" , "RR" , "Mean RR interval" , VT_REAL );
+  add_var( "HRV" , "CH,ANNOT,INST" , "HR" , "Mean heart rate" , VT_REAL );
+  add_var( "HRV" , "CH,ANNOT,INST" , "SDNN" , "Standard deviation of NN intervals" , VT_REAL );
+  add_var( "HRV" , "CH,ANNOT,INST" , "SDNN_R" , "Robust SDNN" , VT_REAL );
+  add_var( "HRV" , "CH,ANNOT,INST" , "RMSSD" , "Root mean square successive RR difference" , VT_REAL );
+  add_var( "HRV" , "CH,ANNOT,INST" , "RMSSD_R" , "Robust RMSSD" , VT_REAL );
+  add_var( "HRV" , "CH,ANNOT,INST" , "pNN50" , "Proportion of successive RR differences exceeding 50 ms" , VT_REAL );
 
   //
   // RAI
@@ -8688,11 +8726,11 @@ void cmddefs_t::init()
   add_param( "RAI" , "verbose" , "" , "Emit per-epoch baseline-corrected amplitudes" );
 
   add_table( "RAI" , "CH" , "Channel-level REM atonia summaries" );
-  add_var( "RAI" , "CH" , "REM_AI" , "REM atonia index" );
-  add_var( "RAI" , "CH" , "NE" , "Number of epochs contributing to the index" );
+  add_var( "RAI" , "CH" , "REM_AI" , "REM atonia index" , VT_REAL );
+  add_var( "RAI" , "CH" , "NE" , "Number of epochs contributing to the index" , VT_INTEGER );
 
   add_table( "RAI" , "CH,N" , "Per-epoch corrected amplitudes [verbose]" );
-  add_var( "RAI" , "CH,N" , "X" , "Baseline-corrected mean rectified amplitude for that epoch" );
+  add_var( "RAI" , "CH,N" , "X" , "Baseline-corrected mean rectified amplitude for that epoch" , VT_REAL );
 
   //
   // AROUSALS
@@ -8777,111 +8815,111 @@ void cmddefs_t::init()
   add_param( "AROUSALS" , "spindle-min-channels" , "0" , "Number of EEG channels that must independently confirm a spindle for it to count; 0 = automatic majority vote (ceil(nchan/2), e.g. 1 of 2, 2 of 3, 2 of 4)" );
 
   add_table( "AROUSALS" , "SS" , "Per-stage (NREM/REM) overall arousal summary" );
-  add_var( "AROUSALS" , "SS" , "MINS" , "Total analyzed duration in minutes for this stage" );
-  add_var( "AROUSALS" , "SS" , "N" , "Number of all detected arousals in this stage" );
-  add_var( "AROUSALS" , "SS" , "AI" , "All-event arousal index per hour for this stage" );
-  add_var( "AROUSALS" , "SS" , "DUR" , "Mean duration of all detected arousals in this stage" );
-  add_var( "AROUSALS" , "SS" , "N_STD" , "Number of standard (<=15 second) detected arousals" );
-  add_var( "AROUSALS" , "SS" , "AI_STD" , "Standard-event arousal index per hour" );
-  add_var( "AROUSALS" , "SS" , "DUR_STD" , "Mean duration of standard detected arousals" );
-  add_var( "AROUSALS" , "SS" , "N_LONG" , "Number of long (>15 second) detected arousals" );
-  add_var( "AROUSALS" , "SS" , "AI_LONG" , "Long-event arousal index per hour" );
-  add_var( "AROUSALS" , "SS" , "DUR_LONG" , "Mean duration of long detected arousals" );
-  add_var( "AROUSALS" , "SS" , "N_ART" , "Number of detected high-delta-rise artifact mask runs in this stage" );
-  add_var( "AROUSALS" , "SS" , "AI_ART" , "Artifact-event index per hour" );
-  add_var( "AROUSALS" , "SS" , "N_SUPPRESSED" , "Number of candidate arousal events suppressed by artifact or REM EMG-confirmation failure in this stage" );
-  add_var( "AROUSALS" , "SS" , "N_SUPPRESSED_SPINDLE" , "Number of candidate arousal events suppressed by the NR spindle veto (spindle=T only)" );
-  add_var( "AROUSALS" , "SS" , "AI_SUPPRESSED_SPINDLE" , "Spindle-veto-suppressed candidate event index per hour (spindle=T only)" );
-  add_var( "AROUSALS" , "SS" , "AI_SUPPRESSED" , "Artifact-suppressed candidate event index per hour" );
-  add_var( "AROUSALS" , "SS" , "N_MAN" , "All manual annotation event count for this stage" );
-  add_var( "AROUSALS" , "SS" , "AI_MAN" , "All manual annotation event index per hour" );
-  add_var( "AROUSALS" , "SS" , "DUR_MAN" , "Mean duration of all manual annotation events" );
-  add_var( "AROUSALS" , "SS" , "N_MAN_STD" , "Manual standard (<=15 second) event count" );
-  add_var( "AROUSALS" , "SS" , "AI_MAN_STD" , "Manual standard-event index per hour" );
-  add_var( "AROUSALS" , "SS" , "DUR_MAN_STD" , "Mean duration of manual standard events" );
-  add_var( "AROUSALS" , "SS" , "N_MAN_LONG" , "Manual long (>15 second) event count" );
-  add_var( "AROUSALS" , "SS" , "AI_MAN_LONG" , "Manual long-event index per hour" );
-  add_var( "AROUSALS" , "SS" , "DUR_MAN_LONG" , "Mean duration of manual long events" );
-  add_var( "AROUSALS" , "SS" , "VDIAG_N_WIN" , "Verbose: analyzed feature windows" );
-  add_var( "AROUSALS" , "SS" , "VDIAG_N_EEG_TILT_SEED" , "Verbose: windows meeting EEG tilt-rise seed criteria" );
-  add_var( "AROUSALS" , "SS" , "VDIAG_PROP_EEG_TILT_SEED" , "Verbose: proportion of windows meeting EEG tilt-rise seed criteria" );
-  add_var( "AROUSALS" , "SS" , "VDIAG_N_EMG_RISE_SEED" , "Verbose: windows meeting EMG-rise seed criteria" );
-  add_var( "AROUSALS" , "SS" , "VDIAG_PROP_EMG_RISE_SEED" , "Verbose: proportion of windows meeting EMG-rise seed criteria" );
-  add_var( "AROUSALS" , "SS" , "VDIAG_N_DELTA_ARTIFACT" , "Verbose: windows marked as high-delta-rise artifact" );
-  add_var( "AROUSALS" , "SS" , "VDIAG_PROP_DELTA_ARTIFACT" , "Verbose: proportion of windows marked as high-delta-rise artifact" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_RAW" , "Verbose: raw candidate intervals before pruning" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_EEG_RAW" , "Verbose: raw EEG-seeded candidate intervals" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_EMG_RAW" , "Verbose: raw EMG-seeded candidate intervals" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_DUR_OK" , "Verbose: raw candidates retained by initial duration limits" );
-  add_var( "AROUSALS" , "SS" , "VCAND_PROP_DUR_OK" , "Verbose: proportion of raw candidates retained by initial duration limits" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_DUR_TOO_SHORT" , "Verbose: raw candidates rejected as too short at the initial duration gate" );
-  add_var( "AROUSALS" , "SS" , "VCAND_PROP_DUR_TOO_SHORT" , "Verbose: proportion of raw candidates rejected as too short at the initial duration gate" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_MERGED" , "Verbose: candidate intervals after gap merging" );
-  add_var( "AROUSALS" , "SS" , "VCAND_PROP_MERGED" , "Verbose: merged candidates divided by raw candidates" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_FINAL_DUR_OK" , "Verbose: merged candidates retained by final duration limits" );
-  add_var( "AROUSALS" , "SS" , "VCAND_PROP_FINAL_DUR_OK" , "Verbose: proportion of raw candidates retained after final duration limits" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_FINAL_DUR_TOO_SHORT" , "Verbose: merged candidates rejected as too short at the final duration gate" );
-  add_var( "AROUSALS" , "SS" , "VCAND_PROP_FINAL_DUR_TOO_SHORT" , "Verbose: proportion of raw candidates rejected as too short at the final duration gate" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_FINAL_DUR_TRIMMED" , "Verbose: merged candidates trimmed to the candidate maximum duration at the final duration gate" );
-  add_var( "AROUSALS" , "SS" , "VCAND_PROP_FINAL_DUR_TRIMMED" , "Verbose: proportion of raw candidates trimmed to the candidate maximum duration at the final duration gate" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_PRESLEEP_OK" , "Verbose: candidates retained by the pre-sleep requirement" );
-  add_var( "AROUSALS" , "SS" , "VCAND_PROP_PRESLEEP_OK" , "Verbose: proportion of raw candidates retained by pre-sleep requirement" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_ARTIFACT_BLOCKED" , "Verbose: candidates blocked as high-delta-rise artifact" );
-  add_var( "AROUSALS" , "SS" , "VCAND_PROP_ARTIFACT_BLOCKED" , "Verbose: proportion of raw candidates blocked as artifact" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_SPINDLE_BLOCKED" , "Verbose, spindle=T only: candidates blocked by the NR spindle veto" );
-  add_var( "AROUSALS" , "SS" , "VCAND_PROP_SPINDLE_BLOCKED" , "Verbose, spindle=T only: proportion of raw candidates blocked by the NR spindle veto" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_REM_EMG_CONFIRMED" , "Verbose, REM only: candidates confirmed by concurrent chin-EMG rise" );
-  add_var( "AROUSALS" , "SS" , "VCAND_PROP_REM_EMG_CONFIRMED" , "Verbose, REM only: proportion of raw candidates confirmed by EMG" );
-  add_var( "AROUSALS" , "SS" , "VCAND_N_REM_EMG_REJECTED" , "Verbose, REM only: candidates rejected for lacking concurrent chin-EMG rise" );
-  add_var( "AROUSALS" , "SS" , "VCAND_PROP_REM_EMG_REJECTED" , "Verbose, REM only: proportion of raw candidates rejected for lacking EMG" );
-  add_var( "AROUSALS" , "SS" , "N_REM_CORTICAL_ONLY" , "Verbose, REM only: EEG candidates that failed EMG confirmation" );
-  add_var( "AROUSALS" , "SS" , "PCT_REM_EMG_CONFIRMED" , "Verbose, REM only: percentage of REM candidates confirmed by EMG" );
-  add_var( "AROUSALS" , "SS" , "N_LONG_REM_CORTICAL_ONLY" , "Verbose, REM only: long EEG candidates that failed EMG confirmation" );
-  add_var( "AROUSALS" , "SS" , "PCT_LONG_REM_EMG_CONFIRMED" , "Verbose, REM only: percentage of long REM candidates confirmed by EMG" );
+  add_var( "AROUSALS" , "SS" , "MINS" , "Total analyzed duration in minutes for this stage" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "N" , "Number of all detected arousals in this stage" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "AI" , "All-event arousal index per hour for this stage" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "DUR" , "Mean duration of all detected arousals in this stage" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "N_STD" , "Number of standard (<=15 second) detected arousals" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "AI_STD" , "Standard-event arousal index per hour" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "DUR_STD" , "Mean duration of standard detected arousals" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "N_LONG" , "Number of long (>15 second) detected arousals" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "AI_LONG" , "Long-event arousal index per hour" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "DUR_LONG" , "Mean duration of long detected arousals" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "N_ART" , "Number of detected high-delta-rise artifact mask runs in this stage" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "AI_ART" , "Artifact-event index per hour" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "N_SUPPRESSED" , "Number of candidate arousal events suppressed by artifact or REM EMG-confirmation failure in this stage" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "N_SUPPRESSED_SPINDLE" , "Number of candidate arousal events suppressed by the NR spindle veto (spindle=T only)" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "AI_SUPPRESSED_SPINDLE" , "Spindle-veto-suppressed candidate event index per hour (spindle=T only)" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "AI_SUPPRESSED" , "Artifact-suppressed candidate event index per hour" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "N_MAN" , "All manual annotation event count for this stage" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "AI_MAN" , "All manual annotation event index per hour" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "DUR_MAN" , "Mean duration of all manual annotation events" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "N_MAN_STD" , "Manual standard (<=15 second) event count" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "AI_MAN_STD" , "Manual standard-event index per hour" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "DUR_MAN_STD" , "Mean duration of manual standard events" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "N_MAN_LONG" , "Manual long (>15 second) event count" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "AI_MAN_LONG" , "Manual long-event index per hour" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "DUR_MAN_LONG" , "Mean duration of manual long events" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VDIAG_N_WIN" , "Verbose: analyzed feature windows" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VDIAG_N_EEG_TILT_SEED" , "Verbose: windows meeting EEG tilt-rise seed criteria" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VDIAG_PROP_EEG_TILT_SEED" , "Verbose: proportion of windows meeting EEG tilt-rise seed criteria" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VDIAG_N_EMG_RISE_SEED" , "Verbose: windows meeting EMG-rise seed criteria" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VDIAG_PROP_EMG_RISE_SEED" , "Verbose: proportion of windows meeting EMG-rise seed criteria" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VDIAG_N_DELTA_ARTIFACT" , "Verbose: windows marked as high-delta-rise artifact" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VDIAG_PROP_DELTA_ARTIFACT" , "Verbose: proportion of windows marked as high-delta-rise artifact" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_RAW" , "Verbose: raw candidate intervals before pruning" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_EEG_RAW" , "Verbose: raw EEG-seeded candidate intervals" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_EMG_RAW" , "Verbose: raw EMG-seeded candidate intervals" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_DUR_OK" , "Verbose: raw candidates retained by initial duration limits" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_PROP_DUR_OK" , "Verbose: proportion of raw candidates retained by initial duration limits" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_DUR_TOO_SHORT" , "Verbose: raw candidates rejected as too short at the initial duration gate" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_PROP_DUR_TOO_SHORT" , "Verbose: proportion of raw candidates rejected as too short at the initial duration gate" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_MERGED" , "Verbose: candidate intervals after gap merging" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_PROP_MERGED" , "Verbose: merged candidates divided by raw candidates" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_FINAL_DUR_OK" , "Verbose: merged candidates retained by final duration limits" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_PROP_FINAL_DUR_OK" , "Verbose: proportion of raw candidates retained after final duration limits" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_FINAL_DUR_TOO_SHORT" , "Verbose: merged candidates rejected as too short at the final duration gate" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_PROP_FINAL_DUR_TOO_SHORT" , "Verbose: proportion of raw candidates rejected as too short at the final duration gate" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_FINAL_DUR_TRIMMED" , "Verbose: merged candidates trimmed to the candidate maximum duration at the final duration gate" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_PROP_FINAL_DUR_TRIMMED" , "Verbose: proportion of raw candidates trimmed to the candidate maximum duration at the final duration gate" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_PRESLEEP_OK" , "Verbose: candidates retained by the pre-sleep requirement" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_PROP_PRESLEEP_OK" , "Verbose: proportion of raw candidates retained by pre-sleep requirement" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_ARTIFACT_BLOCKED" , "Verbose: candidates blocked as high-delta-rise artifact" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_PROP_ARTIFACT_BLOCKED" , "Verbose: proportion of raw candidates blocked as artifact" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_SPINDLE_BLOCKED" , "Verbose, spindle=T only: candidates blocked by the NR spindle veto" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_PROP_SPINDLE_BLOCKED" , "Verbose, spindle=T only: proportion of raw candidates blocked by the NR spindle veto" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_REM_EMG_CONFIRMED" , "Verbose, REM only: candidates confirmed by concurrent chin-EMG rise" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_PROP_REM_EMG_CONFIRMED" , "Verbose, REM only: proportion of raw candidates confirmed by EMG" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "VCAND_N_REM_EMG_REJECTED" , "Verbose, REM only: candidates rejected for lacking concurrent chin-EMG rise" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "VCAND_PROP_REM_EMG_REJECTED" , "Verbose, REM only: proportion of raw candidates rejected for lacking EMG" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "N_REM_CORTICAL_ONLY" , "Verbose, REM only: EEG candidates that failed EMG confirmation" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "PCT_REM_EMG_CONFIRMED" , "Verbose, REM only: percentage of REM candidates confirmed by EMG" , VT_REAL );
+  add_var( "AROUSALS" , "SS" , "N_LONG_REM_CORTICAL_ONLY" , "Verbose, REM only: long EEG candidates that failed EMG confirmation" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS" , "PCT_LONG_REM_EMG_CONFIRMED" , "Verbose, REM only: percentage of long REM candidates confirmed by EMG" , VT_REAL );
 
   add_table( "AROUSALS" , "SS,CLS" , "Per-stage, class-specific feature summaries" );
-  add_var( "AROUSALS" , "SS,CLS" , "NE" , "Number of windows assigned to this class" );
-  add_var( "AROUSALS" , "SS,CLS" , "AI" , "Event index per hour for a manual summary class" );
-  add_var( "AROUSALS" , "SS,CLS" , "DUR" , "Mean event duration for a manual summary class" );
-  add_var( "AROUSALS" , "SS,CLS" , "DELTA" , "Mean normalized delta feature for this class" );
-  add_var( "AROUSALS" , "SS,CLS" , "THETA" , "Mean normalized theta feature for this class" );
-  add_var( "AROUSALS" , "SS,CLS" , "ALPHA" , "Mean normalized alpha feature for this class" );
-  add_var( "AROUSALS" , "SS,CLS" , "BETA" , "Mean normalized beta feature for this class" );
-  add_var( "AROUSALS" , "SS,CLS" , "EMG" , "Mean normalized EMG feature for this class" );
-  add_var( "AROUSALS" , "SS,CLS" , "EEG_TILT_RISE" , "Mean local EEG tilt-rise feature for this class" );
-  add_var( "AROUSALS" , "SS,CLS" , "EEG_FAST_RISE" , "Mean local EEG fast-band rise feature for this class" );
-  add_var( "AROUSALS" , "SS,CLS" , "EMG_RISE" , "Mean local EMG-rise feature for this class" );
-  add_var( "AROUSALS" , "SS,CLS" , "DELTA_ART" , "Mean high-delta-rise artifact feature for this class" );
+  add_var( "AROUSALS" , "SS,CLS" , "NE" , "Number of windows assigned to this class" , VT_INTEGER );
+  add_var( "AROUSALS" , "SS,CLS" , "AI" , "Event index per hour for a manual summary class" , VT_REAL );
+  add_var( "AROUSALS" , "SS,CLS" , "DUR" , "Mean event duration for a manual summary class" , VT_REAL );
+  add_var( "AROUSALS" , "SS,CLS" , "DELTA" , "Mean normalized delta feature for this class" , VT_REAL );
+  add_var( "AROUSALS" , "SS,CLS" , "THETA" , "Mean normalized theta feature for this class" , VT_REAL );
+  add_var( "AROUSALS" , "SS,CLS" , "ALPHA" , "Mean normalized alpha feature for this class" , VT_REAL );
+  add_var( "AROUSALS" , "SS,CLS" , "BETA" , "Mean normalized beta feature for this class" , VT_REAL );
+  add_var( "AROUSALS" , "SS,CLS" , "EMG" , "Mean normalized EMG feature for this class" , VT_REAL );
+  add_var( "AROUSALS" , "SS,CLS" , "EEG_TILT_RISE" , "Mean local EEG tilt-rise feature for this class" , VT_REAL );
+  add_var( "AROUSALS" , "SS,CLS" , "EEG_FAST_RISE" , "Mean local EEG fast-band rise feature for this class" , VT_REAL );
+  add_var( "AROUSALS" , "SS,CLS" , "EMG_RISE" , "Mean local EMG-rise feature for this class" , VT_REAL );
+  add_var( "AROUSALS" , "SS,CLS" , "DELTA_ART" , "Mean high-delta-rise artifact feature for this class" , VT_REAL );
 
   add_table( "AROUSALS" , "COMP,SS" , "Stage-stratified manual versus automated event comparison (COMP=1)" );
-  add_var( "AROUSALS" , "COMP,SS" , "N_AUTO" , "Automated all-class event count" );
-  add_var( "AROUSALS" , "COMP,SS" , "N_MANUAL" , "Manual event count" );
-  add_var( "AROUSALS" , "COMP,SS" , "TP" , "One-to-one matched automated/manual event count" );
-  add_var( "AROUSALS" , "COMP,SS" , "FP" , "Automated events without a manual match" );
-  add_var( "AROUSALS" , "COMP,SS" , "FN" , "Manual events without an automated match" );
-  add_var( "AROUSALS" , "COMP,SS" , "PRECISION" , "Matched events divided by automated events" );
-  add_var( "AROUSALS" , "COMP,SS" , "RECALL" , "Matched events divided by manual events" );
-  add_var( "AROUSALS" , "COMP,SS" , "F1" , "Event-level F1 score" );
-  add_var( "AROUSALS" , "COMP,SS" , "OVERLAP_SEC" , "Total overlap duration for matched event pairs" );
-  add_var( "AROUSALS" , "COMP,SS" , "UNION_ALL_SEC" , "Duration of the union of all automated and manual intervals" );
-  add_var( "AROUSALS" , "COMP,SS" , "OVERLAP_UNION_ALL" , "Matched-pair OVERLAP_SEC divided by the union of all automated and manual intervals" );
-  add_var( "AROUSALS" , "COMP,SS" , "UNION_SEC" , "Duration of the union of matched automated/manual pairs" );
-  add_var( "AROUSALS" , "COMP,SS" , "OVERLAP_UNION" , "Matched-pair OVERLAP_SEC divided by the union of matched automated/manual pairs" );
-  add_var( "AROUSALS" , "COMP,SS" , "P_AUTO" , "Mean fraction of each matched automated event spanned by its manual match" );
-  add_var( "AROUSALS" , "COMP,SS" , "P_MANUAL" , "Mean fraction of each matched manual event spanned by its automated match" );
-  add_var( "AROUSALS" , "COMP,SS" , "START_D" , "Mean signed automated-minus-manual start difference in seconds; positive means automated starts later" );
-  add_var( "AROUSALS" , "COMP,SS" , "START_DABS" , "Mean absolute automated/manual start difference in seconds" );
-  add_var( "AROUSALS" , "COMP,SS" , "DUR_D" , "Mean signed automated-minus-manual duration difference in seconds" );
-  add_var( "AROUSALS" , "COMP,SS" , "BIN_SEC" , "Bin width in seconds for optional bin-level comparison" );
-  add_var( "AROUSALS" , "COMP,SS" , "BIN_N" , "Number of stage-restricted bins in optional bin-level comparison" );
-  add_var( "AROUSALS" , "COMP,SS" , "BIN_TP" , "Optional bin-level true-positive count" );
-  add_var( "AROUSALS" , "COMP,SS" , "BIN_FP" , "Optional bin-level automated-positive/manual-negative count" );
-  add_var( "AROUSALS" , "COMP,SS" , "BIN_TN" , "Optional bin-level true-negative count" );
-  add_var( "AROUSALS" , "COMP,SS" , "BIN_FN" , "Optional bin-level manual-positive/automated-negative count" );
-  add_var( "AROUSALS" , "COMP,SS" , "BIN_PRECISION" , "Optional 30-second bin-level precision" );
-  add_var( "AROUSALS" , "COMP,SS" , "BIN_RECALL" , "Optional 30-second bin-level recall" );
-  add_var( "AROUSALS" , "COMP,SS" , "BIN_F1" , "Optional 30-second bin-level F1 score" );
-  add_var( "AROUSALS" , "COMP,SS" , "BIN_KAPPA" , "Optional 30-second bin-level Cohen kappa" );
+  add_var( "AROUSALS" , "COMP,SS" , "N_AUTO" , "Automated all-class event count" , VT_INTEGER );
+  add_var( "AROUSALS" , "COMP,SS" , "N_MANUAL" , "Manual event count" , VT_INTEGER );
+  add_var( "AROUSALS" , "COMP,SS" , "TP" , "One-to-one matched automated/manual event count" , VT_INTEGER );
+  add_var( "AROUSALS" , "COMP,SS" , "FP" , "Automated events without a manual match" , VT_INTEGER );
+  add_var( "AROUSALS" , "COMP,SS" , "FN" , "Manual events without an automated match" , VT_INTEGER );
+  add_var( "AROUSALS" , "COMP,SS" , "PRECISION" , "Matched events divided by automated events" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "RECALL" , "Matched events divided by manual events" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "F1" , "Event-level F1 score" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "OVERLAP_SEC" , "Total overlap duration for matched event pairs" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "UNION_ALL_SEC" , "Duration of the union of all automated and manual intervals" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "OVERLAP_UNION_ALL" , "Matched-pair OVERLAP_SEC divided by the union of all automated and manual intervals" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "UNION_SEC" , "Duration of the union of matched automated/manual pairs" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "OVERLAP_UNION" , "Matched-pair OVERLAP_SEC divided by the union of matched automated/manual pairs" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "P_AUTO" , "Mean fraction of each matched automated event spanned by its manual match" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "P_MANUAL" , "Mean fraction of each matched manual event spanned by its automated match" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "START_D" , "Mean signed automated-minus-manual start difference in seconds; positive means automated starts later" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "START_DABS" , "Mean absolute automated/manual start difference in seconds" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "DUR_D" , "Mean signed automated-minus-manual duration difference in seconds" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_SEC" , "Bin width in seconds for optional bin-level comparison" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_N" , "Number of stage-restricted bins in optional bin-level comparison" , VT_INTEGER );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_TP" , "Optional bin-level true-positive count" , VT_INTEGER );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_FP" , "Optional bin-level automated-positive/manual-negative count" , VT_INTEGER );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_TN" , "Optional bin-level true-negative count" , VT_INTEGER );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_FN" , "Optional bin-level manual-positive/automated-negative count" , VT_INTEGER );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_PRECISION" , "Optional 30-second bin-level precision" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_RECALL" , "Optional 30-second bin-level recall" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_F1" , "Optional 30-second bin-level F1 score" , VT_REAL );
+  add_var( "AROUSALS" , "COMP,SS" , "BIN_KAPPA" , "Optional 30-second bin-level Cohen kappa" , VT_REAL );
 
   //
   // COMBINE-EMG
@@ -8941,20 +8979,20 @@ void cmddefs_t::init()
   add_param( "COMBINE-EMG" , "stage-weight" , "0.5" , "Weight of the REM figure-of-merit bonus (only applied if use-staging=T and staging is present)" );
 
   add_table( "COMBINE-EMG" , "CH" , "Per-candidate summary" );
-  add_var( "COMBINE-EMG" , "CH" , "NE" , "Total number of decision windows evaluated" );
-  add_var( "COMBINE-EMG" , "CH" , "PCT_USED" , "Percentage of windows in which this candidate was the active (selected) one" );
-  add_var( "COMBINE-EMG" , "CH" , "PCT_FLAT" , "Percentage of windows flagged flatline for this candidate" );
-  add_var( "COMBINE-EMG" , "CH" , "PCT_CLIP" , "Percentage of windows flagged clipped for this candidate" );
-  add_var( "COMBINE-EMG" , "CH" , "PCT_HI_RMS" , "Percentage of windows flagged as excess RMS for this candidate" );
-  add_var( "COMBINE-EMG" , "CH" , "PCT_HI_LN" , "Percentage of windows flagged as excess line-noise for this candidate" );
-  add_var( "COMBINE-EMG" , "CH" , "MEAN_SCORE" , "Mean composite (z-scored, penalized) quality score across all evaluated windows for this candidate" );
+  add_var( "COMBINE-EMG" , "CH" , "NE" , "Total number of decision windows evaluated" , VT_INTEGER );
+  add_var( "COMBINE-EMG" , "CH" , "PCT_USED" , "Percentage of windows in which this candidate was the active (selected) one" , VT_REAL );
+  add_var( "COMBINE-EMG" , "CH" , "PCT_FLAT" , "Percentage of windows flagged flatline for this candidate" , VT_REAL );
+  add_var( "COMBINE-EMG" , "CH" , "PCT_CLIP" , "Percentage of windows flagged clipped for this candidate" , VT_REAL );
+  add_var( "COMBINE-EMG" , "CH" , "PCT_HI_RMS" , "Percentage of windows flagged as excess RMS for this candidate" , VT_REAL );
+  add_var( "COMBINE-EMG" , "CH" , "PCT_HI_LN" , "Percentage of windows flagged as excess line-noise for this candidate" , VT_REAL );
+  add_var( "COMBINE-EMG" , "CH" , "MEAN_SCORE" , "Mean composite (z-scored, penalized) quality score across all evaluated windows for this candidate" , VT_REAL );
 
   add_table( "COMBINE-EMG" , "" , "Overall summary" );
-  add_var( "COMBINE-EMG" , "" , "N_CAND" , "Number of candidate channels considered" );
-  add_var( "COMBINE-EMG" , "" , "N_SWITCH" , "Number of times the active candidate changed" );
-  add_var( "COMBINE-EMG" , "" , "SWITCH_RATE" , "Switches per hour" );
-  add_var( "COMBINE-EMG" , "" , "NEW" , "Label of the new combined output channel" );
-  add_var( "COMBINE-EMG" , "" , "NEW_SR" , "Sample rate (Hz) of the new combined output channel" );
+  add_var( "COMBINE-EMG" , "" , "N_CAND" , "Number of candidate channels considered" , VT_INTEGER );
+  add_var( "COMBINE-EMG" , "" , "N_SWITCH" , "Number of times the active candidate changed" , VT_INTEGER );
+  add_var( "COMBINE-EMG" , "" , "SWITCH_RATE" , "Switches per hour" , VT_REAL );
+  add_var( "COMBINE-EMG" , "" , "NEW" , "Label of the new combined output channel" , VT_TEXT );
+  add_var( "COMBINE-EMG" , "" , "NEW_SR" , "Sample rate (Hz) of the new combined output channel" , VT_REAL );
 
   //
   // LM (leg movements / PLM)
@@ -8998,72 +9036,72 @@ void cmddefs_t::init()
   add_param( "LM" , "f-upr" , "100" , "Optional low-pass edge for internal working copy (Hz)" );
 
   add_table( "LM" , "" , "Recording-level summary" );
-  add_var( "LM" , "" , "MODE" , "Scoring mode (LEG or LR)" );
-  add_var( "LM" , "" , "METHOD" , "Low-level detector (wasm or adaptive)" );
-  add_var( "LM" , "" , "N_SIG" , "Number of input signals" );
-  add_var( "LM" , "" , "FS_MIN" , "Minimum input sample rate (Hz)" );
-  add_var( "LM" , "" , "FS_MAX" , "Maximum input sample rate (Hz)" );
-  add_var( "LM" , "" , "LOW_SR" , "Flag: sample rate below 100 Hz" );
-  add_var( "LM" , "" , "NONSTANDARD_BW" , "Flag: analysis bandwidth not the WASM-recommended 10-100 Hz" );
-  add_var( "LM" , "" , "NO_STAGING" , "Flag: no usable sleep staging present" );
-  add_var( "LM" , "" , "N_LM" , "Number of final evaluation-unit LMs" );
-  add_var( "LM" , "" , "N_CLM" , "Number of candidate leg movements" );
-  add_var( "LM" , "" , "N_PLM" , "Number of periodic leg movements" );
-  add_var( "LM" , "" , "N_PLM_SEQ" , "Number of PLM sequences" );
-  add_var( "LM" , "" , "PERIODICITY" , "N_PLM / N_CLM" );
-  add_var( "LM" , "" , "N_IMI" , "Number of measurable consecutive-CLM IMIs" );
-  add_var( "LM" , "" , "IMI_MEAN" , "Mean IMI (s)" );
-  add_var( "LM" , "" , "IMI_SD" , "SD of IMIs (s)" );
-  add_var( "LM" , "" , "IMI_MEDIAN" , "Median IMI (s)" );
-  add_var( "LM" , "" , "IMI_MIN" , "Minimum IMI (s)" );
-  add_var( "LM" , "" , "IMI_MAX" , "Maximum IMI (s)" );
-  add_var( "LM" , "" , "N_IMI_PERIODIC" , "Number of IMIs in the periodic range" );
-  add_var( "LM" , "" , "LOG_IMI_MEAN" , "Mean log(IMI) over periodic IMIs" );
-  add_var( "LM" , "" , "LOG_IMI_SD" , "SD of log(IMI) over periodic IMIs" );
-  add_var( "LM" , "" , "N_IMI_SHORT" , "Number of IMIs < imi-min" );
-  add_var( "LM" , "" , "N_IMI_LONG" , "Number of IMIs > imi-max" );
-  add_var( "LM" , "" , "N_LM_L" , "LR mode: final LMs, left" );
-  add_var( "LM" , "" , "N_LM_R" , "LR mode: final LMs, right" );
-  add_var( "LM" , "" , "N_LM_B" , "LR mode: final LMs, bilateral" );
-  add_var( "LM" , "" , "N_CLM_L" , "LR mode: CLMs, left" );
-  add_var( "LM" , "" , "N_CLM_R" , "LR mode: CLMs, right" );
-  add_var( "LM" , "" , "N_CLM_B" , "LR mode: CLMs, bilateral" );
-  add_var( "LM" , "" , "N_PLM_L" , "LR mode: PLMs, left" );
-  add_var( "LM" , "" , "N_PLM_R" , "LR mode: PLMs, right" );
-  add_var( "LM" , "" , "N_PLM_B" , "LR mode: PLMs, bilateral" );
-  add_var( "LM" , "" , "N_COMP_L" , "LR mode: raw left-channel component events" );
-  add_var( "LM" , "" , "N_COMP_R" , "LR mode: raw right-channel component events" );
-  add_var( "LM" , "" , "PLMI_L" , "LR mode: left PLM index (per sleep hour)" );
-  add_var( "LM" , "" , "PLMI_R" , "LR mode: right PLM index (per sleep hour)" );
-  add_var( "LM" , "" , "PLMI_B" , "LR mode: bilateral PLM index (per sleep hour)" );
-  add_var( "LM" , "" , "PLMI" , "PLM index in sleep (per sleep hour)" );
-  add_var( "LM" , "" , "PLMWI" , "PLM index in wake (per wake hour)" );
-  add_var( "LM" , "" , "PLMI_NREM" , "PLM index in NREM (per NREM hour)" );
-  add_var( "LM" , "" , "PLMI_REM" , "PLM index in REM (per REM hour)" );
+  add_var( "LM" , "" , "MODE" , "Scoring mode (LEG or LR)" , VT_TEXT );
+  add_var( "LM" , "" , "METHOD" , "Low-level detector (wasm or adaptive)" , VT_TEXT );
+  add_var( "LM" , "" , "N_SIG" , "Number of input signals" , VT_INTEGER );
+  add_var( "LM" , "" , "FS_MIN" , "Minimum input sample rate (Hz)" , VT_REAL );
+  add_var( "LM" , "" , "FS_MAX" , "Maximum input sample rate (Hz)" , VT_REAL );
+  add_var( "LM" , "" , "LOW_SR" , "Flag: sample rate below 100 Hz" , VT_BOOLEAN );
+  add_var( "LM" , "" , "NONSTANDARD_BW" , "Flag: analysis bandwidth not the WASM-recommended 10-100 Hz" , VT_BOOLEAN );
+  add_var( "LM" , "" , "NO_STAGING" , "Flag: no usable sleep staging present" , VT_BOOLEAN );
+  add_var( "LM" , "" , "N_LM" , "Number of final evaluation-unit LMs" , VT_INTEGER );
+  add_var( "LM" , "" , "N_CLM" , "Number of candidate leg movements" , VT_INTEGER );
+  add_var( "LM" , "" , "N_PLM" , "Number of periodic leg movements" , VT_INTEGER );
+  add_var( "LM" , "" , "N_PLM_SEQ" , "Number of PLM sequences" , VT_INTEGER );
+  add_var( "LM" , "" , "PERIODICITY" , "N_PLM / N_CLM" , VT_REAL );
+  add_var( "LM" , "" , "N_IMI" , "Number of measurable consecutive-CLM IMIs" , VT_INTEGER );
+  add_var( "LM" , "" , "IMI_MEAN" , "Mean IMI (s)" , VT_REAL );
+  add_var( "LM" , "" , "IMI_SD" , "SD of IMIs (s)" , VT_REAL );
+  add_var( "LM" , "" , "IMI_MEDIAN" , "Median IMI (s)" , VT_REAL );
+  add_var( "LM" , "" , "IMI_MIN" , "Minimum IMI (s)" , VT_REAL );
+  add_var( "LM" , "" , "IMI_MAX" , "Maximum IMI (s)" , VT_REAL );
+  add_var( "LM" , "" , "N_IMI_PERIODIC" , "Number of IMIs in the periodic range" , VT_INTEGER );
+  add_var( "LM" , "" , "LOG_IMI_MEAN" , "Mean log(IMI) over periodic IMIs" , VT_REAL );
+  add_var( "LM" , "" , "LOG_IMI_SD" , "SD of log(IMI) over periodic IMIs" , VT_REAL );
+  add_var( "LM" , "" , "N_IMI_SHORT" , "Number of IMIs < imi-min" , VT_INTEGER );
+  add_var( "LM" , "" , "N_IMI_LONG" , "Number of IMIs > imi-max" , VT_INTEGER );
+  add_var( "LM" , "" , "N_LM_L" , "LR mode: final LMs, left" , VT_INTEGER );
+  add_var( "LM" , "" , "N_LM_R" , "LR mode: final LMs, right" , VT_INTEGER );
+  add_var( "LM" , "" , "N_LM_B" , "LR mode: final LMs, bilateral" , VT_INTEGER );
+  add_var( "LM" , "" , "N_CLM_L" , "LR mode: CLMs, left" , VT_INTEGER );
+  add_var( "LM" , "" , "N_CLM_R" , "LR mode: CLMs, right" , VT_INTEGER );
+  add_var( "LM" , "" , "N_CLM_B" , "LR mode: CLMs, bilateral" , VT_INTEGER );
+  add_var( "LM" , "" , "N_PLM_L" , "LR mode: PLMs, left" , VT_INTEGER );
+  add_var( "LM" , "" , "N_PLM_R" , "LR mode: PLMs, right" , VT_INTEGER );
+  add_var( "LM" , "" , "N_PLM_B" , "LR mode: PLMs, bilateral" , VT_INTEGER );
+  add_var( "LM" , "" , "N_COMP_L" , "LR mode: raw left-channel component events" , VT_INTEGER );
+  add_var( "LM" , "" , "N_COMP_R" , "LR mode: raw right-channel component events" , VT_INTEGER );
+  add_var( "LM" , "" , "PLMI_L" , "LR mode: left PLM index (per sleep hour)" , VT_REAL );
+  add_var( "LM" , "" , "PLMI_R" , "LR mode: right PLM index (per sleep hour)" , VT_REAL );
+  add_var( "LM" , "" , "PLMI_B" , "LR mode: bilateral PLM index (per sleep hour)" , VT_REAL );
+  add_var( "LM" , "" , "PLMI" , "PLM index in sleep (per sleep hour)" , VT_REAL );
+  add_var( "LM" , "" , "PLMWI" , "PLM index in wake (per wake hour)" , VT_REAL );
+  add_var( "LM" , "" , "PLMI_NREM" , "PLM index in NREM (per NREM hour)" , VT_REAL );
+  add_var( "LM" , "" , "PLMI_REM" , "PLM index in REM (per REM hour)" , VT_REAL );
 
   add_table( "LM" , "SS" , "Stage/state-stratified indices" );
-  add_var( "LM" , "SS" , "DUR_HR" , "Hours in this stage/state" );
-  add_var( "LM" , "SS" , "N_LM" , "LM count in this stratum" );
-  add_var( "LM" , "SS" , "N_CLM" , "CLM count in this stratum" );
-  add_var( "LM" , "SS" , "N_PLM" , "PLM count in this stratum" );
-  add_var( "LM" , "SS" , "N_ISOLATED_CLM" , "Isolated (non-PLM) CLM count" );
-  add_var( "LM" , "SS" , "N_SHORT_IMI_CLM" , "CLMs preceded by a short (<imi-min) IMI" );
-  add_var( "LM" , "SS" , "LM_INDEX" , "LMs per hour" );
-  add_var( "LM" , "SS" , "CLM_INDEX" , "CLMs per hour" );
-  add_var( "LM" , "SS" , "PLM_INDEX" , "PLMs per hour" );
-  add_var( "LM" , "SS" , "ISOLATED_CLM_INDEX" , "Isolated CLMs per hour" );
-  add_var( "LM" , "SS" , "SHORT_IMI_CLM_INDEX" , "Short-IMI CLMs per hour" );
-  add_var( "LM" , "SS" , "PLM_DUR_MEAN" , "Mean PLM duration (s)" );
+  add_var( "LM" , "SS" , "DUR_HR" , "Hours in this stage/state" , VT_REAL );
+  add_var( "LM" , "SS" , "N_LM" , "LM count in this stratum" , VT_INTEGER );
+  add_var( "LM" , "SS" , "N_CLM" , "CLM count in this stratum" , VT_INTEGER );
+  add_var( "LM" , "SS" , "N_PLM" , "PLM count in this stratum" , VT_INTEGER );
+  add_var( "LM" , "SS" , "N_ISOLATED_CLM" , "Isolated (non-PLM) CLM count" , VT_INTEGER );
+  add_var( "LM" , "SS" , "N_SHORT_IMI_CLM" , "CLMs preceded by a short (<imi-min) IMI" , VT_INTEGER );
+  add_var( "LM" , "SS" , "LM_INDEX" , "LMs per hour" , VT_REAL );
+  add_var( "LM" , "SS" , "CLM_INDEX" , "CLMs per hour" , VT_REAL );
+  add_var( "LM" , "SS" , "PLM_INDEX" , "PLMs per hour" , VT_REAL );
+  add_var( "LM" , "SS" , "ISOLATED_CLM_INDEX" , "Isolated CLMs per hour" , VT_REAL );
+  add_var( "LM" , "SS" , "SHORT_IMI_CLM_INDEX" , "Short-IMI CLMs per hour" , VT_REAL );
+  add_var( "LM" , "SS" , "PLM_DUR_MEAN" , "Mean PLM duration (s)" , VT_REAL );
 
   add_table( "LM" , "TYPE,EVENT" , "Verbose event-level output (COMP/LM/SEQ)" );
-  add_var( "LM" , "TYPE,EVENT" , "SIDE" , "Event laterality (L/R/B/LEG)" );
-  add_var( "LM" , "TYPE,EVENT" , "START" , "Event start (seconds from EDF start)" );
-  add_var( "LM" , "TYPE,EVENT" , "STOP" , "Event stop (seconds from EDF start)" );
-  add_var( "LM" , "TYPE,EVENT" , "DUR" , "Event duration (s)" );
-  add_var( "LM" , "TYPE,EVENT" , "CLM" , "CLM flag (final-event rows)" );
-  add_var( "LM" , "TYPE,EVENT" , "PLM" , "PLM flag (final-event rows)" );
-  add_var( "LM" , "TYPE,EVENT" , "STAGE" , "Sleep stage at onset" );
-  add_var( "LM" , "TYPE,EVENT" , "STATE" , "Sleep state at onset (W/S)" );
+  add_var( "LM" , "TYPE,EVENT" , "SIDE" , "Event laterality (L/R/B/LEG)" , VT_TEXT );
+  add_var( "LM" , "TYPE,EVENT" , "START" , "Event start (seconds from EDF start)" , VT_REAL );
+  add_var( "LM" , "TYPE,EVENT" , "STOP" , "Event stop (seconds from EDF start)" , VT_REAL );
+  add_var( "LM" , "TYPE,EVENT" , "DUR" , "Event duration (s)" , VT_REAL );
+  add_var( "LM" , "TYPE,EVENT" , "CLM" , "CLM flag (final-event rows)" , VT_BOOLEAN );
+  add_var( "LM" , "TYPE,EVENT" , "PLM" , "PLM flag (final-event rows)" , VT_BOOLEAN );
+  add_var( "LM" , "TYPE,EVENT" , "STAGE" , "Sleep stage at onset" , VT_TEXT );
+  add_var( "LM" , "TYPE,EVENT" , "STATE" , "Sleep state at onset (W/S)" , VT_TEXT );
 
   //
   // DESAT
@@ -9112,30 +9150,30 @@ void cmddefs_t::init()
 
   // --- Individual-level output ---
   add_table( "DESAT" , "" , "Individual-level summary" );
-  add_var( "DESAT" , "" , "N"         , "Number of desaturation events detected" );
-  add_var( "DESAT" , "" , "T_VALID"   , "Total valid (non-artifact) signal duration (seconds)" );
-  add_var( "DESAT" , "" , "T_ART"     , "Total artifact duration (seconds)" );
-  add_var( "DESAT" , "" , "T_DESAT"   , "Total time spent in desaturation events (seconds)" );
-  add_var( "DESAT" , "" , "MEAN_SPO2" , "Mean SpO2 over all valid samples (%)" );
-  add_var( "DESAT" , "" , "NADIR_MEAN", "Mean nadir (minimum SpO2) across all events (%)" );
-  add_var( "DESAT" , "" , "NADIR_MIN" , "Lowest SpO2 nadir across all events (%)" );
-  add_var( "DESAT" , "" , "DROP_MEAN" , "Mean drop magnitude (baseline - nadir) across events (SpO2 units)" );
-  add_var( "DESAT" , "" , "DUR_MEAN"  , "Mean event duration (seconds)" );
-  add_var( "DESAT" , "" , "DUR_TOTAL" , "Total event duration (seconds)" );
-  add_var( "DESAT" , "" , "PCT_LT90"  , "% valid time with SpO2 < 90%" );
-  add_var( "DESAT" , "" , "PCT_LT88"  , "% valid time with SpO2 < 88%" );
-  add_var( "DESAT" , "" , "PCT_LT85"  , "% valid time with SpO2 < 85%" );
-  add_var( "DESAT" , "" , "PCT_LT80"  , "% valid time with SpO2 < 80%" );
+  add_var( "DESAT" , "" , "N"         , "Number of desaturation events detected" , VT_INTEGER );
+  add_var( "DESAT" , "" , "T_VALID"   , "Total valid (non-artifact) signal duration (seconds)" , VT_REAL );
+  add_var( "DESAT" , "" , "T_ART"     , "Total artifact duration (seconds)" , VT_REAL );
+  add_var( "DESAT" , "" , "T_DESAT"   , "Total time spent in desaturation events (seconds)" , VT_REAL );
+  add_var( "DESAT" , "" , "MEAN_SPO2" , "Mean SpO2 over all valid samples (%)" , VT_REAL );
+  add_var( "DESAT" , "" , "NADIR_MEAN", "Mean nadir (minimum SpO2) across all events (%)" , VT_REAL );
+  add_var( "DESAT" , "" , "NADIR_MIN" , "Lowest SpO2 nadir across all events (%)" , VT_REAL );
+  add_var( "DESAT" , "" , "DROP_MEAN" , "Mean drop magnitude (baseline - nadir) across events (SpO2 units)" , VT_REAL );
+  add_var( "DESAT" , "" , "DUR_MEAN"  , "Mean event duration (seconds)" , VT_REAL );
+  add_var( "DESAT" , "" , "DUR_TOTAL" , "Total event duration (seconds)" , VT_REAL );
+  add_var( "DESAT" , "" , "PCT_LT90"  , "% valid time with SpO2 < 90%" , VT_REAL );
+  add_var( "DESAT" , "" , "PCT_LT88"  , "% valid time with SpO2 < 88%" , VT_REAL );
+  add_var( "DESAT" , "" , "PCT_LT85"  , "% valid time with SpO2 < 85%" , VT_REAL );
+  add_var( "DESAT" , "" , "PCT_LT80"  , "% valid time with SpO2 < 80%" , VT_REAL );
 
   // --- Event-level output ---
   add_table( "DESAT" , "DESAT" , "Per-event desaturation output" );
-  add_var( "DESAT" , "DESAT" , "START"    , "Event start time (seconds from recording start)" );
-  add_var( "DESAT" , "DESAT" , "STOP"     , "Event stop time (seconds from recording start)" );
-  add_var( "DESAT" , "DESAT" , "DUR"      , "Event duration (seconds)" );
-  add_var( "DESAT" , "DESAT" , "NADIR"    , "Minimum SpO2 during event (%)" );
-  add_var( "DESAT" , "DESAT" , "BASELINE" , "Local median baseline SpO2 at event onset (%)" );
-  add_var( "DESAT" , "DESAT" , "DROP"     , "Magnitude of drop (baseline - nadir, SpO2 units)" );
-  add_var( "DESAT" , "DESAT" , "SEG"      , "Segment index (0-based) in which event occurred" );
+  add_var( "DESAT" , "DESAT" , "START"    , "Event start time (seconds from recording start)" , VT_REAL );
+  add_var( "DESAT" , "DESAT" , "STOP"     , "Event stop time (seconds from recording start)" , VT_REAL );
+  add_var( "DESAT" , "DESAT" , "DUR"      , "Event duration (seconds)" , VT_REAL );
+  add_var( "DESAT" , "DESAT" , "NADIR"    , "Minimum SpO2 during event (%)" , VT_REAL );
+  add_var( "DESAT" , "DESAT" , "BASELINE" , "Local median baseline SpO2 at event onset (%)" , VT_REAL );
+  add_var( "DESAT" , "DESAT" , "DROP"     , "Magnitude of drop (baseline - nadir, SpO2 units)" , VT_REAL );
+  add_var( "DESAT" , "DESAT" , "SEG"      , "Segment index (0-based) in which event occurred" , VT_INTEGER );
 
   // --- Matlab mode (mode=matlab) ---
   add_param( "DESAT" , "mode"      , "matlab" , "Use peak-valley algorithm (Azarbarzin/Billauer) instead of forward-scan; add mode=matlab" );
@@ -9145,26 +9183,26 @@ void cmddefs_t::init()
   add_param( "DESAT" , "no-round"  , ""       , "[matlab mode] If present, skip integer rounding after LP filter (rounding is on by default to match Matlab)" );
   add_param( "DESAT" , "mag-thres" , "1.5"    , "[matlab mode] Peak-valley pruning threshold in SpO2 units (default 1.5)" );
 
-  add_table( "DESAT" , "DESAT_M" , "[matlab mode] Per-event desaturation output" );
-  add_var( "DESAT" , "DESAT_M" , "START",    "Event start time (pre-peak, seconds from recording start)" );
-  add_var( "DESAT" , "DESAT_M" , "STOP",     "Event stop time (post-peak, seconds from recording start)" );
-  add_var( "DESAT" , "DESAT_M" , "DUR",      "Event duration (pre to post, seconds)" );
-  add_var( "DESAT" , "DESAT_M" , "NADIR_T",  "Time of nadir (seconds from recording start)" );
-  add_var( "DESAT" , "DESAT_M" , "NADIR",    "SpO2 at nadir (%)" );
-  add_var( "DESAT" , "DESAT_M" , "PRE",      "SpO2 at pre-event local peak (%)" );
-  add_var( "DESAT" , "DESAT_M" , "POST",     "SpO2 at post-event local peak (%)" );
-  add_var( "DESAT" , "DESAT_M" , "MAG_DOWN", "Drop magnitude: PRE - NADIR (SpO2 units)" );
-  add_var( "DESAT" , "DESAT_M" , "MAG_UP",   "Recovery magnitude: POST - NADIR (SpO2 units)" );
-  add_var( "DESAT" , "DESAT_M" , "SEG",      "Segment index (0-based)" );
-  add_var( "DESAT" , "DESAT_M" , "SLEEP",    "1 if nadir fell in a sleep epoch (requires staging annotations)" );
+  add_table( "DESAT" , "DESATM" , "[matlab mode] Per-event desaturation output" );
+  add_var( "DESAT" , "DESATM" , "START",    "Event start time (pre-peak, seconds from recording start)" , VT_REAL );
+  add_var( "DESAT" , "DESATM" , "STOP",     "Event stop time (post-peak, seconds from recording start)" , VT_REAL );
+  add_var( "DESAT" , "DESATM" , "DUR",      "Event duration (pre to post, seconds)" , VT_REAL );
+  add_var( "DESAT" , "DESATM" , "NADIR_T",  "Time of nadir (seconds from recording start)" , VT_REAL );
+  add_var( "DESAT" , "DESATM" , "NADIR",    "SpO2 at nadir (%)" , VT_REAL );
+  add_var( "DESAT" , "DESATM" , "PRE",      "SpO2 at pre-event local peak (%)" , VT_REAL );
+  add_var( "DESAT" , "DESATM" , "POST",     "SpO2 at post-event local peak (%)" , VT_REAL );
+  add_var( "DESAT" , "DESATM" , "MAG_DOWN", "Drop magnitude: PRE - NADIR (SpO2 units)" , VT_REAL );
+  add_var( "DESAT" , "DESATM" , "MAG_UP",   "Recovery magnitude: POST - NADIR (SpO2 units)" , VT_REAL );
+  add_var( "DESAT" , "DESATM" , "SEG",      "Segment index (0-based)" , VT_INTEGER );
+  add_var( "DESAT" , "DESATM" , "SLEEP",    "1 if nadir fell in a sleep epoch (requires staging annotations)" , VT_BOOLEAN );
 
-  add_var( "DESAT" , "" , "N2",            "[matlab mode] Number of events with SpO2 drop >= 2%" );
-  add_var( "DESAT" , "" , "N3",            "[matlab mode] Number of events with SpO2 drop >= 3%" );
-  add_var( "DESAT" , "" , "N4",            "[matlab mode] Number of events with SpO2 drop >= 4%" );
-  add_var( "DESAT" , "" , "ODI2",          "[matlab mode] ODI2: events/hr of valid sleep (or all valid time if no staging)" );
-  add_var( "DESAT" , "" , "ODI3",          "[matlab mode] ODI3: events/hr" );
-  add_var( "DESAT" , "" , "ODI4",          "[matlab mode] ODI4: events/hr" );
-  add_var( "DESAT" , "" , "T_SLEEP_VALID", "[matlab mode] Valid signal duration within sleep epochs (seconds)" );
+  add_var( "DESAT" , "" , "N2",            "[matlab mode] Number of events with SpO2 drop >= 2%" , VT_INTEGER );
+  add_var( "DESAT" , "" , "N3",            "[matlab mode] Number of events with SpO2 drop >= 3%" , VT_INTEGER );
+  add_var( "DESAT" , "" , "N4",            "[matlab mode] Number of events with SpO2 drop >= 4%" , VT_INTEGER );
+  add_var( "DESAT" , "" , "ODI2",          "[matlab mode] ODI2: events/hr of valid sleep (or all valid time if no staging)" , VT_REAL );
+  add_var( "DESAT" , "" , "ODI3",          "[matlab mode] ODI3: events/hr" , VT_REAL );
+  add_var( "DESAT" , "" , "ODI4",          "[matlab mode] ODI4: events/hr" , VT_REAL );
+  add_var( "DESAT" , "" , "T_SLEEP_VALID", "[matlab mode] Valid signal duration within sleep epochs (seconds)" , VT_REAL );
 
   //
   // RESP-LINK
@@ -9222,55 +9260,55 @@ void cmddefs_t::init()
   add_param( "RESP-LINK" , "gap-tol"      , "2"   , "Neighbor-event guard tolerance in seconds when trimming search windows. This keeps the spirit of Raichel's overlap protection." );
 
   add_table( "RESP-LINK" , "" , "Individual-level summary" );
-  add_var( "RESP-LINK" , "" , "N_RESP"            , "Number of respiratory events analyzed" );
-  add_var( "RESP-LINK" , "" , "N_TEMPLATE"        , "Number of events contributing to the learned template" );
-  add_var( "RESP-LINK" , "" , "N_LINKED"          , "Number of respiratory events assigned a linked desaturation" );
-  add_var( "RESP-LINK" , "" , "PCT_LINKED"        , "Percentage of analyzed respiratory events with a linked desaturation" );
-  add_var( "RESP-LINK" , "" , "TEMPLATE_LEARNED"  , "1 if a learned template was used; 0 if fallback timings were used" );
-  add_var( "RESP-LINK" , "" , "TEMPLATE_BASE_T"   , "Template baseline time relative to event end (seconds)" );
-  add_var( "RESP-LINK" , "" , "TEMPLATE_NADIR_T"  , "Template nadir time relative to event end (seconds)" );
-  add_var( "RESP-LINK" , "" , "TEMPLATE_REC_T"    , "Template recovery time relative to event end (seconds)" );
-  add_var( "RESP-LINK" , "" , "TEMPLATE_DROP"     , "Template baseline-to-nadir drop magnitude (%)" );
-  add_var( "RESP-LINK" , "" , "DROP_MEAN"         , "Mean linked desaturation magnitude across linked events (%)" );
-  add_var( "RESP-LINK" , "" , "DELAY_MEAN"        , "Mean event-end to nadir delay across linked events (seconds)" );
+  add_var( "RESP-LINK" , "" , "N_RESP"            , "Number of respiratory events analyzed" , VT_INTEGER );
+  add_var( "RESP-LINK" , "" , "N_TEMPLATE"        , "Number of events contributing to the learned template" , VT_INTEGER );
+  add_var( "RESP-LINK" , "" , "N_LINKED"          , "Number of respiratory events assigned a linked desaturation" , VT_INTEGER );
+  add_var( "RESP-LINK" , "" , "PCT_LINKED"        , "Percentage of analyzed respiratory events with a linked desaturation" , VT_REAL );
+  add_var( "RESP-LINK" , "" , "TEMPLATE_LEARNED"  , "1 if a learned template was used; 0 if fallback timings were used" , VT_BOOLEAN );
+  add_var( "RESP-LINK" , "" , "TEMPLATE_BASE_T"   , "Template baseline time relative to event end (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "" , "TEMPLATE_NADIR_T"  , "Template nadir time relative to event end (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "" , "TEMPLATE_REC_T"    , "Template recovery time relative to event end (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "" , "TEMPLATE_DROP"     , "Template baseline-to-nadir drop magnitude (%)" , VT_REAL );
+  add_var( "RESP-LINK" , "" , "DROP_MEAN"         , "Mean linked desaturation magnitude across linked events (%)" , VT_REAL );
+  add_var( "RESP-LINK" , "" , "DELAY_MEAN"        , "Mean event-end to nadir delay across linked events (seconds)" , VT_REAL );
 
   add_table( "RESP-LINK" , "TPL" , "Learned event-centered template profile" );
-  add_var( "RESP-LINK" , "TPL" , "T"      , "Time relative to respiratory event end (seconds)" );
-  add_var( "RESP-LINK" , "TPL" , "D_SPO2" , "Robust-mean baseline-centered template SpO2 profile (%)" );
-  add_var( "RESP-LINK" , "TPL" , "D_SPO2_S" , "Smoothed robust-mean baseline-centered template SpO2 profile used for landmark detection (%)" );
+  add_var( "RESP-LINK" , "TPL" , "T"      , "Time relative to respiratory event end (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "TPL" , "D_SPO2" , "Robust-mean baseline-centered template SpO2 profile (%)" , VT_REAL );
+  add_var( "RESP-LINK" , "TPL" , "D_SPO2_S" , "Smoothed robust-mean baseline-centered template SpO2 profile used for landmark detection (%)" , VT_REAL );
 
   add_table( "RESP-LINK" , "RDL" , "Per-event respiratory/desaturation/arousal linkage output" );
-  add_var( "RESP-LINK" , "RDL" , "RESP_START" , "Respiratory event start time (seconds from recording start)" );
-  add_var( "RESP-LINK" , "RDL" , "RESP_STOP"  , "Respiratory event stop time (seconds from recording start)" );
-  add_var( "RESP-LINK" , "RDL" , "RESP_DUR"   , "Respiratory event duration (seconds)" );
-  add_var( "RESP-LINK" , "RDL" , "TYPE"       , "Source respiratory annotation label" );
-  add_var( "RESP-LINK" , "RDL" , "SLEEP"      , "1 if the respiratory event occurred during sleep (or if no staging is available)" );
-  add_var( "RESP-LINK" , "RDL" , "LINKED"     , "1 if a desaturation was linked to this respiratory event" );
-  add_var( "RESP-LINK" , "RDL" , "REJECT"     , "Reason a respiratory event was not linked or could not be localized; '.' if linked" );
-  add_var( "RESP-LINK" , "RDL" , "AROUSAL_LINKED" , "1 if a qualifying arousal was linked to this respiratory event" );
-  add_var( "RESP-LINK" , "RDL" , "AROUSAL_REJECT" , "Reason no arousal was linked; '.' if linked" );
-  add_var( "RESP-LINK" , "RDL" , "AROUSAL_TYPE" , "Source arousal annotation label" );
-  add_var( "RESP-LINK" , "RDL" , "AROUSAL_START" , "Linked arousal start time (seconds from recording start)" );
-  add_var( "RESP-LINK" , "RDL" , "AROUSAL_STOP" , "Linked arousal stop time (seconds from recording start)" );
-  add_var( "RESP-LINK" , "RDL" , "AROUSAL_DUR" , "Linked arousal duration (seconds)" );
-  add_var( "RESP-LINK" , "RDL" , "AROUSAL_ONSET_FROM_START" , "Linked arousal onset relative to respiratory event start (seconds)" );
-  add_var( "RESP-LINK" , "RDL" , "AROUSAL_ONSET_FROM_STOP" , "Linked arousal onset relative to respiratory event stop (seconds)" );
-  add_var( "RESP-LINK" , "RDL" , "BASE_CENTER_T" , "Target baseline-center time relative to respiratory event end (seconds)" );
-  add_var( "RESP-LINK" , "RDL" , "NADIR_CENTER_T" , "Target nadir-center time relative to respiratory event end (seconds)" );
-  add_var( "RESP-LINK" , "RDL" , "REC_CENTER_T" , "Target recovery-center time relative to respiratory event end (seconds)" );
-  add_var( "RESP-LINK" , "RDL" , "PREV_REL_STOP" , "Previous respiratory event stop time relative to current respiratory event end (seconds)" );
-  add_var( "RESP-LINK" , "RDL" , "NEXT_REL_START" , "Next respiratory event start time relative to current respiratory event end (seconds)" );
-  add_var( "RESP-LINK" , "RDL" , "BASE_A"     , "Baseline-search window start time (seconds from recording start)" );
-  add_var( "RESP-LINK" , "RDL" , "BASE_B"     , "Baseline-search window stop time (seconds from recording start)" );
-  add_var( "RESP-LINK" , "RDL" , "NAD_A"      , "Nadir-search window start time (seconds from recording start)" );
-  add_var( "RESP-LINK" , "RDL" , "NAD_B"      , "Nadir-search window stop time (seconds from recording start)" );
-  add_var( "RESP-LINK" , "RDL" , "BASE_T"     , "Linked baseline time (seconds from recording start)" );
-  add_var( "RESP-LINK" , "RDL" , "BASELINE"   , "Linked baseline SpO2 (%)" );
-  add_var( "RESP-LINK" , "RDL" , "NADIR_T"    , "Linked nadir time (seconds from recording start)" );
-  add_var( "RESP-LINK" , "RDL" , "NADIR"      , "Linked nadir SpO2 (%)" );
-  add_var( "RESP-LINK" , "RDL" , "REC_T"      , "Linked recovery time (seconds from recording start)" );
-  add_var( "RESP-LINK" , "RDL" , "RECOVERY"   , "Linked recovery SpO2 (%)" );
-  add_var( "RESP-LINK" , "RDL" , "DROP"       , "Linked desaturation magnitude: baseline - nadir (%)" );
+  add_var( "RESP-LINK" , "RDL" , "RESP_START" , "Respiratory event start time (seconds from recording start)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "RESP_STOP"  , "Respiratory event stop time (seconds from recording start)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "RESP_DUR"   , "Respiratory event duration (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "TYPE"       , "Source respiratory annotation label" , VT_TEXT );
+  add_var( "RESP-LINK" , "RDL" , "SLEEP"      , "1 if the respiratory event occurred during sleep (or if no staging is available)" , VT_BOOLEAN );
+  add_var( "RESP-LINK" , "RDL" , "LINKED"     , "1 if a desaturation was linked to this respiratory event" , VT_BOOLEAN );
+  add_var( "RESP-LINK" , "RDL" , "REJECT"     , "Reason a respiratory event was not linked or could not be localized; '.' if linked" , VT_TEXT );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_LINKED" , "1 if a qualifying arousal was linked to this respiratory event" , VT_BOOLEAN );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_REJECT" , "Reason no arousal was linked; '.' if linked" , VT_TEXT );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_TYPE" , "Source arousal annotation label" , VT_TEXT );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_START" , "Linked arousal start time (seconds from recording start)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_STOP" , "Linked arousal stop time (seconds from recording start)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_DUR" , "Linked arousal duration (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_ONSET_FROM_START" , "Linked arousal onset relative to respiratory event start (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "AROUSAL_ONSET_FROM_STOP" , "Linked arousal onset relative to respiratory event stop (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "BASE_CENTER_T" , "Target baseline-center time relative to respiratory event end (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "NADIR_CENTER_T" , "Target nadir-center time relative to respiratory event end (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "REC_CENTER_T" , "Target recovery-center time relative to respiratory event end (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "PREV_REL_STOP" , "Previous respiratory event stop time relative to current respiratory event end (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "NEXT_REL_START" , "Next respiratory event start time relative to current respiratory event end (seconds)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "BASE_A"     , "Baseline-search window start time (seconds from recording start)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "BASE_B"     , "Baseline-search window stop time (seconds from recording start)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "NAD_A"      , "Nadir-search window start time (seconds from recording start)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "NAD_B"      , "Nadir-search window stop time (seconds from recording start)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "BASE_T"     , "Linked baseline time (seconds from recording start)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "BASELINE"   , "Linked baseline SpO2 (%)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "NADIR_T"    , "Linked nadir time (seconds from recording start)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "NADIR"      , "Linked nadir SpO2 (%)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "REC_T"      , "Linked recovery time (seconds from recording start)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "RECOVERY"   , "Linked recovery SpO2 (%)" , VT_REAL );
+  add_var( "RESP-LINK" , "RDL" , "DROP"       , "Linked desaturation magnitude: baseline - nadir (%)" , VT_REAL );
 
   //
   // RESPBREATH
@@ -9337,40 +9375,40 @@ void cmddefs_t::init()
 
   // --- Individual-level output ---
   add_table( "RESPBREATH" , "" , "Individual-level summary (all segments combined)" );
-  add_var( "RESPBREATH" , "" , "N_BREATH"    , "Total number of detected breaths" );
-  add_var( "RESPBREATH" , "" , "BREATH_RATE" , "Breaths per minute (over total valid recording time)" );
-  add_var( "RESPBREATH" , "" , "MEAN_TTOT"   , "Mean total cycle duration (s)" );
-  add_var( "RESPBREATH" , "" , "MEDIAN_TTOT" , "Median total cycle duration (s)" );
-  add_var( "RESPBREATH" , "" , "SD_TTOT"     , "SD of total cycle duration (s)" );
-  add_var( "RESPBREATH" , "" , "CV_TTOT"     , "CV of total cycle duration (SD/mean)" );
-  add_var( "RESPBREATH" , "" , "MEDIAN_TINSP", "Median inspiratory duration (s)" );
-  add_var( "RESPBREATH" , "" , "MEDIAN_TEXP" , "Median expiratory duration (s)" );
-  add_var( "RESPBREATH" , "" , "IE_RATIO"    , "Median I:E ratio (TINSP / TEXP)" );
-  add_var( "RESPBREATH" , "" , "MEDIAN_AMP"  , "Median breath amplitude (symmetric: peak - mean adjacent troughs)" );
-  add_var( "RESPBREATH" , "" , "LOWCONF_PCT" , "Percentage of breaths flagged as low confidence" );
-  add_var( "RESPBREATH" , "" , "ARTIFACT_PCT", "Percentage of recording time covered by RESP_ART" );
-  add_var( "RESPBREATH" , "" , "FUSED_PCT"   , "Percentage of breaths supported by multiple channels" );
+  add_var( "RESPBREATH" , "" , "N_BREATH"    , "Total number of detected breaths" , VT_INTEGER );
+  add_var( "RESPBREATH" , "" , "BREATH_RATE" , "Breaths per minute (over total valid recording time)" , VT_REAL );
+  add_var( "RESPBREATH" , "" , "MEAN_TTOT"   , "Mean total cycle duration (s)" , VT_REAL );
+  add_var( "RESPBREATH" , "" , "MEDIAN_TTOT" , "Median total cycle duration (s)" , VT_REAL );
+  add_var( "RESPBREATH" , "" , "SD_TTOT"     , "SD of total cycle duration (s)" , VT_REAL );
+  add_var( "RESPBREATH" , "" , "CV_TTOT"     , "CV of total cycle duration (SD/mean)" , VT_REAL );
+  add_var( "RESPBREATH" , "" , "MEDIAN_TINSP", "Median inspiratory duration (s)" , VT_REAL );
+  add_var( "RESPBREATH" , "" , "MEDIAN_TEXP" , "Median expiratory duration (s)" , VT_REAL );
+  add_var( "RESPBREATH" , "" , "IE_RATIO"    , "Median I:E ratio (TINSP / TEXP)" , VT_REAL );
+  add_var( "RESPBREATH" , "" , "MEDIAN_AMP"  , "Median breath amplitude (symmetric: peak - mean adjacent troughs)" , VT_REAL );
+  add_var( "RESPBREATH" , "" , "LOWCONF_PCT" , "Percentage of breaths flagged as low confidence" , VT_REAL );
+  add_var( "RESPBREATH" , "" , "ARTIFACT_PCT", "Percentage of recording time covered by RESP_ART" , VT_REAL );
+  add_var( "RESPBREATH" , "" , "FUSED_PCT"   , "Percentage of breaths supported by multiple channels" , VT_REAL );
 
   // --- Per-breath output ---
   add_table( "RESPBREATH" , "CH,N" , "Per-breath event table (source channel x breath number)" );
-  add_var( "RESPBREATH" , "CH,N" , "START"    , "Breath start (preceding trough) in seconds from recording start" );
-  add_var( "RESPBREATH" , "CH,N" , "PEAK"     , "Inspiratory peak time (seconds from recording start)" );
-  add_var( "RESPBREATH" , "CH,N" , "END"      , "Breath end (following trough) in seconds from recording start" );
-  add_var( "RESPBREATH" , "CH,N" , "TINSP"    , "Inspiratory duration (s)" );
-  add_var( "RESPBREATH" , "CH,N" , "TEXP"     , "Expiratory duration (s)" );
-  add_var( "RESPBREATH" , "CH,N" , "TTOT"     , "Total cycle duration (s)" );
-  add_var( "RESPBREATH" , "CH,N" , "AMP_INSP" , "Inspiratory amplitude (peak - preceding trough)" );
-  add_var( "RESPBREATH" , "CH,N" , "AMP_EXP"  , "Expiratory amplitude (peak - following trough)" );
-  add_var( "RESPBREATH" , "CH,N" , "AMP_SYM"  , "Symmetric amplitude (peak - mean adjacent troughs)" );
-  add_var( "RESPBREATH" , "CH,N" , "CONF"     , "Confidence score [0,1]" );
-  add_var( "RESPBREATH" , "CH,N" , "LOW_CONF" , "Low confidence flag (1=yes)" );
-  add_var( "RESPBREATH" , "CH,N" , "FUSED"    , "Multi-channel fusion flag (1=yes)" );
-  add_var( "RESPBREATH" , "CH,N" , "N_SUPPORT", "Number of channels supporting this breath" );
+  add_var( "RESPBREATH" , "CH,N" , "START"    , "Breath start (preceding trough) in seconds from recording start" , VT_REAL );
+  add_var( "RESPBREATH" , "CH,N" , "PEAK"     , "Inspiratory peak time (seconds from recording start)" , VT_REAL );
+  add_var( "RESPBREATH" , "CH,N" , "END"      , "Breath end (following trough) in seconds from recording start" , VT_REAL );
+  add_var( "RESPBREATH" , "CH,N" , "TINSP"    , "Inspiratory duration (s)" , VT_REAL );
+  add_var( "RESPBREATH" , "CH,N" , "TEXP"     , "Expiratory duration (s)" , VT_REAL );
+  add_var( "RESPBREATH" , "CH,N" , "TTOT"     , "Total cycle duration (s)" , VT_REAL );
+  add_var( "RESPBREATH" , "CH,N" , "AMP_INSP" , "Inspiratory amplitude (peak - preceding trough)" , VT_REAL );
+  add_var( "RESPBREATH" , "CH,N" , "AMP_EXP"  , "Expiratory amplitude (peak - following trough)" , VT_REAL );
+  add_var( "RESPBREATH" , "CH,N" , "AMP_SYM"  , "Symmetric amplitude (peak - mean adjacent troughs)" , VT_REAL );
+  add_var( "RESPBREATH" , "CH,N" , "CONF"     , "Confidence score [0,1]" , VT_REAL );
+  add_var( "RESPBREATH" , "CH,N" , "LOW_CONF" , "Low confidence flag (1=yes)" , VT_BOOLEAN );
+  add_var( "RESPBREATH" , "CH,N" , "FUSED"    , "Multi-channel fusion flag (1=yes)" , VT_BOOLEAN );
+  add_var( "RESPBREATH" , "CH,N" , "N_SUPPORT", "Number of channels supporting this breath" , VT_INTEGER );
 
 
   // --- Per-channel summary ---
   add_table( "RESPBREATH" , "CH" , "Per-channel summary (multi-channel only)" );
-  add_var( "RESPBREATH" , "CH" , "PRIMARY_USED_PCT" , "% of total breaths sourced primarily from this channel" );
+  add_var( "RESPBREATH" , "CH" , "PRIMARY_USED_PCT" , "% of total breaths sourced primarily from this channel" , VT_REAL );
 
   //
   // OTSU
@@ -9391,12 +9429,12 @@ void cmddefs_t::init()
   add_param( "OTSU" , "verbose" , "" , "Verbose flag accepted by the implementation" );
 
   add_table( "OTSU" , "CH" , "Otsu threshold summary by channel" );
-  add_var( "OTSU" , "CH" , "EMPTH" , "Estimated Otsu threshold" );
-  add_var( "OTSU" , "CH" , "EMPF" , "Empirical percentile at the estimated threshold" );
+  add_var( "OTSU" , "CH" , "EMPTH" , "Estimated Otsu threshold" , VT_REAL );
+  add_var( "OTSU" , "CH" , "EMPF" , "Empirical percentile at the estimated threshold" , VT_REAL );
 
   add_table( "OTSU" , "CH,TH" , "Threshold scan across candidate cut-points" );
-  add_var( "OTSU" , "CH,TH" , "SIGMAB" , "Between-class variance at that threshold" );
-  add_var( "OTSU" , "CH,TH" , "F" , "Empirical percentile at that threshold" );
+  add_var( "OTSU" , "CH,TH" , "SIGMAB" , "Between-class variance at that threshold" , VT_REAL );
+  add_var( "OTSU" , "CH,TH" , "F" , "Empirical percentile at that threshold" , VT_REAL );
 
   //
   // --otsu
@@ -9413,8 +9451,8 @@ void cmddefs_t::init()
   add_param( "--otsu" , "k" , "100" , "Number of candidate threshold bins" );
 
   add_table( "--otsu" , "TH" , "Threshold scan across candidate cut-points" );
-  add_var( "--otsu" , "TH" , "SIGMAB" , "Between-class variance at that threshold" );
-  add_var( "--otsu" , "TH" , "F" , "Empirical percentile at that threshold" );
+  add_var( "--otsu" , "TH" , "SIGMAB" , "Between-class variance at that threshold" , VT_REAL );
+  add_var( "--otsu" , "TH" , "F" , "Empirical percentile at that threshold" , VT_REAL );
 
   /////////////////////////////////////////////////////////////////////////////////
   //
@@ -9472,31 +9510,31 @@ void cmddefs_t::init()
   add_param( "POL" , "ht" , "" , "Use the Hilbert-transform-based polarity check" );
 
   add_table( "POL" , "CH" , "Channel-level polarity summary" );
-  add_var( "POL" , "CH" , "UP_TIME" , "Mean duration of upward half-waves" );
-  add_var( "POL" , "CH" , "DOWN_TIME" , "Mean duration of downward half-waves" );
-  add_var( "POL" , "CH" , "MN" , "Mean signal level summary" );
-  add_var( "POL" , "CH" , "MD" , "Median signal level summary" );
-  add_var( "POL" , "CH" , "T_DIFF" , "t-statistic comparing upward versus downward signal level" );
-  add_var( "POL" , "CH" , "T_H1" , "t-statistic comparing Hjorth activity" );
-  add_var( "POL" , "CH" , "FLIP" , "Simple polarity call: 1=likely flipped, 0=unsure, -1=likely not flipped, based on agreement between T_DIFF and T_H1" );
-  add_var( "POL" , "CH" , "T_H2" , "t-statistic comparing Hjorth mobility" );
-  add_var( "POL" , "CH" , "T_H3" , "t-statistic comparing Hjorth complexity" );
-  add_var( "POL" , "CH" , "UP_H1" , "Mean upward Hjorth activity [d-mode]" );
-  add_var( "POL" , "CH" , "UP_H2" , "Mean upward Hjorth mobility [d-mode]" );
-  add_var( "POL" , "CH" , "UP_H3" , "Mean upward Hjorth complexity [d-mode]" );
-  add_var( "POL" , "CH" , "DOWN_H1" , "Mean downward Hjorth activity [d-mode]" );
-  add_var( "POL" , "CH" , "DOWN_H2" , "Mean downward Hjorth mobility [d-mode]" );
-  add_var( "POL" , "CH" , "DOWN_H3" , "Mean downward Hjorth complexity [d-mode]" );
-  add_var( "POL" , "CH" , "N_H" , "Number of half-wave comparisons used for time-domain summaries" );
-  add_var( "POL" , "CH" , "N_FFT" , "Number of half-wave comparisons used for spectral summaries" );
+  add_var( "POL" , "CH" , "UP_TIME" , "Mean duration of upward half-waves" , VT_REAL );
+  add_var( "POL" , "CH" , "DOWN_TIME" , "Mean duration of downward half-waves" , VT_REAL );
+  add_var( "POL" , "CH" , "MN" , "Mean signal level summary" , VT_REAL );
+  add_var( "POL" , "CH" , "MD" , "Median signal level summary" , VT_REAL );
+  add_var( "POL" , "CH" , "T_DIFF" , "t-statistic comparing upward versus downward signal level" , VT_REAL );
+  add_var( "POL" , "CH" , "T_H1" , "t-statistic comparing Hjorth activity" , VT_REAL );
+  add_var( "POL" , "CH" , "FLIP" , "Simple polarity call: 1=likely flipped, 0=unsure, -1=likely not flipped, based on agreement between T_DIFF and T_H1" , VT_INTEGER );
+  add_var( "POL" , "CH" , "T_H2" , "t-statistic comparing Hjorth mobility" , VT_REAL );
+  add_var( "POL" , "CH" , "T_H3" , "t-statistic comparing Hjorth complexity" , VT_REAL );
+  add_var( "POL" , "CH" , "UP_H1" , "Mean upward Hjorth activity [d-mode]" , VT_REAL );
+  add_var( "POL" , "CH" , "UP_H2" , "Mean upward Hjorth mobility [d-mode]" , VT_REAL );
+  add_var( "POL" , "CH" , "UP_H3" , "Mean upward Hjorth complexity [d-mode]" , VT_REAL );
+  add_var( "POL" , "CH" , "DOWN_H1" , "Mean downward Hjorth activity [d-mode]" , VT_REAL );
+  add_var( "POL" , "CH" , "DOWN_H2" , "Mean downward Hjorth mobility [d-mode]" , VT_REAL );
+  add_var( "POL" , "CH" , "DOWN_H3" , "Mean downward Hjorth complexity [d-mode]" , VT_REAL );
+  add_var( "POL" , "CH" , "N_H" , "Number of half-wave comparisons used for time-domain summaries" , VT_INTEGER );
+  add_var( "POL" , "CH" , "N_FFT" , "Number of half-wave comparisons used for spectral summaries" , VT_INTEGER );
 
   add_table( "POL" , "CH,F" , "Frequency-specific polarity summary" );
-  add_var( "POL" , "CH,F" , "T_PSD" , "t-statistic comparing absolute PSD [if emitted]" );
-  add_var( "POL" , "CH,F" , "T_RELPSD" , "t-statistic comparing relative PSD" );
-  add_var( "POL" , "CH,F" , "UP_PSD" , "Mean upward PSD [d-mode]" );
-  add_var( "POL" , "CH,F" , "DOWN_PSD" , "Mean downward PSD [d-mode]" );
-  add_var( "POL" , "CH,F" , "UP_RELPSD" , "Mean upward relative PSD [d-mode]" );
-  add_var( "POL" , "CH,F" , "DOWN_RELPSD" , "Mean downward relative PSD [d-mode]" );
+  add_var( "POL" , "CH,F" , "T_PSD" , "t-statistic comparing absolute PSD [if emitted]" , VT_REAL );
+  add_var( "POL" , "CH,F" , "T_RELPSD" , "t-statistic comparing relative PSD" , VT_REAL );
+  add_var( "POL" , "CH,F" , "UP_PSD" , "Mean upward PSD [d-mode]" , VT_REAL );
+  add_var( "POL" , "CH,F" , "DOWN_PSD" , "Mean downward PSD [d-mode]" , VT_REAL );
+  add_var( "POL" , "CH,F" , "UP_RELPSD" , "Mean upward relative PSD [d-mode]" , VT_REAL );
+  add_var( "POL" , "CH,F" , "DOWN_RELPSD" , "Mean downward relative PSD [d-mode]" , VT_REAL );
 
   // A.txt
   // 
@@ -9590,41 +9628,41 @@ void cmddefs_t::init()
 
   // Output variables — whole-recording scalars
   add_table( "GED" , "" , "Whole-recording GED summaries" );
-  add_var( "GED" , "" , "N_S"       , "Timepoints used to build S covariance matrix" );
-  add_var( "GED" , "" , "N_R"       , "Timepoints used to build R covariance matrix" );
-  add_var( "GED" , "" , "EPOW_MEAN" , "Mean epoch-level discriminant power (temporal mean)" );
-  add_var( "GED" , "" , "EPOW_SD"   , "SD of epoch-level discriminant power (temporal instability index)" );
-  add_var( "GED" , "" , "EPOW_CV"   , "Coefficient of variation of epoch-level power" );
+  add_var( "GED" , "" , "N_S"       , "Timepoints used to build S covariance matrix" , VT_INTEGER );
+  add_var( "GED" , "" , "N_R"       , "Timepoints used to build R covariance matrix" , VT_INTEGER );
+  add_var( "GED" , "" , "EPOW_MEAN" , "Mean epoch-level discriminant power (temporal mean)" , VT_REAL );
+  add_var( "GED" , "" , "EPOW_SD"   , "SD of epoch-level discriminant power (temporal instability index)" , VT_REAL );
+  add_var( "GED" , "" , "EPOW_CV"   , "Coefficient of variation of epoch-level power" , VT_REAL );
 
   // Per-component outputs
   add_table( "GED" , "COMP" , "Per-component GED outputs" );
-  add_var( "GED" , "COMP" , "LAMBDA"       , "Eigenvalue (S/R power ratio) for this component" );
-  add_var( "GED" , "COMP" , "LAMBDA_R"     , "Eigenvalue ratio: lambda / sum(lambda)" );
-  add_var( "GED" , "COMP" , "LAMBDA_RANK"  , "Rank of component (1 = largest eigenvalue)" );
-  add_var( "GED" , "COMP" , "FOC"          , "Spatial focality index (0=diffuse, 1=point-source)" );
-  add_var( "GED" , "COMP" , "AP"           , "Anterior-posterior spatial index (requires clocs=)" );
-  add_var( "GED" , "COMP" , "LAT"          , "Lateralization index (requires clocs=)" );
+  add_var( "GED" , "COMP" , "LAMBDA"       , "Eigenvalue (S/R power ratio) for this component" , VT_REAL );
+  add_var( "GED" , "COMP" , "LAMBDA_R"     , "Eigenvalue ratio: lambda / sum(lambda)" , VT_REAL );
+  add_var( "GED" , "COMP" , "LAMBDA_RANK"  , "Rank of component (1 = largest eigenvalue)" , VT_INTEGER );
+  add_var( "GED" , "COMP" , "FOC"          , "Spatial focality index (0=diffuse, 1=point-source)" , VT_REAL );
+  add_var( "GED" , "COMP" , "AP"           , "Anterior-posterior spatial index (requires clocs=)" , VT_REAL );
+  add_var( "GED" , "COMP" , "LAT"          , "Lateralization index (requires clocs=)" , VT_REAL );
 
   // Group projection outputs
-  add_var( "GED" , "COMP" , "POWER"        , "Individual power along group discriminant axis (wT*Ci*w)" );
-  add_var( "GED" , "COMP" , "POWER_R"      , "Individual power normalized by group eigenvalue" );
+  add_var( "GED" , "COMP" , "POWER"        , "Individual power along group discriminant axis (wT*Ci*w)" , VT_REAL );
+  add_var( "GED" , "COMP" , "POWER_R"      , "Individual power normalized by group eigenvalue" , VT_REAL );
 
   // Per-component × channel
   add_table( "GED" , "COMP,CH" , "Per-component per-channel spatial outputs" );
-  add_var( "GED" , "COMP,CH" , "W"   , "Eigenvector (spatial filter) weight for this channel" );
-  add_var( "GED" , "COMP,CH" , "MAP" , "Forward model (topographic map) coefficient, sign-corrected" );
+  add_var( "GED" , "COMP,CH" , "W"   , "Eigenvector (spatial filter) weight for this channel" , VT_REAL );
+  add_var( "GED" , "COMP,CH" , "MAP" , "Forward model (topographic map) coefficient, sign-corrected" , VT_REAL );
 
   // Stage-stratified outputs
   add_table( "GED" , "COMP,SS" , "Stage-stratified per-component outputs (requires stages flag)" );
-  add_var( "GED" , "COMP,SS" , "LAMBDA"      , "Stage-specific eigenvalue" );
-  add_var( "GED" , "COMP,SS" , "LAMBDA_R"    , "Stage-specific eigenvalue ratio" );
-  add_var( "GED" , "COMP,SS" , "N_S"         , "S timepoints within this stage" );
-  add_var( "GED" , "COMP,SS" , "N_R"         , "R timepoints within this stage" );
+  add_var( "GED" , "COMP,SS" , "LAMBDA"      , "Stage-specific eigenvalue" , VT_REAL );
+  add_var( "GED" , "COMP,SS" , "LAMBDA_R"    , "Stage-specific eigenvalue ratio" , VT_REAL );
+  add_var( "GED" , "COMP,SS" , "N_S"         , "S timepoints within this stage" , VT_INTEGER );
+  add_var( "GED" , "COMP,SS" , "N_R"         , "R timepoints within this stage" , VT_INTEGER );
 
   // Epoch-level outputs
   add_table( "GED" , "E" , "Epoch-level discriminant power" );
-  add_var( "GED" , "E" , "EPOW"    , "Discriminant power of top component in this epoch (wT*C_epoch*w)" );
-  add_var( "GED" , "E" , "EPOW_SS" , "Sleep stage label for this epoch (if stages flag set)" );
+  add_var( "GED" , "E" , "EPOW"    , "Discriminant power of top component in this epoch (wT*C_epoch*w)" , VT_REAL );
+  add_var( "GED" , "E" , "EPOW_SS" , "Sleep stage label for this epoch (if stages flag set)" , VT_TEXT );
 
 }
 
@@ -10236,24 +10274,25 @@ void cmddefs_t::ensure_table( const std::string & cmd , const std::string & fact
 
 
 // add variable
-void cmddefs_t::add_var1( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const bool hide )
+void cmddefs_t::add_var1( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const vtype_t type , const bool hide )
 {
   pri_var[ cmd ][ tfac_t( factors ) ].insert( var );
-  add_var( cmd , factors , var , desc , hide );
+  add_var( cmd , factors , var , desc , type , hide );
 }
 
-void cmddefs_t::add_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const bool hide )
+void cmddefs_t::add_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const vtype_t type , const bool hide )
 {
   tfac_t tfac( factors );
   ovars[ cmd ][ tfac ][ var ] = desc;
+  otypes[ cmd ][ tfac ][ var ] = type;
   vhide[ cmd ][ tfac ][ var ] = hide;
   otout[ cmd ][ tfac ][ var ] = true;  
 }
 
 // add hidden variable
-void cmddefs_t::hidden_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc )
+void cmddefs_t::hidden_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const vtype_t type )
 {
-  add_var( cmd , factors , var , desc , true );
+  add_var( cmd , factors , var , desc , type , true );
 }
 
 // register (new) var for output
@@ -10572,6 +10611,34 @@ std::string cmddefs_t::fetch_desc_var( const std::string & cmd, const std::strin
   return vv->second;
 }
 
+
+vtype_t cmddefs_t::fetch_type_var( const std::string & cmd, const std::string & tbl, const std::string & var ) const
+{
+  return fetch_type_var( cmd , tfac_t( tbl ) , var );
+}
+
+vtype_t cmddefs_t::fetch_type_var( const std::string & cmd, const tfac_t & tfac, const std::string & var ) const
+{
+  std::map<std::string,std::map<tfac_t,std::map<std::string,vtype_t> > >::const_iterator ff = otypes.find( cmd );
+  if ( ff == otypes.end() ) return VT_UNDEFINED;
+  std::map<tfac_t,std::map<std::string,vtype_t> >::const_iterator ss = ff->second.find( tfac );
+  if ( ss == ff->second.end() ) return VT_UNDEFINED;
+  std::map<std::string,vtype_t>::const_iterator vv = ss->second.find( var );
+  if ( vv == ss->second.end() ) return VT_UNDEFINED;
+  return vv->second;
+}
+
+std::string vtype_str( const vtype_t t )
+{
+  switch ( t )
+    {
+    case VT_INTEGER : return "integer";
+    case VT_REAL    : return "real";
+    case VT_TEXT    : return "text";
+    case VT_BOOLEAN : return "boolean";
+    default         : return "undefined";
+    }
+}
 
 
 //#pragma GCC pop_options

@@ -69,6 +69,11 @@ struct tfac_t {
 
 
 
+// logical output type of a variable (metadata only; missing values allowed for any type)
+enum vtype_t { VT_UNDEFINED = 0 , VT_INTEGER , VT_REAL , VT_TEXT , VT_BOOLEAN };
+
+std::string vtype_str( const vtype_t t );
+
 class cmddefs_t 
 {
   
@@ -130,10 +135,10 @@ class cmddefs_t
   void ensure_table( const std::string & cmd , const std::string & factors );
 
   // add variable
-  void add_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const bool hide = false );
+  void add_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const vtype_t type , const bool hide = false );
 
   // add hidden variable
-  void hidden_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc );
+  void hidden_var( const std::string & cmd , const std::string & factors , const std::string & var , const std::string & desc , const vtype_t type );
 
   // register extra col for output (controlled by caller)
   void register_var( const std::string & cmd , const std::string & factors , const std::string & var , const bool value = true );
@@ -175,6 +180,7 @@ class cmddefs_t
 		 const std::string & factors ,
 		 const std::string & var ,
 		 const std::string & desc ,
+		 const vtype_t type ,
 		 const bool hide = false );
 
   
@@ -226,6 +232,10 @@ class cmddefs_t
   std::string fetch_desc_param( const std::string & cmd, const std::string & param ) const;
   std::string fetch_desc_tbl( const std::string & cmd, const std::string & tbl ) const;
   std::string fetch_desc_var( const std::string & cmd, const std::string & tbl, const std::string & var ) const;
+
+  // logical output type of a variable (VT_UNDEFINED if not defined)
+  vtype_t fetch_type_var( const std::string & cmd, const std::string & tbl, const std::string & var ) const;
+  vtype_t fetch_type_var( const std::string & cmd, const tfac_t & tfac, const std::string & var ) const;
 
   
   //
@@ -355,6 +365,9 @@ class cmddefs_t
   
   // cmd->table->var->desc
   std::map<std::string,std::map<tfac_t,std::map<std::string,std::string> > > ovars;
+
+  // cmd->table->var->logical type
+  std::map<std::string,std::map<tfac_t,std::map<std::string,vtype_t> > > otypes;
 
   // cmd->table->var->output-enabled
   std::map<std::string,std::map<tfac_t,std::map<std::string,bool> > > otout;

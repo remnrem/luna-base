@@ -1379,13 +1379,14 @@ void edf_t::seg_dumper( param_t & param )
       writer.value( "NSEGS" , 1 );
       writer.value( "NGAPS" , 0 );
 
-      writer.level( 1 , "SEG" );
+      // largest (only) seg: a baseline variable, as for EDF+D below
       double secs = header.nr * header.record_duration;
+      writer.value( "LARGEST" , secs );
+
+      writer.level( 1 , "SEG" );
       writer.value( "START" , 0 );
       writer.value( "STOP" ,  secs );
 
-      // largest (only) seg
-      writer.value( "LARGEST" , secs );
       if ( flag_largest_segment )
 	{
 	  if ( flag_largest_segment_req > 0 || secs >= flag_largest_segment_req * 60.0 ) 

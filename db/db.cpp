@@ -777,7 +777,7 @@ timepoint_t   StratOutDBase::insert_interval_timepoint( const interval_t & inter
 }
 
 
-factor_t  StratOutDBase::insert_factor( const std::string & fac_name, const bool is_numeric )
+factor_t  StratOutDBase::insert_factor( const std::string & fac_name, const bool is_numeric , const bool )
 {
   sql.bind_text( stmt_insert_factor , ":fac_name" , fac_name );
   sql.bind_int( stmt_insert_factor , ":is_num" , is_numeric );
@@ -1252,7 +1252,8 @@ bool writer_t::close()
   // otherwise, handle any DB-related stuff
   if ( ! attached() ) return false;
   clear(); 
-  db.dettach();
+  store().dettach();
+  alternate_store.reset();
   
   return true; 
 } 
@@ -1459,7 +1460,7 @@ bool writer_t::level( const std::string & level_name , const std::string & facto
   if ( levels_idmap.find( level_key ) == levels_idmap.end() )
     {
       // if not, add to DB,
-      level_t level = db.insert_level( level_name , factor.factor_id );
+      level_t level = store().insert_level( level_name , factor.factor_id );
       // and then cache
       levels_idmap[ level_key ] = level.level_id;
       levels[ level.level_id ] = level;
@@ -1477,11 +1478,11 @@ bool writer_t::level( const std::string & level_name , const std::string & facto
   return true;
 }
 
-bool writer_t::numeric_factor( const std::string & fac_name )
+bool writer_t::numeric_factor( const std::string & fac_name , const bool integer )
   {
     if ( factors_idmap.find( fac_name ) == factors_idmap.end() )
       {
-	factor_t factor = db.insert_factor( fac_name , 1 );  // 1 -> numeric factor
+	factor_t factor = store().insert_factor( fac_name , 1 , integer );  // 1 -> numeric factor
 	//	std::cout << "ASSIGN: num " << fac_name << " " << factor.factor_id << "\n";
 	factors_idmap[ fac_name ] = factor.factor_id;
 	factors[ factor.factor_id ] = factor;
@@ -1493,7 +1494,7 @@ bool writer_t::string_factor( const std::string & fac_name )
   {
     if ( factors_idmap.find( fac_name ) == factors_idmap.end() )
       {
-	factor_t factor = db.insert_factor( fac_name , 0 ); // 0 -> string factor  
+	factor_t factor = store().insert_factor( fac_name , 0 ); // 0 -> string factor
 	//std::cout << "ASSIGN: str " << fac_name << " " << factor.factor_id << "\n";
 	factors_idmap[ fac_name ] = factor.factor_id;
 	factors[ factor.factor_id ] = factor;
@@ -1506,35 +1507,42 @@ void writer_t::set_types()
 {
 
   //  std::cout << "SETTING_TYPES()\n";
-  
-  numeric_factor( globals::epoch_strat );
-  numeric_factor( globals::comp_strat ); 
-  numeric_factor( globals::sample_strat );
+
+  // Factor types: the single declaration. SQLite records numeric/string;
+  // typed (DuckDB) output also uses integer vs real for numeric factors.
+  // E and T levels come from timepoints (epoch number; interval start/stop).
+  // Factors not declared here are string factors.
+
+  const bool integer = true;
+
+  numeric_factor( globals::epoch_strat , integer );
+  numeric_factor( globals::comp_strat , integer );
+  numeric_factor( globals::sample_strat , integer );
   numeric_factor( globals::freq_strat );
   numeric_factor( globals::sec_strat );
-  numeric_factor( globals::cycle_strat );
+  numeric_factor( globals::cycle_strat , integer );
   string_factor( globals::band_strat );
   string_factor( globals::annot_strat );
   string_factor( globals::annot_instance_strat );
   string_factor( globals::annot_meta_strat );
   string_factor( globals::signal_strat );
   string_factor( globals::stage_strat );
-  numeric_factor( globals::count_strat );
+  numeric_factor( globals::count_strat , integer );
   numeric_factor( globals::time_strat );
   numeric_factor( globals::value_strat );
 
-  numeric_factor( "EID" );
-  numeric_factor( "IC" );
-  numeric_factor( "I" ); // from PSC
-  numeric_factor( "TAP" );
+  numeric_factor( "EID" , integer );
+  numeric_factor( "IC" , integer );
+  numeric_factor( "I" , integer ); // from PSC
+  numeric_factor( "TAP" , integer );
   numeric_factor( "TH" );
-  numeric_factor( "SPINDLE" );
+  numeric_factor( "SPINDLE" , integer );
   numeric_factor( "MSEC" );
   numeric_factor( "PHASE" );
-  numeric_factor( "PSC" );
-  numeric_factor( "SEG" );
+  numeric_factor( "PSC" , integer );
+  numeric_factor( "SEG" , integer );
   numeric_factor( "OFFSET" );
-  
+
 }
 
 

@@ -22,6 +22,7 @@
 #ifndef __LOCDB_H__
 #define __LOCDB_H__
 
+#include <memory>
 #include "sqlwrap.h"
 #include "retval.h"
 #include <string>
@@ -376,7 +377,29 @@ typedef std::vector<packet_t> packets_t;
 // Database with internal cache
 //
 
-class StratOutDBase {  
+class output_store_t
+{
+ public:
+  virtual ~output_store_t() = default;
+  virtual bool attach( const std::string &, bool readonly, writer_t * ) = 0;
+  virtual bool dettach() = 0;
+  virtual bool attached() = 0;
+  virtual std::string name() const = 0;
+  virtual void begin() = 0;
+  virtual void commit() = 0;
+  virtual indiv_t   insert_individual( const std::string & indiv_name , const std::string & filename ) = 0;
+  virtual var_t     insert_variable( const std::string & var_name, const std::string & cmd_name , const std::string & var_label ) = 0;
+  virtual timepoint_t   insert_epoch_timepoint( const int epoch ) = 0;
+  virtual timepoint_t   insert_interval_timepoint( const interval_t & interval ) = 0;
+  // is_integer refines a numeric factor (integer vs real levels); typed stores use it
+  virtual factor_t  insert_factor( const std::string & fac_name, const bool is_numeric = false , const bool is_integer = false ) = 0;
+  virtual level_t   insert_level( const std::string & level_name, const int factor_id ) = 0;
+  virtual strata_t  insert_strata( const strata_t & ) = 0;
+  virtual command_t insert_command( const std::string & cmd_name , int , const std::string & timedate , const std::string & cmd_param ) = 0;
+  virtual bool      insert_value( const int indiv_id , const int cmd_id , const int variable_id , const int strata_id , const int tp_id , const value_t & x ) = 0;
+};
+
+class StratOutDBase : public output_store_t {
   
  public:
   
@@ -470,7 +493,7 @@ class StratOutDBase {
   var_t     insert_variable( const std::string & var_name, const std::string & cmd_name , const std::string & var_label );
   timepoint_t   insert_epoch_timepoint( const int epoch );
   timepoint_t   insert_interval_timepoint( const interval_t & interval );
-  factor_t  insert_factor( const std::string & fac_name, const bool is_numeric = false );
+  factor_t  insert_factor( const std::string & fac_name, const bool is_numeric = false , const bool is_integer = false );
   level_t   insert_level( const std::string & level_name, const std::string & fac_name );
   level_t   insert_level( const std::string & level_name, const int factor_id );
   strata_t  insert_strata( const strata_t & );
@@ -570,12 +593,14 @@ class writer_t
     cache_str = NULL;    
   } 
   
-  bool attach( const std::string & filename , bool readonly = false )
+  bool attach( const std::string & filename , bool readonly = false,
+               std::unique_ptr<output_store_t> backend = nullptr )
   {
 
+    close();
     dbless = false; plaintext = false; zfiles = NULL ; curr_zfile = NULL; retval = NULL;
-
-    db.attach( filename , readonly , this );
+    alternate_store = std::move(backend);
+    store().attach( filename , readonly , this );
 
     //
     // Ensure that default strata is set as '1' baseline
@@ -588,7 +613,7 @@ class writer_t
 	if ( dummy != 1 ) Helper::halt( "internal problem with root strata_id != 1" );
       }
 
-    return db.attached();
+    return store().attached();
   }
 
   void set_types();
@@ -645,14 +670,14 @@ class writer_t
   }
 
   
-  std::string name() const { return plaintext ? plaintext_root : ( dbless ? "." : db.name() ) ; } 
+  std::string name() const { return plaintext ? plaintext_root : ( dbless ? "." : store().name() ) ; }
 
   void index() { if ( open_db() ) db.index(); } 
   void drop_index() { if ( open_db() ) db.drop_index(); } 
-  void begin() { if ( open_db() ) db.begin(); } 
-  void commit() { if ( open_db() ) db.commit(); }
+  void begin() { if ( open_db() ) store().begin(); }
+  void commit() { if ( open_db() ) store().commit(); }
   void read_all() { if ( open_db() ) db.read_all(this); }
-  bool attached() { if ( ! open_db() ) return false; return db.attached(); }
+  bool attached() { if ( ! open_db() ) return false; return store().attached(); }
   void fetch( int strata_id, int time_mode, packets_t * packets, std::set<int> * i = NULL, std::set<int> * c = NULL, std::set<int> * v = NULL )
   { return db.fetch( strata_id , time_mode, packets, i, c, v) ; }  
 
@@ -679,7 +704,8 @@ class writer_t
 
     // Define factor types (not set current level)
   
-  bool numeric_factor( const std::string & fac_name );
+  // numeric factor with real-valued (default) or integer levels
+  bool numeric_factor( const std::string & fac_name , const bool integer = false );
   
   bool string_factor( const std::string & fac_name );
 
@@ -689,7 +715,7 @@ class writer_t
     std::string var_key = curr_command.cmd_name + ":" + var_name;
     if ( variables_idmap.find( var_key ) == variables_idmap.end() )
       {
-	var_t var = db.insert_variable( var_name , curr_command.cmd_name , var_label );
+	var_t var = store().insert_variable( var_name , curr_command.cmd_name , var_label );
 	variables_idmap[ var_key ] = var.var_id;
 	variables[ var.var_id ] = var;
       }
@@ -798,7 +824,7 @@ class writer_t
     else
       {
 	// add to DB
-	curr_command = db.insert_command( cmd_name , cmd_number , timestamp() , param );		
+	curr_command = store().insert_command( cmd_name , cmd_number , timestamp() , param );
 	// add to cache
 	commands_idmap[ command_key ] = curr_command.cmd_id;
 	commands[ curr_command.cmd_id ] = curr_command;
@@ -818,7 +844,7 @@ class writer_t
       curr_indiv = individuals[ individuals_idmap[ indiv_name ] ];
     else
       {
-	curr_indiv = db.insert_individual( indiv_name , file_name );
+	curr_indiv = store().insert_individual( indiv_name , file_name );
 	individuals_idmap[ indiv_name ] = curr_indiv.indiv_id;
 	individuals[ curr_indiv.indiv_id ] = curr_indiv;
       }
@@ -928,7 +954,7 @@ class writer_t
       }
     
     // if not, add to DB and track ID
-    strata_t new_strata = db.insert_strata( s );
+    strata_t new_strata = store().insert_strata( s );
     strata_idmap[ new_strata ] = new_strata.strata_id;
     strata[ new_strata.strata_id ] = new_strata;
     return new_strata.strata_id;
@@ -953,7 +979,7 @@ class writer_t
     else
       {
 	// add new TP before attaching to current strata
-	curr_timepoint = db.insert_epoch_timepoint( e );
+	curr_timepoint = store().insert_epoch_timepoint( e );
        	timepoints_idmap[ tp_key ] = curr_timepoint.timepoint_id;
 	timepoints[ curr_timepoint.timepoint_id ] = curr_timepoint;	
       }
@@ -981,7 +1007,7 @@ class writer_t
       curr_timepoint = timepoints[ timepoints_idmap[ tp_key ] ];
     else
       {
-	curr_timepoint = db.insert_interval_timepoint( interval );
+	curr_timepoint = store().insert_interval_timepoint( interval );
 	timepoints_idmap[ tp_key ] = curr_timepoint.timepoint_id;
 	timepoints[ curr_timepoint.timepoint_id ] = curr_timepoint;
       }
@@ -1084,7 +1110,7 @@ class writer_t
     // should be already here, but incase it is not
     if ( variables_idmap.find( var_key ) == variables_idmap.end() )
       {
-	var_t var = db.insert_variable( var_name , curr_command.cmd_name , "." );
+	var_t var = store().insert_variable( var_name , curr_command.cmd_name , "." );
         variables_idmap[ var_key ] = var.var_id;
         variables[ var.var_id ] = var;
       }      
@@ -1093,7 +1119,7 @@ class writer_t
     curr_strata.strata_id = get_strata_id( curr_strata );    
 
     // store value    
-    db.insert_value( curr_indiv.indiv_id , 
+    store().insert_value( curr_indiv.indiv_id ,
 		     curr_command.cmd_id , 	
 		     variables_idmap[ var_key ] , 		     
 		     curr_strata.empty() ? -1 : curr_strata.strata_id , 
@@ -1247,7 +1273,10 @@ class writer_t
   // primary data-store
   //
 
-  StratOutDBase db; 
+  StratOutDBase db;
+  std::unique_ptr<output_store_t> alternate_store;
+  output_store_t & store() { return alternate_store ? *alternate_store : db; }
+  const output_store_t & store() const { if (alternate_store) return *alternate_store; return db; }
 
 
   //

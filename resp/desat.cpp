@@ -1167,7 +1167,7 @@ desat_matlab_t::desat_matlab_t( edf_t & edf , param_t & param )
 
   //
   // -----------------------------------------------------------------------
-  // Per-event output (stratified by DESAT_M level)
+  // Per-event output (stratified by DESATM level)
   // -----------------------------------------------------------------------
   //
 
@@ -1175,7 +1175,7 @@ desat_matlab_t::desat_matlab_t( edf_t & edf , param_t & param )
   for ( const auto & ev : all_events )
     {
       ++event_counter;
-      writer.level( event_counter , "DESAT_M" );
+      writer.level( event_counter , "DESATM" );
       writer.value( "START",    ev.start_sec );
       writer.value( "STOP",     ev.stop_sec  );
       writer.value( "DUR",      ev.stop_sec - ev.start_sec );
@@ -1188,7 +1188,7 @@ desat_matlab_t::desat_matlab_t( edf_t & edf , param_t & param )
       writer.value( "SEG",      ev.seg        );
       if ( has_staging )
         writer.value( "SLEEP", (int)ev.in_sleep );
-      writer.unlevel( "DESAT_M" );
+      writer.unlevel( "DESATM" );
     }
 
 

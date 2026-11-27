@@ -19,6 +19,7 @@
 //
 //    --------------------------------------------------------------------
 
+#include <cmath>
 #include <limits>
 
 #include "timeline/timeline.h"
@@ -1803,7 +1804,7 @@ void timeline_t::list_spanning_annotations( const param_t & param )
 
   
   // do any (valid) annots overlap each other?
-  writer.value( "ANNOT_OVERLAP" , ( total_collapsed < total ? "YES" : "NO" )  );
+  writer.value( "ANNOT_OVERLAP" , (int)( total_collapsed < total ) );
 
   // how many annots over-extended beyond range of EDF?
   writer.value( "INVALID_N" , over_extended );
@@ -3779,8 +3780,8 @@ void timeline_t::annot_crosstabs( const param_t & param )
       if ( v.size() != 3 ) Helper::halt( "AXA expects offset=width,increment,max" );
       if ( ! std::isfinite(v[0]) || ! std::isfinite(v[1]) || ! std::isfinite(v[2]) ||
            v[0] <= 0 || v[1] <= 0 || v[2] < 0 ||
-           (v[0] + v[2]) * globals::tp_1sec >= std::numeric_limits<int64_t>::max() ||
-           v[1] * globals::tp_1sec >= std::numeric_limits<int64_t>::max() )
+           (v[0] + v[2]) * globals::tp_1sec >= std::ldexp(1.0, 63) ||
+           v[1] * globals::tp_1sec >= std::ldexp(1.0, 63) )
         Helper::halt( "AXA offset requires positive width/increment and nonnegative maximum" );
       const uint64_t width = std::llround( v[0] * globals::tp_1sec );
       const uint64_t increment = std::llround( v[1] * globals::tp_1sec );

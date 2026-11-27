@@ -990,7 +990,7 @@ bool cmd_t::eval( edf_t & edf )
       if ( (!fnd) && is( c, "ORDER" ) )        { fnd = true; proc_order_signals( edf , param(c) ); }
       if ( (!fnd) && is( c, "REQUIRES" ) )     { fnd = true; proc_requires( edf , param(c) ); } 
       if ( (!fnd) && is( c, "CONTAINS" ) )     { fnd = true; proc_has_signals( edf , param(c) ); }
-      if ( (!fnd) && ( is( c, "RMS" ) || is( c, "SIGSTATS" ) ) ) { fnd = true; proc_rms( edf, param(c) ); }
+      if ( (!fnd) && is( c, "SIGSTATS" ) )    { fnd = true; proc_rms( edf, param(c) ); }
       if ( (!fnd) && is( c, "MSE" ) )          { fnd = true; proc_mse( edf, param(c) ); }
       if ( (!fnd) && is( c, "LZW" ) )          { fnd = true; proc_lzw( edf, param(c) ); }
       if ( (!fnd) && is( c, "ZR" ) )           { fnd = true; proc_zratio( edf , param(c) ); }
@@ -1347,7 +1347,8 @@ void proc_report( edf_t & edf , param_t & param )
 		 << " for " << cmd << ( fac != "" ? ": " + fac : "" ) << "\n";
 	  
 	  globals::cmddefs().ensure_table( cmd , fac );
-	  globals::cmddefs().add_var( cmd , fac , vars[v] , "." );
+	  // keep any existing logical type (VT_UNDEFINED if not previously defined)
+	  globals::cmddefs().add_var( cmd , fac , vars[v] , "." , globals::cmddefs().fetch_type_var( cmd , fac , vars[v] ) );
 	}
       return;
     }
@@ -1456,7 +1457,7 @@ void proc_stats( edf_t & edf , param_t & param )
   edf.basic_stats( param );
 }
 
-// RMS/SIGSTATS : calculate root-mean square for signals 
+// SIGSTATS : calculate root-mean square for signals 
 void proc_rms( edf_t & edf , param_t & param )
 {    
   rms_per_epoch( edf , param );

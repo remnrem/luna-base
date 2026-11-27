@@ -6,6 +6,7 @@
 # User-tunable settings such as ARCH, LGBM, FFTW, ZLIB, PYBIND11_PATH, and
 # compiler overrides are defined in or consumed by Makefile.inc.
 
+.DEFAULT_GOAL := all
 include Makefile.inc
 
 
@@ -20,12 +21,12 @@ include Makefile.inc
 ##############################################################################
 
 ifeq ($(ARCH),WINDOWS)
-TARGETS = luna destrat behead
+TARGETS = luna destrat destrat-sqlite behead
 else
 ifdef WASM
-TARGETS = luna libluna destrat
+TARGETS = luna libluna destrat destrat-sqlite
 else
-TARGETS = luna libluna destrat behead fixrows
+TARGETS = luna libluna destrat destrat-sqlite behead fixrows
 endif
 endif
 
@@ -96,7 +97,35 @@ DEPS := $(OBJS:.o=.d)
 # - `all` is the default entry point and expands through TARGETS above.
 ##############################################################################
 
+DUCKDB ?= 0
+# The default reader always supports DuckDB; DUCKDB controls Luna's writer.
+DUCKDB_PATH ?= /usr/local
+DUCK_INCLUDES = -I"$(DUCKDB_PATH)" -I"$(DUCKDB_PATH)/include"
+ifeq ($(ARCH),WINDOWS)
+DUCK_LIB_DIRS = $(wildcard $(DUCKDB_PATH) $(DUCKDB_PATH)/bin)
+DUCK_LIBS = $(foreach dir,$(DUCK_LIB_DIRS),-L"$(dir)") -l:duckdb.dll
+else
+DUCK_LIB_DIRS = $(wildcard $(DUCKDB_PATH) $(DUCKDB_PATH)/lib)
+DUCK_LIBS = $(foreach dir,$(DUCK_LIB_DIRS),-L"$(dir)" -Wl,-rpath,"$(dir)") -lduckdb
+endif
+duckdb/%.o: CPPFLAGS += $(DUCK_INCLUDES)
+ifeq ($(DUCKDB),1)
+DUCK_WRITER = duckdb/writer.o duckdb/catalog.o
+main.o: CPPFLAGS += -DHAS_DUCKDB $(DUCK_INCLUDES)
+endif
+
 all: $(TARGETS)
+
+# Only main.o changes with the feature flag. Force its rebuild on a mode switch.
+DUCK_MODE_STAMP = duckdb/.build-mode-$(DUCKDB)
+$(DUCK_MODE_STAMP):
+	$(RM) duckdb/.build-mode-*
+	touch $@
+main.o: $(DUCK_MODE_STAMP)
+
+# Keep the old DuckDB reader name available for existing scripts.
+destrat destrat-duckdb: duckdb/reader.o duckdb/reader_source.o duckdb/reader_sqlite.o duckdb/reader_typed.o duckdb/catalog.o libluna.a
+	$(CXX) -o $@ $^ $(DEP_LIB) $(LDFLAGS) $(DUCK_LIBS)
 
 libluna: libluna.a $(SHARED_LIB)
 
@@ -111,12 +140,12 @@ libluna: libluna.a $(SHARED_LIB)
 # - Link lines only when dependency/link-order requirements actually change.
 ##############################################################################
 
-luna: main.o $(OBJS)
-	$(CXX) -o $@ $^ $(DEP_LIB) $(LDFLAGS)
+luna: main.o $(OBJS) $(DUCK_WRITER)
+	$(CXX) -o $@ $^ $(DEP_LIB) $(LDFLAGS) $(DUCK_LIBS)
 
 # Auto-generated header dependency files produced by `-MMD -MP`.
 -include main.d $(DEPS)
--include utils/reader2.d
+-include utils/reader2.d duckdb/writer.d duckdb/reader.d duckdb/reader_source.d duckdb/reader_sqlite.d duckdb/reader_typed.d duckdb/catalog.d
 
 .PHONY: hdstats-pc-schema
 
@@ -149,7 +178,7 @@ static: main.o $(OBJS) $(FFTW)/lib/libfftw3.a
 	$(CXX) -static -static-libgcc -static-libstdc++ -o luna-static $^
 
 # The original utils/reader.cpp is retained as reference source only.
-destrat: utils/reader2.o libluna.a
+destrat-sqlite: utils/reader2.o libluna.a
 	$(CXX) -o $@ $^ -L. $(LDFLAGS) $(DEP_LIB)
 
 regional: utils/region-annotate.o
@@ -201,4 +230,4 @@ clean:
 	-$(RM) $(TARGETS) destrat2 regional tocol cgi-mapper dmerge simassoc \
 		libluna.dylib libluna.so libluna.a luna-static main.o main.d \
 		$(OBJS) $(DEPS) $(addsuffix ~,$(SRCS) $(CSRCS))
-	-$(RM) utils/*.o utils/*.d utils/*~
+	-$(RM) utils/*.o utils/*.d utils/*~ duckdb/*.o duckdb/*.d duckdb/.build-mode-* destrat-duckdb

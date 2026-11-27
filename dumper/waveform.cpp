@@ -1061,7 +1061,7 @@ void dsptools::waveform_summary( param_t & param )
       std::vector<std::string> tok = Helper::parse( ee->first , "\t" );
       if ( tok.size() == 4 )
         {
-          writer.level( tok[0] , "LWF_ID" );
+          writer.level( tok[0] , "LWFID" );
           writer.level( tok[1] , "CH" );
           writer.level( tok[2] , "TAG" );
           writer.level( tok[3] , "ANNOT" );
@@ -1069,7 +1069,7 @@ void dsptools::waveform_summary( param_t & param )
           writer.unlevel( "ANNOT" );
           writer.unlevel( "TAG" );
           writer.unlevel( "CH" );
-          writer.unlevel( "LWF_ID" );
+          writer.unlevel( "LWFID" );
         }
       ++ee;
     }

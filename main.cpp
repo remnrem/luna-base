@@ -40,7 +40,58 @@
 
 extern globals global;
 
+#include "duckdb/format.h"
+#ifdef HAS_DUCKDB
+#include <duckdb.h>
+#include "duckdb/writer.h"
+static bool duckdb_output = false;
+static bool duckdb_append = false;
+#endif
 extern writer_t writer;
+
+// -o/-a write SQLite; -d writes typed DuckDB. For -a (and -d --append) the
+// existing file's format is read from its header, irrespective of extension.
+static void attach_output(const std::string &path)
+{
+  const std::string file = Helper::expand(path);
+  const luna_duck::file_format format = luna_duck::detect_format(file);
+#ifdef HAS_DUCKDB
+  if (duckdb_output || (cmd_t::append_stout_file && format == luna_duck::file_format::duckdb)) {
+    // Close DuckDB in main's error handler, before process shutdown tears
+    // down DuckDB's runtime. Helper::halt() otherwise calls std::exit().
+    globals::bail_function = [](const std::string &msg) {
+      throw std::runtime_error(msg);
+    };
+  }
+  if (duckdb_output) {
+    if (cmd_t::append_stout_file) {
+      if (format == luna_duck::file_format::sqlite)
+        Helper::halt(file + " is an SQLite database: -d --append requires a DuckDB file (use -a to append to SQLite)");
+      if (format == luna_duck::file_format::other)
+        Helper::halt(file + " is not a DuckDB database");
+      if (format == luna_duck::file_format::empty) Helper::deleteFile(file);
+    }
+    writer.attach(path, false, make_duckdb_output(format == luna_duck::file_format::duckdb));
+    return;
+  }
+  if (cmd_t::append_stout_file && format == luna_duck::file_format::duckdb) {
+    writer.attach(path, false, make_duckdb_output(true));
+    return;
+  }
+#else
+  if (cmd_t::append_stout_file && format == luna_duck::file_format::duckdb)
+    Helper::halt(file + " is a DuckDB database: appending requires Luna built with DUCKDB=1");
+#endif
+  writer.attach(path);
+}
+
+static bool is_output_option(const std::string &arg)
+{
+#ifdef HAS_DUCKDB
+  if (Helper::iequals(arg, "-d")) return true;
+#endif
+  return Helper::iequals(arg, "-o") || Helper::iequals(arg, "-a") || Helper::iequals(arg, "-t");
+}
 
 extern logger_t logger;
 
@@ -192,7 +243,7 @@ const start_override_t * find_start_override( const start_override_map_t & overr
 }
 
 
-int main(int argc , char ** argv )
+int main(int argc , char ** argv ) try
 {
 
 #if defined(WINDOWS) || defined(_WIN32)
@@ -237,6 +288,9 @@ int main(int argc , char ** argv )
 		<< EIGEN_MINOR_VERSION << "\n";
       std::cerr << "  SQLite:        v"
 		<< sqlite3_libversion() << "\n";
+#ifdef HAS_DUCKDB
+      std::cerr << "  DuckDB:        " << duckdb_library_version() << "\n";
+#endif
       std::cerr << "  FFTW:          " << fftw_version << "\n";
 #ifdef HAS_LGBM
       std::cerr << "  LightGBM:      enabled";
@@ -265,7 +319,11 @@ int main(int argc , char ** argv )
   std::string usage_msg = luna_base_version() +
     "\n"
     "primary usage: luna [sample-list|EDF] [n1] [n2] [id=ID] [@param-file] \n"
-    "                    [sig=s1,s2] [var1=val1] [-o out.db] [-s COMMANDS] [< command-file]\n"
+    "                    [sig=s1,s2] [var1=val1] [-o out.db] "
+#ifdef HAS_DUCKDB
+    "[-d out.duckdb] "
+#endif
+    "[-s COMMANDS] [< command-file]\n"
     "\n"
     "                 url: http://zzz-luna.org/luna/\n\n"
     "                help: luna -h [domain|COMMAND]\n"
@@ -480,6 +538,15 @@ int main(int argc , char ** argv )
   
   cmdline_proc_t cmdline = parse_cmdline( argc , argv , &param_from_command_line );
 
+#ifdef HAS_DUCKDB
+  // --append only qualifies -d (-a appends to either format)
+  if ( duckdb_append )
+    {
+      if ( ! duckdb_output ) Helper::halt( "--append requires -d" );
+      cmd_t::append_stout_file = true;
+    }
+#endif
+
   //
   // mirror log to file?
   //
@@ -537,7 +604,7 @@ int main(int argc , char ** argv )
 	  if ( ! cmd_t::append_stout_file ) 
 	    Helper::deleteFile( cmd_t::stout_file );
 	  
-	  writer.attach( cmd_t::stout_file );  
+	  attach_output( cmd_t::stout_file );
 	}
     }
   // otherwise, just send to std out
@@ -552,8 +619,9 @@ int main(int argc , char ** argv )
   
   if ( cmdline != NOPROC )
     {
-      exec_cmdline_procs( cmdline , argc, argv, param_from_command_line ) ;
-      std::exit(0);
+      exec_cmdline_procs( cmdline , argc, argv, param_from_command_line );
+      writer.close();
+      return 0;
     }
   
   
@@ -614,12 +682,16 @@ int main(int argc , char ** argv )
   if ( failed == 0 ) logger << " all of which passed" << "\n";
   else logger << failed << " of which failed\n";
   
-  std::exit( globals::retcode );
-  
+  writer.close();
+  return globals::retcode;
 }
-
-
-
+catch (const std::exception &e)
+{
+  logger.off();
+  writer.close();
+  std::cerr << "error : " << e.what() << "\n";
+  return 1;
+}
 
 void process_edfs( cmd_t & cmd )
 {
@@ -949,7 +1021,7 @@ void process_edfs( cmd_t & cmd )
 	  if ( ! cmd_t::append_stout_file ) 
 	    Helper::deleteFile( cmd_t::stout_file );
 	  
-	  writer.attach( cmd_t::stout_file );  
+	  attach_output( cmd_t::stout_file );
 	  
 	  logger << " writing to " << writer.name() << "\n";
 
@@ -1862,6 +1934,27 @@ cmdline_proc_t parse_cmdline( int argc , char ** argv , int * param_from_command
 
       // -o : specify database for output
 	  
+      if (Helper::iequals(tok[0], "-d")) {
+#ifdef HAS_DUCKDB
+        if (i + 1 >= argc || !*argv[i+1] || argv[i+1][0] == '-')
+          Helper::halt("expecting a DuckDB filename after -d");
+        if (duckdb_output || !cmd_t::stout_file.empty() || cmd_t::plaintext_mode)
+          Helper::halt("specify a single output mode with -d");
+        duckdb_output = true;
+        cmd_t::stout_file = argv[++i];
+        continue;
+#else
+        Helper::halt("-d requires DuckDB support, which was not compiled in (rebuild Luna with DUCKDB=1)");
+#endif
+      }
+#ifdef HAS_DUCKDB
+      if (Helper::iequals(tok[0], "--append")) {
+        duckdb_append = true;
+        continue;
+      }
+      if (duckdb_output && is_output_option(tok[0]))
+        Helper::halt("specify a single output mode with -d");
+#endif
       if ( Helper::iequals( tok[0] , "-o" ) || Helper::iequals( tok[0] , "-a" ) )
 	{
 	  // next arg will be DB
@@ -2146,7 +2239,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       hdstats_pc::fit( param );
       writer.unlevel( "_HDSTATS-PC" );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
   if ( cmdline == PROC_HDSTATS_PC_DESC )
@@ -2159,7 +2252,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
           for ( int i = 2; i < argc; ++i )
             {
               const std::string arg = argv[i];
-              if ( arg == "-o" || arg == "-a" || arg == "-t" )
+              if ( is_output_option(arg) )
                 { ++i; continue; }
               if ( !arg.empty() && ( arg[0] == '@' ||
                                      ( arg.size() > 1 && arg[0] == '-' && arg[1] == '-' ) ) )
@@ -2172,7 +2265,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       const std::string model = param.requires( "model" );
       const double min_loading = param.has( "min-loading" ) ? param.requires_dbl( "min-loading" ) : 0.10;
       hdstats_pc::describe( model, std::cout, min_loading );
-      std::exit(0);
+      return;
     }
 
   if ( cmdline == PROC_HDSTATS_DESC )
@@ -2183,7 +2276,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
           for ( int i = 2; i < argc; ++i )
             {
               const std::string arg = argv[i];
-              if ( arg == "-o" || arg == "-a" || arg == "-t" ) { ++i; continue; }
+              if ( is_output_option(arg) ) { ++i; continue; }
               if ( !arg.empty() && ( arg[0] == '@' || ( arg.size() > 1 && arg[0] == '-' && arg[1] == '-' ) ) ) continue;
               param.parse( arg );
             }
@@ -2193,7 +2286,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       const std::string descriptor = param.has( "desc" ) ? Helper::expand( param.value( "desc" ) ) : "";
       const double min_loading = param.has( "min-loading" ) ? param.requires_dbl( "min-loading" ) : 0.10;
       hdstats_pc::describe( Helper::expand(model), std::cout, min_loading, descriptor );
-      std::exit(0);
+      return;
     }
 
   // HYPNO-PC level 2: fit a reference PCA from conventional HYPNO feature
@@ -2212,7 +2305,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       hypno_pc::fit( param );
       writer.unlevel( "_HYPNO-PC" );
       writer.commit();
-      std::exit(0);
+      return;
     }
   
   //
@@ -2238,7 +2331,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
     
       writer.unlevel( "_" + clab );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
 
@@ -2263,7 +2356,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       
       writer.unlevel( "_GPA" );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
   //
@@ -2281,7 +2374,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       ged_group_t::run_group( param );
       writer.unlevel( "_GED" );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
   //
@@ -2306,7 +2399,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 #else
       Helper::halt( "LGBM support not compiled in" );
 #endif
-      std::exit(0);
+      return;
     }
 
   //
@@ -2331,7 +2424,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       Helper::halt( "LGBM support not compiled in" );
 #endif
 
-      std::exit(0);
+      return;
     }
 
 
@@ -2357,7 +2450,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 #else
       Helper::halt( "LGBM support not compiled in" );
 #endif
-      std::exit(0);
+      return;
     }
 
   //
@@ -2374,7 +2467,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
           for (int i = 2; i < argc; ++i)
             {
               const std::string arg = argv[i];
-              if ( arg == "-o" || arg == "-a" || arg == "-t" )
+              if ( is_output_option(arg) )
                 { ++i; continue; }
               if ( !arg.empty() && ( arg[0] == '@' ||
                                      ( arg.size() > 1 && arg[0] == '-' && arg[1] == '-' ) ) )
@@ -2391,7 +2484,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       pops_calibration::run( param );
       writer.unlevel( "_CALIBRATION" );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
   //
@@ -2416,7 +2509,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 #else
       Helper::halt( "LGBM support not compiled in" );
 #endif
-      std::exit(0);
+      return;
     }
 
   
@@ -2441,7 +2534,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 #else
       Helper::halt( "LGBM support not compiled in" );
 #endif
-      std::exit(0);
+      return;
     }
   
 
@@ -2467,7 +2560,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 #else
       Helper::halt( "LGBM support not compiled in" );
 #endif
-      std::exit(0);
+      return;
     }
 
 
@@ -2492,7 +2585,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 #else
       Helper::halt( "LGBM support not compiled in" );
 #endif
-      std::exit(0);
+      return;
     }
 
   //
@@ -2512,7 +2605,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 
       writer.unlevel( "_FFT" );
       writer.commit();
-      std::exit(0);      
+      return;
     }
 
 
@@ -2533,7 +2626,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 
       writer.unlevel( "_VALIDATE" );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
 
@@ -2554,7 +2647,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 
       writer.unlevel( "_WAVEFORMS" );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
   
@@ -2575,7 +2668,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 
       writer.unlevel( "_OVERLAP" );
       writer.commit();
-      std::exit(0);      
+      return;
     }
 
   //
@@ -2595,7 +2688,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 
       writer.unlevel( "_OTSU" );
       writer.commit();
-      std::exit(0);      
+      return;
     }
 
   //
@@ -2615,7 +2708,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 
       writer.unlevel( "_CPT" );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
 
@@ -2637,7 +2730,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       
       writer.unlevel( "_KMER" );
       writer.commit();
-      std::exit(0);
+      return;
     }
   
 
@@ -2658,7 +2751,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       
       writer.unlevel( "_LABEL-MAPS" );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
 
@@ -2680,7 +2773,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
                   
       writer.unlevel( "_CORREL-MAPS" );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
 
@@ -2701,7 +2794,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
 	      
       writer.unlevel( "_CMP-MAPS" );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
 
@@ -2725,7 +2818,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       
       writer.unlevel( "_" + design_label );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
 
@@ -2740,7 +2833,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       proc_cwt_design_cmdline();
 
       writer.commit();
-      std::exit(0);
+      return;
 
     }
 
@@ -2749,7 +2842,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
     {
       // expects input from std::cin
       proc_copy_suds_cmdline();
-      std::exit(0);
+      return;
     }
 
 
@@ -2757,7 +2850,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
     {
       // expects input from std::cin
       proc_combine_suds_cmdline();
-      std::exit(0);
+      return;
     }
   
   
@@ -2767,7 +2860,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
     {
       global.api();
       proc_eval_tester( false ); 
-      std::exit(0);       
+      return;
     }
   
 
@@ -2778,7 +2871,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       // as above, but w/ verbose output
       global.api();
       proc_eval_tester( true ); 
-      std::exit(0);       
+      return;
     }
 
 
@@ -2794,7 +2887,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       pdc_t pdc;
       pdc.external( param );
       writer.commit();
-      std::exit(0);
+      return;
     }
     
 
@@ -2804,7 +2897,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
     {
       global.api();
       annot_t::dumpxml( argv[2] , cmdline == PROC_XML2 );
-      std::exit(0);
+      return;
     }
 
   
@@ -2817,7 +2910,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       for (int i=2;i<argc;i++)
 	tok.push_back( argv[i] );
       Helper::build_sample_list( tok );
-      std::exit(0);
+      return;
     }
 
    
@@ -2830,7 +2923,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       for (int i=2;i<argc;i++)
 	tok.push_back( argv[i] );
       Helper::repath_SL( tok );
-      std::exit(0);
+      return;
     }
 
 
@@ -2842,7 +2935,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       for (int i=2;i<argc;i++)
 	tok.push_back( argv[i] );
       Helper::merge_EDFs( tok );
-      std::exit(0);
+      return;
     }
 
   
@@ -2856,7 +2949,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       for (int i=2;i<argc;i++)
 	tok.push_back( argv[i] );
       Helper::bind_EDFs( tok );
-      std::exit(0);
+      return;
     }
 
   // --pdlib
@@ -2870,7 +2963,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       writer.id( "." , "." );
       pdc_t::construct_pdlib( param );
       writer.commit();
-      std::exit(0);
+      return;
     }
 
   //
@@ -2885,7 +2978,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       for (int i=2;i<argc;i++)
 	tok.push_back( argv[i] );
       Helper::channel_annot_mapper( tok , false ) ;
-      std::exit(0);
+      return;
     }
   
   //
@@ -2901,7 +2994,7 @@ void exec_cmdline_procs( cmdline_proc_t & cmdline , int argc , char ** argv, int
       for (int i=2;i<argc;i++)
 	tok.push_back( argv[i] );
       Helper::channel_annot_mapper( tok , true ) ;
-      std::exit(0);
+      return;
     }
   
 }
