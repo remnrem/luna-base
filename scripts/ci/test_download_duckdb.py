@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import tarfile
 import tempfile
@@ -32,8 +33,36 @@ class DownloadTest(unittest.TestCase):
                  patch.object(sdk.platform, "machine", return_value=arch), \
                  patch.object(sdk.platform, "libc_ver", return_value=(libc, "")), \
                  patch.object(sdk.Path, "glob", return_value=[]), \
-                 patch.dict(sdk.os.environ, {"MSYSTEM": "MINGW64"}):
+                 patch.dict(sdk.os.environ, {"MSYSTEM": "UCRT64"}):
                 self.assertEqual(sdk.native_platform(), expected)
+
+    def test_windows_requires_ucrt64(self):
+        for environment in ("MINGW64", "MINGW32", "CLANG64", "MSYS", ""):
+            with self.subTest(environment=environment), \
+                 patch.object(sdk.platform, "system", return_value="Windows"), \
+                 patch.object(sdk.platform, "machine", return_value="AMD64"), \
+                 patch.dict(sdk.os.environ, {"MSYSTEM": environment}):
+                with self.assertRaisesRegex(RuntimeError, "UCRT64"):
+                    sdk.native_platform()
+
+    def test_sdk_from_old_windows_environment_is_not_reused(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            names = {"include/" + name for name in sdk.HEADERS} | {
+                "include/luna_duckdb_static.h", "lib/libduckdb_static.a", "DUCKDB-LICENSE"}
+            hashes = {}
+            for name in names:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"fixture")
+                hashes[name] = sdk.digest(path)
+            (root / "manifest.json").write_text(json.dumps({
+                "version": sdk.VERSION, "platform": "windows-mingw", "msystem": "MINGW64", "sha256": hashes,
+            }), encoding="utf-8")
+            with patch.object(sdk, "native_platform", return_value="windows-mingw"), \
+                 patch.dict(sdk.os.environ, {"MSYSTEM": "UCRT64"}):
+                with self.assertRaisesRegex(RuntimeError, "Refusing to overwrite"):
+                    sdk.install(argparse.Namespace(prefix=root, cache_dir=None, with_shared=False))
 
     def test_verified_cache_is_reused(self):
         with tempfile.TemporaryDirectory() as temp:

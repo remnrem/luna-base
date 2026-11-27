@@ -29,6 +29,11 @@ runs:
         compiler = subprocess.check_output(['g++', '--version'])
         identity = compiler + subprocess.check_output(['g++', '-dumpmachine'])
         identity += platform.platform().encode()
+        if os.name == 'nt':
+            if os.environ.get('MSYSTEM') != 'UCRT64':
+                raise RuntimeError('Windows CI requires MSYS2 UCRT64')
+            identity += os.environ['MSYSTEM'].encode()
+            identity += os.environ.get('MINGW_PREFIX', '').encode()
         name = {'Windows': 'duckdb.dll', 'Darwin': 'libduckdb.dylib', 'Linux': 'libduckdb.so'}[platform.system()]
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as f:
             f.write('key=' + hashlib.sha256(identity).hexdigest()[:20] + '\n')

@@ -89,6 +89,8 @@ def build(args):
     manifest = {"version": VERSION, "commit": COMMIT, "extensions": EXTENSIONS,
                 "pic": True, "platform": platform.platform(),
                 "compiler": subprocess.check_output([os.environ.get("CXX", "c++"), "--version"], encoding="utf-8", errors="replace")}
+    if os.name == "nt":
+        manifest.update(msystem=os.environ.get("MSYSTEM"), mingw_prefix=os.environ.get("MINGW_PREFIX"))
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"Staged static DuckDB {VERSION}: {output}")
 

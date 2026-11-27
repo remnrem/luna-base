@@ -58,8 +58,8 @@ def native_platform():
         musl = platform.libc_ver()[0] == "musl" or bool(list(Path("/lib").glob("ld-musl-*.so.1")))
         return "linux-" + arch + ("-musl" if musl else "")
     if system == "Windows" or system.startswith(("MINGW", "MSYS")):
-        if arch != "amd64" or os.environ.get("MSYSTEM") != "MINGW64":
-            raise RuntimeError("Windows requires the x86-64 MSYS2 MINGW64 shell; this SDK is not for MSVC")
+        if arch != "amd64" or os.environ.get("MSYSTEM") != "UCRT64":
+            raise RuntimeError("Windows requires the x86-64 MSYS2 UCRT64 shell; this SDK is not for MSVC")
         return "windows-mingw"
     raise RuntimeError(f"Unsupported operating system: {system}")
 
@@ -154,6 +154,7 @@ def install(args):
             required = {"include/" + name for name in HEADERS} | {"include/luna_duckdb_static.h", "lib/libduckdb_static.a", "DUCKDB-LICENSE"}
             if (manifest.get("version") == VERSION and manifest.get("platform") == target
                     and isinstance(files, dict) and required.issubset(files) and all((prefix / name).is_file() and digest(prefix / name) == value for name, value in files.items())
+                    and (target != "windows-mingw" or manifest.get("msystem") == os.environ.get("MSYSTEM"))
                     and (not args.with_shared or manifest.get("with_shared"))):
                 print(f"Verified SDK already installed: {prefix}")
                 return prefix
@@ -207,7 +208,7 @@ def install(args):
         (sdk / "manifest.json").write_text(json.dumps({
             "version": VERSION, "commit": COMMIT, "platform": target, "extensions": EXTENSIONS,
             "source": f"{RELEASE}/{filename}", "source_sha256": STATIC[target],
-            "with_shared": args.with_shared, "sha256": files,
+            "with_shared": args.with_shared, "sha256": files, "msystem": os.environ.get("MSYSTEM"),
             "third_party_licenses": f"https://github.com/duckdb/duckdb/tree/{COMMIT}/third_party",
         }, indent=2) + "\n", encoding="utf-8")
         sdk.rename(prefix)

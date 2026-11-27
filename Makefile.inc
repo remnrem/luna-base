@@ -158,9 +158,11 @@ LDFLAGS = -L. -L..
 # Debug alternative:
 # LDFLAGS = -fsanitize=address,undefined -L. -L..
 
-# Windows assumptions currently target a mingw64-style environment.
+# MSYS2 exports MINGW_PREFIX for its active toolchain. Default to UCRT64
+# when invoking a Windows build without that environment variable.
 ifeq ($(ARCH),WINDOWS)
-LDFLAGS += -L/usr/local/lib -L/mingw64/lib/ -L/mingw64/bin/ -static \
+MINGW_PREFIX ?= /ucrt64
+LDFLAGS += -L$(MINGW_PREFIX)/lib/ -L$(MINGW_PREFIX)/bin/ -static \
            -static-libgcc -static-libstdc++
 else
 LDFLAGS += -L/usr/local/lib
@@ -169,7 +171,7 @@ endif
 ifeq ($(LGBM),1)
 ifdef LGBM_PATH
 ifeq ($(ARCH),WINDOWS)
-DEP_LIB += -L/mingw64/bin/
+DEP_LIB += -L$(MINGW_PREFIX)/bin/
 else
 ifeq ($(LGBM_LINK),shared)
 DEP_LIB += -Wl,-rpath,$(LGBM_PATH)/lib/ -Wl,-rpath,$(LGBM_PATH)/

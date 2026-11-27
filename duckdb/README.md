@@ -21,7 +21,7 @@ make -j8 DUCKDB=1 DUCKDB_PATH=/tmp/duckdb-2.0.1 luna destrat
 The archive must include the extensions you need; the build script below
 bundles core functions, Parquet and JSON, with an explicit extension registry.
 There is no fallback to shared linking if the static archive is missing.
-For MinGW builds use `ARCH=WINDOWS` and a MinGW-built SDK, not MSVC libraries.
+For Windows builds use MSYS2 UCRT64, `ARCH=WINDOWS`, and a matching GCC/MinGW-w64 SDK, not MSVC libraries. `MINGW_PREFIX` follows the active MSYS2 environment (default `/ucrt64`).
 
 For an existing shared-library SDK, opt in explicitly:
 
@@ -56,8 +56,9 @@ before installing. A matching verified SDK is reused; unrelated or incomplete
 existing directories are never overwritten.
 
 Supported targets are macOS Intel/ARM64, Linux x86-64/ARM64 (glibc or musl), and
-Windows x86-64 in MSYS2 MINGW64. The Windows archive is not compatible with
-MSVC. Use the matching `ARCH` and Make tool for your platform. Official prebuilt
+Windows x86-64 in MSYS2 UCRT64. DuckDB's upstream archive is still named
+`windows-mingw`; that is an asset name, not a request to use the deprecated
+MINGW64 environment. The Windows archive is not compatible with MSVC. Use the matching `ARCH` and Make tool for your platform. Official prebuilt
 Linux libraries still require a compatible system C/C++ runtime.
 
 `--with-shared` additionally downloads the macOS/Linux shared library for the
@@ -80,7 +81,7 @@ python3 scripts/ci/build_duckdb.py --prefix .ci-deps/duckdb --source .ci-deps/du
 make DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb luna destrat destrat-sqlite
 ```
 
-On macOS add `ARCH=MAC` to Make. With MSYS2/MinGW use
+On macOS add `ARCH=MAC` to Make. With MSYS2 UCRT64 use
 `--generator "MinGW Makefiles"` for the dependency, then `mingw32-make
 ARCH=WINDOWS ...` for Luna. The dependency build is PIC-enabled for future
 Python-extension reuse; it does not require Luna's unrelated `STATIC=1` option.
@@ -91,7 +92,7 @@ The engine has no external-extension loader or HTTP client: core functions,
 Parquet and JSON work offline, without extension downloads.
 
 GitHub CI builds and tests on Linux x86-64, macOS Intel/ARM64 and Windows
-MinGW64. SDK caches are keyed by platform, architecture, compiler identity and
+UCRT64. SDK caches are keyed by platform, architecture, compiler identity and
 dependency-script revision. Development pushes to `luna-2.0-dev` run CI too.
 Every job verifies the embedded version, checks the executables have no
 DuckDB shared-library dependency, runs parity tests, packages both readers,
@@ -100,7 +101,14 @@ macOS and Linux CI explicitly link static LightGBM built with OpenMP disabled
 and PIC enabled. They also build static FFTW. This removes the LightGBM,
 OpenMP and FFTW runtime-library requirements from those downloads; the normal
 OS C/C++ runtime remains required. Native cache keys distinguish this setup
-from older shared-library builds. Windows retains its existing DLL packaging.
+from older shared-library builds. Windows retains its existing DLL packaging,
+but now builds with MSYS2 UCRT64 and `mingw-w64-ucrt-x86_64-*` packages.
+LightGBM/FFTW caches live in `.ci-deps/windows-native` and include UCRT64 and
+compiler identity in their keys; DuckDB's cache also records the MSYS2 environment.
+The first migrated CI run rebuilds the dependencies rather than reusing MINGW64
+artifacts. The CMake generator is still named `MinGW Makefiles`, as required by
+the GCC toolchain; this does not select the deprecated MINGW64 environment.
+This Windows GCC migration does not change luna-api's separate MSVC build.
 
 For local macOS/Linux builds, `LGBM_LINK=shared` remains the default so existing
 Homebrew installations work. To use a static LightGBM SDK, pass
