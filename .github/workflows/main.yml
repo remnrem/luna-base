@@ -312,71 +312,44 @@ jobs:
   linux-build:
     needs: release-meta
     runs-on: ubuntu-latest
+    env:
+      LINUX_BUILD_IMAGE: quay.io/pypa/manylinux_2_28_x86_64:latest
     steps:
       - uses: actions/checkout@v5
-      - name: Cache native deps
+      # Keep Node-based actions on the host; compile and test only in the old-glibc container.
+      - name: Resolve Linux build image
+        id: linux-image
+        run: |
+          docker pull "$LINUX_BUILD_IMAGE"
+          image=$(docker image inspect --format '{{index .RepoDigests 0}}' "$LINUX_BUILD_IMAGE")
+          identity=$(docker image inspect --format '{{.Id}}' "$LINUX_BUILD_IMAGE")
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "key=${identity#sha256:}" >> "$GITHUB_OUTPUT"
+      - name: Cache baseline-compatible native dependencies
         id: cache-native
         uses: actions/cache@v5
         with:
-          path: |
-            ~/LightGBM
-            ~/fftw-${{ env.FFTW_VERSION }}
-          key: native-deps-${{ runner.os }}-${{ runner.arch }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-static-omp-off-v2
-      - name: Native deps cache status
+          path: .ci-deps/linux-manylinux228
+          key: linux-manylinux228-v1-${{ runner.arch }}-${{ steps.linux-image.outputs.key }}-fftw-${{ env.FFTW_VERSION }}-lgbm-${{ env.LIGHTGBM_REF }}-${{ hashFiles('scripts/ci/build_linux_portable.sh', 'scripts/ci/build_duckdb.py') }}
+      - name: Build and test portable Linux binaries
+        env:
+          LINUX_BUILD_IMAGE: ${{ steps.linux-image.outputs.image }}
+          LUNA_PACKAGE_VERSION: ${{ needs.release-meta.outputs.version || 'dev' }}
         run: |
-          echo "NATIVE_DEPS_MODE=${NATIVE_DEPS_MODE}"
-          echo "cache-hit=${{ steps.cache-native.outputs.cache-hit }}"
-      - name: Install fftw
-        if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
-        run: |
-          cd ${HOME}
-          rm -rf fftw-${FFTW_VERSION}
-          rm -rf fftw-${FFTW_VERSION}.tar.gz
-          wget http://www.fftw.org/fftw-${FFTW_VERSION}.tar.gz
-          tar -xzvf fftw-${FFTW_VERSION}.tar.gz
-          cd fftw-${FFTW_VERSION}
-          ./configure --disable-shared --enable-static --with-pic --prefix=${HOME}/fftw-${FFTW_VERSION}/
-          make -j$(nproc)
-          make install
-      - name: Install LightGBM
-        if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
-        run: |
-          cd ${HOME}
-          rm -rf LightGBM
-          git clone --recursive --branch ${LIGHTGBM_REF} --depth 1 https://github.com/microsoft/LightGBM
-          cd LightGBM
-          mkdir build
-          cd build
-          cmake -DBUILD_STATIC_LIB=ON -DUSE_OPENMP=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_BUILD_TYPE=Release ..
-          make -j$(nproc)
-          cd ${GITHUB_WORKSPACE}
-      - name: Build pinned DuckDB
-        id: duckdb
-        uses: ./.github/actions/duckdb
-        with:
-          rebuild: ${{ env.NATIVE_DEPS_MODE == 'all' }}
-      - name: make
-        run: |
-          make -j$(nproc) DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_LINK=static LGBM_PATH=${HOME}/LightGBM
-      - name: Verify DuckDB and reader parity
-        run: |
-          ./luna __LUNA_TESTS__ lgbm verbose
-          python3 scripts/ci/check_duckdb.py --static-lightgbm --library "${{ steps.duckdb.outputs.library }}"
-      - name: Package and verify Linux binaries
-        run: |
-          v="${{ needs.release-meta.outputs.version }}"
-          v="${v:-dev}"
-          mkdir "luna-${v}"
-          cp luna destrat destrat-sqlite behead "luna-${v}/"
-          cp .ci-deps/duckdb/DUCKDB-LICENSE .ci-deps/duckdb/DUCKDB-THIRD-PARTY-NOTICES.txt .ci-deps/duckdb/manifest.json "luna-${v}/"
-          cp "${HOME}/LightGBM/LICENSE" "luna-${v}/LIGHTGBM-LICENSE"
-          cp "${HOME}/fftw-${FFTW_VERSION}/COPYING" "luna-${v}/FFTW-LICENSE"
-          tar czf linux-luna.tar.gz "luna-${v}/"
-          python3 scripts/ci/check_duckdb.py --static-lightgbm --archive linux-luna.tar.gz --library "${{ steps.duckdb.outputs.library }}"
-      - uses: actions/upload-artifact@v6
+          echo "Native deps cache hit: ${{ steps.cache-native.outputs.cache-hit }}"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:/work" --workdir /work \
+            --env HOME=/tmp/luna-build-home --env CCACHE_DISABLE=1 \
+            --env FFTW_VERSION --env LIGHTGBM_REF --env NATIVE_DEPS_MODE \
+            --env PYTHONIOENCODING --env PYTHONUTF8 \
+            --env LINUX_BUILD_IMAGE --env LUNA_PACKAGE_VERSION \
+            "$LINUX_BUILD_IMAGE" bash scripts/ci/build_linux_portable.sh
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-luna.tar.gz
           path: linux-luna.tar.gz
+          archive: false
+          if-no-files-found: error
   release:
     runs-on: ubuntu-latest
     needs: [release-meta, linux-build, macos-build, windows-build, macos-arm64-build]

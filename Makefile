@@ -160,12 +160,12 @@ endif
 
 # Changing LightGBM link mode/path must relink even when objects are unchanged.
 ifneq ($(ARCH),WINDOWS)
-LGBM_LINK_KEY := $(shell printf '%s\n' '$(LGBM)|$(LGBM_LINK)|$(LGBM_PATH)|$(LIBOMP)' | cksum | cut -d ' ' -f 1)
+LGBM_LINK_KEY := $(shell printf '%s\n' '$(LGBM)|$(LGBM_LINK)|$(LGBM_PATH)|$(LIBOMP)|$(PORTABLE_LINUX)' | cksum | cut -d ' ' -f 1)
 LGBM_LINK_STAMP = lgbm/.link-mode-$(LGBM_LINK_KEY)
 $(LGBM_LINK_STAMP):
 	$(RM) lgbm/.link-mode-*
 	touch $@
-luna $(SHARED_LIB) destrat destrat-duckdb destrat-sqlite tests/native-result-io-test: $(LGBM_LINK_STAMP)
+luna $(SHARED_LIB) destrat destrat-duckdb destrat-sqlite tests/native-result-io-test behead fixrows: $(LGBM_LINK_STAMP)
 ifeq ($(LGBM),1)
 ifeq ($(LGBM_LINK),static)
 luna $(SHARED_LIB) destrat destrat-duckdb destrat-sqlite tests/native-result-io-test: $(LGBM_STATIC_ARCHIVE)
@@ -246,13 +246,13 @@ tocol: utils/tocol.o
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 fixrows: utils/fixrows.o
-	$(CXX) -o $@ $^ $(LDFLAGS)
+	$(CXX) -o $@ utils/fixrows.o $(LDFLAGS)
 
 cgi-mapper: utils/cgi-mapper.o libluna.a
 	$(CXX) -o $@ $^ $(LDFLAGS) $(DEP_LIB)
 
 behead: utils/behead.o
-	$(CXX) -o $@ $^ $(LDFLAGS)
+	$(CXX) -o $@ utils/behead.o $(LDFLAGS)
 
 dmerge: utils/merge.o utils/merge-helpers.o
 	$(CXX) -o $@ $^

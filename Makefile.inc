@@ -27,6 +27,8 @@ LGBM ?= 1
 LGBM_PATH ?= /opt/homebrew
 # CI opts into an explicit archive; shared remains convenient for Homebrew builds.
 LGBM_LINK ?= shared
+# Distribution-only Linux mode; glibc remains dynamic.
+PORTABLE_LINUX ?= 0
 
 # LightGBM has no public version query. Source trees provide VERSION.txt;
 # packaged installs can supply LGBM_VERSION explicitly for `luna -v`.
@@ -60,7 +62,9 @@ ifdef FFTW
 DEP_INCLUDES += -I$(FFTW)/include
 DEP_LIB += -L$(FFTW)/lib
 ifeq ($(ARCH),LINUX)
+ifneq ($(PORTABLE_LINUX),1)
 DEP_LIB += -Wl,-rpath,$(FFTW)/lib
+endif
 endif
 endif
 
@@ -166,6 +170,11 @@ LDFLAGS += -L$(MINGW_PREFIX)/lib/ -L$(MINGW_PREFIX)/bin/ -static \
            -static-libgcc -static-libstdc++
 else
 LDFLAGS += -L/usr/local/lib
+endif
+ifeq ($(ARCH),LINUX)
+ifeq ($(PORTABLE_LINUX),1)
+LDFLAGS += -static-libgcc -static-libstdc++
+endif
 endif
 
 ifeq ($(LGBM),1)

@@ -43,8 +43,11 @@ def check_static_lightgbm(binary_dir):
             raise RuntimeError(f"Unexpected shared native dependency in {binary}: {dependencies}")
 
 
-def check(binary_dir, library, home=None, static_lightgbm=False):
+def check(binary_dir, library, home=None, static_lightgbm=False, linux_baseline=False):
     binary_dir = Path(binary_dir).resolve()
+    if linux_baseline:
+        from check_linux_abi import check as check_linux_abi
+        check_linux_abi(binary_dir)
     if static_lightgbm:
         check_static_lightgbm(binary_dir)
     suffix = ".exe" if os.name == "nt" else ""
@@ -71,6 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--bin-dir", default=".")
     parser.add_argument("--library", required=True)
     parser.add_argument("--static-lightgbm", action="store_true", help="Require static LightGBM/FFTW and no OpenMP runtime")
+    parser.add_argument("--linux-baseline", action="store_true", help="Require glibc <= 2.28 and static GCC/C++ runtimes")
     parser.add_argument("--archive", help="Extract and test a freshly packaged release")
     args = parser.parse_args()
     if args.archive:
@@ -89,6 +93,6 @@ if __name__ == "__main__":
                 raise RuntimeError("Expected exactly one Luna binary in release")
             home = Path(tmp) / "home"
             home.mkdir()
-            check(binaries[0].parent, args.library, str(home), args.static_lightgbm)
+            check(binaries[0].parent, args.library, str(home), args.static_lightgbm, args.linux_baseline)
     else:
-        check(args.bin_dir, args.library, static_lightgbm=args.static_lightgbm)
+        check(args.bin_dir, args.library, static_lightgbm=args.static_lightgbm, linux_baseline=args.linux_baseline)

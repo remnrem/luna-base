@@ -121,6 +121,32 @@ Link-mode changes force relinking. CI builds the archive with
 `check_duckdb.py --static-lightgbm` rejects unexpected shared LightGBM/OpenMP
 or FFTW dependencies before testing binaries or extracted archives.
 
+### Portable Linux downloads
+
+Building from source on Linux is still recommended, particularly on managed HPC
+systems. The downloadable x86-64 binaries are built entirely inside
+`quay.io/pypa/manylinux_2_28_x86_64`, including DuckDB, LightGBM and FFTW.
+The Ubuntu GitHub runner only hosts Docker and the checkout/cache/upload actions.
+The container image is resolved to an immutable digest for each run, recorded
+in `LINUX-BUILD.json`, and included in the dependency cache identity. Old
+Ubuntu-built dependency caches are not reused.
+
+`PORTABLE_LINUX=1` statically links the GCC/C++ runtimes while leaving glibc
+dynamic and omitting build-directory FFTW runtime paths. It does not, by
+itself, lower the glibc baseline: all compilation must occur in the baseline
+container. Source dependencies and Luna use generic x86-64 compiler flags.
+Before packaging and after extraction, `check_linux_abi.py` verifies every
+executable requires glibc no newer than 2.28, has no external C++ runtime
+requirements, no build-directory runtime paths, and only allowed system shared
+libraries. Functional parity tests also run in that container. This targets
+glibc-based Linux distributions with glibc 2.28 or newer; it is not an Alpine/
+musl or Linux ARM build. End users do not need Docker or Apptainer.
+
+The Linux artifact uses `actions/upload-artifact@v7` with `archive: false`, so
+new browser downloads are the tarball itself, rather than `tar.gz.zip`. Older
+artifacts retain their ZIP wrapper. Existing release publication continues to
+use `actions/download-artifact@v8`, which supports the direct-file format.
+
 macOS archives bundle non-system dylibs (including shared LightGBM and OpenMP
 when needed) in `lib/`, rewrite references relative to each binary, and ad-hoc
 sign the edited Mach-O files. Archive checks reject external runtime dependencies
