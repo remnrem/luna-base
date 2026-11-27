@@ -26,12 +26,13 @@ import sys
 import tempfile
 from collections import Counter
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(os.environ.get("LUNA_TEST_BIN_DIR", Path(__file__).resolve().parents[1])).resolve()
 COMMANDS = "HEADERS & STATS epoch & ANNOTS & HYPNO"
 
 
 def run(cwd, exe, *args, ok=True):
-    proc = subprocess.run([ROOT / exe, *map(str, args)], cwd=cwd,
+    binary = ROOT / (exe + (".exe" if os.name == "nt" else ""))
+    proc = subprocess.run([binary, *map(str, args)], cwd=cwd,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if ok and proc.returncode:
         raise RuntimeError(f"{exe} {args}: {proc.stderr.decode()[-400:]}")

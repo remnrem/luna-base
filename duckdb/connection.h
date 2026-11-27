@@ -3,6 +3,11 @@
 #include <duckdb.h>
 #include <stdexcept>
 #include <string>
+#include <mutex>
+
+#ifdef LUNA_DUCKDB_STATIC_EXTENSIONS
+extern "C" int duckdb_register_static_extensions(void);
+#endif
 
 namespace luna_duck {
 
@@ -28,6 +33,13 @@ public:
 
   void open(const char *path, bool readonly = false) {
     close();
+#ifdef LUNA_DUCKDB_STATIC_EXTENSIONS
+    static std::once_flag extensions;
+    std::call_once(extensions, [] {
+      if (duckdb_register_static_extensions() != 0)
+        throw std::runtime_error("registering built-in DuckDB extensions");
+    });
+#endif
     duckdb_config cfg = nullptr;
     check(duckdb_create_config(&cfg), "creating DuckDB configuration");
     char *message = nullptr;

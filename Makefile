@@ -100,32 +100,65 @@ DEPS := $(OBJS:.o=.d)
 DUCKDB ?= 0
 # The default reader always supports DuckDB; DUCKDB controls Luna's writer.
 DUCKDB_PATH ?= /usr/local
+DUCKDB_LINK ?= static
 DUCK_INCLUDES = -I"$(DUCKDB_PATH)" -I"$(DUCKDB_PATH)/include"
+DUCK_LIB_DIRS = $(wildcard $(DUCKDB_PATH) $(DUCKDB_PATH)/lib $(DUCKDB_PATH)/bin)
+ifeq ($(DUCKDB_LINK),static)
+DUCK_ARCHIVE = $(firstword $(wildcard $(DUCKDB_PATH)/lib/libduckdb_static.a $(DUCKDB_PATH)/libduckdb_static.a))
+# Leave a missing archive as a prerequisite so make fails rather than silently
+# falling back to a shared library. The legacy reader needs neither SDK.
+ifeq ($(strip $(DUCK_ARCHIVE)),)
+DUCK_ARCHIVE = $(DUCKDB_PATH)/lib/libduckdb_static.a
+endif
+DUCK_LIBS = "$(DUCK_ARCHIVE)"
+DUCK_DEFINES = -DDUCKDB_STATIC_BUILD
+ifneq ($(wildcard $(DUCKDB_PATH)/include/luna_duckdb_static.h),)
+DUCK_DEFINES += -DLUNA_DUCKDB_STATIC_EXTENSIONS
+endif
 ifeq ($(ARCH),WINDOWS)
-DUCK_LIB_DIRS = $(wildcard $(DUCKDB_PATH) $(DUCKDB_PATH)/bin)
+DUCK_LIBS += -lws2_32 -lrstrtmgr -pthread
+else
+DUCK_LIBS += -pthread
+ifeq ($(ARCH),LINUX)
+DUCK_LIBS += -ldl
+endif
+endif
+else ifeq ($(DUCKDB_LINK),shared)
+ifeq ($(ARCH),WINDOWS)
 DUCK_LIBS = $(foreach dir,$(DUCK_LIB_DIRS),-L"$(dir)") -l:duckdb.dll
 else
-DUCK_LIB_DIRS = $(wildcard $(DUCKDB_PATH) $(DUCKDB_PATH)/lib)
 DUCK_LIBS = $(foreach dir,$(DUCK_LIB_DIRS),-L"$(dir)" -Wl,-rpath,"$(dir)") -lduckdb
 endif
-duckdb/%.o: CPPFLAGS += $(DUCK_INCLUDES)
+else
+$(error DUCKDB_LINK must be static or shared)
+endif
+duckdb/%.o: CPPFLAGS += $(DUCK_INCLUDES) $(DUCK_DEFINES)
 ifeq ($(DUCKDB),1)
 DUCK_WRITER = duckdb/writer.o duckdb/catalog.o
-main.o: CPPFLAGS += -DHAS_DUCKDB $(DUCK_INCLUDES)
+main.o: CPPFLAGS += -DHAS_DUCKDB $(DUCK_INCLUDES) $(DUCK_DEFINES)
 endif
 
 all: $(TARGETS)
 
-# Only main.o changes with the feature flag. Force its rebuild on a mode switch.
-DUCK_MODE_STAMP = duckdb/.build-mode-$(DUCKDB)
+# Rebuild entry points when the DuckDB feature, SDK or link mode changes.
+DUCK_CONFIG_KEY := $(shell printf '%s\n' '$(DUCKDB)|$(DUCKDB_LINK)|$(DUCKDB_PATH)|$(DUCK_DEFINES)' | cksum | cut -d ' ' -f 1)
+DUCK_MODE_STAMP = duckdb/.build-mode-$(DUCK_CONFIG_KEY)
 $(DUCK_MODE_STAMP):
 	$(RM) duckdb/.build-mode-*
 	touch $@
 main.o: $(DUCK_MODE_STAMP)
+DUCK_READER_OBJS = duckdb/reader.o duckdb/reader_source.o duckdb/reader_sqlite.o duckdb/reader_typed.o duckdb/catalog.o
+$(DUCK_READER_OBJS) duckdb/writer.o: $(DUCK_MODE_STAMP)
+ifeq ($(DUCKDB_LINK),static)
+destrat destrat-duckdb: $(DUCK_ARCHIVE)
+ifeq ($(DUCKDB),1)
+luna: $(DUCK_ARCHIVE)
+endif
+endif
 
 # Keep the old DuckDB reader name available for existing scripts.
-destrat destrat-duckdb: duckdb/reader.o duckdb/reader_source.o duckdb/reader_sqlite.o duckdb/reader_typed.o duckdb/catalog.o libluna.a
-	$(CXX) -o $@ $^ $(DEP_LIB) $(LDFLAGS) $(DUCK_LIBS)
+destrat destrat-duckdb: $(DUCK_READER_OBJS) libluna.a
+	$(CXX) -o $@ $(DUCK_READER_OBJS) libluna.a $(DEP_LIB) $(LDFLAGS) $(DUCK_LIBS)
 
 libluna: libluna.a $(SHARED_LIB)
 
@@ -141,7 +174,7 @@ libluna: libluna.a $(SHARED_LIB)
 ##############################################################################
 
 luna: main.o $(OBJS) $(DUCK_WRITER)
-	$(CXX) -o $@ $^ $(DEP_LIB) $(LDFLAGS) $(DUCK_LIBS)
+	$(CXX) -o $@ main.o $(OBJS) $(DUCK_WRITER) $(DEP_LIB) $(LDFLAGS) $(if $(filter 1,$(DUCKDB)),$(DUCK_LIBS))
 
 # Auto-generated header dependency files produced by `-MMD -MP`.
 -include main.d $(DEPS)

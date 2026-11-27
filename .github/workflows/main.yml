@@ -2,10 +2,10 @@ name: lunabase CI
 
 on:
   push:
-    branches: master
+    branches: [master, luna-2.0-dev]
     tags: v*
   pull_request:
-    branches: master
+    branches: [master, luna-2.0-dev]
     tags: v*
   workflow_dispatch:
     inputs:
@@ -77,7 +77,7 @@ jobs:
         with:
           msystem: MINGW64
           update: true
-          install: zip mingw-w64-x86_64-cmake git mingw-w64-x86_64-gcc mingw-w64-x86_64-make mingw-w64-x86_64-toolchain mingw-w64-x86_64-zlib mingw-w64-x86_64-fftw
+          install: zip mingw-w64-x86_64-cmake mingw-w64-x86_64-python git mingw-w64-x86_64-gcc mingw-w64-x86_64-make mingw-w64-x86_64-toolchain mingw-w64-x86_64-zlib mingw-w64-x86_64-fftw
       - name: Verify Windows toolchain
         run: |
           /mingw64/bin/cmake.exe --version
@@ -116,17 +116,25 @@ jobs:
           cd build
           /mingw64/bin/cmake.exe -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release ..
           mingw32-make.exe -j4
-      - uses: actions/checkout@v5
+      - name: Build pinned DuckDB
+        id: duckdb
+        uses: ./.github/actions/duckdb
+        with:
+          shell: msys2 {0}
+          rebuild: ${{ env.NATIVE_DEPS_MODE == 'all' }}
       - run: |
-          mingw32-make.exe -j${NUMBER_OF_PROCESSORS:-4} ARCH=WINDOWS LGBM=1 LGBM_PATH=${HOME}/LightGBM FFTW=${HOME}/native-deps/windows-fftw
-          if [[ "${{ needs.release-meta.outputs.enabled }}" == "true" ]]; then
-            v="${{ needs.release-meta.outputs.version }}"
-            mkdir luna-${v}
-            cp *.exe ${HOME}/native-deps/windows-fftw/bin/libfftw3-3.dll ${HOME}/LightGBM/lib_lightgbm.dll /mingw64/bin/libgcc_s_seh-1.dll /mingw64/bin/libgomp-1.dll /mingw64/bin/libwinpthread-1.dll luna-${v}/
-            zip -r win-luna.zip luna-${v}
-          fi
+          mingw32-make.exe -j${NUMBER_OF_PROCESSORS:-4} ARCH=WINDOWS DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb LGBM=1 LGBM_PATH=${HOME}/LightGBM FFTW=${HOME}/native-deps/windows-fftw
+          cp "${HOME}/native-deps/windows-fftw/bin/libfftw3-3.dll" .
+          cp "${HOME}/LightGBM/lib_lightgbm.dll" .
+          python3 scripts/ci/check_duckdb.py --library "${{ steps.duckdb.outputs.library }}"
+          v="${{ needs.release-meta.outputs.version }}"
+          v="${v:-dev}"
+          mkdir luna-${v}
+          cp luna.exe destrat.exe destrat-sqlite.exe behead.exe ${HOME}/native-deps/windows-fftw/bin/libfftw3-3.dll ${HOME}/LightGBM/lib_lightgbm.dll /mingw64/bin/libgcc_s_seh-1.dll /mingw64/bin/libstdc++-6.dll /mingw64/bin/libgomp-1.dll /mingw64/bin/libwinpthread-1.dll luna-${v}/
+          cp .ci-deps/duckdb/DUCKDB-LICENSE .ci-deps/duckdb/DUCKDB-THIRD-PARTY-NOTICES.txt .ci-deps/duckdb/manifest.json luna-${v}/
+          zip -r win-luna.zip luna-${v}
+          python3 scripts/ci/check_duckdb.py --archive win-luna.zip --library "${{ steps.duckdb.outputs.library }}"
       - uses: actions/upload-artifact@v6
-        if: needs.release-meta.outputs.enabled == 'true'
         with:
           name: win-luna.zip
           path: ./win-luna.zip
@@ -183,22 +191,28 @@ jobs:
       # - name: Build ONNX Runtime
       #   if: env.NATIVE_DEPS_MODE == 'all' || steps.cache-native.outputs.cache-hit != 'true'
       #   run: ...
+      - name: Build pinned DuckDB
+        id: duckdb
+        uses: ./.github/actions/duckdb
+        with:
+          rebuild: ${{ env.NATIVE_DEPS_MODE == 'all' }}
       - name: Make
         run: |
           [[ -e ${HOME}/LightGBM/lib_lightgbm.so ]] && cp ${HOME}/LightGBM/lib_lightgbm.so .
           [[ -e ${HOME}/LightGBM/lib_lightgbm.dylib ]] && cp ${HOME}/LightGBM/lib_lightgbm.dylib .
-          make -j$(sysctl -n hw.ncpu) ARCH=MAC FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_PATH=${HOME}/LightGBM ORT=0
-          if [[ "${{ needs.release-meta.outputs.enabled }}" == "true" ]]; then
-            v="${{ needs.release-meta.outputs.version }}"
-            mkdir luna-${v}
-            cp luna destrat behead luna-${v}/
-            cd luna-${v}/
-            otool -l ./luna
-            cd ..
-            tar cvzf mac-luna.tar.gz luna-${v}/
-          fi
+          make -j$(sysctl -n hw.ncpu) ARCH=MAC DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_PATH=${HOME}/LightGBM ORT=0
+          python3 scripts/ci/check_duckdb.py --library "${{ steps.duckdb.outputs.library }}"
+          v="${{ needs.release-meta.outputs.version }}"
+          v="${v:-dev}"
+          mkdir luna-${v}
+          cp luna destrat destrat-sqlite behead luna-${v}/
+          cd luna-${v}/
+          otool -l ./luna
+          cd ..
+          cp .ci-deps/duckdb/DUCKDB-LICENSE .ci-deps/duckdb/DUCKDB-THIRD-PARTY-NOTICES.txt .ci-deps/duckdb/manifest.json luna-${v}/
+          tar cvzf mac-luna.tar.gz luna-${v}/
+          python3 scripts/ci/check_duckdb.py --archive mac-luna.tar.gz --library "${{ steps.duckdb.outputs.library }}"
       - uses: actions/upload-artifact@v6
-        if: needs.release-meta.outputs.enabled == 'true'
         with:
           name: mac-luna.tar.gz
           path: mac-luna.tar.gz
@@ -252,26 +266,33 @@ jobs:
           make install
       # ONNX Runtime source build is paused on macOS; see the Intel job above.
     
+      - name: Build pinned DuckDB
+        id: duckdb
+        uses: ./.github/actions/duckdb
+        with:
+          rebuild: ${{ env.NATIVE_DEPS_MODE == 'all' }}
       - name: Final Build
         run: |
-          make -j$(sysctl -n hw.ncpu) ARCH=MAC LGBM=1 LGBM_PATH=${HOME}/LightGBM/ FFTW=$HOME/fftw-${FFTW_VERSION} ORT=0
-          if [[ "${{ needs.release-meta.outputs.enabled }}" == "true" ]]; then
-            v="${{ needs.release-meta.outputs.version }}"
-            mkdir luna-${v}
-            cp luna destrat behead luna-${v}/
-            cd luna-${v}/
-            otool -L ./luna
-            cd ..
-            tar cvzf macos-arm64-luna.tar.gz luna-${v}/
-          fi
+          make -j$(sysctl -n hw.ncpu) ARCH=MAC DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb LGBM=1 LGBM_PATH=${HOME}/LightGBM/ FFTW=$HOME/fftw-${FFTW_VERSION} ORT=0
+          python3 scripts/ci/check_duckdb.py --library "${{ steps.duckdb.outputs.library }}"
+          v="${{ needs.release-meta.outputs.version }}"
+          v="${v:-dev}"
+          mkdir luna-${v}
+          cp luna destrat destrat-sqlite behead luna-${v}/
+          cd luna-${v}/
+          otool -L ./luna
+          cd ..
+          cp .ci-deps/duckdb/DUCKDB-LICENSE .ci-deps/duckdb/DUCKDB-THIRD-PARTY-NOTICES.txt .ci-deps/duckdb/manifest.json luna-${v}/
+          tar cvzf macos-arm64-luna.tar.gz luna-${v}/
+          python3 scripts/ci/check_duckdb.py --archive macos-arm64-luna.tar.gz --library "${{ steps.duckdb.outputs.library }}"
     
       - uses: actions/upload-artifact@v6
-        if: needs.release-meta.outputs.enabled == 'true'
         with:
           name: macos-arm64-luna.tar.gz
           path: macos-arm64-luna.tar.gz
           
   linux-build:
+    needs: release-meta
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -311,9 +332,29 @@ jobs:
           cmake -DCMAKE_BUILD_TYPE=Release ..
           make -j$(nproc)
           cd ${GITHUB_WORKSPACE}
+      - name: Build pinned DuckDB
+        id: duckdb
+        uses: ./.github/actions/duckdb
+        with:
+          rebuild: ${{ env.NATIVE_DEPS_MODE == 'all' }}
       - name: make
         run: |
-          make -j$(nproc) FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_PATH=${HOME}/LightGBM
+          make -j$(nproc) DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb FFTW=${HOME}/fftw-${FFTW_VERSION} LGBM=1 LGBM_PATH=${HOME}/LightGBM
+      - name: Verify DuckDB and reader parity
+        run: python3 scripts/ci/check_duckdb.py --library "${{ steps.duckdb.outputs.library }}"
+      - name: Package and verify Linux binaries
+        run: |
+          v="${{ needs.release-meta.outputs.version }}"
+          v="${v:-dev}"
+          mkdir "luna-${v}"
+          cp luna destrat destrat-sqlite behead "luna-${v}/"
+          cp .ci-deps/duckdb/DUCKDB-LICENSE .ci-deps/duckdb/DUCKDB-THIRD-PARTY-NOTICES.txt .ci-deps/duckdb/manifest.json "luna-${v}/"
+          tar czf linux-luna.tar.gz "luna-${v}/"
+          python3 scripts/ci/check_duckdb.py --archive linux-luna.tar.gz --library "${{ steps.duckdb.outputs.library }}"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: linux-luna.tar.gz
+          path: linux-luna.tar.gz
   release:
     runs-on: ubuntu-latest
     needs: [release-meta, linux-build, macos-build, windows-build, macos-arm64-build]
@@ -327,6 +368,7 @@ jobs:
       - run: |
           echo ${{steps.download.outputs.download-path}}
           cd ${{steps.download.outputs.download-path}}
+          mv linux-luna.tar.gz/linux-luna.tar.gz linux_luna.tar.gz
           mv mac-luna.tar.gz/mac-luna.tar.gz mac_luna.tar.gz
           mv win-luna.zip/win-luna.zip win_luna.zip
           mv macos-arm64-luna.tar.gz/macos-arm64-luna.tar.gz macos_arm64_luna.tar.gz
@@ -338,7 +380,7 @@ jobs:
           tag: ${{ needs.release-meta.outputs.tag }}
           commit: ${{ github.sha }}
           name: ${{ needs.release-meta.outputs.title }}
-          artifacts: "mac_luna.tar.gz,macos_arm64_luna.tar.gz,win_luna.zip"
+          artifacts: "linux_luna.tar.gz,mac_luna.tar.gz,macos_arm64_luna.tar.gz,win_luna.zip"
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: "false"
           prerelease: "false"

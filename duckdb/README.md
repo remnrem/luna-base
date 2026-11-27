@@ -16,10 +16,60 @@ make -j8 DUCKDB=1 DUCKDB_PATH=/tmp/duckdb-2.0.1 luna destrat
 ./destrat results.duckdb +STATS -r CH E --parquet stats.parquet
 ```
 
-Set `DUCKDB_PATH` to the unpacked SDK directory or installation prefix (the
-platform SDK for Linux, macOS or Windows; for MinGW set `ARCH=WINDOWS` and ship
-`duckdb.dll` alongside both executables). `make luna` selects the
-default build again, without DuckDB.
+`DUCKDB_LINK=static` is the default. Set `DUCKDB_PATH` to a native SDK with
+`lib/libduckdb_static.a` and `include/duckdb.h` (a flat SDK layout also works).
+The archive must include the extensions you need; the build script below
+bundles core functions, Parquet and JSON, with an explicit extension registry.
+There is no fallback to shared linking if the static archive is missing.
+For MinGW builds use `ARCH=WINDOWS` and a MinGW-built SDK, not MSVC libraries.
+
+For an existing shared-library SDK, opt in explicitly:
+
+```sh
+make DUCKDB=1 DUCKDB_LINK=shared DUCKDB_PATH=/path/to/sdk luna destrat
+```
+
+Shared Windows builds require `duckdb.dll` alongside the executables. Static
+builds do not. `make luna` without `DUCKDB=1` builds Luna without DuckDB output;
+the new `destrat` still needs its SDK. `make destrat-sqlite` needs no DuckDB SDK.
+
+## Native dependency build and CI
+
+`scripts/ci/build_duckdb.py` builds DuckDB 2.0.1 at the pinned commit
+`8d78114e90a53823803660bf821f6073ac87da8c`. It uses CMake for the dependency
+only; the normal Luna build continues to use Make. Git, Python, CMake and a
+native C/C++ toolchain are needed for this dependency-build step:
+
+```sh
+python3 scripts/ci/build_duckdb.py --prefix .ci-deps/duckdb --source .ci-deps/duckdb-source --build-dir .ci-deps/duckdb-build
+make DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb luna destrat destrat-sqlite
+```
+
+On macOS add `ARCH=MAC` to Make. With MSYS2/MinGW use
+`--generator "MinGW Makefiles"` for the dependency, then `mingw32-make
+ARCH=WINDOWS ...` for Luna. The dependency build is PIC-enabled for future
+Python-extension reuse; it does not require Luna's unrelated `STATIC=1` option.
+
+The SDK includes a combined static archive, headers, license, provenance
+manifest and a matching shared library used only by the Python parity tests.
+The engine has no external-extension loader or HTTP client: core functions,
+Parquet and JSON work offline, without extension downloads.
+
+GitHub CI builds and tests on Linux x86-64, macOS Intel/ARM64 and Windows
+MinGW64. SDK caches are keyed by platform, architecture, compiler identity and
+dependency-script revision. Development pushes to `luna-2.0-dev` run CI too.
+Every job verifies the embedded version, checks the executables have no
+DuckDB shared-library dependency, runs parity tests, packages both readers,
+and repeats checks on the extracted archive with a fresh home directory.
+Archives are uploaded on development builds as well as releases. The
+`check_duckdb.py` helper can also be run locally:
+
+```sh
+python3 scripts/ci/check_duckdb.py --library .ci-deps/duckdb/lib/libduckdb.so
+```
+
+Use `libduckdb.dylib` on macOS or `duckdb.dll` on Windows. This work does not
+enable DuckDB in `libluna`/lunapi yet; that integration remains separate.
 
 ## Output options
 
@@ -99,8 +149,8 @@ factors and variables whose values are all whole numbers become BIGINT there.
 ## Tests
 
 ```sh
-make -j8 DUCKDB=1 DUCKDB_PATH=/tmp/duckdb-2.0.1 luna destrat destrat-sqlite
-python3 duckdb/test_parity.py /tmp/duckdb-2.0.1/libduckdb.dylib
+make -j8 DUCKDB=1 DUCKDB_PATH=.ci-deps/duckdb luna destrat destrat-sqlite
+python3 duckdb/test_parity.py .ci-deps/duckdb/lib/libduckdb.so
 ```
 
 This checks the catalog against the physical tables, cell-by-cell parity with

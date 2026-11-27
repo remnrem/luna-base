@@ -1,0 +1,48 @@
+name: Build pinned static DuckDB
+description: Cache a native PIC-enabled DuckDB SDK for Luna and its parity tests
+inputs:
+  shell:
+    description: Native build shell
+    default: bash
+  rebuild:
+    description: Force rebuilding the dependency
+    default: 'false'
+outputs:
+  path:
+    description: SDK path relative to the workspace
+    value: .ci-deps/duckdb
+  library:
+    description: Matching shared library used only by Python parity tests
+    value: ${{ steps.toolchain.outputs.library }}
+runs:
+  using: composite
+  steps:
+    - name: Identify toolchain
+      id: toolchain
+      shell: ${{ inputs.shell }}
+      run: |
+        python3 - <<'PYTHON'
+        import hashlib, os, platform, subprocess
+        compiler = subprocess.check_output(['g++', '--version'])
+        identity = compiler + subprocess.check_output(['g++', '-dumpmachine'])
+        identity += platform.platform().encode()
+        name = {'Windows': 'duckdb.dll', 'Darwin': 'libduckdb.dylib', 'Linux': 'libduckdb.so'}[platform.system()]
+        with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write('key=' + hashlib.sha256(identity).hexdigest()[:20] + '\n')
+            f.write('library=.ci-deps/duckdb/lib/' + name + '\n')
+        PYTHON
+    - uses: actions/cache@v5
+      id: cache
+      with:
+        path: .ci-deps/duckdb
+        key: duckdb-2.0.1-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.key }}-${{ hashFiles('scripts/ci/build_duckdb.py', '.github/actions/duckdb/action.yml') }}
+    - name: Build dependency
+      if: inputs.rebuild == 'true' || steps.cache.outputs.cache-hit != 'true'
+      shell: ${{ inputs.shell }}
+      run: |
+        if [[ "${RUNNER_OS}" == "macOS" ]]; then
+          command -v cmake >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install cmake
+        fi
+        generator="Unix Makefiles"
+        if [[ "${RUNNER_OS}" == "Windows" ]]; then generator="MinGW Makefiles"; fi
+        python3 scripts/ci/build_duckdb.py --prefix .ci-deps/duckdb --source .ci-deps/duckdb-source --build-dir .ci-deps/duckdb-build --generator "$generator" --jobs 2

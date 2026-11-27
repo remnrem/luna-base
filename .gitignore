@@ -1,0 +1,2 @@
+# Local/CI native dependency builds and staged release archives.
+/.ci-deps/
