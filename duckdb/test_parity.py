@@ -255,7 +255,7 @@ def test(tmp, lib):
     for args in [("-d", "failed.duckdb"), ("-a", "app.db")]:
         proc = run(tmp, "luna", tmp / "inputs.lst", *args, "-s", "STATS & ACF", ok=False)
         assert proc.returncode == 1, (proc.returncode, proc.stderr)
-        assert proc.stderr.endswith(b"error : command requires parameter lag\n"), proc.stderr
+        assert proc.stderr.splitlines()[-1:] == [b"error : command requires parameter lag"], proc.stderr
         assert b"finishing" not in proc.stderr
         duck = Duck(lib, tmp / args[1])
         expected = 0 if args[0] == "-d" else 6
