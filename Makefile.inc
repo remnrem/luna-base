@@ -172,6 +172,8 @@ else
 LDFLAGS += -L/usr/local/lib
 endif
 ifeq ($(ARCH),LINUX)
+CXXFLAGS += -pthread
+LDFLAGS += -pthread
 ifeq ($(PORTABLE_LINUX),1)
 LDFLAGS += -static-libgcc -static-libstdc++
 endif
